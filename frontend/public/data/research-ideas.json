@@ -35,7 +35,8 @@
     "upvotes": 187,
     "created_at": "2025-10-18T09:15:00Z",
     "citations": 32,
-    "impact_score": 8.5
+    "impact_score": 8.5,
+    "url": "https://example.com/research/3"
   },
   {
     "id": "4",
@@ -60,7 +61,8 @@
     "upvotes": 164,
     "created_at": "2025-10-16T11:45:00Z",
     "citations": 26,
-    "impact_score": 8.1
+    "impact_score": 8.1,
+    "url": "https://example.com/research/5"
   },
   {
     "id": "6",
@@ -85,7 +87,8 @@
     "upvotes": 148,
     "created_at": "2025-10-14T10:00:00Z",
     "citations": 22,
-    "impact_score": 7.7
+    "impact_score": 7.7,
+    "url": "https://example.com/research/7"
   },
   {
     "id": "8",
@@ -110,7 +113,8 @@
     "upvotes": 128,
     "created_at": "2025-10-12T09:30:00Z",
     "citations": 18,
-    "impact_score": 7.3
+    "impact_score": 7.3,
+    "url": "https://example.com/research/9"
   },
   {
     "id": "10",
@@ -135,7 +139,8 @@
     "upvotes": 112,
     "created_at": "2025-10-10T11:20:00Z",
     "citations": 15,
-    "impact_score": 6.9
+    "impact_score": 6.9,
+    "url": "https://example.com/research/11"
   },
   {
     "id": "12",
@@ -160,7 +165,8 @@
     "upvotes": 98,
     "created_at": "2025-10-08T10:35:00Z",
     "citations": 13,
-    "impact_score": 6.5
+    "impact_score": 6.5,
+    "url": "https://example.com/research/13"
   },
   {
     "id": "14",
@@ -185,7 +191,8 @@
     "upvotes": 86,
     "created_at": "2025-10-06T12:25:00Z",
     "citations": 11,
-    "impact_score": 6.1
+    "impact_score": 6.1,
+    "url": "https://example.com/research/15"
   }
 ]
 
