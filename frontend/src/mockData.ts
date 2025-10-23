@@ -1,0 +1,230 @@
+import type { ResearchIdea } from './types';
+
+/**
+ * Fetch research ideas from JSON file
+ * Used for frontend development and testing when backend API is unavailable
+ */
+export async function fetchMockResearchIdeas(delay: number = 0): Promise<ResearchIdea[]> {
+  try {
+    const response = await fetch('/data/research-ideas.json');
+    if (!response.ok) {
+      throw new Error('Failed to load research ideas');
+    }
+    const ideas: ResearchIdea[] = await response.json();
+    
+    // Simulate network delay if specified
+    if (delay > 0) {
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    
+    return ideas;
+  } catch (error) {
+    console.error('Error loading research ideas from JSON:', error);
+    return fallbackIdeas;
+  }
+}
+
+/**
+ * Fallback research ideas in case JSON loading fails
+ */
+const fallbackIdeas: ResearchIdea[] = [
+  {
+    id: '1',
+    title: 'Automated Code Review System Using Large Language Models',
+    description: 'Leveraging GPT-4 and Claude for automated code quality review through deep learning to identify code smells, security vulnerabilities, and performance issues, improving development efficiency and code quality.',
+    author: 'Sarah Johnson',
+    institution: 'MIT',
+    tags: ['AI', 'Code Review', 'Automation', 'LLM'],
+    upvotes: 256,
+    created_at: '2025-10-20T10:00:00Z',
+    citations: 45,
+    impact_score: 9.2,
+    url: 'https://example.com/research/1'
+  },
+  {
+    id: '2',
+    title: 'Quantum Computing Applications in Drug Discovery',
+    description: 'Exploring how quantum computing can accelerate new drug development by simulating molecular interactions, significantly reducing time from lab to clinic and enabling precision medicine.',
+    author: 'Dr. Michael Chen',
+    institution: 'Stanford University',
+    tags: ['Quantum Computing', 'Biomedicine', 'Drug Discovery'],
+    upvotes: 198,
+    created_at: '2025-10-19T15:30:00Z',
+    citations: 38,
+    impact_score: 8.8,
+    url: 'https://example.com/research/2'
+  },
+  {
+    id: '3',
+    title: 'Decentralized Identity Verification Protocol Using Blockchain',
+    description: 'Designing a novel decentralized identity verification system combining zero-knowledge proofs and blockchain technology for cross-platform authentication while protecting user privacy and solving single-point-of-failure issues.',
+    author: 'Alex Wang',
+    institution: 'UC Berkeley',
+    tags: ['Blockchain', 'Cryptography', 'Privacy', 'Authentication'],
+    upvotes: 187,
+    created_at: '2025-10-18T09:15:00Z',
+    citations: 32,
+    impact_score: 8.5
+  },
+  {
+    id: '4',
+    title: 'Neural-Symbolic AI: Bridging Deep Learning and Symbolic Reasoning',
+    description: 'Proposing a new neural-symbolic hybrid architecture that combines the learning capabilities of deep neural networks with the logical reasoning of symbolic systems for more interpretable and reliable AI.',
+    author: 'Dr. Emily Zhang',
+    institution: 'Oxford University',
+    tags: ['AI', 'Deep Learning', 'Symbolic Reasoning', 'Explainable AI'],
+    upvotes: 175,
+    created_at: '2025-10-17T14:20:00Z',
+    citations: 29,
+    impact_score: 8.3,
+    url: 'https://example.com/research/4'
+  },
+  {
+    id: '5',
+    title: 'Federated Learning Optimization for Edge Computing Environments',
+    description: 'Addressing resource constraints and network instability in edge devices with an efficient federated learning algorithm for distributed model training while preserving data privacy.',
+    author: 'James Liu',
+    institution: 'Carnegie Mellon University',
+    tags: ['Edge Computing', 'Federated Learning', 'Privacy Computing', 'Distributed Systems'],
+    upvotes: 164,
+    created_at: '2025-10-16T11:45:00Z',
+    citations: 26,
+    impact_score: 8.1
+  },
+  {
+    id: '6',
+    title: 'AI-Powered Smart Grid Optimization for Renewable Energy',
+    description: 'Applying reinforcement learning and predictive models to optimize renewable energy storage and distribution, improving energy efficiency and reducing carbon emissions for carbon neutrality goals.',
+    author: 'Dr. Maria Rodriguez',
+    institution: 'ETH Zurich',
+    tags: ['AI', 'Renewable Energy', 'Reinforcement Learning', 'Sustainability'],
+    upvotes: 152,
+    created_at: '2025-10-15T16:30:00Z',
+    citations: 24,
+    impact_score: 7.9,
+    url: 'https://example.com/research/6'
+  },
+  {
+    id: '7',
+    title: 'Non-Invasive Brain-Computer Interface for Neural Rehabilitation',
+    description: 'Developing next-generation non-invasive BCI systems using machine learning to decode EEG signals, helping paralyzed patients recover motor functions and opening new pathways for neurorehabilitation.',
+    author: 'Prof. David Kim',
+    institution: 'Johns Hopkins University',
+    tags: ['BCI', 'Neuroscience', 'Rehabilitation Medicine', 'Machine Learning'],
+    upvotes: 148,
+    created_at: '2025-10-14T10:00:00Z',
+    citations: 22,
+    impact_score: 7.7
+  },
+  {
+    id: '8',
+    title: 'Adaptive Cybersecurity Defense System',
+    description: 'AI-based real-time threat detection and response system that automatically identifies new attack patterns and dynamically adjusts protection strategies, significantly enhancing network security defense capabilities.',
+    author: 'Rachel Green',
+    institution: 'Georgia Tech',
+    tags: ['Cybersecurity', 'AI', 'Threat Detection', 'Adaptive Systems'],
+    upvotes: 136,
+    created_at: '2025-10-13T13:15:00Z',
+    citations: 20,
+    impact_score: 7.5,
+    url: 'https://example.com/research/8'
+  },
+  {
+    id: '9',
+    title: 'Multimodal Emotion Recognition Using Deep Learning',
+    description: 'Integrating text, speech, and facial expression modalities for emotion recognition with an end-to-end deep learning model, showing great potential in human-computer interaction and mental health assessment.',
+    author: 'Dr. Kevin Park',
+    institution: 'Seoul National University',
+    tags: ['Emotion Recognition', 'Multimodal Learning', 'Deep Learning', 'HCI'],
+    upvotes: 128,
+    created_at: '2025-10-12T09:30:00Z',
+    citations: 18,
+    impact_score: 7.3
+  },
+  {
+    id: '10',
+    title: 'High-Performance Optimization for Distributed Graph Computing',
+    description: 'Addressing performance bottlenecks in large-scale graph data processing with a new distributed graph computing framework and optimization algorithms, achieving significant performance improvements in social network analysis and recommendation systems.',
+    author: 'Thomas Anderson',
+    institution: 'University of Washington',
+    tags: ['Graph Computing', 'Distributed Systems', 'HPC', 'Algorithm Optimization'],
+    upvotes: 119,
+    created_at: '2025-10-11T15:45:00Z',
+    citations: 16,
+    impact_score: 7.1,
+    url: 'https://example.com/research/10'
+  },
+  {
+    id: '11',
+    title: 'Digital Twin Technology for Smart Manufacturing',
+    description: 'Building high-fidelity digital twin models of industrial systems for real-time monitoring, fault prediction, and optimization decisions, driving manufacturing toward intelligent and digital transformation.',
+    author: 'Dr. Lisa Brown',
+    institution: 'Technical University of Munich',
+    tags: ['Smart Manufacturing', 'Digital Twin', 'Industry 4.0', 'Predictive Maintenance'],
+    upvotes: 112,
+    created_at: '2025-10-10T11:20:00Z',
+    citations: 15,
+    impact_score: 6.9
+  },
+  {
+    id: '12',
+    title: 'Reinforcement Learning for Autonomous Driving Decision Systems',
+    description: 'Developing novel reinforcement learning algorithms for autonomous vehicle real-time decision making, achieving safer and more efficient driving strategies in complex traffic scenarios.',
+    author: 'Mark Wilson',
+    institution: 'University of Michigan',
+    tags: ['Autonomous Driving', 'Reinforcement Learning', 'Decision Systems', 'Smart Transportation'],
+    upvotes: 105,
+    created_at: '2025-10-09T14:10:00Z',
+    citations: 14,
+    impact_score: 6.7,
+    url: 'https://example.com/research/12'
+  },
+  {
+    id: '13',
+    title: 'AI-Assisted Ethical Decision Making for Gene Editing',
+    description: 'Combining ethical principles with AI technology to provide intelligent assistance for gene editing decisions, balancing scientific progress with ethical responsibility for responsible biotech innovation.',
+    author: 'Dr. Jennifer Lee',
+    institution: 'Harvard Medical School',
+    tags: ['Bioethics', 'Gene Editing', 'AI', 'Decision Support'],
+    upvotes: 98,
+    created_at: '2025-10-08T10:35:00Z',
+    citations: 13,
+    impact_score: 6.5
+  },
+  {
+    id: '14',
+    title: 'Neural Machine Translation for Low-Resource Languages',
+    description: 'Addressing the lack of large-scale training data for low-resource languages with innovative transfer learning and data augmentation methods, bridging the digital language divide and promoting cultural exchange.',
+    author: 'Carlos Martinez',
+    institution: 'University of Barcelona',
+    tags: ['Machine Translation', 'NLP', 'Transfer Learning', 'Low-Resource Languages'],
+    upvotes: 92,
+    created_at: '2025-10-07T16:50:00Z',
+    citations: 12,
+    impact_score: 6.3,
+    url: 'https://example.com/research/14'
+  },
+  {
+    id: '15',
+    title: 'Spatial-Temporal Graph Neural Networks for Traffic Flow Prediction',
+    description: 'Proposing a novel spatial-temporal graph neural network architecture for accurate urban traffic flow prediction, providing scientific evidence for smart city traffic management and planning.',
+    author: 'Dr. Yuki Tanaka',
+    institution: 'University of Tokyo',
+    tags: ['Traffic Prediction', 'Graph Neural Networks', 'Smart City', 'Spatial-Temporal Modeling'],
+    upvotes: 86,
+    created_at: '2025-10-06T12:25:00Z',
+    citations: 11,
+    impact_score: 6.1
+  }
+];
+
+/**
+ * Fetch single research idea by ID
+ * @param id Research idea ID
+ * @param delay Simulated network delay (milliseconds)
+ * @returns Promise<ResearchIdea | null>
+ */
+export async function fetchMockResearchIdeaById(id: string, delay: number = 0): Promise<ResearchIdea | null> {
+  const ideas = await fetchMockResearchIdeas(delay);
+  return ideas.find(item => item.id === id) || null;
+}
