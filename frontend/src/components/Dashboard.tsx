@@ -74,18 +74,16 @@ const ResearchIdeaCard: React.FC<{
         {isExpanded && (
           <div className="idea-expanded-content">
             <p className="idea-description">{idea.description}</p>
-            {idea.url && (
-              <a 
-                href={idea.url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="idea-link"
-                onClick={(e) => e.stopPropagation()}
+            <a 
+              href={idea.url || '#'} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="idea-link"
+              onClick={(e) => e.stopPropagation()}
             >
-              View Full Details →
+              View Full Proposal →
             </a>
-            )}
-          </div>
+              </div>
         )}
       </div>
     </div>
