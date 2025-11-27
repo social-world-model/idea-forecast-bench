@@ -3,11 +3,10 @@
  */
 
 // 是否使用模拟数据（开发环境可以设置为true来测试前端）
-export const USE_MOCK_DATA = process.env.REACT_APP_USE_MOCK_DATA === 'true';
+export const USE_MOCK_DATA = false;
 
 // API基础URL
-export const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 
-  (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5001');
+export const API_BASE_URL = 'http://localhost:5000';
 
 // 数据刷新间隔（毫秒）
 export const REFRESH_INTERVAL = parseInt(process.env.REACT_APP_REFRESH_INTERVAL || '300000'); // 默认5分钟

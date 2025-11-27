@@ -1,0 +1,612 @@
+# thinker_prompt.yaml
+
+# System prompts
+idea_system_prompt: >
+  You are an ambitious AI PhD student who is looking to publish a paper that will contribute significantly to the field.
+  You want to generate creative and impactful research ideas that can be feasibly investigated with the code provided.
+  Be critical and realistic in your assessments.
+evaluation_system_prompt: >
+  You are an expert research reviewer who evaluates scientific ideas with rigor and fairness.
+  Your role is to comparatively evaluate multiple research ideas and score them based on their feasibility, novelty, impact, and alignment with the original research intent.
+  Be thoughtful, objective, and provide clear justifications for your scoring.
+idea_evaluation_prompt: |
+  You are tasked with evaluating and scoring multiple research ideas generated for the following research intent:
+
+  RESEARCH INTENT:
+  ```
+  {intent}
+  ```
+
+  RESEARCH IDEAS TO EVALUATE:
+  ```
+  {ideas}
+  ```
+  Please evaluate these ideas comparatively across three key dimensions:
+
+  **NOVELTY DIMENSION**
+  {novelty_criteria}
+
+  **FEASIBILITY DIMENSION**
+  {feasibility_criteria}
+
+  **IMPACT DIMENSION**
+  {impact_criteria}
+
+  CRITICAL REQUIREMENTS:
+  1. For EACH idea, you MUST provide three separate rating fields that MUST follow this format:
+    - "FeasibilityScore": A number from 0 to 100, where 100 is most feasible
+    - "NoveltyScore": A number from 0 to 100, where 100 is most novel
+    - "ImpactScore": A number from 0 to 100, where 100 is highest impact
+
+  2. For EACH idea, also provide a brief reasoning for each score:
+    - "NoveltyReason": Brief explanation (1-2 sentences) of why this idea received its novelty score
+    - "FeasibilityReason": Brief explanation (1-2 sentences) of why this idea received its feasibility score
+    - "ImpactReason": Brief explanation (1-2 sentences) of why this idea received its impact score
+  These three scores must be completely separate and independent from each other. For example, the idea with the highest impact score might have a low feasibility score.
+
+  Respond in the following format:
+
+  COMPARATIVE ANALYSIS:
+  <ANALYSIS>
+
+  EVALUATION JSON:
+  ```json
+  <JSON>
+  ```
+
+  In <ANALYSIS>, provide a thoughtful comparative analysis discussing the trade-offs between ideas.
+  In <JSON>, provide the evaluation results in JSON format with the following structure:
+  "scored_ideas": A list of scored idea objects, each containing:
+  - "Title": The EXACT original title of the idea as provided in the input JSON - DO NOT MODIFY OR CHANGE THE TITLE IN ANY WAY
+  - "FeasibilityScore": A number from 0 to 100, scoring feasibility
+  - "NoveltyScore": A number from 0 to 100, scoring novelty
+  - "ImpactScore": A number from 0 to 100, scoring impact
+  - "NoveltyReason": Explanation of the novelty score
+  - "FeasibilityReason": Explanation of the feasibility score
+  - "ImpactReason": Explanation of the impact score
+
+  CRITICAL: You MUST preserve the exact original titles from the input. Do not change, modify, or improve the titles in any way.
+  Ensure your evaluation is fair, comprehensive, and based solely on the scientific and practical merits of each idea.
+modify_idea_prompt: |
+  Given a research idea and a set of requested modifications, generate a modified version of the idea.
+
+  ORIGINAL RESEARCH IDEA:
+  ```
+  {idea}
+  ```
+
+  REQUESTED MODIFICATIONS:
+  ```
+  {modifications}
+  ```
+
+  RESEARCH INTENT:
+  ```
+  {intent}
+  ```
+  Carefully consider how to preserve the core strengths of the original idea while enhancing it according to the requested modifications. Ensure the modified idea maintains strong alignment with the original research intent.
+
+  For each modification request, adjust the corresponding aspect (Novelty, Feasibility, or Impact) by emphasizing or de-emphasizing relevant characteristics.
+
+  **CRITICAL**: When modifying the idea:
+  - Keep the "Approach" field focused on the CORE NOVEL ALGORITHM (not basic preprocessing)
+  - The "Approach" should describe YOUR algorithmic innovation with mathematical/technical detail
+  - If increasing Novelty, add more distinctive technical innovations to the CORE ALGORITHM
+  - If increasing Feasibility, provide implementation details for the NOVEL component specifically
+  - Maintain detailed comparison with existing work in "NoveltyComparison"
+  - AVOID filling "Approach" with standard data processing, tokenization, or routine training procedures
+  - AVOID ethical considerations, societal impact, or bias discussions in "Approach" - focus ONLY on the technical algorithm
+
+  Respond in the following format:
+
+  THOUGHT:
+  <THOUGHT>
+
+  MODIFIED IDEA JSON:
+  ```json
+  <JSON>
+  ```
+
+  In <THOUGHT>, explain your reasoning for the modifications and how they enhance the idea.
+  In <JSON>, provide the modified idea with the same structure as the original, including all original fields.
+
+merge_ideas_prompt: |
+  You are tasked with merging two research ideas into a single, stronger idea that combines the best aspects of both.
+
+  IDEA A:
+  ```
+  {idea_a}
+  ```
+
+  IDEA B:
+  ```
+  {idea_b}
+  ```
+
+  RESEARCH INTENT:
+  ```
+  {intent}
+  ```
+
+  Create a new research idea that:
+  1. Preserves the most valuable aspects of both original ideas
+  2. Resolves any contradictions or tensions between them
+  3. Maintains strong alignment with the original research intent
+  4. Is more novel, feasible, or impactful than either original idea alone
+
+  Respond in the following format:
+  THOUGHT:
+  <THOUGHT>
+
+  MERGED IDEA JSON:
+  ```json
+  <JSON>
+  ```
+
+  In <THOUGHT>, explain your reasoning for how you combined elements from both ideas and why the merged result is stronger.
+  In <JSON>, provide the merged idea with the same structure as the original ideas, including all required fields:
+  - "Name": A shortened descriptor of the idea. Lowercase, no spaces, underscores allowed.
+  - "Title": A title for the idea, will be used for the report writing.
+  - "Problem": Answer to question 1.
+  - "Importance": Answer to question 2.
+  - "Difficulty": Answer to question 3.
+  - "NoveltyComparison": Answer to question 4.
+
+novelty_system_prompt: |
+  You are an ambitious AI PhD student who is looking to publish a paper that will contribute significantly to the field.
+  You have an idea and you want to check if it is novel or not. I.e., not overlapping significantly with existing literature or already well explored.
+  Be a harsh critic for novelty, ensure there is a sufficient contribution in the idea for a new conference or workshop paper.
+  You are analyzing search results to determine if your idea has already been explored in existing literature.
+
+  Decide a paper idea is novel if after sufficient searching, you have not found a paper that significantly overlaps with your idea.
+  Decide a paper idea is not novel if you have found a paper that significantly overlaps with your idea.
+
+query_prompt: |
+  Based on the following research intent:
+
+  ```
+  {intent}
+  ```
+
+  **YOUR TASK**: Read the intent above and extract 2-4 SPECIFIC technical terms FROM THE INTENT to create a search query.
+
+  **CRITICAL STEP-BY-STEP**:
+  1. READ the intent carefully
+  2. IDENTIFY the specific technique/algorithm mentioned (e.g., "latent reasoning", "graph attention", "knowledge distillation")
+  3. IDENTIFY the specific model/domain mentioned (e.g., "BERT", "transformers", "large language models")
+  4. COMBINE them with AND: "technique AND model/domain"
+  5. DO NOT use examples below - they are just to show the FORMAT, not content to copy!
+
+  **TYPES OF SPECIFIC TECHNICAL TERMS TO EXTRACT FROM INTENT**:
+  ✅ Specific algorithms: "graph attention network", "knowledge distillation", "contrastive learning"
+  ✅ Specific mechanisms: "tree-based reasoning", "causal intervention", "hierarchical attention"
+  ✅ Specific models: "BERT", "GPT", "transformer", "large language models"
+  ✅ Specific architectures: "encoder-decoder", "autoregressive", "diffusion model"
+  ✅ Specific tasks: "link prediction", "question answering", "sentiment analysis"
+
+  **WHAT TO AVOID** (general/vague terms):
+  ❌ "machine learning", "deep learning", "AI"
+  ❌ "neural networks" (too general - specify which type!)
+  ❌ "NLP", "computer vision" (too broad)
+  ❌ "improve performance", "better results"
+
+  **FORMAT EXAMPLES** (showing query structure, NOT content to copy):
+  - If intent mentions "causal graphs for GNN link prediction" → query: "causal graph AND graph neural network AND link prediction"
+  - If intent mentions "knowledge distillation for BERT" → query: "knowledge distillation AND BERT"
+  - If intent mentions "latent reasoning in LLMs" → query: "latent reasoning AND large language models"
+  - If intent mentions "contrastive learning on graphs" → query: "contrastive learning AND graph representation"
+
+  **REMEMBER**: Extract terms FROM THE INTENT above, not from these examples!
+
+  Respond in the following format:
+
+  RESPONSE:
+  ```json
+  <JSON>
+  ```
+
+  In <JSON>, respond in JSON format with ONLY the following field:
+  - "Query": The query you just generated (3-5 concepts, use AND/OR strategically)
+
+  **CRITICAL JSON FORMAT**:
+  - Do NOT use quotes around individual terms inside the Query value
+  - CORRECT: {{"Query": "causal graph AND graph neural networks"}}
+  - WRONG: {{"Query": "\"causal graph\" AND \"graph neural networks\""}}
+
+rethink_query_prompt: |
+  Based on the following research idea and the original intent:
+
+  ORIGINAL INTENT:
+  ```
+  {intent}
+  ```
+
+  CURRENT IDEA:
+  ```
+  {idea}
+  ```
+
+  **YOUR TASK**: Read the CURRENT IDEA above and extract 2-3 SPECIFIC technical terms FROM IT to create a search query.
+
+  **CRITICAL STEP-BY-STEP**:
+  1. READ the current idea's "Approach" section carefully
+  2. IDENTIFY the specific technique/algorithm in the approach (e.g., "hierarchical attention", "causal intervention")
+  3. IDENTIFY the specific task/application (e.g., "text classification", "bias mitigation")
+  4. COMBINE them with AND: "technique AND task"
+  5. DO NOT copy from examples - extract from the IDEA above!
+
+  **TYPES OF TERMS TO EXTRACT FROM THE IDEA**:
+  ✅ Specific techniques in the approach: "hierarchical attention", "knowledge distillation", "causal intervention"
+  ✅ Specific models mentioned: "BERT", "GPT", "transformer"
+  ✅ Specific tasks: "text classification", "question answering", "node classification"
+
+  **WHAT TO AVOID**:
+  ❌ Generic terms: "deep learning", "machine learning"
+  ❌ Vague terms: "neural networks" (specify which!)
+  ❌ Abbreviations without context: "RL", "NLP"
+
+  **FORMAT EXAMPLES** (showing structure only, NOT content to copy):
+  - If idea uses "hierarchical attention for text classification" → query: "hierarchical attention AND text classification"
+  - If idea uses "causal intervention for bias mitigation" → query: "causal intervention AND bias mitigation"
+  - If idea uses "knowledge distillation on BERT" → query: "knowledge distillation AND BERT"
+
+  **REMEMBER**: Extract terms FROM THE CURRENT IDEA above!
+
+  Respond in the following format:
+
+  RESPONSE:
+  ```json
+  <JSON>
+  ```
+
+  In <JSON>, respond in JSON format with ONLY the following field:
+  - "Query": The query you just generated 1-3 concepts, use AND/OR strategically)
+
+  **CRITICAL JSON FORMAT**:
+  - Do NOT use quotes around individual terms inside the Query value
+  - CORRECT: {{"Query": "hierarchical attention AND dynamic weighting"}}
+  - WRONG: {{"Query": "\"hierarchical attention\" AND \"dynamic weighting\""}}
+
+novelty_query_prompt: |
+  Based on the following research idea and the original intent:
+
+  ORIGINAL INTENT:
+  ```
+  {intent}
+  ```
+
+  CURRENT IDEA:
+  ```
+  {idea}
+  ```
+
+  **YOUR TASK**: Read the CURRENT IDEA's "Approach" and extract the MOST SPECIFIC technical terms of the CORE NOVEL ALGORITHM to check if it already exists.
+
+  **CRITICAL STEP-BY-STEP FOR NOVELTY CHECK**:
+  1. READ the "Approach" section in the CURRENT IDEA
+  2. IDENTIFY what makes it novel (e.g., "causal" + "graph attention", "adversarial" + "contrastive learning")
+  3. EXTRACT all distinctive modifiers + the base technique (e.g., "causal graph attention", not just "attention")
+  4. COMBINE all novel components with AND
+  5. Goal: Find papers with the EXACT SAME combination
+  6. DO NOT use examples below - extract from the IDEA!
+
+  **HOW TO EXTRACT THE NOVEL COMPONENTS FROM THE IDEA**:
+  ✅ If idea uses "causal graph attention" → extract: "causal AND graph attention network"
+  ✅ If idea uses "adversarial contrastive learning" → extract: "adversarial AND contrastive learning"
+  ✅ If idea uses "hierarchical policy gradient for dialogue" → extract: "hierarchical AND policy gradient AND dialogue"
+  ✅ If idea uses "tree-based reasoning with transformers" → extract: "tree-based AND reasoning AND transformer"
+
+  **KEY PRINCIPLE**:
+  - Include ALL distinctive modifiers that make it novel (e.g., "causal", "adversarial", "hierarchical")
+  - Use complete technical phrases (e.g., "graph attention network", not just "attention")
+  - Be as specific as the idea describes
+
+  **FORMAT EXAMPLES** (structure only, extract YOUR content from idea above):
+  - If idea's novelty is "X + Y technique for Z" → query: "X AND Y technique AND Z"
+  - If idea combines "A method with B architecture" → query: "A method AND B architecture"
+
+  **REMEMBER**: Extract the EXACT novel combination FROM THE IDEA's "Approach" above!
+
+  Respond in the following format:
+
+  RESPONSE:
+  ```json
+  <JSON>
+  ```
+
+  In <JSON>, respond in JSON format with ONLY the following field:
+  - "Query": The query you just generated (3-5 distinctive concepts, use AND/OR strategically)
+
+  **CRITICAL JSON FORMAT**:
+  - Do NOT use quotes around individual terms inside the Query value
+  - CORRECT: {{"Query": "causal AND attention AND graph neural networks"}}
+  - WRONG: {{"Query": "\"causal\" AND \"attention\" AND \"graph neural networks\""}}
+
+# Complete prompts that combine all necessary information
+idea_first_prompt: |
+  Generate a **creative and impactful research idea** based on:
+  ```
+  {intent}
+  ```
+
+  Related works:
+  ```
+  {related_works_string}
+  ```
+
+  Please make sure the following requirements are kept:
+  1. **Problem**
+    * The problem should be a precise, not too large and not ambiguous problem.
+    * Think from demand: what are the attractive/necessary demands from the research community that have not been fully satisfied?
+    * A question that can be answered with yes/no + some reason. For example, Can LLM do well on NER task?
+  2. **Importance**
+    * Explain why the problem matters and is interesting.
+    * Use recent literature to support your points.
+    * Relate to the community consensus/trend to show your importance. We point out the gap/potential/opportunities between our idea and the current consensus.
+    * Recent example: Scalable LLM ranker? Graph based ranker
+  3. **Difficulty**
+    * Explain why the problem is technically challenging and why simple methods fail.
+    * Cite prior works that highlight these challenges.
+    * List 2-4 reason why this is very challenging. List with (1) (2) (3)
+  4. **NoveltyComparison**
+    * Write a **detailed comparison (≥150 words)** explaining how your idea differs from existing work.
+    * Discuss related works, their approaches, and limitations. Analyze your prior work’s limitations, and argue that yours is better
+    * Explain why past methods don’t fully solve the problem and what’s new about yours.
+    * Prove your novelty. No one has solved XYZ, but we did. These limitations can be perfectly solved after our paper.
+  5. **Approach**
+    * Describe the **core algorithm/mechanism** of your proposed method.
+    * Need to explain each point in the difficulty why our proposed method can solve them. List explanation for each point in the difficulty
+    * Focus on your novel component, not standard preprocessing or ethics.
+    * IMPORTANT! You need to make sure that your proposed method can solve the problem you propose. Need to include the reason why such method can solve.
+
+
+  The output should be this format:
+  ```json
+  {{
+    "Name": "...",
+    "Title": "...",
+    "Description": "...",
+    "Problem": "...",
+    "Importance": "...",
+    "Difficulty": "...",
+    "NoveltyComparison": "...",
+    "Approach": "...",
+    "is_experimental": true,
+    "Interestingness": 1-10,
+    "Feasibility": 1-10,
+    "Novelty": 1-10,
+    "IntentAlignment": 1-10,
+    "Score": 1-10
+  }}
+  ```
+
+idea_reflection_prompt: |
+  Round {current_round}/{num_reflections}
+
+  Original Intent:
+  ```
+  {intent}
+  ```
+
+  Current Idea:
+  ```
+  {current_idea}
+  ```
+
+  Refer to the following related works from recent literature that might help inform your reflection:
+  ```
+  {related_works_string}
+  ```
+
+  Your goal is to turn this idea into a technically strong, and novel research proposal that could be published.
+
+  Key Reflection Priorities
+  1. **Intent Alignment** – Make sure the idea directly solves the original intent. If not, refocus.
+  2. **Problem** – Add concrete examples, numbers, and proper citations. Show clearly why this problem matters and persists.
+  3. **Importance** – Strengthen with real evidence (scale, impact, urgency).
+  4. **Difficulty** – List more bullet points why ours is better
+  5. **Novelty Comparison** – Include more papers for comparison
+  6. **Approach (Most Important)** List more bullet points corresponding to Difficulty and check how to design methods that ours is better
+
+  Please make sure the following requirements are kept:
+  1. **Problem**
+    * The problem should be a precise, not too large and not ambiguous problem.
+    * Think from demand: what are the attractive/necessary demands from the research community that have not been fully satisfied?
+    * A question that can be answered with yes/no + some reason. For example, Can LLM do well on NER task?
+  2. **Importance**
+    * Explain why the problem matters and is interesting.
+    * Use recent literature to support your points.
+    * Relate to the community consensus/trend to show your importance. We point out the gap/potential/opportunities between our idea and the current consensus.
+    * Recent example: Scalable LLM ranker? Graph based ranker
+  3. **Difficulty**
+    * Explain why the problem is technically challenging and why simple methods fail.
+    * Cite prior works that highlight these challenges.
+    * List 2-4 reason why this is very challenging. List with (1) (2) (3)
+  4. **NoveltyComparison**
+    * Write a **detailed comparison (≥150 words)** explaining how your idea differs from existing work.
+    * Discuss related works, their approaches, and limitations. Analyze your prior work’s limitations, and argue that yours is better
+    * Explain why past methods don’t fully solve the problem and what’s new about yours.
+    * Prove your novelty. No one has solved XYZ, but we did. These limitations can be perfectly solved after our paper.
+  5. **Approach**
+    * Describe the **core algorithm/mechanism** of your proposed method.
+    * Need to explain each point in the difficulty why our proposed method can solve them. List explanation for each in the difficulty
+    * Focus on your novel component, not standard preprocessing or ethics.
+    * IMPORTANT! You need to make sure that your proposed method can solve the problem you propose. Need to include the reason why such method can solve.
+
+
+  The output should be in this form
+  ```json
+  {{
+    "Name": "",
+    "Title": "",
+    "Problem": "",
+    "Importance": "",
+    "Difficulty": "",
+    "NoveltyComparison": "",
+    "Approach": "",
+    "Interestingness": 0,
+    "Feasibility": 0,
+    "Novelty": 0,
+    "IntentAlignment": 0,
+    "Score": 0
+  }}
+  ```
+
+novelty_prompt: |
+  Round {current_round}/{num_rounds}.
+  You are assessing the novelty of the following research idea in the context of the original intent:
+
+  ORIGINAL INTENT:
+  ```
+  {intent}
+  ```
+
+  CURRENT IDEA:
+  ```
+  {idea}
+  ```
+
+  SEARCH RESULTS FROM PREVIOUS QUERY:
+  ```
+  {last_query_results}
+  ```
+
+  Respond in the following format:
+
+  THOUGHT:
+  <THOUGHT>
+
+  DECISION:
+  <DECISION>
+
+  In <THOUGHT>, carefully analyze the idea's novelty by:
+  1. First explicitly assess how well the idea aligns with the original intent
+  2. Compare the idea against the search results to identify similarities and differences
+  3. Determine if any existing work already implements the core approach for the same intent
+  4. Consider if the idea offers meaningful innovation beyond existing approaches
+  5. Assess whether minor variations from existing work constitute sufficient novelty
+
+  In <DECISION>, write either:
+  - "NOVELTY CHECK: CONTINUE" if you need more information to make a decision. In this case, explain what specific information you need.
+  - "NOVELTY CHECK: NOVEL" if you've determined the idea is novel. Briefly explain why.
+  - "NOVELTY CHECK: NOT NOVEL" if you've determined the idea is not novel. Briefly explain why and cite the specific paper(s) that demonstrate lack of novelty.
+
+experiment_plan_prompt: |
+  Given the following research idea:
+
+  ```
+  {idea}
+  ```
+
+  And the ORIGINAL INTENT:
+  ```
+  {intent}
+  ```
+
+  Develop a comprehensive experimental plan using Adaptive Prompt Decomposition principles.
+  You must provide TWO separate outputs: a JSON object and a Markdown table.
+
+  IMPORTANT: Your plan MUST support the original intent and long-range coherence, and it MUST NOT
+  include any training or fine-tuning. Design the experiment to minimize special cases (prefer data
+  structure changes over conditionals), keep functions small (<=3 indentation levels), and avoid
+  breaking existing behavior unless a clear migration path is provided. Cite relevant papers
+  pragmatically as needed. Prefer zero-shot or in-context demonstrations over parameter updates.
+  Prefer small pretrained models (< 100M parameters) or lightweight API endpoints for inference.
+
+  Respond in the following format:
+
+  THOUGHT:
+  <THOUGHT>
+
+  EXPERIMENT PLAN JSON:
+  ```json
+  <JSON>
+  ```
+  EXPERIMENT PLAN MARKDOWN TABLE:
+  ```markdown
+  <MARKDOWN_TABLE>
+  ```
+  In <THOUGHT>, briefly discuss your reasoning behind the chosen approach.
+
+  In <JSON>, provide the plan in JSON format with these fields:
+  - "Model": Detailed description of model architecture with specific components. Choose architectures appropriate to the task (pretrained models, transformers, graph neural networks, or diffusion models are allowed).
+    * Document input/output dimensions so coder can wire tensors without guessing. Provide literal numeric values (e.g., use 3072 instead of `32 * 32 * 3`).
+    * Absolutely NO comments (`//` or `/* */`) inside JSON values.
+    * Prefer direct inference with small pretrained models (< 100M parameters) or API endpoints; avoid ad-hoc MLP/GRU designs or any training.
+  - "Dataset": Detailed description of dataset including:
+    * "Name": Clearly identify the dataset (e.g., HuggingFace dataset, standard benchmark, or well-defined local/hosted dataset).
+    * "Size": Number of samples
+    * "Splits": Dev/validation/test split ratios (NO TRAINING). Use "Dev" only for prompt crafting/ICL selection or configuration probing; it MUST NOT be used for parameter updates. Allowed keys are strictly ["Dev", "Validation", "Test"]. Do NOT output a key named "Train".
+    * "Preprocessing": Required preprocessing steps (e.g., tokenization/vectorization, image normalization). Specify resulting feature shapes.
+    * Absolutely NO comments (`//` or `/* */`) or inline expressions inside the JSON values.
+    * "Load_Command": The exact Python call or code snippet that loads the dataset programmatically (e.g., `datasets.load_dataset(...)`, `sklearn.datasets.load_iris()`, torchvision loaders, or explicit path-based loaders). If local files or downloads are required, include the expected path(s) and/or download steps.
+  - "Metric": Description of evaluation metrics with justification (use key name "Metric", NOT "Evaluation_Metrics")
+    * Include a short self-check note confirming that the plan is reproducible and the JSON contains no inline comments.
+  - "Decomposition": A compact list describing how the task decomposes into stable interfaces
+    and small steps (owner, inputs, outputs). Prefer data-centric boundaries and note any
+    compatibility or migration considerations.
+
+  In <MARKDOWN_TABLE>, provide a DETAILED experimental plan as a Markdown table. This table MUST include the following columns and rows:
+  - "Component": The part of the experiment
+  - "Specification": A DETAILED description with specifics (not vague descriptions)
+  - "Justification / Rationale": Why this choice is appropriate, citing relevant literature
+  - "Status": Leave this column EMPTY
+  - Include an additional row titled **Sanity Checks** listing:
+    * Any subsampling or resource scaling choices (optional) and how to toggle them.
+    * Reproducibility notes (random seeds, dependency versions or install instructions).
+    * Confirmation that JSON contains no inline comments or expressions.
+
+  **REQUIRED ROWS** (at minimum):
+  1. **Model Architecture**: Specify exact architecture, layers, dimensions, parameters
+  2. **Dataset**: Name, size, splits (train/val/test), preprocessing steps
+     - Use a clearly identifiable dataset (HuggingFace, torchvision/tensorflow_datasets, other public benchmarks, or well-defined local/hosted data).
+     - Provide exact, runnable loading code or commands (e.g., `datasets.load_dataset("wikitext", "wikitext-2-raw-v1")`, torchvision loaders, or explicit path-based loaders with expected locations).
+     - If manual downloads or authentication are required, include concise instructions or code to fetch the data.
+  3. **Baselines**: List 3-5 specific baseline methods to compare against (with citations)
+  4. **Execution Setup (No Training)**: Environment, hardware (if any), seeds, batch sizes for inference only, and any caching. Do not include optimizers, epochs, or gradient updates. If the plan previously suggested training, explicitly state that training is skipped and why inference-only is sufficient.
+  5. **Evaluation Metrics**: Primary and secondary metrics with justification
+  6. **Hyperparameters**: Key hyperparameters and their values/ranges
+  7. **Decomposition & Interfaces**: Steps, owners, inputs/outputs, and any compatibility contract.
+
+  Each specification should be concrete and implementation-ready, not high-level or vague.
+
+non_experiment_plan_prompt: |
+  Given the following non-experimental research idea:
+
+  ```
+  {idea}
+  ```
+
+  And the ORIGINAL INTENT:
+  ```
+  {intent}
+  ```
+
+  Develop a comprehensive research plan. You must provide TWO separate outputs: a JSON object and a Markdown table.
+
+  IMPORTANT: Your research plan MUST directly support the investigation of the original intent.
+
+  Respond in the following format:
+
+  THOUGHT:
+  <THOUGHT>
+
+  EXPERIMENT PLAN JSON:
+  ```json
+  <JSON>
+  ```
+  EXPERIMENT PLAN MARKDOWN TABLE:
+  ```markdown
+  <MARKDOWN_TABLE>
+  ```
+
+  In <THOUGHT>, briefly discuss your reasoning behind the chosen approach.
+
+  In <JSON>, provide a concise research plan in JSON format with a SINGLE field:
+  - "Research_Plan": A detailed paragraph describing the complete research plan.
+
+  In <MARKDOWN_TABLE>, provide a more detailed plan as a Markdown table. This table MUST include the following columns:
+  - "Phase": The stage of the research (e.g., Literature Review, Data Collection, Analysis).
+  - "Methodology": The specific methods to be used in this phase.
+  - "Expected Outcome": The deliverable or result of this phase.
+  - "Status": Leave this column EMPTY.

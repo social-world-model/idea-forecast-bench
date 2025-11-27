@@ -3,7 +3,9 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import About from './components/About';
 import Navigation from './components/Navigation';
+
 import Footnote from './components/Footnote';
+import GeneratedIdeasList from './components/GeneratedIdeasList';
 import './App.css';
 import type { ResearchIdea } from './types';
 import { USE_MOCK_DATA, API_BASE_URL, API_ENDPOINTS, REFRESH_INTERVAL, logger } from './config';
@@ -23,9 +25,9 @@ function App() {
   const fetchResearchIdeas = useCallback(async () => {
     try {
       logger.log('🔄 Fetching research ideas...');
-      
+
       let ideas: ResearchIdea[];
-      
+
       if (USE_MOCK_DATA) {
         // Use mock data
         logger.log('📦 Using mock data');
@@ -35,14 +37,14 @@ function App() {
         const url = `${API_BASE_URL}${API_ENDPOINTS.RESEARCH_IDEAS}`;
         logger.log('🌐 Fetching from API:', url);
         const response = await fetch(url);
-        
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         ideas = await response.json();
       }
-      
+
       setResearchIdeas(ideas);
       setLastRefresh(new Date());
       logger.log(`✅ Research ideas updated: ${ideas.length} ideas`);
@@ -71,7 +73,7 @@ function App() {
       }
 
       const url = `${API_BASE_URL}${API_ENDPOINTS.VIEWS}`;
-      
+
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -157,6 +159,7 @@ function App() {
               />
             } />
             <Route path="/about" element={<About />} />
+            <Route path="/generated-ideas" element={<GeneratedIdeasList />} />
           </Routes>
         </div>
         <Footnote />
