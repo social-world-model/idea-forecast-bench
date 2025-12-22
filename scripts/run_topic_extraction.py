@@ -11,7 +11,6 @@ sys.path.append(str(project_root))
 from src.topic_extraction import (extract_domain_keywords, get_markdown_files,
                                   read_file_content)
 
-
 def main():
     # Define the path to the md_mineru directory relative to the project root
     md_dir = Path("/mnt/disk1_from_server2/haofeiy2/live-idea-bench/md_mineru")
