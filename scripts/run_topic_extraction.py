@@ -1,13 +1,16 @@
 import os
 import sys
-import openai
 from pathlib import Path
+
+import openai
 
 # Add the project root to sys.path to allow importing from src
 project_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(project_root))
 
-from src.topic_extraction import get_markdown_files, read_file_content, extract_domain_keywords
+from src.topic_extraction import (extract_domain_keywords, get_markdown_files,
+                                  read_file_content)
+
 
 def main():
     # Define the path to the md_mineru directory relative to the project root

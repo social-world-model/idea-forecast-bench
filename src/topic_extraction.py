@@ -1,8 +1,9 @@
-import os
-import glob
 import argparse
-from typing import List
+import glob
+import os
 from pathlib import Path
+from typing import List
+
 import openai
 
 # Note: You need to install the openai library: pip install openai
