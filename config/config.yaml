@@ -1,0 +1,14 @@
+model_name: "gpt-4o"
+max_context_chars: 15000
+temperature: 0.0
+# OPENAI_API_KEY is usually better handled via ENV, but adding it as optional
+openai_api_key: ""
+
+embedding:
+  model_name: "all-MiniLM-L6-v2"
+  max_context_chars: 50000
+  use_section_weights: true
+  abstract_weight: 0.4
+  introduction_weight: 0.2
+  method_weight: 0.2
+  conclusion_weight: 0.2
