@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: live-idea-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: live-idea-backend
+  template:
+    metadata:
+      labels:
+        app: live-idea-backend
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/your-org/live-idea-backend:latest
+          ports:
+            - containerPort: 5000
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: live-idea-secrets
+                  key: OPENAI_API_KEY
+            - name: GOOGLE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: live-idea-secrets
+                  key: GOOGLE_API_KEY
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: live-idea-backend
+spec:
+  selector:
+    app: live-idea-backend
+  ports:
+    - port: 5000
+      targetPort: 5000
