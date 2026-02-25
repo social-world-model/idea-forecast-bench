@@ -412,8 +412,6 @@
 }
 
 /* ── Ideas List ──────────────────────────────────────────────── */
-.ideas-section {}
-
 .ideas-list {
   display: flex;
   flex-direction: column;

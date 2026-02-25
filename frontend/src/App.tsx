@@ -10,97 +10,138 @@ import HistoryPage from './pages/HistoryPage';
 import RunDetailPage from './pages/RunDetailPage';
 import './App.css';
 import './pages/runs.css';
-import type { ResearchIdea } from './types';
-import { USE_MOCK_DATA, API_BASE_URL, API_ENDPOINTS, REFRESH_INTERVAL, logger } from './config';
-import { fetchMockResearchIdeas } from './mockData';
+import type { Strategy } from './types';
+import { API_BASE_URL, API_ENDPOINTS, REFRESH_INTERVAL, logger } from './config';
 
 function App() {
-  const initialFetchComplete = useRef(false);
-
-  const [researchIdeas, setResearchIdeas] = useState<ResearchIdea[]>([]);
-  const [views, setViews] = useState<number>(0);
+  const initialFetchDone = useRef(false);
+  const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
-  const fetchResearchIdeas = useCallback(async () => {
+  // ── Fetch all strategies ────────────────────────────────────────────────────
+  const fetchStrategies = useCallback(async () => {
     try {
-      logger.log('Fetching research ideas...');
-      let ideas: ResearchIdea[];
-
-      if (USE_MOCK_DATA) {
-        ideas = await fetchMockResearchIdeas();
-      } else {
-        const url = `${API_BASE_URL}${API_ENDPOINTS.RESEARCH_IDEAS}`;
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        ideas = await response.json();
-      }
-
-      setResearchIdeas(ideas);
+      const res = await fetch(`${API_BASE_URL}${API_ENDPOINTS.STRATEGIES}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: Strategy[] = await res.json();
+      setStrategies(data);
       setLastRefresh(new Date());
-    } catch (error) {
-      logger.error('Research ideas fetch failed:', error);
-      if (!USE_MOCK_DATA) {
-        const ideas = await fetchMockResearchIdeas();
-        setResearchIdeas(ideas);
-        setLastRefresh(new Date());
-      }
+      logger.log(`Strategies loaded: ${data.length}`);
+    } catch (err) {
+      logger.error('fetchStrategies failed:', err);
     }
   }, []);
 
-  const fetchViews = useCallback(async () => {
+  // ── Create strategy ─────────────────────────────────────────────────────────
+  const createStrategy = useCallback(async (data: Partial<Strategy>): Promise<Strategy | null> => {
     try {
-      if (USE_MOCK_DATA) {
-        setViews(Math.floor(Math.random() * 10000) + 1000);
-        return;
-      }
-
-      const url = `${API_BASE_URL}${API_ENDPOINTS.VIEWS}`;
-      const response = await fetch(url);
-      if (response.ok) {
-        const data = await response.json();
-        setViews(data.views);
-      }
-
-      await fetch(url, { method: 'POST' });
-
-      const updatedResponse = await fetch(url);
-      if (updatedResponse.ok) {
-        const updatedData = await updatedResponse.json();
-        setViews(updatedData.views);
-      }
-    } catch (error) {
-      logger.error('Failed to fetch views:', error);
-      setViews(Math.floor(Math.random() * 10000) + 1000);
+      const res = await fetch(`${API_BASE_URL}${API_ENDPOINTS.STRATEGIES}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const created: Strategy = await res.json();
+      setStrategies((prev) => [created, ...prev]);
+      return created;
+    } catch (err) {
+      logger.error('createStrategy failed:', err);
+      return null;
     }
   }, []);
 
-  const fetchAllDataInParallel = useCallback(async () => {
+  // ── Delete strategy ─────────────────────────────────────────────────────────
+  const deleteStrategy = useCallback(async (id: string) => {
     try {
-      await Promise.all([fetchResearchIdeas(), fetchViews()]);
-    } finally {
-      setIsLoading(false);
+      await fetch(`${API_BASE_URL}${API_ENDPOINTS.STRATEGY(id)}`, {
+        method: 'DELETE',
+      });
+      setStrategies((prev) => prev.filter((s) => s.id !== id));
+    } catch (err) {
+      logger.error('deleteStrategy failed:', err);
     }
-  }, [fetchResearchIdeas, fetchViews]);
+  }, []);
 
+  // ── Poll until a job finishes ───────────────────────────────────────────────
+  const pollStatus = useCallback((id: string) => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}${API_ENDPOINTS.STRATEGY_STATUS(id)}`
+        );
+        if (!res.ok) return;
+        const st = await res.json();
+        const finished =
+          st.backtest_status !== 'running' && st.generation_status !== 'running';
+
+        if (finished) {
+          clearInterval(interval);
+          // Re-fetch the full strategy record with results
+          const sRes = await fetch(`${API_BASE_URL}${API_ENDPOINTS.STRATEGY(id)}`);
+          if (sRes.ok) {
+            const updated: Strategy = await sRes.json();
+            setStrategies((prev) => prev.map((s) => (s.id === id ? updated : s)));
+          }
+        } else {
+          setStrategies((prev) =>
+            prev.map((s) =>
+              s.id === id
+                ? {
+                    ...s,
+                    backtest_status: st.backtest_status,
+                    generation_status: st.generation_status,
+                  }
+                : s
+            )
+          );
+        }
+      } catch (_) {
+        // ignore transient poll errors
+      }
+    }, 2000);
+  }, []);
+
+  // ── Trigger backtest ────────────────────────────────────────────────────────
+  const runBacktest = useCallback(
+    async (id: string) => {
+      await fetch(`${API_BASE_URL}${API_ENDPOINTS.STRATEGY_BACKTEST(id)}`, {
+        method: 'POST',
+      });
+      setStrategies((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, backtest_status: 'running' } : s))
+      );
+      pollStatus(id);
+    },
+    [pollStatus]
+  );
+
+  // ── Trigger generation ──────────────────────────────────────────────────────
+  const runGeneration = useCallback(
+    async (id: string, cutoffMonth?: string) => {
+      await fetch(`${API_BASE_URL}${API_ENDPOINTS.STRATEGY_GENERATE(id)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cutoff_month: cutoffMonth }),
+      });
+      setStrategies((prev) =>
+        prev.map((s) =>
+          s.id === id ? { ...s, generation_status: 'running' } : s
+        )
+      );
+      pollStatus(id);
+    },
+    [pollStatus]
+  );
+
+  // ── Initial load + periodic refresh ────────────────────────────────────────
   useEffect(() => {
-    if (initialFetchComplete.current) {
-      return;
-    }
-    initialFetchComplete.current = true;
-
-    fetchAllDataInParallel();
-
-    const updateInterval = setInterval(async () => {
-      await fetchResearchIdeas();
-    }, REFRESH_INTERVAL);
-
-    return () => {
-      clearInterval(updateInterval);
-    };
-  }, [fetchAllDataInParallel, fetchResearchIdeas]);
+    if (initialFetchDone.current) return;
+    initialFetchDone.current = true;
+    fetchStrategies().finally(() => setIsLoading(false));
+    const timer = setInterval(fetchStrategies, REFRESH_INTERVAL);
+    return () => clearInterval(timer);
+  }, [fetchStrategies]);
 
   return (
     <Router>
@@ -112,10 +153,13 @@ function App() {
               path="/"
               element={
                 <Dashboard
-                  researchIdeas={researchIdeas}
+                  strategies={strategies}
                   lastRefresh={lastRefresh}
-                  views={views}
                   isLoading={isLoading}
+                  onRunBacktest={runBacktest}
+                  onRunGeneration={runGeneration}
+                  onCreateStrategy={createStrategy}
+                  onDeleteStrategy={deleteStrategy}
                 />
               }
             />
