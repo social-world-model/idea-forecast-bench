@@ -2,14 +2,14 @@ import os
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, Optional, Union
 
 import numpy as np
 import openai
 
 from src.configs import Config
-from src.topic_extraction import read_file_content
-from utils.data import MatchResult, clean_paper_content
+from src.types import MatchResult, clean_paper_content
+from src.utils import read_file_content
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -19,6 +19,12 @@ except ImportError:
     DEPENDENCIES_AVAILABLE = False
 
 class SimilarityEngine(ABC):
+    @property
+    @abstractmethod
+    def engine_name(self) -> str:
+        """Human-readable engine label."""
+        raise NotImplementedError
+
     @abstractmethod
     def compute_similarity(self, idea: str, context: str) -> MatchResult:
         """
@@ -56,7 +62,7 @@ class LLMSimilarityEngine(SimilarityEngine):
                 temperature=self.config.temperature,
             )
             
-            content = response.choices[0].message.content.strip()
+            content = (response.choices[0].message.content or "").strip()
             score = 0.0
             reasoning = ""
             
@@ -177,6 +183,23 @@ class ResearchMatcher:
             
         content = clean_paper_content(content)
         return self.engine.compute_similarity(idea, content)
+
+
+def create_similarity_engine(
+    engine_type: str,
+    config: Config,
+    client: Optional[openai.OpenAI] = None,
+) -> SimilarityEngine:
+    """
+    Unified engine factory for caller code.
+    """
+    if engine_type == "llm":
+        if client is None:
+            raise ValueError("LLM engine requires an OpenAI client.")
+        return LLMSimilarityEngine(client=client, config=config)
+    if engine_type == "embedding":
+        return SentenceTransformerSimilarityEngine(config=config)
+    raise ValueError(f"Unsupported engine type: {engine_type}")
 
 def example_usage():
     project_root = Path(__file__).parent.parent
