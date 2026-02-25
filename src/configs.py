@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional, Type, TypeVar
 import yaml
 from pydantic import BaseModel
 
-from utils.data import SimilarityPrompt
+from src.types import SimilarityPrompt
 
 T = TypeVar("T", bound=BaseModel)
 

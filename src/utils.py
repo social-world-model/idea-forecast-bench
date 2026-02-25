@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List, Mapping, Union
+
+PathLike = Union[str, Path]
 
 def find_markdown_files(root: Path) -> List[Path]:
     return sorted(root.rglob("*.md"))
@@ -14,13 +16,21 @@ def read_text(path: Path) -> str:
         return ""
 
 
+def read_file_content(path: PathLike) -> str:
+    """
+    Stable file-reading interface used by matching and scripts.
+    Accepts both string and Path inputs.
+    """
+    return read_text(Path(path))
+
+
 def truncate(text: str, max_chars: int) -> str:
     if max_chars <= 0 or len(text) <= max_chars:
         return text
     return text[:max_chars] + "\n...(truncated)"
 
 
-def load_json(path: Path) -> Dict[str, List[str]]:
+def load_json(path: Path) -> Dict[str, Any]:
     if not path.exists():
         return {}
     try:
@@ -30,7 +40,7 @@ def load_json(path: Path) -> Dict[str, List[str]]:
         return {}
 
 
-def save_json(path: Path, obj: Dict[str, List[str]]) -> None:
+def save_json(path: Path, obj: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(obj, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -90,4 +100,3 @@ def group_by_keywords(
                 
     # Filter by min_papers and convert sets to sorted lists
     return {k: sorted(list(v)) for k, v in keyword_map.items() if len(v) >= min_papers}
-

@@ -1,0 +1,716 @@
+{
+  "id": "80cf91ac",
+  "name": "Keyword Trend · 2024 Full Year",
+  "strategy_name": "keyword_trend",
+  "params": {
+    "recent_months": 6,
+    "min_keyword_freq": 1
+  },
+  "config": {
+    "top_k": 8,
+    "horizon_months": 3,
+    "min_train_papers": 2,
+    "start_month": "2024-01",
+    "end_month": "2024-12",
+    "data_dir": "/Users/yuhaofei/Downloads/live-idea-bench/data/arxiv_csml/raw_markdown"
+  },
+  "created_at": "2026-02-26T05:17:42.471644",
+  "backtest_status": "done",
+  "generation_status": "pending",
+  "backtest_result": {
+    "summary": {
+      "windows": 8,
+      "avg_hit_at_k": 0.375,
+      "avg_recall_at_k": 0.0893,
+      "avg_precision_at_k": 0.0781,
+      "avg_mrr": 0.2125,
+      "avg_novelty": 0.0,
+      "avg_diversity": 1.0
+    },
+    "windows": [
+      {
+        "cutoff_month": "2024-02",
+        "future_end_month": "2024-05",
+        "train_papers": 2,
+        "future_papers": 3,
+        "predictions": [
+          {
+            "rank": 1,
+            "title": "Next-stage direction: Contrastive Alignment",
+            "rationale": "Keyword 'contrastive alignment' appears 1 times in the recent 6 month(s), 1 times overall before 2024-02.",
+            "key_terms": [
+              "contrastive alignment"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 2,
+            "title": "Next-stage direction: Diffusion Transformers",
+            "rationale": "Keyword 'diffusion transformers' appears 1 times in the recent 6 month(s), 1 times overall before 2024-02.",
+            "key_terms": [
+              "diffusion transformers"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 3,
+            "title": "Next-stage direction: Mixture-Of-Experts Routing",
+            "rationale": "Keyword 'mixture-of-experts routing' appears 1 times in the recent 6 month(s), 1 times overall before 2024-02.",
+            "key_terms": [
+              "mixture-of-experts routing"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 4,
+            "title": "Next-stage direction: Multimodal Reasoning",
+            "rationale": "Keyword 'multimodal reasoning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-02.",
+            "key_terms": [
+              "multimodal reasoning"
+            ],
+            "confidence": 0.5
+          }
+        ],
+        "evaluation": {
+          "hit_at_k": 0.0,
+          "recall_at_k": 0.0,
+          "precision_at_k": 0.0,
+          "mrr": 0.0,
+          "novelty": 0.0,
+          "diversity": 1.0,
+          "matched_prediction_ranks": [],
+          "matched_terms": []
+        }
+      },
+      {
+        "cutoff_month": "2024-03",
+        "future_end_month": "2024-06",
+        "train_papers": 3,
+        "future_papers": 3,
+        "predictions": [
+          {
+            "rank": 1,
+            "title": "Next-stage direction: Agentic Tool Use",
+            "rationale": "Keyword 'agentic tool use' appears 1 times in the recent 6 month(s), 1 times overall before 2024-03.",
+            "key_terms": [
+              "agentic tool use"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 2,
+            "title": "Next-stage direction: Contrastive Alignment",
+            "rationale": "Keyword 'contrastive alignment' appears 1 times in the recent 6 month(s), 1 times overall before 2024-03.",
+            "key_terms": [
+              "contrastive alignment"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 3,
+            "title": "Next-stage direction: Diffusion Transformers",
+            "rationale": "Keyword 'diffusion transformers' appears 1 times in the recent 6 month(s), 1 times overall before 2024-03.",
+            "key_terms": [
+              "diffusion transformers"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 4,
+            "title": "Next-stage direction: Mixture-Of-Experts Routing",
+            "rationale": "Keyword 'mixture-of-experts routing' appears 1 times in the recent 6 month(s), 1 times overall before 2024-03.",
+            "key_terms": [
+              "mixture-of-experts routing"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 5,
+            "title": "Next-stage direction: Multimodal Reasoning",
+            "rationale": "Keyword 'multimodal reasoning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-03.",
+            "key_terms": [
+              "multimodal reasoning"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 6,
+            "title": "Next-stage direction: Synthetic Data Bootstrapping",
+            "rationale": "Keyword 'synthetic data bootstrapping' appears 1 times in the recent 6 month(s), 1 times overall before 2024-03.",
+            "key_terms": [
+              "synthetic data bootstrapping"
+            ],
+            "confidence": 0.5
+          }
+        ],
+        "evaluation": {
+          "hit_at_k": 0.0,
+          "recall_at_k": 0.0,
+          "precision_at_k": 0.0,
+          "mrr": 0.0,
+          "novelty": 0.0,
+          "diversity": 1.0,
+          "matched_prediction_ranks": [],
+          "matched_terms": []
+        }
+      },
+      {
+        "cutoff_month": "2024-04",
+        "future_end_month": "2024-07",
+        "train_papers": 4,
+        "future_papers": 3,
+        "predictions": [
+          {
+            "rank": 1,
+            "title": "Next-stage direction: Agentic Tool Use",
+            "rationale": "Keyword 'agentic tool use' appears 1 times in the recent 6 month(s), 1 times overall before 2024-04.",
+            "key_terms": [
+              "agentic tool use"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 2,
+            "title": "Next-stage direction: Contrastive Alignment",
+            "rationale": "Keyword 'contrastive alignment' appears 1 times in the recent 6 month(s), 1 times overall before 2024-04.",
+            "key_terms": [
+              "contrastive alignment"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 3,
+            "title": "Next-stage direction: Diffusion Transformers",
+            "rationale": "Keyword 'diffusion transformers' appears 1 times in the recent 6 month(s), 1 times overall before 2024-04.",
+            "key_terms": [
+              "diffusion transformers"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 4,
+            "title": "Next-stage direction: Mixture-Of-Experts Routing",
+            "rationale": "Keyword 'mixture-of-experts routing' appears 1 times in the recent 6 month(s), 1 times overall before 2024-04.",
+            "key_terms": [
+              "mixture-of-experts routing"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 5,
+            "title": "Next-stage direction: Multimodal Reasoning",
+            "rationale": "Keyword 'multimodal reasoning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-04.",
+            "key_terms": [
+              "multimodal reasoning"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 6,
+            "title": "Next-stage direction: Synthetic Data Bootstrapping",
+            "rationale": "Keyword 'synthetic data bootstrapping' appears 1 times in the recent 6 month(s), 1 times overall before 2024-04.",
+            "key_terms": [
+              "synthetic data bootstrapping"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 7,
+            "title": "Next-stage direction: Test-Time Adaptation",
+            "rationale": "Keyword 'test-time adaptation' appears 1 times in the recent 6 month(s), 1 times overall before 2024-04.",
+            "key_terms": [
+              "test-time adaptation"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 8,
+            "title": "Next-stage direction: Uncertainty-Aware Decoding",
+            "rationale": "Keyword 'uncertainty-aware decoding' appears 1 times in the recent 6 month(s), 1 times overall before 2024-04.",
+            "key_terms": [
+              "uncertainty-aware decoding"
+            ],
+            "confidence": 0.5
+          }
+        ],
+        "evaluation": {
+          "hit_at_k": 0.0,
+          "recall_at_k": 0.0,
+          "precision_at_k": 0.0,
+          "mrr": 0.0,
+          "novelty": 0.0,
+          "diversity": 1.0,
+          "matched_prediction_ranks": [],
+          "matched_terms": []
+        }
+      },
+      {
+        "cutoff_month": "2024-05",
+        "future_end_month": "2024-08",
+        "train_papers": 5,
+        "future_papers": 3,
+        "predictions": [
+          {
+            "rank": 1,
+            "title": "Next-stage direction: Agentic Tool Use",
+            "rationale": "Keyword 'agentic tool use' appears 1 times in the recent 6 month(s), 1 times overall before 2024-05.",
+            "key_terms": [
+              "agentic tool use"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 2,
+            "title": "Next-stage direction: Contrastive Alignment",
+            "rationale": "Keyword 'contrastive alignment' appears 1 times in the recent 6 month(s), 1 times overall before 2024-05.",
+            "key_terms": [
+              "contrastive alignment"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 3,
+            "title": "Next-stage direction: Diffusion Transformers",
+            "rationale": "Keyword 'diffusion transformers' appears 1 times in the recent 6 month(s), 1 times overall before 2024-05.",
+            "key_terms": [
+              "diffusion transformers"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 4,
+            "title": "Next-stage direction: Mixture-Of-Experts Routing",
+            "rationale": "Keyword 'mixture-of-experts routing' appears 1 times in the recent 6 month(s), 1 times overall before 2024-05.",
+            "key_terms": [
+              "mixture-of-experts routing"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 5,
+            "title": "Next-stage direction: Multimodal Reasoning",
+            "rationale": "Keyword 'multimodal reasoning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-05.",
+            "key_terms": [
+              "multimodal reasoning"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 6,
+            "title": "Next-stage direction: Representation Learning",
+            "rationale": "Keyword 'representation learning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-05.",
+            "key_terms": [
+              "representation learning"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 7,
+            "title": "Next-stage direction: Self-Refinement Loops",
+            "rationale": "Keyword 'self-refinement loops' appears 1 times in the recent 6 month(s), 1 times overall before 2024-05.",
+            "key_terms": [
+              "self-refinement loops"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 8,
+            "title": "Next-stage direction: Synthetic Data Bootstrapping",
+            "rationale": "Keyword 'synthetic data bootstrapping' appears 1 times in the recent 6 month(s), 1 times overall before 2024-05.",
+            "key_terms": [
+              "synthetic data bootstrapping"
+            ],
+            "confidence": 0.5
+          }
+        ],
+        "evaluation": {
+          "hit_at_k": 0.0,
+          "recall_at_k": 0.0,
+          "precision_at_k": 0.0,
+          "mrr": 0.0,
+          "novelty": 0.0,
+          "diversity": 1.0,
+          "matched_prediction_ranks": [],
+          "matched_terms": []
+        }
+      },
+      {
+        "cutoff_month": "2024-06",
+        "future_end_month": "2024-09",
+        "train_papers": 6,
+        "future_papers": 3,
+        "predictions": [
+          {
+            "rank": 1,
+            "title": "Next-stage direction: Agentic Tool Use",
+            "rationale": "Keyword 'agentic tool use' appears 1 times in the recent 6 month(s), 1 times overall before 2024-06.",
+            "key_terms": [
+              "agentic tool use"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 2,
+            "title": "Next-stage direction: Contrastive Alignment",
+            "rationale": "Keyword 'contrastive alignment' appears 1 times in the recent 6 month(s), 1 times overall before 2024-06.",
+            "key_terms": [
+              "contrastive alignment"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 3,
+            "title": "Next-stage direction: Diffusion Transformers",
+            "rationale": "Keyword 'diffusion transformers' appears 1 times in the recent 6 month(s), 1 times overall before 2024-06.",
+            "key_terms": [
+              "diffusion transformers"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 4,
+            "title": "Next-stage direction: Efficient Finetuning",
+            "rationale": "Keyword 'efficient finetuning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-06.",
+            "key_terms": [
+              "efficient finetuning"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 5,
+            "title": "Next-stage direction: Graph-Structured Memory",
+            "rationale": "Keyword 'graph-structured memory' appears 1 times in the recent 6 month(s), 1 times overall before 2024-06.",
+            "key_terms": [
+              "graph-structured memory"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 6,
+            "title": "Next-stage direction: Mixture-Of-Experts Routing",
+            "rationale": "Keyword 'mixture-of-experts routing' appears 1 times in the recent 6 month(s), 1 times overall before 2024-06.",
+            "key_terms": [
+              "mixture-of-experts routing"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 7,
+            "title": "Next-stage direction: Multimodal Reasoning",
+            "rationale": "Keyword 'multimodal reasoning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-06.",
+            "key_terms": [
+              "multimodal reasoning"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 8,
+            "title": "Next-stage direction: Representation Learning",
+            "rationale": "Keyword 'representation learning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-06.",
+            "key_terms": [
+              "representation learning"
+            ],
+            "confidence": 0.5
+          }
+        ],
+        "evaluation": {
+          "hit_at_k": 1.0,
+          "recall_at_k": 0.2857,
+          "precision_at_k": 0.25,
+          "mrr": 0.5,
+          "novelty": 0.0,
+          "diversity": 1.0,
+          "matched_prediction_ranks": [
+            2,
+            3
+          ],
+          "matched_terms": [
+            "contrastive alignment",
+            "diffusion transformers"
+          ]
+        }
+      },
+      {
+        "cutoff_month": "2024-07",
+        "future_end_month": "2024-10",
+        "train_papers": 7,
+        "future_papers": 3,
+        "predictions": [
+          {
+            "rank": 1,
+            "title": "Next-stage direction: Agentic Tool Use",
+            "rationale": "Keyword 'agentic tool use' appears 1 times in the recent 6 month(s), 1 times overall before 2024-07.",
+            "key_terms": [
+              "agentic tool use"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 2,
+            "title": "Next-stage direction: Distillation With Verifier Models",
+            "rationale": "Keyword 'distillation with verifier models' appears 1 times in the recent 6 month(s), 1 times overall before 2024-07.",
+            "key_terms": [
+              "distillation with verifier models"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 3,
+            "title": "Next-stage direction: Efficient Finetuning",
+            "rationale": "Keyword 'efficient finetuning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-07.",
+            "key_terms": [
+              "efficient finetuning"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 4,
+            "title": "Next-stage direction: Graph-Structured Memory",
+            "rationale": "Keyword 'graph-structured memory' appears 1 times in the recent 6 month(s), 1 times overall before 2024-07.",
+            "key_terms": [
+              "graph-structured memory"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 5,
+            "title": "Next-stage direction: Mixture-Of-Experts Routing",
+            "rationale": "Keyword 'mixture-of-experts routing' appears 1 times in the recent 6 month(s), 1 times overall before 2024-07.",
+            "key_terms": [
+              "mixture-of-experts routing"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 6,
+            "title": "Next-stage direction: Multimodal Reasoning",
+            "rationale": "Keyword 'multimodal reasoning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-07.",
+            "key_terms": [
+              "multimodal reasoning"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 7,
+            "title": "Next-stage direction: Representation Learning",
+            "rationale": "Keyword 'representation learning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-07.",
+            "key_terms": [
+              "representation learning"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 8,
+            "title": "Next-stage direction: Retrieval-Augmented Learning",
+            "rationale": "Keyword 'retrieval-augmented learning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-07.",
+            "key_terms": [
+              "retrieval-augmented learning"
+            ],
+            "confidence": 0.5
+          }
+        ],
+        "evaluation": {
+          "hit_at_k": 1.0,
+          "recall_at_k": 0.2857,
+          "precision_at_k": 0.25,
+          "mrr": 0.2,
+          "novelty": 0.0,
+          "diversity": 1.0,
+          "matched_prediction_ranks": [
+            5,
+            6
+          ],
+          "matched_terms": [
+            "mixture-of-experts routing",
+            "multimodal reasoning"
+          ]
+        }
+      },
+      {
+        "cutoff_month": "2024-08",
+        "future_end_month": "2024-11",
+        "train_papers": 8,
+        "future_papers": 3,
+        "predictions": [
+          {
+            "rank": 1,
+            "title": "Next-stage direction: Agentic Tool Use",
+            "rationale": "Keyword 'agentic tool use' appears 1 times in the recent 6 month(s), 1 times overall before 2024-08.",
+            "key_terms": [
+              "agentic tool use"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 2,
+            "title": "Next-stage direction: Curriculum Training",
+            "rationale": "Keyword 'curriculum training' appears 1 times in the recent 6 month(s), 1 times overall before 2024-08.",
+            "key_terms": [
+              "curriculum training"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 3,
+            "title": "Next-stage direction: Distillation With Verifier Models",
+            "rationale": "Keyword 'distillation with verifier models' appears 1 times in the recent 6 month(s), 1 times overall before 2024-08.",
+            "key_terms": [
+              "distillation with verifier models"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 4,
+            "title": "Next-stage direction: Efficient Finetuning",
+            "rationale": "Keyword 'efficient finetuning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-08.",
+            "key_terms": [
+              "efficient finetuning"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 5,
+            "title": "Next-stage direction: Graph-Structured Memory",
+            "rationale": "Keyword 'graph-structured memory' appears 1 times in the recent 6 month(s), 1 times overall before 2024-08.",
+            "key_terms": [
+              "graph-structured memory"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 6,
+            "title": "Next-stage direction: Representation Learning",
+            "rationale": "Keyword 'representation learning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-08.",
+            "key_terms": [
+              "representation learning"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 7,
+            "title": "Next-stage direction: Retrieval-Augmented Learning",
+            "rationale": "Keyword 'retrieval-augmented learning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-08.",
+            "key_terms": [
+              "retrieval-augmented learning"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 8,
+            "title": "Next-stage direction: Self-Refinement Loops",
+            "rationale": "Keyword 'self-refinement loops' appears 1 times in the recent 6 month(s), 1 times overall before 2024-08.",
+            "key_terms": [
+              "self-refinement loops"
+            ],
+            "confidence": 0.5
+          }
+        ],
+        "evaluation": {
+          "hit_at_k": 1.0,
+          "recall_at_k": 0.1429,
+          "precision_at_k": 0.125,
+          "mrr": 1.0,
+          "novelty": 0.0,
+          "diversity": 1.0,
+          "matched_prediction_ranks": [
+            1
+          ],
+          "matched_terms": [
+            "agentic tool use"
+          ]
+        }
+      },
+      {
+        "cutoff_month": "2024-09",
+        "future_end_month": "2024-12",
+        "train_papers": 9,
+        "future_papers": 3,
+        "predictions": [
+          {
+            "rank": 1,
+            "title": "Next-stage direction: Contrastive Alignment",
+            "rationale": "Keyword 'contrastive alignment' appears 1 times in the recent 6 month(s), 2 times overall before 2024-09.",
+            "key_terms": [
+              "contrastive alignment"
+            ],
+            "confidence": 0.52
+          },
+          {
+            "rank": 2,
+            "title": "Next-stage direction: Curriculum Training",
+            "rationale": "Keyword 'curriculum training' appears 1 times in the recent 6 month(s), 1 times overall before 2024-09.",
+            "key_terms": [
+              "curriculum training"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 3,
+            "title": "Next-stage direction: Diffusion Transformers",
+            "rationale": "Keyword 'diffusion transformers' appears 1 times in the recent 6 month(s), 2 times overall before 2024-09.",
+            "key_terms": [
+              "diffusion transformers"
+            ],
+            "confidence": 0.52
+          },
+          {
+            "rank": 4,
+            "title": "Next-stage direction: Distillation With Verifier Models",
+            "rationale": "Keyword 'distillation with verifier models' appears 1 times in the recent 6 month(s), 1 times overall before 2024-09.",
+            "key_terms": [
+              "distillation with verifier models"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 5,
+            "title": "Next-stage direction: Efficient Finetuning",
+            "rationale": "Keyword 'efficient finetuning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-09.",
+            "key_terms": [
+              "efficient finetuning"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 6,
+            "title": "Next-stage direction: Graph-Structured Memory",
+            "rationale": "Keyword 'graph-structured memory' appears 1 times in the recent 6 month(s), 1 times overall before 2024-09.",
+            "key_terms": [
+              "graph-structured memory"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 7,
+            "title": "Next-stage direction: Representation Learning",
+            "rationale": "Keyword 'representation learning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-09.",
+            "key_terms": [
+              "representation learning"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "rank": 8,
+            "title": "Next-stage direction: Retrieval-Augmented Learning",
+            "rationale": "Keyword 'retrieval-augmented learning' appears 1 times in the recent 6 month(s), 1 times overall before 2024-09.",
+            "key_terms": [
+              "retrieval-augmented learning"
+            ],
+            "confidence": 0.5
+          }
+        ],
+        "evaluation": {
+          "hit_at_k": 0.0,
+          "recall_at_k": 0.0,
+          "precision_at_k": 0.0,
+          "mrr": 0.0,
+          "novelty": 0.0,
+          "diversity": 1.0,
+          "matched_prediction_ranks": [],
+          "matched_terms": []
+        }
+      }
+    ]
+  },
+  "generation": null
+}
