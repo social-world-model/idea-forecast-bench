@@ -18,33 +18,28 @@ const Navigation: React.FC = () => {
   return (
     <nav className="navigation">
       <div className="navigation-container">
-        {/* Logo Section */}
         <div className="nav-logo">
           <div className="live-badge">
             <div className="live-indicator"></div>
             LIVE
           </div>
-          <button
-            className="brand-button"
-            onClick={() => navigateAndCloseMobile('/')}
-          >
+          <button className="brand-button" onClick={() => navigateAndCloseMobile('/')}>
             Idea Benchmark
           </button>
         </div>
 
-        {/* Desktop Navigation Links */}
         <div className="nav-links desktop-nav">
-          <button
-            className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}
-            onClick={() => navigate('/')}
-          >
+          <button className={`nav-link ${location.pathname === '/' ? 'active' : ''}`} onClick={() => navigate('/')}>
             Leaderboard
           </button>
+          <button className={`nav-link ${location.pathname === '/runs' ? 'active' : ''}`} onClick={() => navigate('/runs')}>
+            Run
+          </button>
           <button
-            className={`nav-link ${location.pathname === '/about' ? 'active' : ''}`}
-            onClick={() => navigate('/about')}
+            className={`nav-link ${location.pathname.startsWith('/runs/history') ? 'active' : ''}`}
+            onClick={() => navigate('/runs/history')}
           >
-            About
+            History
           </button>
           <button
             className={`nav-link ${location.pathname === '/generated-ideas' ? 'active' : ''}`}
@@ -52,14 +47,12 @@ const Navigation: React.FC = () => {
           >
             Generated Ideas
           </button>
+          <button className={`nav-link ${location.pathname === '/about' ? 'active' : ''}`} onClick={() => navigate('/about')}>
+            About
+          </button>
         </div>
 
-        {/* Mobile Hamburger Button */}
-        <button
-          className="mobile-menu-toggle"
-          onClick={toggleMobileMenu}
-          aria-label="Toggle mobile menu"
-        >
+        <button className="mobile-menu-toggle" onClick={toggleMobileMenu} aria-label="Toggle mobile menu">
           <div className={`hamburger ${isMobileMenuOpen ? 'open' : ''}`}>
             <span></span>
             <span></span>
@@ -68,15 +61,9 @@ const Navigation: React.FC = () => {
         </button>
       </div>
 
-      {/* Mobile Navigation Menu */}
       <div className={`mobile-nav ${isMobileMenuOpen ? 'open' : ''}`}>
-        {/* Mobile Menu Header with Close Button */}
         <div className="mobile-nav-header">
-          <button
-            className="mobile-nav-close"
-            onClick={() => setIsMobileMenuOpen(false)}
-            aria-label="Close menu"
-          >
+          <button className="mobile-nav-close" onClick={() => setIsMobileMenuOpen(false)} aria-label="Close menu">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -85,36 +72,27 @@ const Navigation: React.FC = () => {
         </div>
 
         <div className="mobile-nav-links">
-          <button
-            className={`mobile-nav-link ${location.pathname === '/' ? 'active' : ''}`}
-            onClick={() => navigateAndCloseMobile('/')}
-          >
+          <button className={`mobile-nav-link ${location.pathname === '/' ? 'active' : ''}`} onClick={() => navigateAndCloseMobile('/')}>
             Home
           </button>
-          <button
-            className={`mobile-nav-link ${location.pathname === '/about' ? 'active' : ''}`}
-            onClick={() => navigateAndCloseMobile('/about')}
-          >
-            About
+          <button className={`mobile-nav-link ${location.pathname === '/runs' ? 'active' : ''}`} onClick={() => navigateAndCloseMobile('/runs')}>
+            Run
           </button>
-          <button
-            className={`mobile-nav-link ${location.pathname === '/generated-ideas' ? 'active' : ''}`}
-            onClick={() => navigateAndCloseMobile('/generated-ideas')}
-          >
+          <button className={`mobile-nav-link ${location.pathname.startsWith('/runs/history') ? 'active' : ''}`} onClick={() => navigateAndCloseMobile('/runs/history')}>
+            History
+          </button>
+          <button className={`mobile-nav-link ${location.pathname === '/generated-ideas' ? 'active' : ''}`} onClick={() => navigateAndCloseMobile('/generated-ideas')}>
             Generated Ideas
+          </button>
+          <button className={`mobile-nav-link ${location.pathname === '/about' ? 'active' : ''}`} onClick={() => navigateAndCloseMobile('/about')}>
+            About
           </button>
         </div>
       </div>
 
-      {/* Mobile Menu Backdrop */}
-      {
-        isMobileMenuOpen && (
-          <div
-            className="mobile-menu-backdrop"
-            onClick={() => setIsMobileMenuOpen(false)}
-          ></div>
-        )
-      }
+      {isMobileMenuOpen && (
+        <div className="mobile-menu-backdrop" onClick={() => setIsMobileMenuOpen(false)}></div>
+      )}
     </nav>
   );
 };
