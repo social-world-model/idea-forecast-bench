@@ -1,170 +1,170 @@
-# Open-Source Research Project in Python: A Template
+# Live Idea Bench
 
-[![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/downloads/release/python-3109/)
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
-<a href="https://github.com/psf/black"><img alt="Code style: black" src="https://img.shields.io/badge/code%20style-black-000000.svg"></a>
-[![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
-[![bear-ified](https://raw.githubusercontent.com/beartype/beartype-assets/main/badge/bear-ified.svg)](https://beartype.readthedocs.io)
-[![Github Action](https://github.com/lwaekfjlk/python-project-template/actions/workflows/pytest.yml/badge.svg?branch=main)]()
+Live Idea Bench is a strategy-driven research idea system with three connected capabilities:
 
-> [!NOTE]
-> This repo is continuously updating with more tools. Any contribution is welcome.
+1. Define strategy variants.
+2. Run backtests over time windows.
+3. Generate ideas and evaluate quality/performance.
 
-## ✨ Motivation
+The goal is to compare strategies side-by-side and expose their metrics in backend APIs and frontend dashboards.
 
-To ensure high standards in engineering projects, we offer a standardized template specifically designed for open-source Python research projects. This template is an excellent choice if you:
+## What Is In Place
 
-1. Want to facilitate seamless collaboration and extension of your project by other researchers.
-2. Aim to bridge communication gaps among collaborators effectively.
-3. Seek to make rapid iterations with assurance that small code modifications won’t disrupt the overall project.
-4. Wish to reduce the frequency of frustrating runtime errors during experiments.
+- Backtest orchestrator:
+  - [/Users/yuhaofei/Downloads/live-idea-bench-backtest-orchestrator/src/runner.py](/Users/yuhaofei/Downloads/live-idea-bench-backtest-orchestrator/src/runner.py)
+  - [/Users/yuhaofei/Downloads/live-idea-bench-backtest-orchestrator/scripts/run_backtest.py](/Users/yuhaofei/Downloads/live-idea-bench-backtest-orchestrator/scripts/run_backtest.py)
+- Idea generation backend endpoints:
+  - `/api/generate-ideas`
+  - `/api/research-ideas`
+- Frontend idea leaderboard/dashboard.
 
-## 🔨 Continuous Integration (CI) Workflow
+## Strategy-First Workflow
 
-Here's a clearer and more straightforward guideline of the steps for working with your codebase. If working in a small group or working on a simple project, some of the steps can be skipped.
+Use this lifecycle for each strategy (`baseline`, `novelty_boost`, `cost_aware`, etc.):
 
-1. **Create Issue**
+1. Strategy Definition
+- Define strategy id/name and its config knobs (model, prompt mode, filters, ranking weights, budget caps).
 
-   Before starting, open a new issue in the repository detailing what you plan to implement. Assign the issue to yourself.
+2. Backtest Execution
+- Run strategy across rolling windows.
+- Persist per-window artifacts and resumable state.
 
-2. **Sync Repo**
+3. Generation
+- Produce ideas per window (or for latest window).
 
-   Update your local repository to match the latest version of the remote repository.
+4. Evaluation
+- Score output quality and operational performance.
+- Aggregate metrics by strategy.
 
-3. **Create Branch**
+5. Product Surface
+- Backend returns strategy-level metrics and idea-level records.
+- Frontend compares strategies and shows idea overview.
 
-   Create a new branch for your task. Name it appropriately based on the type of task, such as `feature/feature-name`, `bug/bug-name`, or `exp/exp-name`.
+## Backtest Orchestrator
 
-4. **Implement Code**
+Run rolling windows with resumable artifacts.
 
-   Work on your task and make necessary changes to the codebase.
-
-5. **Test Locally**
-
-   Run tests using tools like mypy, pytest, and pre-commit. Ensure all tests pass before proceeding.
-
-6. **Change Commit**
-
-   Add and commit your changes to the branch, then push the branch to the repository.
-
-7. **Create PR**
-
-   Open a Pull Request (PR) for the branch you've pushed.
-
-8. **Link PR to Issue**
-
-   In your PR, include "Closes #ISSUE_NUM" to link it to the original issue.
-
-9. **Pass Continuous Integration**
-
-   Ensure all GitHub Actions checks pass. If they fail, revise your code based on the errors reported.
-
-10. **Review PR Checklist**
-
-    Verify that all items in the PR checklist are completed, such as updating documentation or adding package requirements.
-
-11. **Ask for Code Review**
-
-    Invite a colleague to review your PR. One approved, Use the "Squash and Merge" option to merge your PR, ensuring a clean commit history.
-
-12. **Troubleshooting**
-
-    If you break down the commit history or main branch, contact the repository owner for assistance with `rebase` or other needed actions.
-
-## 💼 Template Structure
-
-The current project template supports the final package release of our codebase.
-
-```
-Template/
-│
-├── .github/                  # Contains GitHub related files like workflows
-├── docs/                     # Documentation for the project
-├── src/                      # Main package directory
-├── stubs/                    # Type stubs for static typing (for mypy strict mode)
-├── tests/                    # Test scripts and resources
-│
-├── .gitignore                # Specifies untracked files to ignore
-├── .pre-commit-config.yaml   # Configurations for pre-commit hooks
-├── poetry.lock               # Lock file generated by poetry for dependencies
-├── pyproject.toml            # Project metadata and tool configurations
+```bash
+python scripts/run_backtest.py \
+  --start 2401 \
+  --end 2406 \
+  --window-months 3 \
+  --step-months 1 \
+  --command-template "python scripts/predict_ideas.py --start {window_start_yymm} --end {window_end_yymm} --output {window_dir}/predictions.json" \
+  --artifacts-dir data/backtests/baseline \
+  --resume
 ```
 
-## ❓ Issue & Pull Request
+Supported time inputs:
+- `YYMM` (example: `2401`)
+- `YYYY-MM` (example: `2024-01`)
 
-An issue typically describes a new feature (`feature`), fixing an old bug (`bug`), launching a group of experiments (`exp`), or refactoring part of the code (`refactor`). Using different issue templates for different issues.
+Command template placeholders:
+- `{window_start}` / `{window_end}` (`YYYY-MM`)
+- `{window_start_yymm}` / `{window_end_yymm}` (`YYMM`)
+- `{window_id}` / `{window_index}`
+- `{window_dir}` / `{artifacts_dir}`
 
-A PR typically implements the content mentioned in one issue.
+Artifacts:
+- `manifest.json`: run-level setup
+- `state.json`: resumable window state
+- `windows/<window_id>/metadata.json`
+- `windows/<window_id>/stdout.log`
+- `windows/<window_id>/stderr.log`
 
-Notice about the development:
+## Strategy Metrics Contract (Recommended)
 
-1. When creating an issue, assign the responsible member for fixing that if possible
-2. When creating a PR, make sure you uses `feature/feature-name`, `bug/bug-name`, `exp/exp-name` for its branch
-3. When finishing one PR, make sure all the github action is passed and all the checks are done.
-4. When merging one PR, make sure using `squash and merge` instead of `merge a pull request`.
-5. Avoid making any direct commit to the `main` branch and try to avoid any `--force` push to any branch unless you are pretty sure about that.
+To support “multi-strategy comparison” in backend and frontend, use a standard output contract per strategy run:
 
-## 👷 Type Checking
+- `strategy_summary.json`
+- `idea_overview.json`
 
-- Tools
+Example `strategy_summary.json` fields:
 
-  - static type checking (`mypy`)
+```json
+{
+  "strategy_id": "baseline",
+  "run_id": "2026-02-25_baseline",
+  "windows_total": 12,
+  "windows_completed": 12,
+  "success_rate": 1.0,
+  "avg_runtime_sec": 18.4,
+  "ideas_generated": 240,
+  "avg_idea_score": 7.8,
+  "avg_novelty": 7.4,
+  "avg_feasibility": 8.1,
+  "api_cost_usd": 42.15
+}
+```
 
-  - dynamic type checking (`beartype`)
+Example `idea_overview.json` fields:
 
-- Guidelines
-  - Run `mypy --strict ./` under the root of the current repo to test the static type.
+```json
+{
+  "strategy_id": "baseline",
+  "top_ideas": [
+    {
+      "id": "idea_001",
+      "title": "...",
+      "impact_score": 8.9,
+      "novelty": 8.7,
+      "feasibility": 8.3,
+      "window": "2024-01_to_2024-03",
+      "tags": ["LLM", "Evaluation"]
+    }
+  ]
+}
+```
 
-## 🏅️ Unit Testing
+## Backend/Frontend Display Targets
 
-- Tools
+Backend should provide:
+- Strategy comparison endpoint: per-strategy KPI table.
+- Idea overview endpoint: top ideas, trend over windows, score distribution.
 
-  - testing code components based on testing function (`pytest`)
+Frontend should show:
+- Strategy comparison panel:
+  - success rate, avg score, avg novelty, avg feasibility, runtime, cost
+- Strategy trend charts:
+  - per-window score/cost/runtime trends
+- Idea overview board:
+  - top ideas by strategy and global top ideas
 
-- Guidelines
-  - Run `pytest` under the root of the current repo to check unit test results.
+## Existing API Notes
 
-## 🧐 Code Spell Checking
+Current backend already serves generated ideas:
+- `GET /api/generate-ideas`
+- `POST /api/generate-ideas`
+- `GET /api/research-ideas`
 
-- Tools
+Current frontend already renders idea list and ranking via `ResearchIdea`.
+The strategy comparison APIs/views can be added on top of the metrics contract above.
 
-  - code spell checking (`codespell`)
+## Dev Commands
 
-- Guidelines
-  - Commonly need to ignore part of the files in the repository like `/data`.
+Run tests:
 
-## 🪝 Pre-commit Hook
+```bash
+pytest -q
+```
 
-- Tools
+Run backend:
 
-  - code formatting (`prettier`)
+```bash
+python backend/app.py
+```
 
-  - import package sorting (`isort`)
+Run frontend:
 
-  - ipynb output clear (`nbstripout`)
+```bash
+cd frontend
+npm install
+npm start
+```
 
-  - code bug checking (`ruff`)
+## Next Integration Steps
 
-- Guidelines
-
-  - Run `python -m pip install pre-commit` to install `pre-commit`
-
-  - Run `pre-commit install` to allow hooking pre-commit with any `git commit` commands.
-
-## 🧑‍💼 Dependency Management
-
-- Tools
-
-  - We utilize `poetry` to support the dependency requirements. Dependency for different usage of the repo can be defined separately in `pyproject.toml`.
-
-- Guidelines
-
-  - Run `pip install poetry` to finish the installation of poetry.
-
-  - Create `conda environment` with a specified Python version
-
-  - Run `poetry install` to install required dependencies.
-
-## ❤️ Contribution
-
-I welcome all kinds of contributions, e.g. adding more tools, better practices, and discussion on trade-offs.
+1. Add strategy config loader (YAML/JSON) and strategy registry.
+2. Make generation script emit standardized evaluation metrics per window.
+3. Add backend endpoints for strategy summaries and trend series.
+4. Extend frontend dashboard with multi-strategy comparison + idea overview tabs.
