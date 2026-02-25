@@ -46,6 +46,12 @@ const Navigation: React.FC = () => {
           >
             About
           </button>
+          <button
+            className={`nav-link ${location.pathname === '/generated-ideas' ? 'active' : ''}`}
+            onClick={() => navigate('/generated-ideas')}
+          >
+            Generated Ideas
+          </button>
         </div>
 
         {/* Mobile Hamburger Button */}
@@ -91,16 +97,24 @@ const Navigation: React.FC = () => {
           >
             About
           </button>
+          <button
+            className={`mobile-nav-link ${location.pathname === '/generated-ideas' ? 'active' : ''}`}
+            onClick={() => navigateAndCloseMobile('/generated-ideas')}
+          >
+            Generated Ideas
+          </button>
         </div>
       </div>
 
       {/* Mobile Menu Backdrop */}
-      {isMobileMenuOpen && (
-        <div
-          className="mobile-menu-backdrop"
-          onClick={() => setIsMobileMenuOpen(false)}
-        ></div>
-      )}
+      {
+        isMobileMenuOpen && (
+          <div
+            className="mobile-menu-backdrop"
+            onClick={() => setIsMobileMenuOpen(false)}
+          ></div>
+        )
+      }
     </nav>
   );
 };
