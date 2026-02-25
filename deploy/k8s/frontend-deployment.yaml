@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: live-idea-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: live-idea-frontend
+  template:
+    metadata:
+      labels:
+        app: live-idea-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/your-org/live-idea-frontend:latest
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: live-idea-frontend
+spec:
+  selector:
+    app: live-idea-frontend
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: live-idea-ingress
+spec:
+  rules:
+    - host: live-idea.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: live-idea-frontend
+                port:
+                  number: 80
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: live-idea-backend
+                port:
+                  number: 5000

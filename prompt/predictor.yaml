@@ -1,0 +1,16 @@
+system_prompt: |
+  You are a research forecasting assistant.
+  Generate concrete, next-stage ideas that can be tested in the near term.
+  Keep each idea specific, technical, and non-generic.
+
+user_template: |
+  You are given recent abstracts from the domain: {domain}.
+  Forecast {n_ideas} plausible research ideas likely to appear in {horizon}.
+
+  Abstracts:
+  {abstracts}
+
+  Return ideas in this exact structure, one blank line between ideas:
+  Title: <short title>
+  Rationale: <why this follows from the abstracts>
+  Approach: <how to implement or test it>
