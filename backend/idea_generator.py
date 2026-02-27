@@ -1,7 +1,6 @@
 import os
 import sys
 import json
-import time
 from typing import List, Dict, Any
 from pathlib import Path
 import openreview
@@ -10,10 +9,50 @@ import openreview
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
-# Import Thinker
-from backend.tiny_scientist.thinker import Thinker
 # Import Config
 from backend import config
+from backend import llm_utils, output_contract, prompt_registry
+
+
+_PROMPT_ID = "llm_baseline"
+_PROMPT_VERSION = "v1"
+_JSON_DECODER = json.JSONDecoder()
+
+
+def _build_user_message(paper: Dict[str, Any]) -> str:
+    title = str(paper.get("title") or "").strip()
+    abstract = str(paper.get("abstract") or "").strip()
+    return (
+        "Generate exactly one research idea for this paper context. "
+        "Return JSON object only.\n"
+        f"Paper title: {title}\n"
+        f"Paper abstract: {abstract}"
+    )
+
+
+def _extract_json_object(response_text: str) -> Dict[str, Any] | None:
+    text = response_text.strip()
+    if not text:
+        return None
+
+    try:
+        payload = json.loads(text)
+        if isinstance(payload, dict):
+            return payload
+    except json.JSONDecodeError:
+        pass
+
+    for idx, char in enumerate(text):
+        if char != "{":
+            continue
+        try:
+            payload, _ = _JSON_DECODER.raw_decode(text[idx:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            return payload
+
+    return None
 
 def fetch_papers_from_openreview(keywords: List[str], limit: int = 10) -> List[Dict[str, Any]]:
     """
@@ -74,14 +113,16 @@ def fetch_papers_from_openreview(keywords: List[str], limit: int = 10) -> List[D
         print(f"Error fetching from OpenReview: {e}")
         return []
 
-def generate_ideas(keywords: List[str] = None, n: int = 5) -> List[Dict[str, Any]]:
+def generate_ideas(keywords: List[str] | None = None, n: int = 5) -> List[Dict[str, Any]]:
     """
     Orchestrates the workflow: Fetch Papers (OpenReview) -> Generate Ideas.
     Returns a list of generated ideas.
     """
     # Use keywords from config if not provided
     if not keywords:
-        keywords = config.KEYWORDS
+        keywords = [str(item) for item in config.KEYWORDS]
+    else:
+        keywords = [str(item) for item in keywords]
         
     print(f"Using keywords: {keywords}")
     
@@ -93,60 +134,58 @@ def generate_ideas(keywords: List[str] = None, n: int = 5) -> List[Dict[str, Any
 
     print(f"Found {len(papers)} papers. Generating ideas...")
     
-    generated_ideas = []
-    
-    # Initialize Thinker
-    # Note: This requires GOOGLE_API_KEY or other LLM API key to be set in environment
+    generated_ideas: List[Dict[str, Any]] = []
+
     try:
-        thinker = Thinker(
-            tools=[], 
-            iter_num=1,
-            search_papers=False, 
-            model=config.MODEL,
-            generate_exp_plan=False,
-        )
+        policy = prompt_registry.get_prompt_policy(_PROMPT_ID, _PROMPT_VERSION)
+        model_id = str(config.MODEL or policy.get("model_id") or "gpt-4o-mini")
+        client, resolved_model = llm_utils.create_client(model_id)
+        system_message = str(policy.get("template") or "").strip()
+        temperature = float(policy.get("temperature", 0.7))
+        if not system_message:
+            print(
+                f"Prompt template is empty for {_PROMPT_ID}@{_PROMPT_VERSION}."
+            )
+            return []
     except Exception as e:
-        print(f"Failed to initialize Thinker: {e}")
+        print(f"Failed to initialize prompt-only generator: {e}")
         return []
-    
+
     for i, paper in enumerate(papers):
         print(f"Generating idea for paper {i+1}/{len(papers)}: {paper['title']}")
-        
-        intent = paper['abstract']
-        
-        try:
-            # Use thinker.run to generate idea with full pipeline (refinement, experiment plan, etc.)
-            # run returns a list of dicts (if num_ideas > 1) or a single dict/list (if num_ideas=1)
-            # We are generating 1 idea per paper here.
-            idea_result = thinker.run(
-                intent, 
-                num_ideas=1, 
-                check_novelty=False, 
-            )
-            
-            if not idea_result:
-                print(f"No idea generated for {paper['title']}")
-                continue
-                
-            # Handle potential list return type
-            if isinstance(idea_result, list):
-                if not idea_result:
-                    continue
-                idea = idea_result[0]
-            else:
-                idea = idea_result
 
-            # Add metadata
-            idea['source_paper'] = paper['title']
-            idea['source_url'] = paper['url']
-            idea['id'] = f"idea_{i}_{os.urandom(4).hex()}"
-            
+        try:
+            raw_text, _ = llm_utils.get_response_from_llm(
+                msg=_build_user_message(paper),
+                client=client,
+                model=resolved_model,
+                system_message=system_message,
+                temperature=temperature,
+            )
+
+            raw_idea = _extract_json_object(raw_text)
+            if raw_idea is None:
+                print(f"Skipping malformed JSON output for {paper['title']}")
+                continue
+
+            try:
+                idea = output_contract.normalize_idea(raw_idea)
+            except ValueError as exc:
+                print(
+                    f"Skipping invalid normalized output for {paper['title']}: {exc}"
+                )
+                continue
+
+            idea["source_paper"] = paper["title"]
+            idea["source_url"] = paper["url"]
+            idea["id"] = f"idea_{i}_{os.urandom(4).hex()}"
+
             generated_ideas.append(idea)
             print(f"Generated idea: {idea.get('Title', 'Untitled')}")
-            
+
         except Exception as e:
             print(f"Error generating idea for {paper['title']}: {e}")
-            
+
     return generated_ideas
 
 def main():
