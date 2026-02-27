@@ -10,7 +10,3 @@ openreview-py
 beartype
 backoff
 rich
-mcp
-fastmcp
-anyio
-toml
