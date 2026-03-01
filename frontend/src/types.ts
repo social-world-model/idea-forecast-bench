@@ -123,10 +123,15 @@ export interface BacktestResult {
   windows: WindowResult[];
 }
 
-/** Strategy hyper-parameters (KeywordTrendStrategy) */
+/** Strategy hyper-parameters (varies by strategy_name) */
 export interface StrategyParams {
-  recent_months: number;
-  min_keyword_freq: number;
+  recent_months?: number;
+  min_keyword_freq?: number;
+  model_id?: string;
+  prompt_id?: string;
+  prompt_version?: string;
+  temperature?: number | null;
+  [key: string]: unknown;
 }
 
 /** BacktestConfig fields + data path */

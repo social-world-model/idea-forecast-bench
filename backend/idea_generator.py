@@ -3,7 +3,6 @@ import sys
 import json
 from typing import List, Dict, Any
 from pathlib import Path
-import openreview
 
 # Add project root to path to allow imports if needed
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -61,6 +60,8 @@ def fetch_papers_from_openreview(keywords: List[str], limit: int = 10) -> List[D
     print(f"Fetching papers from OpenReview (Venue: {config.VENUE_ID})...")
     
     try:
+        import openreview
+
         client = openreview.api.OpenReviewClient(baseurl='https://api2.openreview.net')
         
         # Fetch accepted papers from the venue
