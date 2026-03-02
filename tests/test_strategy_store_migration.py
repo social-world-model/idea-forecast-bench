@@ -119,3 +119,46 @@ def test_make_strategy_obj_passes_prompt_llm_params(monkeypatch, tmp_path: Path)
     assert obj.prompt_id == "test-prompt"
     assert obj.prompt_version == "v2"
     assert obj.temperature == 0.5
+
+
+def test_create_strategy_keeps_data_dir_blank_when_not_provided(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from backend import strategy_store
+
+    _isolate_strategy_store(monkeypatch, tmp_path)
+
+    created = strategy_store.create_strategy({"strategy_name": "keyword_trend"})
+    assert created["config"]["data_dir"] == ""
+
+    loaded = strategy_store.get_strategy(created["id"])
+    assert loaded is not None
+    assert loaded["config"]["data_dir"] == ""
+
+
+def test_resolve_data_dir_falls_back_for_missing_absolute_path(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from backend import strategy_store
+
+    _isolate_strategy_store(monkeypatch, tmp_path)
+    default_dir = tmp_path / "runtime-default"
+    default_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("LIVE_IDEA_BENCH_DATA_DIR", str(default_dir))
+
+    strategy = {"config": {"data_dir": "/Users/someone/old-machine/path"}}
+    resolved = strategy_store._resolve_data_dir(strategy)
+    assert resolved == default_dir
+
+
+def test_resolve_data_dir_uses_project_relative_path(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from backend import strategy_store
+
+    _isolate_strategy_store(monkeypatch, tmp_path)
+    relative_path = "data/arxiv_csml/raw_markdown"
+
+    strategy = {"config": {"data_dir": relative_path}}
+    resolved = strategy_store._resolve_data_dir(strategy)
+    assert resolved == (strategy_store.PROJECT_ROOT / relative_path).resolve()

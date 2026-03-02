@@ -8,13 +8,14 @@ A Strategy bundles:
 """
 
 import json
+import os
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_DATA_DIR = str(PROJECT_ROOT / "data" / "arxiv_csml" / "raw_markdown")
+DEFAULT_DATA_DIR = PROJECT_ROOT / "data" / "arxiv_csml" / "raw_markdown"
 
 STRATEGIES_DIR = Path(__file__).parent / "strategies"
 STRATEGIES_DIR.mkdir(exist_ok=True)
@@ -31,6 +32,13 @@ def _coerce_int(value: object, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _runtime_default_data_dir() -> Path:
+    override = os.environ.get("LIVE_IDEA_BENCH_DATA_DIR", "").strip()
+    if not override:
+        return DEFAULT_DATA_DIR
+    return Path(override).expanduser()
 
 
 def _normalize_params(
@@ -114,6 +122,10 @@ def get_strategy(strategy_id: str) -> Optional[dict]:
 def create_strategy(data: dict) -> dict:
     strategy_id = uuid.uuid4().hex[:8]
     strategy_name = str(data.get("strategy_name", "keyword_trend"))
+    config = data.get("config") or {}
+    raw_data_dir = config.get("data_dir", "")
+    data_dir = str(raw_data_dir).strip() if raw_data_dir is not None else ""
+
     strategy = {
         "id": strategy_id,
         "name": data.get("name") or "{} [{}]".format(
@@ -129,13 +141,12 @@ def create_strategy(data: dict) -> dict:
         ),
         # BacktestConfig fields + data path
         "config": {
-            "top_k": int((data.get("config") or {}).get("top_k", 5)),
-            "horizon_months": int((data.get("config") or {}).get("horizon_months", 3)),
-            "min_train_papers": int((data.get("config") or {}).get("min_train_papers", 6)),
-            "start_month": (data.get("config") or {}).get("start_month", "2024-01"),
-            "end_month": (data.get("config") or {}).get("end_month", "2024-12"),
-            # Leave blank to use DEFAULT_DATA_DIR
-            "data_dir": (data.get("config") or {}).get("data_dir", "") or DEFAULT_DATA_DIR,
+            "top_k": int(config.get("top_k", 5)),
+            "horizon_months": int(config.get("horizon_months", 3)),
+            "min_train_papers": int(config.get("min_train_papers", 6)),
+            "start_month": config.get("start_month", "2024-01"),
+            "end_month": config.get("end_month", "2024-12"),
+            "data_dir": data_dir,
         },
         "created_at": datetime.now().isoformat(),
         "backtest_status": "pending",
@@ -167,8 +178,20 @@ def delete_strategy(strategy_id: str) -> bool:
 # ── Engine helpers ─────────────────────────────────────────────────────────────
 
 def _resolve_data_dir(s: dict) -> Path:
-    d = (s.get("config") or {}).get("data_dir", "") or DEFAULT_DATA_DIR
-    return Path(d)
+    raw_data_dir = (s.get("config") or {}).get("data_dir", "")
+    data_dir = str(raw_data_dir).strip() if raw_data_dir is not None else ""
+
+    if not data_dir:
+        return _runtime_default_data_dir()
+
+    configured = Path(data_dir).expanduser()
+    if configured.is_absolute() and not configured.exists():
+        return _runtime_default_data_dir()
+
+    if configured.is_absolute():
+        return configured
+
+    return (PROJECT_ROOT / configured).resolve()
 
 
 def _load_papers(s: dict):

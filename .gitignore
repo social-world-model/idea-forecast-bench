@@ -164,3 +164,4 @@ cython_debug/
 
 **/data/*
 **/keywords_results.json
+backend/strategies/*.json
