@@ -8,13 +8,14 @@ A Strategy bundles:
 """
 
 import json
+import os
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_DATA_DIR = str(PROJECT_ROOT / "data" / "arxiv_csml" / "raw_markdown")
+DEFAULT_DATA_DIR = PROJECT_ROOT / "data" / "arxiv_csml" / "raw_markdown"
 
 STRATEGIES_DIR = Path(__file__).parent / "strategies"
 STRATEGIES_DIR.mkdir(exist_ok=True)
@@ -26,12 +27,63 @@ def _path(strategy_id: str) -> Path:
     return STRATEGIES_DIR / f"{strategy_id}.json"
 
 
+def _coerce_int(value: object, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _runtime_default_data_dir() -> Path:
+    override = os.environ.get("LIVE_IDEA_BENCH_DATA_DIR", "").strip()
+    if not override:
+        return DEFAULT_DATA_DIR
+    return Path(override).expanduser()
+
+
+def _normalize_params(
+    strategy_name: str,
+    params: object,
+    *,
+    strict_keyword_coercion: bool = False,
+) -> dict:
+    raw_params = params if isinstance(params, dict) else {}
+    normalized_params = dict(raw_params)
+
+    if strategy_name == "keyword_trend":
+        if strict_keyword_coercion:
+            normalized_params["recent_months"] = int(raw_params.get("recent_months", 3))
+            normalized_params["min_keyword_freq"] = int(
+                raw_params.get("min_keyword_freq", 2)
+            )
+        else:
+            normalized_params["recent_months"] = _coerce_int(
+                raw_params.get("recent_months", 3), 3
+            )
+            normalized_params["min_keyword_freq"] = _coerce_int(
+                raw_params.get("min_keyword_freq", 2), 2
+            )
+
+    return normalized_params
+
+
+def _normalize_strategy(strategy: dict) -> dict:
+    strategy_name = str(strategy.get("strategy_name") or "keyword_trend")
+    normalized = dict(strategy)
+    normalized["strategy_name"] = strategy_name
+    normalized["params"] = _normalize_params(strategy_name, strategy.get("params"))
+    return normalized
+
+
 def _read(strategy_id: str) -> Optional[dict]:
     p = _path(strategy_id)
     if not p.exists():
         return None
     try:
-        return json.loads(p.read_text(encoding="utf-8"))
+        loaded = json.loads(p.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict):
+            return None
+        return _normalize_strategy(loaded)
     except Exception:
         return None
 
@@ -54,7 +106,9 @@ def list_strategies() -> List[dict]:
     strategies = []
     for p in sorted(STRATEGIES_DIR.glob("*.json")):
         try:
-            strategies.append(json.loads(p.read_text(encoding="utf-8")))
+            loaded = json.loads(p.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                strategies.append(_normalize_strategy(loaded))
         except Exception:
             pass
     strategies.sort(key=_sort_key, reverse=True)
@@ -67,27 +121,32 @@ def get_strategy(strategy_id: str) -> Optional[dict]:
 
 def create_strategy(data: dict) -> dict:
     strategy_id = uuid.uuid4().hex[:8]
+    strategy_name = str(data.get("strategy_name", "keyword_trend"))
+    config = data.get("config") or {}
+    raw_data_dir = config.get("data_dir", "")
+    data_dir = str(raw_data_dir).strip() if raw_data_dir is not None else ""
+
     strategy = {
         "id": strategy_id,
         "name": data.get("name") or "{} [{}]".format(
-            data.get("strategy_name", "keyword_trend"), strategy_id
+            strategy_name, strategy_id
         ),
         # Which IdeaStrategy implementation to use (matches IdeaStrategy.name)
-        "strategy_name": data.get("strategy_name", "keyword_trend"),
+        "strategy_name": strategy_name,
         # Strategy hyper-parameters passed to the strategy constructor
-        "params": {
-            "recent_months": int((data.get("params") or {}).get("recent_months", 3)),
-            "min_keyword_freq": int((data.get("params") or {}).get("min_keyword_freq", 2)),
-        },
+        "params": _normalize_params(
+            strategy_name,
+            data.get("params") or {},
+            strict_keyword_coercion=True,
+        ),
         # BacktestConfig fields + data path
         "config": {
-            "top_k": int((data.get("config") or {}).get("top_k", 5)),
-            "horizon_months": int((data.get("config") or {}).get("horizon_months", 3)),
-            "min_train_papers": int((data.get("config") or {}).get("min_train_papers", 6)),
-            "start_month": (data.get("config") or {}).get("start_month", "2024-01"),
-            "end_month": (data.get("config") or {}).get("end_month", "2024-12"),
-            # Leave blank to use DEFAULT_DATA_DIR
-            "data_dir": (data.get("config") or {}).get("data_dir", "") or DEFAULT_DATA_DIR,
+            "top_k": int(config.get("top_k", 5)),
+            "horizon_months": int(config.get("horizon_months", 3)),
+            "min_train_papers": int(config.get("min_train_papers", 6)),
+            "start_month": config.get("start_month", "2024-01"),
+            "end_month": config.get("end_month", "2024-12"),
+            "data_dir": data_dir,
         },
         "created_at": datetime.now().isoformat(),
         "backtest_status": "pending",
@@ -119,8 +178,20 @@ def delete_strategy(strategy_id: str) -> bool:
 # ── Engine helpers ─────────────────────────────────────────────────────────────
 
 def _resolve_data_dir(s: dict) -> Path:
-    d = (s.get("config") or {}).get("data_dir", "") or DEFAULT_DATA_DIR
-    return Path(d)
+    raw_data_dir = (s.get("config") or {}).get("data_dir", "")
+    data_dir = str(raw_data_dir).strip() if raw_data_dir is not None else ""
+
+    if not data_dir:
+        return _runtime_default_data_dir()
+
+    configured = Path(data_dir).expanduser()
+    if configured.is_absolute() and not configured.exists():
+        return _runtime_default_data_dir()
+
+    if configured.is_absolute():
+        return configured
+
+    return (PROJECT_ROOT / configured).resolve()
 
 
 def _load_papers(s: dict):
@@ -136,10 +207,22 @@ def _load_papers(s: dict):
 def _make_strategy_obj(s: dict):
     """Instantiate the IdeaStrategy from src.strategy registry."""
     from src import create_strategy as src_create
+
+    strategy_name = str(s.get("strategy_name") or "keyword_trend")
+    params = s.get("params") or {}
+
     return src_create(
-        s["strategy_name"],
-        recent_months=s["params"]["recent_months"],
-        min_keyword_freq=s["params"]["min_keyword_freq"],
+        strategy_name,
+        recent_months=_coerce_int(params.get("recent_months", 3), 3),
+        min_keyword_freq=_coerce_int(params.get("min_keyword_freq", 2), 2),
+        model_id=str(params.get("model_id", "gpt-4o-mini")),
+        prompt_id=str(params.get("prompt_id", "llm_baseline")),
+        prompt_version=str(params.get("prompt_version", "v1")),
+        temperature=(
+            float(params.get("temperature"))  # type: ignore[arg-type]
+            if params.get("temperature") is not None
+            else None
+        ),
     )
 
 
@@ -179,6 +262,63 @@ def run_backtest_sync(strategy_id: str) -> None:
         })
 
 
+def run_generation_sync(strategy_id: str, cutoff_month: str | None = None) -> None:
+    """Run idea generation synchronously and persist the result."""
+    import dataclasses
+    import sys
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+    s = _read(strategy_id)
+    if s is None:
+        return
+
+    update_strategy(strategy_id, {"generation_status": "running"})
+    try:
+        # Resolve cutoff_month: use supplied value or derive from config end_month
+        if not cutoff_month:
+            cutoff_month = (s.get("config") or {}).get("end_month") or ""
+
+        if not cutoff_month:
+            raise ValueError("cutoff_month is required for generation")
+
+        from src.backtest.data import month_to_index
+
+        top_k = int((s.get("config") or {}).get("top_k", 5))
+        cutoff_idx = month_to_index(cutoff_month)
+
+        all_papers = _load_papers(s)
+        # Filter to train-only: papers whose month index <= cutoff_month index
+        train_papers = [p for p in all_papers if month_to_index(p.month) <= cutoff_idx]
+
+        strategy_obj = _make_strategy_obj(s)
+
+        # generate() signature: (train_papers, cutoff_month, top_k)
+        predictions_raw = strategy_obj.generate(
+            train_papers=train_papers,
+            cutoff_month=cutoff_month,
+            top_k=top_k,
+        )
+
+        # IdeaPrediction is a dataclass — serialize with dataclasses.asdict
+        predictions = [
+            dataclasses.asdict(p) if dataclasses.is_dataclass(p) else
+            (p._asdict() if hasattr(p, "_asdict") else
+             (dict(p) if hasattr(p, "keys") else str(p)))
+            for p in predictions_raw
+        ]
+
+        update_strategy(strategy_id, {
+            "generation_status": "done",
+            "generation": {
+                "cutoff_month": cutoff_month,
+                "predictions": predictions,
+            },
+        })
+    except Exception as e:
+        update_strategy(strategy_id, {
+            "generation_status": "failed",
+            "generation_error": str(e),
+        })
 # ── Demo seeding ───────────────────────────────────────────────────────────────
 
 def seed_demo_strategies() -> None:
@@ -229,7 +369,7 @@ def seed_demo_strategies() -> None:
         s = create_strategy(demo)
         print(f"  Seeding: {s['name']}")
         run_backtest_sync(s["id"])
-        result = _read(s["id"])
+        result = _read(s["id"]) or {}
         summary = (result.get("backtest_result") or {}).get("summary", {})
         print(f"    → status={result.get('backtest_status')}  "
               f"windows={summary.get('windows', 0)}  "

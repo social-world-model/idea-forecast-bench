@@ -69,6 +69,19 @@ const StrategyRow: React.FC<{
   const btRunning = strategy.backtest_status === "running";
   const genRunning = strategy.generation_status === "running";
 
+  const recentMonths =
+    typeof strategy.params?.recent_months === "number" ? strategy.params.recent_months : null;
+  const minFreq =
+    typeof strategy.params?.min_keyword_freq === "number" ? strategy.params.min_keyword_freq : null;
+  const modelId =
+    typeof strategy.params?.model_id === "string" ? strategy.params.model_id : null;
+  const promptId =
+    typeof strategy.params?.prompt_id === "string" ? strategy.params.prompt_id : null;
+  const promptVersion =
+    typeof strategy.params?.prompt_version === "string" ? strategy.params.prompt_version : null;
+  const temperature =
+    typeof strategy.params?.temperature === "number" ? strategy.params.temperature : null;
+
   return (
     <tr
       className={`strategy-row ${isSelected ? "selected" : ""}`}
@@ -86,12 +99,21 @@ const StrategyRow: React.FC<{
         <div className="strategy-name">{strategy.name}</div>
         <div className="strategy-meta">
           <span className="meta-chip">{strategy.strategy_name}</span>
-          <span className="meta-chip">
-            recent={strategy.params.recent_months}m
-          </span>
-          <span className="meta-chip">
-            min_freq={strategy.params.min_keyword_freq}
-          </span>
+          {recentMonths !== null && (
+            <span className="meta-chip">recent={recentMonths}m</span>
+          )}
+          {minFreq !== null && (
+            <span className="meta-chip">min_freq={minFreq}</span>
+          )}
+          {modelId && <span className="meta-chip">model={modelId}</span>}
+          {promptId && (
+            <span className="meta-chip">
+              prompt={promptId}{promptVersion ? `@${promptVersion}` : ""}
+            </span>
+          )}
+          {temperature !== null && (
+            <span className="meta-chip">temp={temperature}</span>
+          )}
         </div>
       </td>
 
@@ -299,9 +321,16 @@ const NewStrategyForm: React.FC<{
   onCreate: (data: Partial<Strategy>) => Promise<Strategy | null>;
   onClose: () => void;
 }> = ({ onCreate, onClose }) => {
+  const [strategyName, setStrategyName] = useState<"keyword_trend" | "prompt_llm">(
+    "keyword_trend"
+  );
   const [name, setName] = useState("");
   const [recentMonths, setRecentMonths] = useState(3);
   const [minFreq, setMinFreq] = useState(2);
+  const [modelId, setModelId] = useState("gpt-4o-mini");
+  const [promptId, setPromptId] = useState("llm_baseline");
+  const [promptVersion, setPromptVersion] = useState("v1");
+  const [temperature, setTemperature] = useState<number>(0.7);
   const [topK, setTopK] = useState(5);
   const [horizonMonths, setHorizonMonths] = useState(3);
   const [startMonth, setStartMonth] = useState("2024-01");
@@ -311,10 +340,26 @@ const NewStrategyForm: React.FC<{
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+
+    const defaultName =
+      strategyName === "prompt_llm"
+        ? `Prompt LLM · ${startMonth} → ${endMonth}`
+        : `Keyword Trend · ${startMonth} → ${endMonth}`;
+
+    const params =
+      strategyName === "prompt_llm"
+        ? {
+            model_id: modelId,
+            prompt_id: promptId,
+            prompt_version: promptVersion,
+            temperature,
+          }
+        : { recent_months: recentMonths, min_keyword_freq: minFreq };
+
     await onCreate({
-      name: name || `Keyword Trend · ${startMonth} → ${endMonth}`,
-      strategy_name: "keyword_trend",
-      params: { recent_months: recentMonths, min_keyword_freq: minFreq },
+      name: name || defaultName,
+      strategy_name: strategyName,
+      params,
       config: {
         top_k: topK,
         horizon_months: horizonMonths,
@@ -337,6 +382,17 @@ const NewStrategyForm: React.FC<{
         </div>
         <form className="strategy-form" onSubmit={handleSubmit}>
           <label>
+            Strategy Type
+            <select
+              value={strategyName}
+              onChange={(e) => setStrategyName(e.target.value as "keyword_trend" | "prompt_llm")}
+            >
+              <option value="keyword_trend">keyword_trend (heuristic)</option>
+              <option value="prompt_llm">prompt_llm (LLM)</option>
+            </select>
+          </label>
+
+          <label>
             Name (optional)
             <input
               value={name}
@@ -345,24 +401,68 @@ const NewStrategyForm: React.FC<{
             />
           </label>
 
-          <div className="form-row">
-            <label>
-              Recent Months
-              <input
-                type="number" min={1} max={24}
-                value={recentMonths}
-                onChange={(e) => setRecentMonths(+e.target.value)}
-              />
-            </label>
-            <label>
-              Min Keyword Freq
-              <input
-                type="number" min={1} max={20}
-                value={minFreq}
-                onChange={(e) => setMinFreq(+e.target.value)}
-              />
-            </label>
-          </div>
+          {strategyName === "keyword_trend" ? (
+            <div className="form-row">
+              <label>
+                Recent Months
+                <input
+                  type="number" min={1} max={24}
+                  value={recentMonths}
+                  onChange={(e) => setRecentMonths(+e.target.value)}
+                />
+              </label>
+              <label>
+                Min Keyword Freq
+                <input
+                  type="number" min={1} max={20}
+                  value={minFreq}
+                  onChange={(e) => setMinFreq(+e.target.value)}
+                />
+              </label>
+            </div>
+          ) : (
+            <>
+              <div className="form-row">
+                <label>
+                  Model ID
+                  <input
+                    value={modelId}
+                    onChange={(e) => setModelId(e.target.value)}
+                    placeholder="gpt-4o-mini"
+                  />
+                </label>
+                <label>
+                  Temperature
+                  <input
+                    type="number"
+                    min={0}
+                    max={2}
+                    step={0.1}
+                    value={temperature}
+                    onChange={(e) => setTemperature(+e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="form-row">
+                <label>
+                  Prompt ID
+                  <input
+                    value={promptId}
+                    onChange={(e) => setPromptId(e.target.value)}
+                    placeholder="llm_baseline"
+                  />
+                </label>
+                <label>
+                  Prompt Version
+                  <input
+                    value={promptVersion}
+                    onChange={(e) => setPromptVersion(e.target.value)}
+                    placeholder="v1"
+                  />
+                </label>
+              </div>
+            </>
+          )}
 
           <div className="form-row">
             <label>

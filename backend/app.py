@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import os
 import sys
 from datetime import datetime, timezone
@@ -15,6 +16,15 @@ sys.path.append(project_root)
 
 from backend import config
 from backend.services.run_service import RunService
+from backend.strategy_store import (
+    create_strategy,
+    delete_strategy,
+    get_strategy,
+    list_strategies,
+    run_backtest_sync,
+    run_generation_sync,
+    update_strategy,
+)
 
 app = Flask(__name__)
 CORS(app)
@@ -117,7 +127,10 @@ def _write_views(views: int) -> None:
 
 
 @app.route("/healthz", methods=["GET"])
+@app.route("/api/health", methods=["GET", "POST"])
 def healthz():
+    if request.method == "POST":
+        return jsonify({"error": "Method not allowed"}), 405
     return jsonify(
         {
             "status": "ok",
@@ -180,6 +193,81 @@ def api_views():
         _write_views(views)
     return jsonify({"views": views})
 
+
+@app.route("/api/strategies", methods=["GET", "POST"])
+def api_strategies():
+    if request.method == "GET":
+        return jsonify(list_strategies())
+
+    payload = request.get_json(silent=True) or {}
+    strategy = create_strategy(payload)
+    return jsonify(strategy), 201
+
+
+@app.route("/api/strategies/<strategy_id>", methods=["GET", "DELETE"])
+def api_strategy(strategy_id: str):
+    if request.method == "GET":
+        strategy = get_strategy(strategy_id)
+        if strategy is None:
+            raise APIError("strategy not found", status_code=404, code="not_found")
+        return jsonify(strategy)
+
+    deleted = delete_strategy(strategy_id)
+    if not deleted:
+        raise APIError("strategy not found", status_code=404, code="not_found")
+    return "", 204
+
+
+@app.route("/api/strategies/<strategy_id>/status", methods=["GET"])
+def api_strategy_status(strategy_id: str):
+    strategy = get_strategy(strategy_id)
+    if strategy is None:
+        raise APIError("strategy not found", status_code=404, code="not_found")
+
+    return jsonify(
+        {
+            "id": strategy["id"],
+            "backtest_status": strategy.get("backtest_status", "pending"),
+            "generation_status": strategy.get("generation_status", "pending"),
+        }
+    )
+
+
+@app.route("/api/strategies/<strategy_id>/backtest", methods=["POST"])
+def api_strategy_backtest(strategy_id: str):
+    strategy = get_strategy(strategy_id)
+    if strategy is None:
+        raise APIError("strategy not found", status_code=404, code="not_found")
+
+    # Persist running status synchronously before spawning thread (prevents status race)
+    update_strategy(strategy_id, {"backtest_status": "running"})
+
+    def _worker() -> None:
+        run_backtest_sync(strategy_id)
+
+    thread = threading.Thread(target=_worker, daemon=True)
+    thread.start()
+    return jsonify({"id": strategy_id, "backtest_status": "running"}), 202
+
+
+@app.route("/api/strategies/<strategy_id>/generate", methods=["POST"])
+def api_strategy_generate(strategy_id: str):
+    strategy = get_strategy(strategy_id)
+    if strategy is None:
+        raise APIError("strategy not found", status_code=404, code="not_found")
+
+    payload = request.get_json(silent=True) or {}
+    cutoff_month: str | None = payload.get("cutoff_month") or None
+
+    # Persist running status synchronously before spawning thread (prevents status race)
+    update_strategy(strategy_id, {"generation_status": "running"})
+
+    def _worker() -> None:
+        run_generation_sync(strategy_id, cutoff_month=cutoff_month)
+
+    thread = threading.Thread(target=_worker, daemon=True)
+    thread.start()
+    return jsonify({"id": strategy_id, "generation_status": "running"}), 202
 
 @app.route("/api/runs/start", methods=["POST"])
 def api_runs_start():

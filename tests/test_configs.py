@@ -30,7 +30,7 @@ embedding:
     (prompt_dir / "similarity.yaml").write_text(
         """
 system_prompt: You are a judge.
-user_prompt_template: Idea: {idea}\nContext: {context}
+user_prompt_template: "Idea: {idea}\\nContext: {context}"
 """.strip(),
         encoding="utf-8",
     )
