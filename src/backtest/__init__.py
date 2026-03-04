@@ -1,4 +1,15 @@
-from src.backtest.data import add_months, load_papers_from_markdown, month_to_index, normalize_month
+from src.backtest.data import (
+    add_months,
+    add_months_keep_month,
+    date_to_ordinal,
+    get_paper_published_date,
+    load_papers_from_markdown,
+    month_end_date,
+    month_start_date,
+    month_to_index,
+    normalize_date,
+    normalize_month,
+)
 from src.backtest.evaluator import evaluate_predictions
 from src.backtest.models import (
     BacktestWindowResult,
@@ -24,8 +35,14 @@ __all__ = [
     "EvaluationResult",
     "BacktestWindowResult",
     "normalize_month",
+    "normalize_date",
     "month_to_index",
+    "date_to_ordinal",
     "add_months",
+    "add_months_keep_month",
+    "month_start_date",
+    "month_end_date",
+    "get_paper_published_date",
     "load_papers_from_markdown",
     "IdeaStrategy",
     "KeywordTrendStrategy",

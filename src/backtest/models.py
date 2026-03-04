@@ -10,6 +10,7 @@ class PaperRecord:
     summary: str
     keywords: List[str]
     source_path: str
+    published_date: str = ""
     metadata: Dict[str, str] = field(default_factory=dict)
 
 
@@ -37,9 +38,10 @@ class EvaluationResult:
 @dataclass
 class BacktestWindowResult:
     cutoff_month: str
+    cutoff_date: str
     future_end_month: str
+    future_end_date: str
     train_papers: int
     future_papers: int
     predictions: List[IdeaPrediction]
     evaluation: EvaluationResult
-

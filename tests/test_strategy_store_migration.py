@@ -73,6 +73,7 @@ def test_legacy_keyword_strategy_missing_prompt_model_keys_still_generates(
             summary="S1",
             keywords=["attention", "transformer"],
             source_path="/fake/p1.md",
+            published_date="2024-06-20",
         ),
     ]
     monkeypatch.setattr(strategy_store, "_load_papers", lambda _s: papers)
@@ -85,12 +86,13 @@ def test_legacy_keyword_strategy_missing_prompt_model_keys_still_generates(
     assert "prompt_id" not in loaded["params"]
     assert "prompt_version" not in loaded["params"]
 
-    strategy_store.run_generation_sync(legacy_id, cutoff_month="2024-06")
+    strategy_store.run_generation_sync(legacy_id, cutoff_date="2024-06-30")
 
     refreshed = strategy_store.get_strategy(legacy_id)
     assert refreshed is not None
     assert refreshed["generation_status"] == "done"
     assert refreshed["generation"]["cutoff_month"] == "2024-06"
+    assert refreshed["generation"]["cutoff_date"] == "2024-06-30"
     assert isinstance(refreshed["generation"]["predictions"], list)
 
 

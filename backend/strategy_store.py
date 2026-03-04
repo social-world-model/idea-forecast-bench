@@ -162,7 +162,7 @@ def create_strategy(data: dict) -> dict:
         "backtest_status": "pending",
         "generation_status": "pending",
         "backtest_result": None,    # { summary: {...}, windows: [...] }
-        "generation": None,         # { cutoff_month: str, predictions: [...] }
+        "generation": None,         # { cutoff_date: str, cutoff_month: str, predictions: [...] }
         "leaderboard_score": None,
         "daily_evaluation": None,
         "last_daily_run_at": None,
@@ -284,7 +284,7 @@ def run_backtest_sync(strategy_id: str) -> None:
         })
 
 
-def run_generation_sync(strategy_id: str, cutoff_month: str | None = None) -> None:
+def run_generation_sync(strategy_id: str, cutoff_date: str | None = None) -> None:
     """Run idea generation synchronously and persist the result."""
     import dataclasses
     import sys
@@ -296,21 +296,33 @@ def run_generation_sync(strategy_id: str, cutoff_month: str | None = None) -> No
 
     update_strategy(strategy_id, {"generation_status": "running"})
     try:
-        # Resolve cutoff_month: use supplied value or derive from config end_month
-        if not cutoff_month:
-            cutoff_month = (s.get("config") or {}).get("end_month") or ""
+        # Resolve cutoff_date: use supplied value or derive from config end_month.
+        if not cutoff_date:
+            config_end_month = (s.get("config") or {}).get("end_month") or ""
+            cutoff_date = f"{config_end_month}-01" if config_end_month else ""
 
-        if not cutoff_month:
-            raise ValueError("cutoff_month is required for generation")
+        if not cutoff_date:
+            raise ValueError("cutoff_date is required for generation")
 
-        from src.backtest.data import month_to_index
+        from src.backtest.data import (
+            date_to_ordinal,
+            get_paper_published_date,
+            normalize_date,
+            normalize_month,
+        )
 
         top_k = int((s.get("config") or {}).get("top_k", 5))
-        cutoff_idx = month_to_index(cutoff_month)
+        resolved_cutoff_date = normalize_date(cutoff_date)
+        cutoff_month = normalize_month(resolved_cutoff_date)
+        cutoff_ord = date_to_ordinal(resolved_cutoff_date)
 
         all_papers = _load_papers(s)
-        # Filter to train-only: papers whose month index <= cutoff_month index
-        train_papers = [p for p in all_papers if month_to_index(p.month) <= cutoff_idx]
+        # Train-only: papers published on/before cutoff_date.
+        train_papers = [
+            p
+            for p in all_papers
+            if date_to_ordinal(get_paper_published_date(p)) <= cutoff_ord
+        ]
 
         strategy_obj = _make_strategy_obj(s)
 
@@ -332,6 +344,7 @@ def run_generation_sync(strategy_id: str, cutoff_month: str | None = None) -> No
         update_strategy(strategy_id, {
             "generation_status": "done",
             "generation": {
+                "cutoff_date": resolved_cutoff_date,
                 "cutoff_month": cutoff_month,
                 "predictions": predictions,
             },

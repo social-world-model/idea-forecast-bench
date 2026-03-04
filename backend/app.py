@@ -281,13 +281,21 @@ def api_strategy_generate(strategy_id: str):
         raise APIError("strategy not found", status_code=404, code="not_found")
 
     payload = request.get_json(silent=True) or {}
-    cutoff_month: str | None = payload.get("cutoff_month") or None
+    cutoff_date_raw = payload.get("cutoff_date")
+    if not isinstance(cutoff_date_raw, str) or not cutoff_date_raw.strip():
+        raise APIError("cutoff_date is required (YYYY-MM-DD)", status_code=400)
+    from src.backtest.data import normalize_date
+
+    try:
+        cutoff_date = normalize_date(cutoff_date_raw.strip())
+    except ValueError as exc:
+        raise APIError(str(exc), status_code=400) from exc
 
     # Persist running status synchronously before spawning thread (prevents status race)
     update_strategy(strategy_id, {"generation_status": "running"})
 
     def _worker() -> None:
-        run_generation_sync(strategy_id, cutoff_month=cutoff_month)
+        run_generation_sync(strategy_id, cutoff_date=cutoff_date)
 
     thread = threading.Thread(target=_worker, daemon=True)
     thread.start()

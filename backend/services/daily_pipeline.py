@@ -5,12 +5,20 @@ import os
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
+from zoneinfo import ZoneInfo
 
 from backend import strategy_store
 from backend.services.arxiv_ingest import ingest_latest_arxiv_papers
 from src.backtest import load_papers_from_markdown
-from src.backtest.data import month_to_index
+from src.backtest.data import (
+    date_to_ordinal,
+    get_paper_published_date,
+    month_start_date,
+    month_to_index,
+    normalize_date,
+    normalize_month,
+)
 from src.backtest.evaluator import evaluate_predictions
 from src.backtest.models import IdeaPrediction
 
@@ -99,6 +107,10 @@ def _compute_leaderboard_score(daily_eval: Dict[str, Any]) -> float:
     return round((0.7 * hit) + (0.3 * mrr), 4)
 
 
+def _daily_cutoff_date(now_utc: datetime) -> str:
+    return now_utc.astimezone(ZoneInfo("America/New_York")).date().isoformat()
+
+
 def _evaluate_previous_generation(
     strategy: Dict[str, Any],
     *,
@@ -106,18 +118,37 @@ def _evaluate_previous_generation(
     evaluated_at: datetime,
 ) -> Optional[Dict[str, Any]]:
     generation = strategy.get("generation") or {}
-    cutoff_month = str(generation.get("cutoff_month") or "").strip()
+    cutoff_date_raw = str(generation.get("cutoff_date") or "").strip()
+    cutoff_month_raw = str(generation.get("cutoff_month") or "").strip()
     predictions_raw = generation.get("predictions")
-    if not cutoff_month or not isinstance(predictions_raw, list) or not predictions_raw:
+    if not isinstance(predictions_raw, list) or not predictions_raw:
         return None
 
+    if cutoff_date_raw:
+        try:
+            cutoff_date = normalize_date(cutoff_date_raw)
+        except ValueError:
+            if not cutoff_month_raw:
+                return None
+            cutoff_date = month_start_date(cutoff_month_raw)
+    elif cutoff_month_raw:
+        cutoff_date = month_start_date(cutoff_month_raw)
+    else:
+        return None
+    cutoff_month = normalize_month(cutoff_date)
+
     papers = strategy_store.load_papers_for_strategy(strategy)
-    cutoff_idx = month_to_index(cutoff_month)
-    train = [p for p in papers if month_to_index(p.month) <= cutoff_idx]
+    cutoff_ord = date_to_ordinal(cutoff_date)
+    train = [
+        p
+        for p in papers
+        if date_to_ordinal(get_paper_published_date(p)) <= cutoff_ord
+    ]
     future = [
         p
         for p in papers
-        if p.paper_id in new_paper_ids and month_to_index(p.month) > cutoff_idx
+        if p.paper_id in new_paper_ids
+        and date_to_ordinal(get_paper_published_date(p)) > cutoff_ord
     ]
 
     predictions = [
@@ -142,6 +173,7 @@ def _evaluate_previous_generation(
     )
     return {
         "evaluated_at": _iso(evaluated_at),
+        "prediction_cutoff_date": cutoff_date,
         "prediction_cutoff_month": cutoff_month,
         "new_papers_count": len(future),
         "prediction_count": len(predictions),
@@ -197,6 +229,7 @@ def run_daily_pipeline(
     data_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
     utc_now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    cutoff_date = _daily_cutoff_date(utc_now)
     project_root = strategy_store.PROJECT_ROOT
     run_dir = project_root / "data" / "daily_runs"
     lock_path = run_dir / "pipeline.lock"
@@ -239,7 +272,7 @@ def run_daily_pipeline(
             generation_status = "skipped_no_data"
             generation_error = None
             if latest_month:
-                strategy_store.run_generation_sync(strategy_id, cutoff_month=latest_month)
+                strategy_store.run_generation_sync(strategy_id, cutoff_date=cutoff_date)
                 after_generation = strategy_store.get_strategy(strategy_id) or {}
                 generation_status = str(after_generation.get("generation_status") or "unknown")
                 generation_error = after_generation.get("generation_error")

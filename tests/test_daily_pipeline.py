@@ -36,13 +36,15 @@ def _write_markdown(path: Path, *, paper_id: str, title: str, date: str, keyword
 
 
 def _fake_generation(monkeypatch) -> None:
-    def _run_generation(strategy_id: str, cutoff_month: str | None = None) -> None:
+    def _run_generation(strategy_id: str, cutoff_date: str | None = None) -> None:
+        resolved_cutoff_date = cutoff_date or "2026-03-01"
         strategy_store.update_strategy(
             strategy_id,
             {
                 "generation_status": "done",
                 "generation": {
-                    "cutoff_month": cutoff_month or "2026-03",
+                    "cutoff_date": resolved_cutoff_date,
+                    "cutoff_month": resolved_cutoff_date[:7],
                     "predictions": [
                         {
                             "rank": 1,
@@ -133,10 +135,12 @@ def test_daily_pipeline_updates_daily_eval_and_leaderboard(monkeypatch, tmp_path
 
     updated = strategy_store.get_strategy(s["id"])
     assert updated is not None
+    assert updated["daily_evaluation"]["prediction_cutoff_date"] == "2026-02-01"
     assert updated["daily_evaluation"]["new_papers_count"] == 1
     assert updated["daily_evaluation"]["hit_at_k"] == 1.0
     assert updated["leaderboard_score"] > 0.0
     assert updated["last_generation_cutoff_month"] == "2026-03"
+    assert updated["generation"]["cutoff_date"] == "2026-03-03"
 
 
 def test_daily_pipeline_skips_eval_without_previous_generation(monkeypatch, tmp_path) -> None:
@@ -236,6 +240,7 @@ def test_daily_pipeline_writes_zero_hit_when_no_new_papers(monkeypatch, tmp_path
     assert updated is not None
     assert updated["daily_evaluation"]["new_papers_count"] == 0
     assert updated["daily_evaluation"]["hit_at_k"] == 0.0
+    assert updated["daily_evaluation"]["prediction_cutoff_date"] == "2026-02-01"
 
 
 def test_daily_pipeline_lock_prevents_concurrent_runs(monkeypatch, tmp_path) -> None:
