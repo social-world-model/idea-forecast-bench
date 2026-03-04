@@ -17,6 +17,7 @@ sys.path.append(project_root)
 from backend import config
 from backend.services.run_service import RunService
 from backend.strategy_store import (
+    bootstrap_backtest_if_missing,
     create_strategy,
     delete_strategy,
     get_strategy,
@@ -33,6 +34,31 @@ GENERATED_IDEAS_FILE = os.path.join(project_root, "backend", "generated_ideas.js
 VIEWS_FILE = os.path.join(project_root, "data", "views.json")
 
 run_service = RunService(project_root=project_root)
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    value = raw.strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+def _bootstrap_leaderboard_async() -> None:
+    if not _env_flag("LIVE_IDEA_BOOTSTRAP_BACKTEST", True):
+        return
+
+    def _worker() -> None:
+        try:
+            bootstrap_backtest_if_missing()
+        except Exception as exc:  # pragma: no cover - defensive startup guard
+            print(f"[bootstrap] backtest bootstrap failed: {exc}")
+
+    thread = threading.Thread(target=_worker, daemon=True)
+    thread.start()
+
+
+_bootstrap_leaderboard_async()
 
 
 class APIError(Exception):
@@ -159,9 +185,7 @@ def metrics():
 @app.route("/api/generate-ideas", methods=["GET", "POST"])
 def api_generate_ideas():
     if request.method == "GET":
-        ideas = _load_generated_ideas()
-        if ideas:
-            return jsonify(ideas)
+        return jsonify(_load_generated_ideas())
 
     payload = request.get_json(silent=True) or {}
     keywords = payload.get("keywords") if request.method == "POST" else config.KEYWORDS

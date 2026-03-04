@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import './GeneratedIdeasList.css';
+import { API_BASE_URL, API_ENDPOINTS } from '../config';
 
 interface GeneratedIdea {
     id: string;
@@ -25,8 +26,8 @@ const GeneratedIdeasList: React.FC = () => {
         setLoading(true);
         setError(null);
         try {
-            // GET request triggers backend to return existing file or generate new one using config
-            const response = await fetch('http://localhost:5000/api/generate-ideas');
+            // Read-only fetch: backend returns cached generated ideas.
+            const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.GENERATE_IDEAS}`);
 
             if (!response.ok) {
                 throw new Error('Failed to fetch ideas');

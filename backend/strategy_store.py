@@ -72,6 +72,10 @@ def _normalize_strategy(strategy: dict) -> dict:
     normalized = dict(strategy)
     normalized["strategy_name"] = strategy_name
     normalized["params"] = _normalize_params(strategy_name, strategy.get("params"))
+    normalized.setdefault("leaderboard_score", None)
+    normalized.setdefault("daily_evaluation", None)
+    normalized.setdefault("last_daily_run_at", None)
+    normalized.setdefault("last_generation_cutoff_month", None)
     return normalized
 
 
@@ -95,6 +99,12 @@ def _write(strategy: dict) -> None:
 
 
 def _sort_key(s: dict) -> tuple:
+    score = s.get("leaderboard_score")
+    if score is not None:
+        try:
+            return (float(score), s.get("created_at", ""))
+        except (TypeError, ValueError):
+            pass
     summary = (s.get("backtest_result") or {}).get("summary") or {}
     hit = summary.get("avg_hit_at_k", -1)
     return (hit, s.get("created_at", ""))
@@ -153,6 +163,10 @@ def create_strategy(data: dict) -> dict:
         "generation_status": "pending",
         "backtest_result": None,    # { summary: {...}, windows: [...] }
         "generation": None,         # { cutoff_month: str, predictions: [...] }
+        "leaderboard_score": None,
+        "daily_evaluation": None,
+        "last_daily_run_at": None,
+        "last_generation_cutoff_month": None,
     }
     _write(strategy)
     return strategy
@@ -202,6 +216,14 @@ def _load_papers(s: dict):
         start_month=s["config"].get("start_month"),
         end_month=s["config"].get("end_month"),
     )
+
+
+def resolve_data_dir_for_strategy(strategy: dict) -> Path:
+    return _resolve_data_dir(strategy)
+
+
+def load_papers_for_strategy(strategy: dict):
+    return _load_papers(strategy)
 
 
 def _make_strategy_obj(s: dict):
@@ -374,3 +396,36 @@ def seed_demo_strategies() -> None:
         print(f"    → status={result.get('backtest_status')}  "
               f"windows={summary.get('windows', 0)}  "
               f"avg_hit@k={summary.get('avg_hit_at_k', 0)}")
+
+
+def has_leaderboard_baseline() -> bool:
+    for strategy in list_strategies():
+        status = str(strategy.get("backtest_status") or "").lower()
+        backtest_result = strategy.get("backtest_result")
+        if status == "done" and backtest_result is not None:
+            return True
+    return False
+
+
+def bootstrap_backtest_if_missing() -> dict:
+    strategies = list_strategies()
+    if not strategies:
+        return {"triggered": False, "reason": "no_strategies", "count": 0, "strategy_ids": []}
+
+    if has_leaderboard_baseline():
+        return {"triggered": False, "reason": "baseline_exists", "count": 0, "strategy_ids": []}
+
+    executed_ids = []
+    for strategy in strategies:
+        strategy_id = strategy.get("id")
+        if not strategy_id:
+            continue
+        run_backtest_sync(strategy_id)
+        executed_ids.append(strategy_id)
+
+    return {
+        "triggered": True,
+        "reason": "missing_baseline",
+        "count": len(executed_ids),
+        "strategy_ids": executed_ids,
+    }

@@ -61,3 +61,16 @@ def test_runs_api_validation(monkeypatch, tmp_path) -> None:
     resp_not_found = client.get("/api/runs/not-exists")
     assert resp_not_found.status_code == 404
     assert resp_not_found.get_json()["error"]["code"] == "not_found"
+
+
+def test_generate_ideas_get_is_read_only(monkeypatch, tmp_path) -> None:
+    from backend import app as app_module
+
+    ideas_file = tmp_path / "generated_ideas.json"
+    monkeypatch.setattr(app_module, "GENERATED_IDEAS_FILE", str(ideas_file))
+    client = app_module.app.test_client()
+
+    resp = client.get("/api/generate-ideas")
+    assert resp.status_code == 200
+    assert resp.get_json() == []
+    assert not ideas_file.exists()

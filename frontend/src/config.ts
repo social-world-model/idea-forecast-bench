@@ -24,9 +24,9 @@ export const API_ENDPOINTS = {
   HEALTH: '/api/health',
 
   // ── Legacy Run API (kept for RunPage / HistoryPage) ──────────
+  GENERATE_IDEAS: '/api/generate-ideas',
   RESEARCH_IDEAS: '/api/research-ideas',
   VIEWS: '/api/views',
-  RUNS_START: '/api/runs/start',
   RUNS_LIST: '/api/runs/list',
   RUNS_DETAIL: '/api/runs',
   RUNS_REPORT: '/api/runs/report',

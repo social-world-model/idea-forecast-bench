@@ -10,16 +10,6 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function startRun(keywords: string[], n: number): Promise<RunRecord> {
-  const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.RUNS_START}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ keywords, n }),
-  });
-  const payload = await parseResponse<{ run: RunRecord }>(response);
-  return payload.run;
-}
-
 export async function fetchRuns(limit = 50): Promise<RunRecord[]> {
   const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.RUNS_LIST}?limit=${limit}`);
   const payload = await parseResponse<{ runs: RunRecord[] }>(response);

@@ -1,0 +1,36 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: live-idea-daily-pipeline
+spec:
+  schedule: "0 0 * * *"
+  timeZone: "America/New_York"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: daily-pipeline
+              image: ghcr.io/your-org/live-idea-backend:latest
+              command: ["python", "scripts/run_daily_pipeline.py"]
+              env:
+                - name: OPENAI_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: live-idea-secrets
+                      key: OPENAI_API_KEY
+                - name: GOOGLE_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: live-idea-secrets
+                      key: GOOGLE_API_KEY
+                - name: LIVE_IDEA_ARXIV_QUERY
+                  value: "cat:cs.AI OR cat:cs.ML"
+                - name: LIVE_IDEA_ARXIV_MAX_RESULTS
+                  value: "200"
+                - name: LIVE_IDEA_ARXIV_LOOKBACK_DAYS
+                  value: "1"

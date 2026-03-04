@@ -32,9 +32,6 @@ const Navigation: React.FC = () => {
           <button className={`nav-link ${location.pathname === '/' ? 'active' : ''}`} onClick={() => navigate('/')}>
             Leaderboard
           </button>
-          <button className={`nav-link ${location.pathname === '/runs' ? 'active' : ''}`} onClick={() => navigate('/runs')}>
-            Run
-          </button>
           <button
             className={`nav-link ${location.pathname.startsWith('/runs/history') ? 'active' : ''}`}
             onClick={() => navigate('/runs/history')}
@@ -74,9 +71,6 @@ const Navigation: React.FC = () => {
         <div className="mobile-nav-links">
           <button className={`mobile-nav-link ${location.pathname === '/' ? 'active' : ''}`} onClick={() => navigateAndCloseMobile('/')}>
             Home
-          </button>
-          <button className={`mobile-nav-link ${location.pathname === '/runs' ? 'active' : ''}`} onClick={() => navigateAndCloseMobile('/runs')}>
-            Run
           </button>
           <button className={`mobile-nav-link ${location.pathname.startsWith('/runs/history') ? 'active' : ''}`} onClick={() => navigateAndCloseMobile('/runs/history')}>
             History

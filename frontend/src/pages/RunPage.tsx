@@ -1,73 +1,60 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchRuns, startRun } from '../api/runsApi';
+import { fetchRuns } from '../api/runsApi';
 import type { RunRecord } from '../types';
 
 const RunPage: React.FC = () => {
   const navigate = useNavigate();
-  const [keywordsInput, setKeywordsInput] = useState('Diffusion Language Model, Multimodal Visual Reasoning');
-  const [nInput, setNInput] = useState(5);
-  const [activeRun, setActiveRun] = useState<RunRecord | null>(null);
+  const [runs, setRuns] = useState<RunRecord[]>([]);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const parsedKeywords = useMemo(
-    () => keywordsInput.split(',').map((item) => item.trim()).filter(Boolean),
-    [keywordsInput]
-  );
+  useEffect(() => {
+    let mounted = true;
 
-  const handleStart = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const run = await startRun(parsedKeywords, nInput);
-      setActiveRun(run);
-      const refresh = window.setInterval(async () => {
-        const runs = await fetchRuns(20);
-        const latest = runs.find((item) => item.run_id === run.run_id);
-        if (latest) {
-          setActiveRun(latest);
-          if (latest.status === 'success' || latest.status === 'failed') {
-            window.clearInterval(refresh);
-          }
+    const loadRuns = async () => {
+      try {
+        const data = await fetchRuns(20);
+        if (mounted) {
+          setRuns(data);
+          setError('');
         }
-      }, 2000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start run');
-    } finally {
-      setLoading(false);
-    }
-  };
+      } catch (err) {
+        if (mounted) {
+          setError(err instanceof Error ? err.message : 'Failed to load runs');
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadRuns();
+    const timer = window.setInterval(loadRuns, 10000);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const activeRun = useMemo(() => {
+    return runs.find((run) => run.status === 'running' || run.status === 'pending') ?? runs[0] ?? null;
+  }, [runs]);
 
   return (
     <div className="runs-page">
-      <h1>Run</h1>
-      <p className="muted">Start a new generation run and monitor its status.</p>
-
-      <div className="panel">
-        <label>
-          Keywords (comma separated)
-          <textarea value={keywordsInput} onChange={(e) => setKeywordsInput(e.target.value)} rows={4} />
-        </label>
-        <label>
-          Papers to fetch
-          <input
-            type="number"
-            min={1}
-            value={nInput}
-            onChange={(e) => setNInput(Number(e.target.value) || 1)}
-          />
-        </label>
-        <button onClick={handleStart} disabled={loading || parsedKeywords.length === 0}>
-          {loading ? 'Starting...' : 'Start Run'}
-        </button>
-      </div>
+      <h1>Run Status</h1>
+      <p className="muted">Read-only run monitor. This page does not start new runs.</p>
 
       {error && <div className="error-box">{error}</div>}
 
-      {activeRun && (
+      {loading && <div className="panel">Loading runs...</div>}
+
+      {activeRun && !loading && (
         <div className="panel">
-          <h2>Active Run</h2>
+          <h2>Latest Run</h2>
           <p><strong>ID:</strong> {activeRun.run_id}</p>
           <p><strong>Status:</strong> <span className={`status ${activeRun.status}`}>{activeRun.status}</span></p>
           <p><strong>Ideas:</strong> {activeRun.ideas_count}</p>
@@ -76,6 +63,12 @@ const RunPage: React.FC = () => {
             <button onClick={() => navigate(`/runs/${activeRun.run_id}`)}>Open Detail</button>
             <button onClick={() => navigate('/runs/history')}>Open History</button>
           </div>
+        </div>
+      )}
+
+      {!loading && runs.length === 0 && !error && (
+        <div className="panel">
+          <p className="muted">No runs available.</p>
         </div>
       )}
     </div>

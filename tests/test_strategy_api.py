@@ -499,3 +499,21 @@ def test_strategy_backtest_status_field_in_response(monkeypatch, tmp_path) -> No
     # Thread should be triggered
     import time; time.sleep(0.05)  # tiny wait for daemon thread to start
     assert len(captured) > 0 or True  # non-flaky: thread may or may not have run yet
+
+
+def test_strategy_response_includes_daily_fields(monkeypatch, tmp_path) -> None:
+    from backend import app as app_module
+
+    _isolate_strategy_store(monkeypatch, tmp_path)
+    client = app_module.app.test_client()
+
+    created = client.post("/api/strategies", json={"strategy_name": "keyword_trend"}).get_json()
+    sid = created["id"]
+
+    detail = client.get(f"/api/strategies/{sid}").get_json()
+    assert "leaderboard_score" in detail
+    assert "daily_evaluation" in detail
+    assert "last_daily_run_at" in detail
+    assert "last_generation_cutoff_month" in detail
+    assert detail["leaderboard_score"] is None
+    assert detail["daily_evaluation"] is None

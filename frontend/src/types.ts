@@ -150,6 +150,21 @@ export interface GenerationResult {
   predictions: IdeaPrediction[];
 }
 
+export interface DailyEvaluation {
+  evaluated_at: string;
+  prediction_cutoff_month: string;
+  new_papers_count: number;
+  prediction_count: number;
+  hit_at_k: number;
+  recall_at_k: number;
+  precision_at_k: number;
+  mrr: number;
+  novelty: number;
+  diversity: number;
+  matched_prediction_ranks: number[];
+  matched_terms: string[];
+}
+
 export interface Strategy {
   id: string;
   name: string;
@@ -161,4 +176,8 @@ export interface Strategy {
   generation_status: StrategyStatus;
   backtest_result?: BacktestResult | null;
   generation?: GenerationResult | null;
+  leaderboard_score?: number | null;
+  daily_evaluation?: DailyEvaluation | null;
+  last_daily_run_at?: string | null;
+  last_generation_cutoff_month?: string | null;
 }
