@@ -51,3 +51,18 @@ def test_run_service_report(tmp_path: Path) -> None:
     assert report["summary"]["failed_runs"] == 0
     assert report["keyword_frequency"]["agents"] == 1
     assert len(report["score_trend"]) == 1
+
+
+def test_run_service_failure_does_not_persist_traceback(tmp_path: Path) -> None:
+    def failing_generate_ideas(keywords, n):
+        raise RuntimeError("boom")
+
+    service = RunService(str(tmp_path), idea_generator=failing_generate_ideas)
+    run = service.start_run(keywords=["llm"], n=1)
+
+    _wait_for_status(service, run.run_id, RunStatus.FAILED.value)
+    details = service.get_run(run.run_id)
+
+    assert details is not None
+    assert details["status"] == RunStatus.FAILED.value
+    assert details["error"] == "RuntimeError: boom"

@@ -74,3 +74,59 @@ def test_generate_ideas_get_is_read_only(monkeypatch, tmp_path) -> None:
     assert resp.status_code == 200
     assert resp.get_json() == []
     assert not ideas_file.exists()
+
+
+def test_protected_write_requires_admin_token(monkeypatch, tmp_path) -> None:
+    from backend import app as app_module
+
+    monkeypatch.setenv("LIVE_IDEA_ADMIN_TOKEN", "secret-token")
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr(app_module, "run_service", RunService(str(tmp_path)))
+
+    client = app_module.app.test_client()
+    resp = client.post("/api/runs/start", json={"keywords": ["vision"], "n": 1})
+
+    assert resp.status_code == 403
+    assert resp.get_json()["error"]["code"] == "forbidden"
+
+
+def test_protected_write_accepts_valid_admin_token(monkeypatch, tmp_path) -> None:
+    from backend import app as app_module
+
+    def fake_generate_ideas(keywords, n):
+        return [{"Title": "A", "Score": 9, "Novelty": 9, "Feasibility": 8}]
+
+    monkeypatch.setenv("LIVE_IDEA_ADMIN_TOKEN", "secret-token")
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr(
+        app_module,
+        "run_service",
+        RunService(str(tmp_path), idea_generator=fake_generate_ideas),
+    )
+
+    client = app_module.app.test_client()
+    resp = client.post(
+        "/api/runs/start",
+        json={"keywords": ["vision"], "n": 1},
+        headers={"X-Live-Idea-Admin-Token": "secret-token"},
+    )
+
+    assert resp.status_code == 202
+    assert "run" in resp.get_json()
+
+
+def test_unexpected_errors_do_not_leak_internal_details(monkeypatch) -> None:
+    from backend import app as app_module
+
+    def _boom():
+        raise RuntimeError("secret stack detail")
+
+    monkeypatch.setattr(app_module, "_load_generated_ideas", _boom)
+
+    client = app_module.app.test_client()
+    resp = client.get("/api/generate-ideas")
+
+    assert resp.status_code == 500
+    payload = resp.get_json()
+    assert payload["error"]["message"] == "Unexpected server error"
+    assert payload["error"]["details"] is None

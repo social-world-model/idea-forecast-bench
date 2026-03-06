@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -247,10 +248,41 @@ def test_daily_pipeline_lock_prevents_concurrent_runs(monkeypatch, tmp_path) -> 
     _isolate_strategy_store(monkeypatch, tmp_path)
     lock_file = tmp_path / "data" / "daily_runs" / "pipeline.lock"
     lock_file.parent.mkdir(parents=True, exist_ok=True)
-    lock_file.write_text("busy", encoding="utf-8")
+    lock_file.write_text(
+        f"pid={os.getpid()} created_at={datetime.now(timezone.utc).isoformat()}\n",
+        encoding="utf-8",
+    )
 
     with pytest.raises(daily_pipeline.PipelineAlreadyRunningError):
         daily_pipeline.run_daily_pipeline(
             now=datetime(2026, 3, 3, 5, 0, 0, tzinfo=timezone.utc),
             data_dir=tmp_path / "raw_markdown",
         )
+
+
+def test_daily_pipeline_reclaims_stale_lock(monkeypatch, tmp_path) -> None:
+    _isolate_strategy_store(monkeypatch, tmp_path)
+    _fake_generation(monkeypatch)
+
+    lock_file = tmp_path / "data" / "daily_runs" / "pipeline.lock"
+    lock_file.parent.mkdir(parents=True, exist_ok=True)
+    lock_file.write_text(
+        "pid=999999 created_at=2020-01-01T00:00:00+00:00\n",
+        encoding="utf-8",
+    )
+
+    raw_dir = tmp_path / "raw_markdown"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(
+        daily_pipeline,
+        "ingest_latest_arxiv_papers",
+        lambda **kwargs: {"data_dir": str(raw_dir), "new_papers": []},
+    )
+
+    report = daily_pipeline.run_daily_pipeline(
+        now=datetime(2026, 3, 3, 5, 0, 0, tzinfo=timezone.utc),
+        data_dir=raw_dir,
+    )
+
+    assert report["strategies_processed"] == 0
+    assert not lock_file.exists()

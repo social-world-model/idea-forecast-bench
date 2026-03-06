@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import threading
-import traceback
 import uuid
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
@@ -185,7 +184,7 @@ class RunService:
                 self._persist_runs()
         except Exception as exc:
             finished_at = self._now_iso()
-            error = f"{exc}\n{traceback.format_exc(limit=8)}"
+            error = f"{type(exc).__name__}: {exc}"
             with self._lock:
                 failed = self._runs.get(run_id)
                 if failed is None:

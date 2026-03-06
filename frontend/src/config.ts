@@ -18,15 +18,10 @@ export const API_ENDPOINTS = {
   // ── Backtest / Strategy API ──────────────────────────────────
   STRATEGIES: '/api/strategies',
   STRATEGY: (id: string) => `/api/strategies/${id}`,
-  STRATEGY_BACKTEST: (id: string) => `/api/strategies/${id}/backtest`,
-  STRATEGY_GENERATE: (id: string) => `/api/strategies/${id}/generate`,
-  STRATEGY_STATUS: (id: string) => `/api/strategies/${id}/status`,
-  HEALTH: '/api/health',
 
   // ── Legacy Run API (kept for RunPage / HistoryPage) ──────────
   GENERATE_IDEAS: '/api/generate-ideas',
   RESEARCH_IDEAS: '/api/research-ideas',
-  VIEWS: '/api/views',
   RUNS_LIST: '/api/runs/list',
   RUNS_DETAIL: '/api/runs',
   RUNS_REPORT: '/api/runs/report',

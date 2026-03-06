@@ -65,7 +65,7 @@ const GeneratedIdeasList: React.FC = () => {
             {error && <div className="error-container">Error: {error}</div>}
 
             {ideas.length === 0 && !loading && !error && (
-                <div className="empty-container">Enter keywords and click Generate to see ideas.</div>
+                <div className="empty-container">No cached generated ideas are available yet.</div>
             )}
 
             <div className="ideas-grid">

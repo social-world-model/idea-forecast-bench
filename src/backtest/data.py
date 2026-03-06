@@ -20,7 +20,11 @@ def normalize_month(raw: str) -> str:
     if re.match(r"^\d{4}-\d{2}-\d{2}$", value):
         return value[:7]
     if re.match(r"^\d{4}$", value):
-        return "20{}-{}".format(value[:2], value[2:])
+        year = 2000 + int(value[:2])
+        month = int(value[2:])
+        if month < 1 or month > 12:
+            raise ValueError("Unsupported month format: {}".format(raw))
+        return "{:04d}-{:02d}".format(year, month)
     raise ValueError("Unsupported month format: {}".format(raw))
 
 

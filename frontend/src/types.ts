@@ -100,7 +100,9 @@ export interface EvaluationResult {
 /** Mirrors BacktestWindowResult dataclass */
 export interface WindowResult {
   cutoff_month: string;
+  cutoff_date: string;
   future_end_month: string;
+  future_end_date: string;
   train_papers: number;
   future_papers: number;
   predictions: IdeaPrediction[];
@@ -146,12 +148,14 @@ export interface StrategyConfig {
 
 /** Generation result: predictions at a single cutoff */
 export interface GenerationResult {
+  cutoff_date: string;
   cutoff_month: string;
   predictions: IdeaPrediction[];
 }
 
 export interface DailyEvaluation {
   evaluated_at: string;
+  prediction_cutoff_date: string;
   prediction_cutoff_month: string;
   new_papers_count: number;
   prediction_count: number;

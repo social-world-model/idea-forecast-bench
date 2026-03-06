@@ -27,17 +27,92 @@ class PipelineAlreadyRunningError(RuntimeError):
     pass
 
 
+def _lock_ttl_seconds() -> int:
+    raw = os.environ.get("LIVE_IDEA_PIPELINE_LOCK_TTL_SECONDS")
+    if raw is None:
+        return 6 * 60 * 60
+    try:
+        return max(60, int(raw))
+    except ValueError:
+        return 6 * 60 * 60
+
+
 class _FileLock:
     def __init__(self, path: Path) -> None:
         self.path = path
         self.fd: Optional[int] = None
 
+    @staticmethod
+    def _process_alive(pid: int) -> bool:
+        if pid <= 0:
+            return False
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+
+    def _read_metadata(self) -> tuple[Optional[int], Optional[datetime]]:
+        try:
+            payload = self.path.read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            return None, None
+        except OSError:
+            return None, None
+
+        pid: Optional[int] = None
+        created_at: Optional[datetime] = None
+        for token in payload.split():
+            if token.startswith("pid="):
+                try:
+                    pid = int(token.split("=", 1)[1])
+                except ValueError:
+                    pid = None
+            if token.startswith("created_at="):
+                raw = token.split("=", 1)[1]
+                try:
+                    created_at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                except ValueError:
+                    created_at = None
+        return pid, created_at
+
+    def _clear_if_stale(self) -> bool:
+        pid, created_at = self._read_metadata()
+        now = datetime.now(timezone.utc)
+
+        expired = False
+        if created_at is None:
+            expired = True
+        else:
+            age = (now - created_at.astimezone(timezone.utc)).total_seconds()
+            expired = age >= _lock_ttl_seconds()
+
+        process_dead = pid is None or not self._process_alive(pid)
+        if not expired and not process_dead:
+            return False
+
+        try:
+            self.path.unlink()
+        except FileNotFoundError:
+            return True
+        except OSError:
+            return False
+        return True
+
     def __enter__(self) -> "_FileLock":
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            self.fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError as exc:
-            raise PipelineAlreadyRunningError(f"Lock exists: {self.path}") from exc
+        for _ in range(2):
+            try:
+                self.fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                break
+            except FileExistsError as exc:
+                if not self._clear_if_stale():
+                    raise PipelineAlreadyRunningError(f"Lock exists: {self.path}") from exc
+        else:
+            raise PipelineAlreadyRunningError(f"Lock exists: {self.path}")
+
         payload = f"pid={os.getpid()} created_at={datetime.now(timezone.utc).isoformat()}\n"
         os.write(self.fd, payload.encode("utf-8"))
         return self

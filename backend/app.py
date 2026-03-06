@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
-import threading
 import os
+import secrets
 import sys
+import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
@@ -28,7 +29,6 @@ from backend.strategy_store import (
 )
 
 app = Flask(__name__)
-CORS(app)
 
 GENERATED_IDEAS_FILE = os.path.join(project_root, "backend", "generated_ideas.json")
 VIEWS_FILE = os.path.join(project_root, "data", "views.json")
@@ -42,6 +42,67 @@ def _env_flag(name: str, default: bool) -> bool:
         return default
     value = raw.strip().lower()
     return value not in {"0", "false", "no", "off"}
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _cors_origins() -> List[str]:
+    raw = os.environ.get("LIVE_IDEA_CORS_ORIGINS", "").strip()
+    if raw:
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
+    return [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
+
+def _admin_token() -> str:
+    return os.environ.get("LIVE_IDEA_ADMIN_TOKEN", "").strip()
+
+
+def _request_admin_token() -> str:
+    bearer = request.headers.get("Authorization", "").strip()
+    if bearer.lower().startswith("bearer "):
+        return bearer[7:].strip()
+    return request.headers.get("X-Live-Idea-Admin-Token", "").strip()
+
+
+def _auth_bypass_enabled() -> bool:
+    return app.testing or bool(os.environ.get("PYTEST_CURRENT_TEST"))
+
+
+def _is_protected_write_request() -> bool:
+    if request.method not in {"POST", "DELETE", "PUT", "PATCH"}:
+        return False
+    protected_paths = (
+        "/api/generate-ideas",
+        "/api/runs/start",
+        "/api/strategies",
+    )
+    return any(
+        request.path == path or request.path.startswith(f"{path}/")
+        for path in protected_paths
+    )
+
+
+CORS(
+    app,
+    resources={
+        r"/api/*": {"origins": _cors_origins()},
+        r"/healthz": {"origins": _cors_origins()},
+        r"/metrics": {"origins": _cors_origins()},
+    },
+)
 
 
 def _bootstrap_leaderboard_async() -> None:
@@ -70,13 +131,32 @@ class APIError(Exception):
         self.details = details
 
 
+@app.before_request
+def guard_protected_write_endpoints():
+    if not _is_protected_write_request() or _auth_bypass_enabled():
+        return None
+
+    expected = _admin_token()
+    if not expected:
+        raise APIError(
+            "Protected write endpoints are disabled until LIVE_IDEA_ADMIN_TOKEN is configured",
+            status_code=503,
+            code="admin_token_not_configured",
+        )
+
+    provided = _request_admin_token()
+    if not provided or not secrets.compare_digest(provided, expected):
+        raise APIError("Admin token required", status_code=403, code="forbidden")
+    return None
+
+
 @app.errorhandler(APIError)
 def handle_api_error(error: APIError):
     payload = {
         "error": {
             "code": error.code,
             "message": error.message,
-            "details": error.details,
+            "details": error.details if app.debug or app.testing else None,
         },
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
@@ -85,11 +165,12 @@ def handle_api_error(error: APIError):
 
 @app.errorhandler(Exception)
 def handle_unexpected_error(error: Exception):
+    app.logger.exception("Unhandled server error")
     payload = {
         "error": {
             "code": "internal_error",
             "message": "Unexpected server error",
-            "details": str(error),
+            "details": None,
         },
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
@@ -344,4 +425,7 @@ def api_runs_report():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(
+        debug=_env_flag("FLASK_DEBUG", False),
+        port=_env_int("PORT", 5000),
+    )
