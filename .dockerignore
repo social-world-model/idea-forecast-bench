@@ -1,0 +1,17 @@
+.git
+.github
+.codex
+.env
+.env.*
+.mypy_cache
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+data
+frontend/build
+frontend/node_modules
+htmlcov
+docs/_build

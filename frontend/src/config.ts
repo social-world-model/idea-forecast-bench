@@ -1,11 +1,5 @@
-/**
- * Frontend configuration
- */
-
-export const USE_MOCK_DATA = false;
-
 export const API_BASE_URL =
-  process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+  process.env.REACT_APP_API_BASE_URL || '';
 
 export const REFRESH_INTERVAL = parseInt(
   process.env.REACT_APP_REFRESH_INTERVAL || '30000',
@@ -15,7 +9,6 @@ export const REFRESH_INTERVAL = parseInt(
 export const DEBUG_MODE = process.env.NODE_ENV === 'development';
 
 export const API_ENDPOINTS = {
-  // ── Backtest / Strategy API ──────────────────────────────────
   STRATEGIES: '/api/strategies',
   STRATEGY: (id: string) => `/api/strategies/${id}`,
 };

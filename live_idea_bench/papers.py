@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import calendar
-import json
 import re
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import yaml
 
@@ -28,90 +27,6 @@ def read_text(path: Path) -> str:
 
 def read_file_content(path: PathLike) -> str:
     return read_text(Path(path))
-
-
-def truncate(text: str, max_chars: int) -> str:
-    if max_chars <= 0 or len(text) <= max_chars:
-        return text
-    return text[:max_chars] + "\n...(truncated)"
-
-
-def load_json(path: Path) -> Dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        print(f"Load error: {path} ({exc})")
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
-
-def save_json(path: Path, obj: Mapping[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(obj, indent=2, ensure_ascii=False), encoding="utf-8")
-
-
-def filter_by_arxiv_date(
-    results: Dict[str, List[str]],
-    start_yymm: str,
-    end_yymm: str,
-) -> Dict[str, List[str]]:
-    filtered = {}
-    for file_path, keywords in results.items():
-        filename = Path(file_path).name
-        if filename[:4].isdigit():
-            date_prefix = filename[:4]
-            if start_yymm <= date_prefix <= end_yymm:
-                filtered[file_path] = keywords
-    return filtered
-
-
-def group_by_keywords(
-    results: Dict[str, List[str]],
-    target_categories: List[str] | None = None,
-    fuzzy_threshold: float = 0.6,
-    min_papers: int = 1,
-) -> Dict[str, List[str]]:
-    import difflib
-    from collections import defaultdict
-
-    keyword_map = defaultdict(set)
-    targets_lower = [item.lower() for item in target_categories] if target_categories else []
-
-    for file_path, keywords in results.items():
-        for keyword in keywords:
-            clean_keyword = keyword.strip()
-            if not clean_keyword or len(clean_keyword) > 100:
-                continue
-
-            matched_keyword = clean_keyword
-            if target_categories:
-                matches = difflib.get_close_matches(
-                    clean_keyword.lower(),
-                    targets_lower,
-                    n=1,
-                    cutoff=fuzzy_threshold,
-                )
-                if matches:
-                    idx = targets_lower.index(matches[0])
-                    matched_keyword = target_categories[idx]
-                else:
-                    continue
-
-            normalized_keyword = (
-                matched_keyword.strip().lower()
-                if not target_categories
-                else matched_keyword
-            )
-            if normalized_keyword:
-                keyword_map[normalized_keyword].add(file_path)
-
-    return {
-        keyword: sorted(list(paths))
-        for keyword, paths in keyword_map.items()
-        if len(paths) >= min_papers
-    }
 
 
 def clean_paper_content(content: str) -> str:

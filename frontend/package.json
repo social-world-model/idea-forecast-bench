@@ -11,17 +11,11 @@
     "@types/node": "^16.18.126",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
-    "@types/react-router-dom": "^5.3.3",
-    "axios": "^1.10.0",
-    "chart.js": "^4.5.0",
     "react": "^19.1.0",
-    "react-chartjs-2": "^5.3.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.3",
     "react-scripts": "5.0.1",
-    "tinycolor2": "^1.6.0",
-    "typescript": "^4.9.5",
-    "web-vitals": "^2.1.4"
+    "typescript": "^4.9.5"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -47,8 +41,5 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "http://localhost:5000",
-  "devDependencies": {
-    "@types/tinycolor2": "^1.4.6"
-  }
+  "proxy": "http://localhost:5000"
 }

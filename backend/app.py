@@ -10,12 +10,12 @@ from typing import Any, Dict, List
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from backend import config
 
 # Add project root to path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
-from backend import config
 from backend.strategy_store import (
     bootstrap_backtest_if_missing,
     create_strategy,
@@ -32,38 +32,12 @@ app = Flask(__name__)
 VIEWS_FILE = os.path.join(project_root, "data", "views.json")
 
 
-def _env_flag(name: str, default: bool) -> bool:
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    value = raw.strip().lower()
-    return value not in {"0", "false", "no", "off"}
-
-
-def _env_int(name: str, default: int) -> int:
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    try:
-        return int(raw)
-    except ValueError:
-        return default
-
-
 def _cors_origins() -> List[str]:
-    raw = os.environ.get("LIVE_IDEA_CORS_ORIGINS", "").strip()
-    if raw:
-        return [origin.strip() for origin in raw.split(",") if origin.strip()]
-    return [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ]
+    return config.cors_origins()
 
 
 def _admin_token() -> str:
-    return os.environ.get("LIVE_IDEA_ADMIN_TOKEN", "").strip()
+    return config.admin_token()
 
 
 def _request_admin_token() -> str:
@@ -98,7 +72,7 @@ CORS(
 
 
 def _bootstrap_leaderboard_async() -> None:
-    if not _env_flag("LIVE_IDEA_BOOTSTRAP_BACKTEST", True):
+    if not config.bootstrap_backtest_enabled():
         return
 
     def _worker() -> None:
@@ -313,6 +287,7 @@ def api_strategy_generate(strategy_id: str):
 
 if __name__ == "__main__":
     app.run(
-        debug=_env_flag("FLASK_DEBUG", False),
-        port=_env_int("PORT", 5000),
+        debug=config.env_flag("FLASK_DEBUG", False),
+        host="0.0.0.0",
+        port=config.backend_port(),
     )

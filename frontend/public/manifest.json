@@ -1,6 +1,6 @@
 {
-  "short_name": "Live Trade Bench",
-  "name": "Live evaluation of trading agents",
+  "short_name": "LiveIdeaBench",
+  "name": "Live Idea Bench",
   "icons": [
     {
       "src": "favicon.ico",

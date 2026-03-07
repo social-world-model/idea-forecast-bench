@@ -34,6 +34,43 @@ function fmtIso(raw?: string | null): string {
   return parsed.toLocaleString();
 }
 
+type ModelBadge = {
+  label: string;
+  icon: string;
+};
+
+function resolveModelBadge(modelName?: string | null): ModelBadge | null {
+  if (!modelName) return null;
+  const normalized = modelName.toLowerCase();
+
+  if (normalized.includes('claude')) {
+    return { label: 'Claude', icon: '/claude.png' };
+  }
+  if (normalized.includes('gemini') || normalized.includes('google')) {
+    return { label: 'Google', icon: '/google.png' };
+  }
+  if (normalized.includes('gpt') || normalized.includes('openai')) {
+    return { label: 'OpenAI', icon: '/openai.png' };
+  }
+  if (normalized.includes('deepseek')) {
+    return { label: 'DeepSeek', icon: '/deepseek.png' };
+  }
+  if (normalized.includes('qwen')) {
+    return { label: 'Qwen', icon: '/qwen.png' };
+  }
+  if (normalized.includes('kimi') || normalized.includes('moonshot')) {
+    return { label: 'Kimi', icon: '/kimi.png' };
+  }
+  if (normalized.includes('grok') || normalized.includes('xai')) {
+    return { label: 'xAI', icon: '/xai.png' };
+  }
+  if (normalized.includes('llama') || normalized.includes('meta')) {
+    return { label: 'Meta', icon: '/meta.png' };
+  }
+
+  return null;
+}
+
 const MetricBar: React.FC<{ value: number; color?: string }> = ({
   value,
   color = '#9c9ef8',
@@ -73,6 +110,7 @@ const StrategyRow: React.FC<{
     typeof strategy.params?.model_name === 'string'
       ? strategy.params.model_name
       : null;
+  const modelBadge = resolveModelBadge(modelName);
   const predictorConfig =
     typeof strategy.params?.predictor_config === 'string'
       ? strategy.params.predictor_config
@@ -97,6 +135,16 @@ const StrategyRow: React.FC<{
         <div className="strategy-name">{strategy.name}</div>
         <div className="strategy-meta">
           <span className="meta-chip">{strategy.strategy_name}</span>
+          {modelBadge && (
+            <span className="meta-chip model-chip">
+              <img
+                className="model-chip-icon"
+                src={modelBadge.icon}
+                alt={`${modelBadge.label} logo`}
+              />
+              {modelBadge.label}
+            </span>
+          )}
           {recentMonths !== null && (
             <span className="meta-chip">recent={recentMonths}m</span>
           )}

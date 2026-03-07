@@ -1,25 +1,59 @@
-version: '3.9'
-
 services:
   backend:
+    init: true
+    restart: unless-stopped
     build:
       context: .
       dockerfile: backend/Dockerfile
     container_name: live-idea-backend
     ports:
-      - '5000:5000'
+      - '127.0.0.1:5000:5000'
     volumes:
       - ./data:/app/data
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - LIVE_IDEA_ADMIN_TOKEN=${LIVE_IDEA_ADMIN_TOKEN:-}
+      - LIVE_IDEA_BOOTSTRAP_BACKTEST=${LIVE_IDEA_BOOTSTRAP_BACKTEST:-1}
+      - LIVE_IDEA_ARXIV_QUERY=${LIVE_IDEA_ARXIV_QUERY:-cat:cs.AI OR cat:cs.ML}
+      - LIVE_IDEA_ARXIV_MAX_RESULTS=${LIVE_IDEA_ARXIV_MAX_RESULTS:-200}
+      - LIVE_IDEA_ARXIV_LOOKBACK_DAYS=${LIVE_IDEA_ARXIV_LOOKBACK_DAYS:-1}
+      - LIVE_IDEA_CORS_ORIGINS=${LIVE_IDEA_CORS_ORIGINS:-}
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-1}
+      - GUNICORN_THREADS=${GUNICORN_THREADS:-4}
+      - GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-300}
+      - GUNICORN_GRACEFUL_TIMEOUT=${GUNICORN_GRACEFUL_TIMEOUT:-30}
+      - GUNICORN_KEEPALIVE=${GUNICORN_KEEPALIVE:-5}
+      - GUNICORN_LOG_LEVEL=${GUNICORN_LOG_LEVEL:-info}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz', timeout=5).read()",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   frontend:
+    init: true
+    restart: unless-stopped
     build:
       context: .
       dockerfile: frontend/Dockerfile
     container_name: live-idea-frontend
     ports:
-      - '3000:80'
+      - '80:80'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O - http://127.0.0.1/healthz >/dev/null']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy

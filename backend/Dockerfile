@@ -12,4 +12,4 @@ COPY . /app
 
 EXPOSE 5000
 
-CMD ["python", "backend/app.py"]
+CMD ["gunicorn", "--config", "backend/gunicorn.conf.py", "backend.app:app"]

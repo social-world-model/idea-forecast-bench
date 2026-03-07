@@ -1,50 +1,70 @@
 # LiveIdeaBench
 
-LiveIdeaBench is a research-idea forecasting benchmark. The clean mainline is:
+LiveIdeaBench is a website for comparing research-idea generation strategies on a shared paper stream.
 
-`ingest -> predictor.yaml -> strategy generation -> similarity.yaml evaluation -> monthly backtest -> daily pipeline -> backend API -> frontend`
+The runtime mainline is:
+
+`bootstrap backtest once if missing -> daily ingest -> daily evaluation -> next generation -> backend API -> frontend`
+
+## Official Deployment Target
+
+This repo is organized for a single AWS EC2 host running Docker Compose:
+
+- `frontend`: Nginx serving the React build and proxying `/api`, `/healthz`, and `/metrics`
+- `backend`: Gunicorn serving the Flask API plus bootstrap and generation logic
+- `host cron`: triggers the daily pipeline inside the backend container
+- `data/`: mounted into the backend container so strategy state, views, and daily artifacts persist across restarts
+
+Detailed EC2 operations live in [docs/ops.md](docs/ops.md).
 
 ## Repo Layout
 
 ```text
-assets/          # README/site assets
-backend/         # Flask API, JSON persistence, startup bootstrap
-config/          # Runtime defaults
-data/            # Paper markdown, strategy JSON, daily artifacts
-deploy/          # Deployment manifests
-docs/            # Ops and API notes
-examples/        # Python example entrypoints
-frontend/        # React UI
-live_idea_bench/   # Core package
-scripts/         # Bash wrappers for examples
-tests/           # Automated tests
+backend/           Flask API and file-backed strategy store
+config/            Runtime defaults
+data/              Mounted runtime state and local paper corpus
+docs/              Operating notes
+examples/          Python entrypoints for backtest and daily jobs
+frontend/          React app and Nginx image
+live_idea_bench/   Core ingest, prediction, similarity, and backtest package
+scripts/           Bash wrappers around the supported examples
+tests/             Automated tests
 ```
 
-## Core Package
+## Runtime Semantics
 
-```text
-live_idea_bench/
-  config.py      # config/config.yaml + live_idea_bench/prompt/*.yaml loading
-  models.py      # PaperRecord / IdeaPrediction / EvaluationResult / MatchResult
-  papers.py      # markdown parsing, dates, JSON/file helpers
-  llm.py         # model client and request adapters
-  predictor.py   # predictor.yaml-driven idea generation
-  similarity.py  # similarity.yaml-driven evaluation
-  backtest.py    # month-level backtest and window runner
-  daily.py       # daily validation + next-generation helpers
-  ingest.py      # arXiv ingest helpers
-  strategy/
-    base.py
-    predictor_llm.py
-    keyword_trend.py
-    execution.py
-    registry.py
-  prompt/
-    predictor.yaml
-    similarity.yaml
+- Historical backtests are month-based and primarily used to establish a baseline leaderboard.
+- Backend startup only auto-runs backtest when no local strategy record has a non-empty `backtest_result`.
+- The daily pipeline ingests the latest arXiv papers, evaluates the previous generation against new papers, updates leaderboard state, and generates the next cutoff.
+- Runtime state is stored under `data/`:
+  - `data/strategies/` for persisted strategy records
+  - `data/views.json` for the landing-page counter
+  - `data/daily_runs/` for daily pipeline reports
+
+## Local Development
+
+### Backend
+
+```bash
+poetry install --with test
+python backend/app.py
 ```
 
-## Main Workflows
+Backend default URL: `http://localhost:5000`
+
+Production Docker runs the backend under Gunicorn with a single worker by default because runtime state is still file-backed.
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm start
+```
+
+The frontend uses same-origin `/api` calls by default. In local development, the CRA dev server proxies them to `http://localhost:5000`.
+
+## Supported CLI Workflows
 
 Generate one cutoff:
 
@@ -58,7 +78,7 @@ bash scripts/research_idea_engine.sh \
   --output /tmp/idea_generate.json
 ```
 
-Run monthly backtest:
+Run a monthly backtest:
 
 ```bash
 bash scripts/research_idea_engine.sh \
@@ -70,22 +90,21 @@ bash scripts/research_idea_engine.sh \
   --output /tmp/idea_backtest.json
 ```
 
-Start backend:
+Run the daily pipeline manually:
 
 ```bash
-python backend/app.py
+bash scripts/run_daily_pipeline.sh
 ```
 
-Start frontend:
+## API Surface
 
-```bash
-cd frontend
-npm install
-npm start
-```
-
-## Runtime Semantics
-
-- Historical `backtest` is month-based.
-- `daily pipeline` evaluates yesterday's generation against newly ingested papers, updates leaderboard state, then generates the next cutoff.
-- Backend startup only auto-runs backtest if no local strategy file contains a non-empty `backtest_result`.
+- `GET /healthz`
+- `GET /metrics`
+- `GET /api/strategies`
+- `POST /api/strategies`
+- `GET /api/strategies/<strategy_id>`
+- `GET /api/strategies/<strategy_id>/status`
+- `POST /api/strategies/<strategy_id>/backtest`
+- `POST /api/strategies/<strategy_id>/generate`
+- `GET /api/views`
+- `POST /api/views`

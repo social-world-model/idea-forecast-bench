@@ -41,11 +41,8 @@ from live_idea_bench.papers import (
     add_months,
     clean_paper_content,
     date_to_ordinal,
-    filter_by_arxiv_date,
     find_markdown_files,
     get_paper_published_date,
-    group_by_keywords,
-    load_json,
     month_end_date,
     month_start_date,
     month_to_index,
@@ -54,8 +51,6 @@ from live_idea_bench.papers import (
     parse_markdown_paper,
     read_file_content,
     read_text,
-    save_json,
-    truncate,
 )
 from live_idea_bench.predictor import extract_abstract, generate_predictions
 from live_idea_bench.similarity import evaluate_predictions
@@ -102,7 +97,6 @@ __all__ = [
     "evaluate_predictions",
     "evaluate_previous_generation",
     "extract_abstract",
-    "filter_by_arxiv_date",
     "find_markdown_files",
     "generate",
     "generate_predictions",
@@ -110,10 +104,8 @@ __all__ = [
     "get_prompt_policy",
     "get_prompt_template",
     "get_paper_published_date",
-    "group_by_keywords",
     "ingest_latest_arxiv_papers",
     "list_prompts",
-    "load_json",
     "load_papers_from_markdown",
     "load_predictor_config",
     "load_runtime_config",
@@ -129,6 +121,4 @@ __all__ = [
     "run_backtest",
     "run_strategy_backtest",
     "run_strategy_generation",
-    "save_json",
-    "truncate",
 ]

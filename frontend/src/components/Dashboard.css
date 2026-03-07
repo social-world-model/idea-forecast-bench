@@ -249,6 +249,21 @@
   color: #9c9ef8;
 }
 
+.model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.model-chip-icon {
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 999px;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
 /* Window column */
 .col-window { min-width: 130px; }
 

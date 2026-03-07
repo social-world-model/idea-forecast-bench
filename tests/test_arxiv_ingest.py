@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from backend.services import arxiv_ingest
+from live_idea_bench import ingest
 
 
 SAMPLE_FEED = """<?xml version="1.0" encoding="UTF-8"?>
@@ -38,13 +38,13 @@ class _FakeResponse:
 
 def test_ingest_latest_arxiv_papers_writes_markdown_and_is_idempotent(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(
-        arxiv_ingest.requests,
+        ingest.requests,
         "get",
         lambda *args, **kwargs: _FakeResponse(SAMPLE_FEED),
     )
     now = datetime(2026, 3, 3, 0, 0, 0, tzinfo=timezone.utc)
 
-    first = arxiv_ingest.ingest_latest_arxiv_papers(
+    first = ingest.ingest_latest_arxiv_papers(
         data_dir=tmp_path,
         query="cat:cs.AI",
         max_results=10,
@@ -64,7 +64,7 @@ def test_ingest_latest_arxiv_papers_writes_markdown_and_is_idempotent(monkeypatc
     assert "source_url:" in text
     assert "# Abstract" in text
 
-    second = arxiv_ingest.ingest_latest_arxiv_papers(
+    second = ingest.ingest_latest_arxiv_papers(
         data_dir=tmp_path,
         query="cat:cs.AI",
         max_results=10,

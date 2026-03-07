@@ -1,5 +1,5 @@
 """
-Strategy store: CRUD for Strategy objects, backed by per-file JSON in backend/strategies/.
+Strategy store: CRUD for Strategy objects, backed by per-file JSON in data/strategies/.
 
 A Strategy bundles:
   - strategy_name : which IdeaStrategy implementation ("keyword_trend", …)
@@ -9,24 +9,45 @@ A Strategy bundles:
 
 import json
 import os
+import shutil
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+from backend import config
 from live_idea_bench.papers import load_papers_from_markdown
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DATA_DIR = PROJECT_ROOT / "data" / "arxiv_csml" / "raw_markdown"
 DEFAULT_MODEL_NAME = "gpt-4o"
 
-STRATEGIES_DIR = Path(__file__).parent / "strategies"
-STRATEGIES_DIR.mkdir(exist_ok=True)
+DEFAULT_STRATEGIES_DIR = PROJECT_ROOT / "data" / "strategies"
+LEGACY_STRATEGIES_DIR = PROJECT_ROOT / "backend" / "strategies"
+STRATEGIES_DIR = DEFAULT_STRATEGIES_DIR
+
+
+def _prepare_storage() -> None:
+    STRATEGIES_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Preserve local state when migrating from the legacy backend/strategies path.
+    if STRATEGIES_DIR != DEFAULT_STRATEGIES_DIR or not LEGACY_STRATEGIES_DIR.exists():
+        return
+
+    for legacy_path in LEGACY_STRATEGIES_DIR.glob("*.json"):
+        target_path = STRATEGIES_DIR / legacy_path.name
+        if target_path.exists():
+            continue
+        try:
+            shutil.copy2(legacy_path, target_path)
+        except OSError:
+            continue
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 def _path(strategy_id: str) -> Path:
+    _prepare_storage()
     return STRATEGIES_DIR / f"{strategy_id}.json"
 
 
@@ -38,7 +59,7 @@ def _coerce_int(value: object, default: int) -> int:
 
 
 def _runtime_default_data_dir() -> Path:
-    override = os.environ.get("LIVE_IDEA_BENCH_DATA_DIR", "").strip()
+    override = config.data_dir_override()
     if not override:
         return DEFAULT_DATA_DIR
     return Path(override).expanduser()
@@ -227,6 +248,7 @@ def _sort_key(s: dict) -> tuple:
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def list_strategies() -> List[dict]:
+    _prepare_storage()
     strategies = []
     for p in sorted(STRATEGIES_DIR.glob("*.json")):
         try:
