@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.runner import BacktestRunner, generate_windows
+from live_idea_bench.backtest import BacktestRunner, generate_windows
 
 
 def test_generate_windows_basic() -> None:

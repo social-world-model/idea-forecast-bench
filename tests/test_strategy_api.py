@@ -293,8 +293,8 @@ def test_run_generation_sync_real_worker(monkeypatch, tmp_path) -> None:
     signature (missing top_k) or no paper filtering.
     """
     from backend import strategy_store
-    from src.backtest.models import PaperRecord
-    from src.strategy.keyword_trend import KeywordTrendStrategy
+    from live_idea_bench.models import PaperRecord
+    from live_idea_bench.strategy.keyword_trend import KeywordTrendStrategy
 
     _isolate_strategy_store(monkeypatch, tmp_path)
 
@@ -346,11 +346,11 @@ def test_run_generation_sync_real_worker(monkeypatch, tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Task 11 – Regression: strategy CRUD with prompt_llm params (migration surface)
+# Task 11 – Regression: strategy CRUD with predictor_llm params (migration surface)
 # ---------------------------------------------------------------------------
 
 
-def test_strategy_create_with_prompt_llm_params_persisted(monkeypatch, tmp_path) -> None:
+def test_strategy_create_with_predictor_params_persisted(monkeypatch, tmp_path) -> None:
     """
     Regression: creating a strategy with prompt/model params persists them exactly.
     Catches schema drift if strategy_store.create_strategy silently drops new param keys.
@@ -361,11 +361,11 @@ def test_strategy_create_with_prompt_llm_params_persisted(monkeypatch, tmp_path)
     client = app_module.app.test_client()
 
     payload = {
-        "strategy_name": "prompt_llm",
+        "strategy_name": "predictor_llm",
         "params": {
-            "model_id": "gpt-4o-mini",
-            "prompt_id": "llm_baseline",
-            "prompt_version": "v1",
+            "model_name": "gpt-4o-mini",
+            "predictor_config": "predictor.yaml",
+            "similarity_config": "similarity.yaml",
             "temperature": 0.7,
         },
         "config": {
@@ -379,12 +379,12 @@ def test_strategy_create_with_prompt_llm_params_persisted(monkeypatch, tmp_path)
     created = r.get_json()
     sid = created["id"]
 
-    # Verify all prompt/model params survived the round-trip
+    # Verify all predictor/model params survived the round-trip
     detail = client.get(f"/api/strategies/{sid}").get_json()
     params = detail["params"]
-    assert params["model_id"] == "gpt-4o-mini", f"model_id lost: {params}"
-    assert params["prompt_id"] == "llm_baseline", f"prompt_id lost: {params}"
-    assert params["prompt_version"] == "v1", f"prompt_version lost: {params}"
+    assert params["model_name"] == "gpt-4o-mini", f"model_name lost: {params}"
+    assert params["predictor_config"] == "predictor.yaml", f"predictor_config lost: {params}"
+    assert params["similarity_config"] == "similarity.yaml", f"similarity_config lost: {params}"
 
     # Status defaults must be pending
     status = client.get(f"/api/strategies/{sid}/status").get_json()

@@ -69,17 +69,17 @@ const StrategyRow: React.FC<{
     typeof strategy.params?.min_keyword_freq === 'number'
       ? strategy.params.min_keyword_freq
       : null;
-  const modelId =
-    typeof strategy.params?.model_id === 'string'
-      ? strategy.params.model_id
+  const modelName =
+    typeof strategy.params?.model_name === 'string'
+      ? strategy.params.model_name
       : null;
-  const promptId =
-    typeof strategy.params?.prompt_id === 'string'
-      ? strategy.params.prompt_id
+  const predictorConfig =
+    typeof strategy.params?.predictor_config === 'string'
+      ? strategy.params.predictor_config
       : null;
-  const promptVersion =
-    typeof strategy.params?.prompt_version === 'string'
-      ? strategy.params.prompt_version
+  const similarityConfig =
+    typeof strategy.params?.similarity_config === 'string'
+      ? strategy.params.similarity_config
       : null;
   const temperature =
     typeof strategy.params?.temperature === 'number'
@@ -103,13 +103,9 @@ const StrategyRow: React.FC<{
           {minFreq !== null && (
             <span className="meta-chip">min_freq={minFreq}</span>
           )}
-          {modelId && <span className="meta-chip">model={modelId}</span>}
-          {promptId && (
-            <span className="meta-chip">
-              prompt={promptId}
-              {promptVersion ? `@${promptVersion}` : ''}
-            </span>
-          )}
+          {modelName && <span className="meta-chip">model={modelName}</span>}
+          {predictorConfig && <span className="meta-chip">predictor={predictorConfig}</span>}
+          {similarityConfig && <span className="meta-chip">similarity={similarityConfig}</span>}
           {temperature !== null && (
             <span className="meta-chip">temp={temperature}</span>
           )}
@@ -170,14 +166,12 @@ const StrategyRow: React.FC<{
   );
 };
 
-const PredictionCard: React.FC<{ pred: IdeaPrediction; matchedTerms?: string[] }> = ({
+const PredictionCard: React.FC<{ pred: IdeaPrediction; matchedRanks?: number[] }> = ({
   pred,
-  matchedTerms = [],
+  matchedRanks = [],
 }) => {
   const [expanded, setExpanded] = useState(false);
-  const isMatched = pred.key_terms.some((t) =>
-    matchedTerms.includes(t.toLowerCase())
-  );
+  const isMatched = matchedRanks.includes(pred.rank);
 
   return (
     <div
@@ -193,8 +187,11 @@ const PredictionCard: React.FC<{ pred: IdeaPrediction; matchedTerms?: string[] }
         <div className="idea-header">
           <h3 className="idea-title">{pred.title}</h3>
           <div className="idea-scores">
+            <span className="score-badge confidence" title="Score">
+              {(pred.score * 100).toFixed(0)}%
+            </span>
             <span className="score-badge confidence" title="Confidence">
-              {(pred.confidence * 100).toFixed(0)}%
+              {(((pred.confidence ?? pred.score) || 0) * 100).toFixed(0)}%
             </span>
             {isMatched && (
               <span className="score-badge matched-badge" title="Matched future paper">
@@ -204,20 +201,20 @@ const PredictionCard: React.FC<{ pred: IdeaPrediction; matchedTerms?: string[] }
           </div>
         </div>
 
-        <div className="idea-tags-row">
-          {pred.key_terms.map((t, i) => (
-            <span
-              key={i}
-              className={`tag ${matchedTerms.includes(t.toLowerCase()) ? 'match-tag' : ''}`}
-            >
-              {t}
-            </span>
-          ))}
-        </div>
+        {pred.key_terms && pred.key_terms.length > 0 && (
+          <div className="idea-tags-row">
+            {pred.key_terms.map((t, i) => (
+              <span key={i} className="tag">
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
 
         {expanded && (
           <div className="idea-expanded">
             <p className="idea-desc">{pred.rationale}</p>
+            <p className="idea-desc">{pred.approach}</p>
           </div>
         )}
       </div>
@@ -256,10 +253,10 @@ const WindowDetail: React.FC<{ window: WindowResult; index: number }> = ({
 
       {open && (
         <div className="window-body">
-          {e.matched_terms.length > 0 && (
+          {e.matched_paper_ids.length > 0 && (
             <div className="matched-terms">
-              <span className="matched-terms-label">Matched terms: </span>
-              {e.matched_terms.map((t, i) => (
+              <span className="matched-terms-label">Matched papers: </span>
+              {e.matched_paper_ids.map((t, i) => (
                 <span key={i} className="tag match-tag">
                   {t}
                 </span>
@@ -271,7 +268,7 @@ const WindowDetail: React.FC<{ window: WindowResult; index: number }> = ({
               <PredictionCard
                 key={pred.rank}
                 pred={pred}
-                matchedTerms={e.matched_terms}
+                matchedRanks={e.matched_prediction_ranks}
               />
             ))}
           </div>

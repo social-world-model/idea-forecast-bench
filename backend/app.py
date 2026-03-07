@@ -16,7 +16,6 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
 from backend import config
-from backend.services.run_service import RunService
 from backend.strategy_store import (
     bootstrap_backtest_if_missing,
     create_strategy,
@@ -30,10 +29,7 @@ from backend.strategy_store import (
 
 app = Flask(__name__)
 
-GENERATED_IDEAS_FILE = os.path.join(project_root, "backend", "generated_ideas.json")
 VIEWS_FILE = os.path.join(project_root, "data", "views.json")
-
-run_service = RunService(project_root=project_root)
 
 
 def _env_flag(name: str, default: bool) -> bool:
@@ -84,11 +80,7 @@ def _auth_bypass_enabled() -> bool:
 def _is_protected_write_request() -> bool:
     if request.method not in {"POST", "DELETE", "PUT", "PATCH"}:
         return False
-    protected_paths = (
-        "/api/generate-ideas",
-        "/api/runs/start",
-        "/api/strategies",
-    )
+    protected_paths = ("/api/strategies",)
     return any(
         request.path == path or request.path.startswith(f"{path}/")
         for path in protected_paths
@@ -176,46 +168,6 @@ def handle_unexpected_error(error: Exception):
     }
     return jsonify(payload), 500
 
-
-def _load_generated_ideas() -> List[Dict[str, Any]]:
-    if not os.path.exists(GENERATED_IDEAS_FILE):
-        return []
-    with open(GENERATED_IDEAS_FILE, "r", encoding="utf-8") as fh:
-        return json.load(fh)
-
-
-def _save_generated_ideas(ideas: List[Dict[str, Any]]) -> None:
-    os.makedirs(os.path.dirname(GENERATED_IDEAS_FILE), exist_ok=True)
-    with open(GENERATED_IDEAS_FILE, "w", encoding="utf-8") as fh:
-        json.dump(ideas, fh, indent=2)
-
-
-def _transform_ideas_for_dashboard(ideas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    now = datetime.now(timezone.utc).isoformat()
-    transformed_ideas = []
-    for idea in ideas:
-        transformed = {
-            "id": idea.get("id", f"gen_{os.urandom(4).hex()}"),
-            "title": idea.get("Title", "Untitled Idea"),
-            "description": f"**Problem:** {idea.get('Problem', '')}\n\n**Approach:** {idea.get('Approach', '')}",
-            "author": "AI Researcher",
-            "institution": "Live Idea Bench",
-            "tags": ["AI Generated", "ICLR 2025"],
-            "upvotes": int(float(idea.get("Score", 0)) * 10 + float(idea.get("Interestingness", 0))),
-            "impact_score": float(idea.get("Score", 0)),
-            "created_at": now,
-            "updated_at": now,
-            "url": idea.get("source_url"),
-            "citations": 0,
-        }
-        if float(idea.get("Novelty", 0)) > 8:
-            transformed["tags"].append("High Novelty")
-        if float(idea.get("Feasibility", 0)) > 8:
-            transformed["tags"].append("High Feasibility")
-        transformed_ideas.append(transformed)
-    return transformed_ideas
-
-
 def _read_views() -> int:
     if not os.path.exists(VIEWS_FILE):
         return 0
@@ -249,45 +201,21 @@ def healthz():
 
 @app.route("/metrics", methods=["GET"])
 def metrics():
-    report = run_service.build_global_report()
-    summary = report.get("summary", {})
+    strategies = list_strategies()
+    backtest_done = sum(1 for strategy in strategies if strategy.get("backtest_status") == "done")
+    backtest_running = sum(1 for strategy in strategies if strategy.get("backtest_status") == "running")
+    generation_done = sum(1 for strategy in strategies if strategy.get("generation_status") == "done")
+    generation_running = sum(1 for strategy in strategies if strategy.get("generation_status") == "running")
     return jsonify(
         {
-            "runs_total": summary.get("total_runs", 0),
-            "runs_running": summary.get("running_runs", 0),
-            "runs_successful": summary.get("successful_runs", 0),
-            "runs_failed": summary.get("failed_runs", 0),
-            "success_rate": summary.get("success_rate", 0),
+            "strategies_total": len(strategies),
+            "backtests_done": backtest_done,
+            "backtests_running": backtest_running,
+            "generations_done": generation_done,
+            "generations_running": generation_running,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     )
-
-
-@app.route("/api/generate-ideas", methods=["GET", "POST"])
-def api_generate_ideas():
-    if request.method == "GET":
-        return jsonify(_load_generated_ideas())
-
-    payload = request.get_json(silent=True) or {}
-    keywords = payload.get("keywords") if request.method == "POST" else config.KEYWORDS
-    n = payload.get("n", config.NUM_PAPERS_TO_FETCH)
-
-    if not isinstance(keywords, list) or not keywords:
-        raise APIError("keywords must be a non-empty array", status_code=400)
-    if not isinstance(n, int) or n <= 0:
-        raise APIError("n must be a positive integer", status_code=400)
-
-    from backend.idea_generator import generate_ideas
-
-    ideas = generate_ideas(keywords, n)
-    _save_generated_ideas(ideas)
-    return jsonify(ideas)
-
-
-@app.route("/api/research-ideas", methods=["GET"])
-def api_research_ideas():
-    ideas = _load_generated_ideas()
-    return jsonify(_transform_ideas_for_dashboard(ideas))
 
 
 @app.route("/api/views", methods=["GET", "POST"])
@@ -365,7 +293,7 @@ def api_strategy_generate(strategy_id: str):
     cutoff_date_raw = payload.get("cutoff_date")
     if not isinstance(cutoff_date_raw, str) or not cutoff_date_raw.strip():
         raise APIError("cutoff_date is required (YYYY-MM-DD)", status_code=400)
-    from src.backtest.data import normalize_date
+    from live_idea_bench.papers import normalize_date
 
     try:
         cutoff_date = normalize_date(cutoff_date_raw.strip())
@@ -381,47 +309,6 @@ def api_strategy_generate(strategy_id: str):
     thread = threading.Thread(target=_worker, daemon=True)
     thread.start()
     return jsonify({"id": strategy_id, "generation_status": "running"}), 202
-
-@app.route("/api/runs/start", methods=["POST"])
-def api_runs_start():
-    payload = request.get_json(silent=True) or {}
-    keywords = payload.get("keywords", config.KEYWORDS)
-    n = payload.get("n", config.NUM_PAPERS_TO_FETCH)
-
-    try:
-        run = run_service.start_run(keywords=keywords, n=n)
-    except ValueError as exc:
-        raise APIError(str(exc), status_code=400) from exc
-
-    return jsonify({"run": run.__dict__}), 202
-
-
-@app.route("/api/runs", methods=["GET"])
-@app.route("/api/runs/list", methods=["GET"])
-def api_runs_list():
-    limit_raw = request.args.get("limit", "50")
-    try:
-        limit = int(limit_raw)
-    except ValueError as exc:
-        raise APIError("limit must be an integer", status_code=400) from exc
-    if limit <= 0 or limit > 500:
-        raise APIError("limit must be between 1 and 500", status_code=400)
-    return jsonify({"runs": run_service.list_runs(limit=limit)})
-
-
-@app.route("/api/runs/<run_id>", methods=["GET"])
-@app.route("/api/runs/detail/<run_id>", methods=["GET"])
-def api_runs_detail(run_id: str):
-    include_ideas = request.args.get("includeIdeas", "false").lower() == "true"
-    run = run_service.get_run(run_id, include_ideas=include_ideas)
-    if run is None:
-        raise APIError("run not found", status_code=404, code="not_found")
-    return jsonify({"run": run})
-
-
-@app.route("/api/runs/report", methods=["GET"])
-def api_runs_report():
-    return jsonify(run_service.build_global_report())
 
 
 if __name__ == "__main__":

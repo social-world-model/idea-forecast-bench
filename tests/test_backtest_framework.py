@@ -3,8 +3,8 @@ from typing import List
 
 import pytest
 
-from src.backtest import BacktestConfig, backtest, evaluate, generate, load_papers_from_markdown
-from src.strategy import create_strategy
+from live_idea_bench.backtest import BacktestConfig, backtest, evaluate, generate, load_papers_from_markdown
+from live_idea_bench.strategy import create_strategy
 
 
 def _setup_mock_data(tmp_path: Path) -> Path:

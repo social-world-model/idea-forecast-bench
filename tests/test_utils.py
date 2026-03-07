@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from src.utils import (
+from live_idea_bench import (
     filter_by_arxiv_date,
     find_markdown_files,
     group_by_keywords,

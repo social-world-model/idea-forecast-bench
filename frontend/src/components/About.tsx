@@ -1,5 +1,4 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import './About.css';
 
 type Member = {
@@ -35,8 +34,6 @@ const MEMBERS: Member[] = [
 ];
 
 const About: React.FC = () => {
-  const navigate = useNavigate();
-
   return (
     <div className="about-container">
       <div className="about-header">
@@ -93,53 +90,39 @@ const About: React.FC = () => {
           <div className="project-features">
             <h3><span className="highlight-text">Our Mission</span></h3>
             <p className="warning-paragraph">
-              Live Trading Benchmark evaluates AI trading agents in real time across multiple asset classes—so researchers, developers, and traders can compare strategies under identical market, data, and execution conditions, using capital-aware, risk-adjusted metrics.
+              Live Idea Bench evaluates research-idea generation strategies on a shared paper stream so researchers can compare prompts, models, and heuristics under identical data windows and evaluation rules.
             </p>
 
-            <h3><span className="highlight-text">Why live testing?</span></h3>
+            <h3><span className="highlight-text">Why historical backtesting?</span></h3>
             <p className="warning-paragraph">
-              <span className="warning-text">Backtests can lie.</span> They often overfit and leak future information, while glossing over real-world frictions—latency, slippage, liquidity, borrow fees, halts. The result: agents that look brilliant in simulation but stumble in production.
+              <span className="warning-text">Idea generation is easy to demo and hard to validate.</span> A one-off generation sample can look impressive even when it fails to anticipate what actually appears in later papers.
             </p>
             <p className="warning-paragraph">
-              <span className="warning-text">Markets shift.</span> Regimes change with news, policy, and crowd behavior. Only live evaluation shows whether an agent adapts to distribution shifts and manages risk under uncertainty.
-            </p>
-
-            <h3><span className="highlight-text">Why portfolio management?</span></h3>
-            <p className="warning-paragraph">
-              <span className="warning-text">Think globally, act locally.</span> Buy/sell calls are local actions; performance is driven by global choices—allocation, position sizing, correlation, rebalancing, and risk limits.
-            </p>
-            <p className="warning-paragraph">
-              <span className="warning-text">Harder—and more realistic.</span> Managing a diversified portfolio under constraints is strictly tougher than predicting a single asset. It tests diversification, cross-asset reasoning, and capital allocation—the skills that matter in practice.
+              <span className="warning-text">Historical cutoff evaluation helps.</span> We replay the literature timeline, generate ideas from the papers available at each cutoff, and score whether those predictions match emerging future themes.
             </p>
 
-            <h3><span className="highlight-text">Why stocks and polymarket?</span></h3>
+            <h3><span className="highlight-text">Why daily evaluation?</span></h3>
             <p className="warning-paragraph">
-              The{" "}
-              <button
-                className="about-link warning-text"
-                onClick={() => navigate('/stocks')}
-              >
-                stock market
-              </button>{" "}
-              is mature, complex, and widely studied, making it a natural benchmark for trading systems.
+              <span className="warning-text">Backtest alone is not enough.</span> Once a strategy has historical results, we keep generating fresh predictions and compare them against newly ingested papers to measure ongoing performance.
+            </p>
+            <p className="warning-paragraph">
+              <span className="warning-text">This exposes drift.</span> Prompt quality, model quality, and topic dynamics all move over time; daily evaluation shows when a strategy stops generalizing.
             </p>
 
+            <h3><span className="highlight-text">What is a strategy here?</span></h3>
             <p className="warning-paragraph">
-              The <button
-                className="about-link warning-text"
-                onClick={() => navigate('/polymarket')}
-              >
-                Polymarket
-              </button>{" "}
-              is a fast-growing prediction market that reflects collective beliefs on real-world events, aligning well with the strengths of LLMs.
+              A strategy is an experiment configuration: generator type, model, prompt version, and generation parameters. It defines how ideas are produced from a fixed history of papers.
+            </p>
+            <p className="warning-paragraph">
+              Some strategies are heuristic baselines, while others wrap an LLM. The benchmark compares them under the same cutoffs and evaluation logic.
             </p>
 
             <h3><span className="highlight-text">Disclaimer</span></h3>
             <p className="warning-paragraph">
-              The content on this website is provided for general informational and <span className="warning-text">educational purposes only</span>. Nothing contained herein constitutes, or should be construed as, investment advice, financial advice, trading advice, legal advice, or any other form of professional advice. You <span className="warning-text">should not</span> treat any information on this website as a recommendation to make a particular investment or to pursue any financial strategy.
+              The content on this website is provided for general informational and <span className="warning-text">educational purposes only</span>. Generated ideas and benchmark scores are research artifacts, not statements of scientific truth or guarantees of future novelty.
             </p>
             <p className="warning-paragraph">
-              Decisions based on the information provided are made <span className="warning-text">at your own risk</span>. We strongly recommend that you seek independent financial advice from a licensed professional before making any investment or financial decisions.
+              Human review is still required before treating any generated idea as actionable research direction.
             </p>
           </div>
 

@@ -1,0 +1,28 @@
+engine: hybrid
+semantic_threshold: 0.5
+keyword_threshold: 0.3
+llm_match_threshold: 0.7
+system_prompt: |
+  You are a precise similarity evaluator. You output structured scores and reasoning.
+user_prompt_template: |
+  You are an expert academic reviewer. Your task is to evaluate the similarity between a new "Research Idea" and an existing "Academic Paper Content".
+
+  Research Idea:
+  "{idea}"
+
+  Academic Paper Content:
+  {context}
+
+  ---
+  Task:
+  1. Analyze the core research question, methodology, and domain of both.
+  2. Provide a similarity score between 0.0 and 1.0, where:
+     - 1.0 means the idea is identical or extremely similar to the paper.
+     - 0.7-0.9 means very close thematic and methodological overlap.
+     - 0.4-0.6 means significant overlap in domain or approach but distinct ideas.
+     - 0.1-0.3 means slight relationship (e.g., same broad field but different topics).
+     - 0.0 means completely unrelated.
+
+  Return your response in the following format:
+  Score: [numerical score between 0.0 and 1.0]
+  Reasoning: [1-2 sentences explaining the score]

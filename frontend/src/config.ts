@@ -18,13 +18,6 @@ export const API_ENDPOINTS = {
   // ── Backtest / Strategy API ──────────────────────────────────
   STRATEGIES: '/api/strategies',
   STRATEGY: (id: string) => `/api/strategies/${id}`,
-
-  // ── Legacy Run API (kept for RunPage / HistoryPage) ──────────
-  GENERATE_IDEAS: '/api/generate-ideas',
-  RESEARCH_IDEAS: '/api/research-ideas',
-  RUNS_LIST: '/api/runs/list',
-  RUNS_DETAIL: '/api/runs',
-  RUNS_REPORT: '/api/runs/report',
 };
 
 export const logger = {

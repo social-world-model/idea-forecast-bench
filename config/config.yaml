@@ -1,7 +1,7 @@
 model_name: "gpt-4o"
 max_context_chars: 15000
 temperature: 0.0
-# OPENAI_API_KEY is usually better handled via ENV, but adding it as optional
+# Prompt text lives under live_idea_bench/prompt/*.yaml. This file only stores runtime defaults.
 openai_api_key: ""
 
 embedding:

@@ -90,3 +90,53 @@ def test_bootstrap_backtest_skips_when_completed_backtest_data_exists(
     assert result["triggered"] is False
     assert result["reason"] == "baseline_exists"
     assert called["value"] is False
+
+
+def test_bootstrap_backtest_skips_when_any_backtest_data_exists_regardless_of_status(
+    monkeypatch, tmp_path
+) -> None:
+    _isolate_strategy_store(monkeypatch, tmp_path)
+
+    s = strategy_store.create_strategy({"strategy_name": "keyword_trend"})
+    strategy_store.update_strategy(
+        s["id"],
+        {
+            "backtest_status": "failed",
+            "backtest_result": {
+                "summary": {"windows": 1, "avg_hit_at_k": 0.1},
+                "windows": [],
+            },
+        },
+    )
+
+    called = {"value": False}
+
+    def _should_not_run(strategy_id: str) -> None:
+        called["value"] = True
+
+    monkeypatch.setattr(strategy_store, "run_backtest_sync", _should_not_run)
+    result = strategy_store.bootstrap_backtest_if_missing()
+
+    assert result["triggered"] is False
+    assert result["reason"] == "baseline_exists"
+    assert called["value"] is False
+
+
+def test_bootstrap_backtest_noop_when_no_strategies(monkeypatch, tmp_path) -> None:
+    _isolate_strategy_store(monkeypatch, tmp_path)
+
+    called = {"value": False}
+
+    def _should_not_run(strategy_id: str) -> None:
+        called["value"] = True
+
+    monkeypatch.setattr(strategy_store, "run_backtest_sync", _should_not_run)
+    result = strategy_store.bootstrap_backtest_if_missing()
+
+    assert result == {
+        "triggered": False,
+        "reason": "no_strategies",
+        "count": 0,
+        "strategy_ids": [],
+    }
+    assert called["value"] is False

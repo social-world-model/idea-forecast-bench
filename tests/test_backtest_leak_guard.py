@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from src.backtest.models import PaperRecord
-from src.backtest.runner import generate_at_cutoff, split_train_future_by_cutoff
-from src.strategy.keyword_trend import KeywordTrendStrategy
+from live_idea_bench.backtest import generate_at_cutoff, split_train_future_by_cutoff
+from live_idea_bench.models import PaperRecord
+from live_idea_bench.strategy.keyword_trend import KeywordTrendStrategy
 
 
 def test_same_month_future_paper_not_in_train_for_cutoff_date() -> None:

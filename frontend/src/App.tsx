@@ -5,11 +5,7 @@ import About from './components/About';
 import Navigation from './components/Navigation';
 import Footnote from './components/Footnote';
 import GeneratedIdeasList from './components/GeneratedIdeasList';
-import RunPage from './pages/RunPage';
-import HistoryPage from './pages/HistoryPage';
-import RunDetailPage from './pages/RunDetailPage';
 import './App.css';
-import './pages/runs.css';
 import type { Strategy } from './types';
 import { API_BASE_URL, API_ENDPOINTS, REFRESH_INTERVAL, logger } from './config';
 
@@ -58,9 +54,6 @@ function App() {
             />
             <Route path="/about" element={<About />} />
             <Route path="/generated-ideas" element={<GeneratedIdeasList />} />
-            <Route path="/runs" element={<RunPage />} />
-            <Route path="/runs/history" element={<HistoryPage />} />
-            <Route path="/runs/:runId" element={<RunDetailPage />} />
           </Routes>
         </div>
         <Footnote />

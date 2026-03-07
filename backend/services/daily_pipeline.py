@@ -2,25 +2,18 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
-from zoneinfo import ZoneInfo
 
 from backend import strategy_store
-from backend.services.arxiv_ingest import ingest_latest_arxiv_papers
-from src.backtest import load_papers_from_markdown
-from src.backtest.data import (
-    date_to_ordinal,
-    get_paper_published_date,
-    month_start_date,
-    month_to_index,
-    normalize_date,
-    normalize_month,
+from live_idea_bench.daily import (
+    compute_leaderboard_score,
+    daily_cutoff_date,
+    evaluate_previous_generation,
 )
-from src.backtest.evaluator import evaluate_predictions
-from src.backtest.models import IdeaPrediction
+from live_idea_bench.ingest import ingest_latest_arxiv_papers
+from live_idea_bench.papers import load_papers_from_markdown, month_to_index
 
 
 class PipelineAlreadyRunningError(RuntimeError):
@@ -81,18 +74,10 @@ class _FileLock:
     def _clear_if_stale(self) -> bool:
         pid, created_at = self._read_metadata()
         now = datetime.now(timezone.utc)
-
-        expired = False
-        if created_at is None:
-            expired = True
-        else:
-            age = (now - created_at.astimezone(timezone.utc)).total_seconds()
-            expired = age >= _lock_ttl_seconds()
-
+        expired = created_at is None or (now - created_at.astimezone(timezone.utc)).total_seconds() >= _lock_ttl_seconds()
         process_dead = pid is None or not self._process_alive(pid)
         if not expired and not process_dead:
             return False
-
         try:
             self.path.unlink()
         except FileNotFoundError:
@@ -131,33 +116,6 @@ def _iso(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).isoformat()
 
 
-def _coerce_prediction(raw: Dict[str, Any], rank_fallback: int) -> IdeaPrediction:
-    rank_raw = raw.get("rank", rank_fallback)
-    confidence_raw = raw.get("confidence", 0.0)
-    key_terms_raw = raw.get("key_terms") or []
-    if not isinstance(key_terms_raw, list):
-        key_terms_raw = []
-
-    try:
-        rank = int(rank_raw)
-    except (TypeError, ValueError):
-        rank = rank_fallback
-
-    try:
-        confidence = float(confidence_raw)
-    except (TypeError, ValueError):
-        confidence = 0.0
-
-    key_terms = [str(term).strip() for term in key_terms_raw if str(term).strip()]
-    return IdeaPrediction(
-        rank=rank,
-        title=str(raw.get("title", "")),
-        rationale=str(raw.get("rationale", "")),
-        key_terms=key_terms,
-        confidence=confidence,
-    )
-
-
 def _latest_month_from_data_dir(data_dir: Path) -> Optional[str]:
     papers = load_papers_from_markdown(data_dir)
     if not papers:
@@ -174,86 +132,6 @@ def _fallback_backtest_score(strategy: Dict[str, Any]) -> Optional[float]:
         return float(score)
     except (TypeError, ValueError):
         return None
-
-
-def _compute_leaderboard_score(daily_eval: Dict[str, Any]) -> float:
-    hit = float(daily_eval.get("hit_at_k", 0.0))
-    mrr = float(daily_eval.get("mrr", 0.0))
-    return round((0.7 * hit) + (0.3 * mrr), 4)
-
-
-def _daily_cutoff_date(now_utc: datetime) -> str:
-    return now_utc.astimezone(ZoneInfo("America/New_York")).date().isoformat()
-
-
-def _evaluate_previous_generation(
-    strategy: Dict[str, Any],
-    *,
-    new_paper_ids: Set[str],
-    evaluated_at: datetime,
-) -> Optional[Dict[str, Any]]:
-    generation = strategy.get("generation") or {}
-    cutoff_date_raw = str(generation.get("cutoff_date") or "").strip()
-    cutoff_month_raw = str(generation.get("cutoff_month") or "").strip()
-    predictions_raw = generation.get("predictions")
-    if not isinstance(predictions_raw, list) or not predictions_raw:
-        return None
-
-    if cutoff_date_raw:
-        try:
-            cutoff_date = normalize_date(cutoff_date_raw)
-        except ValueError:
-            if not cutoff_month_raw:
-                return None
-            cutoff_date = month_start_date(cutoff_month_raw)
-    elif cutoff_month_raw:
-        cutoff_date = month_start_date(cutoff_month_raw)
-    else:
-        return None
-    cutoff_month = normalize_month(cutoff_date)
-
-    papers = strategy_store.load_papers_for_strategy(strategy)
-    cutoff_ord = date_to_ordinal(cutoff_date)
-    train = [
-        p
-        for p in papers
-        if date_to_ordinal(get_paper_published_date(p)) <= cutoff_ord
-    ]
-    future = [
-        p
-        for p in papers
-        if p.paper_id in new_paper_ids
-        and date_to_ordinal(get_paper_published_date(p)) > cutoff_ord
-    ]
-
-    predictions = [
-        _coerce_prediction(raw, idx + 1)
-        for idx, raw in enumerate(predictions_raw)
-        if isinstance(raw, dict)
-    ]
-    if not predictions:
-        return None
-
-    top_k_raw = (strategy.get("config") or {}).get("top_k", len(predictions))
-    try:
-        top_k = max(1, int(top_k_raw))
-    except (TypeError, ValueError):
-        top_k = max(1, len(predictions))
-
-    evaluation = evaluate_predictions(
-        predictions=predictions,
-        train_papers=train,
-        future_papers=future,
-        k=top_k,
-    )
-    return {
-        "evaluated_at": _iso(evaluated_at),
-        "prediction_cutoff_date": cutoff_date,
-        "prediction_cutoff_month": cutoff_month,
-        "new_papers_count": len(future),
-        "prediction_count": len(predictions),
-        **asdict(evaluation),
-    }
 
 
 def _ensure_strategy_end_month(strategy: Dict[str, Any], latest_month: Optional[str]) -> Dict[str, Any]:
@@ -304,7 +182,7 @@ def run_daily_pipeline(
     data_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
     utc_now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-    cutoff_date = _daily_cutoff_date(utc_now)
+    cutoff_date = daily_cutoff_date(utc_now)
     project_root = strategy_store.PROJECT_ROOT
     run_dir = project_root / "data" / "daily_runs"
     lock_path = run_dir / "pipeline.lock"
@@ -312,11 +190,7 @@ def run_daily_pipeline(
     with _FileLock(lock_path):
         ingest_result = ingest_latest_arxiv_papers(data_dir=data_dir, now=utc_now)
         raw_data_dir = str(ingest_result.get("data_dir") or "").strip()
-        resolved_data_dir = (
-            Path(raw_data_dir).expanduser()
-            if raw_data_dir
-            else strategy_store.DEFAULT_DATA_DIR
-        )
+        resolved_data_dir = Path(raw_data_dir).expanduser() if raw_data_dir else strategy_store.DEFAULT_DATA_DIR
         latest_month = _latest_month_from_data_dir(resolved_data_dir)
         new_paper_ids = _extract_new_paper_ids(ingest_result)
 
@@ -328,8 +202,10 @@ def run_daily_pipeline(
 
             current = strategy_store.get_strategy(strategy_id) or strategy
             current = _ensure_strategy_end_month(current, latest_month)
-            daily_eval = _evaluate_previous_generation(
+            papers = strategy_store.load_papers_for_strategy(current)
+            daily_eval = evaluate_previous_generation(
                 current,
+                papers=papers,
                 new_paper_ids=new_paper_ids,
                 evaluated_at=utc_now,
             )
@@ -339,7 +215,7 @@ def run_daily_pipeline(
                 updates["last_generation_cutoff_month"] = latest_month
             if daily_eval is not None:
                 updates["daily_evaluation"] = daily_eval
-                updates["leaderboard_score"] = _compute_leaderboard_score(daily_eval)
+                updates["leaderboard_score"] = compute_leaderboard_score(daily_eval)
             elif current.get("leaderboard_score") is None:
                 updates["leaderboard_score"] = _fallback_backtest_score(current)
             strategy_store.update_strategy(strategy_id, updates)

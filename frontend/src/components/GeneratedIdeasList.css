@@ -4,31 +4,58 @@
   padding: 2rem;
 }
 
+.generated-ideas-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
 .generated-ideas-title {
   font-size: 2rem;
   font-weight: bold;
-  margin-bottom: 2rem;
-  color: #333;
+  margin: 0;
+  color: #111827;
+}
+
+.generated-ideas-subtitle {
+  margin: 0.5rem 0 0;
+  color: #6b7280;
+}
+
+.refresh-button {
+  padding: 0.7rem 1rem;
+  border-radius: 9999px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #111827;
+  cursor: pointer;
+}
+
+.refresh-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .ideas-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 1.5rem;
 }
 
 .idea-card {
   background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-radius: 14px;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
   padding: 1.5rem;
   transition: transform 0.2s, box-shadow 0.2s;
-  border: 1px solid #eee;
+  border: 1px solid #e5e7eb;
 }
 
 .idea-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
 }
 
 .idea-header {
@@ -40,26 +67,24 @@
   gap: 1rem;
 }
 
+.idea-meta-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
 .idea-title {
   font-size: 1.25rem;
   font-weight: 600;
   margin: 0 0 0.5rem 0;
-  color: #ffffff;
+  color: #111827;
 }
 
 .idea-source {
   font-size: 0.875rem;
-  color: #666;
+  color: #6b7280;
   margin: 0;
-}
-
-.idea-source a {
-  color: #3b82f6;
-  text-decoration: none;
-}
-
-.idea-source a:hover {
-  text-decoration: underline;
 }
 
 .idea-badges {
@@ -76,6 +101,12 @@
   border: 1px solid #e5e7eb;
   background-color: #f9fafb;
   color: #374151;
+}
+
+.confidence-badge {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4338ca;
 }
 
 .idea-content {
@@ -100,14 +131,19 @@
   margin: 0;
 }
 
-.comparison-table {
-  background-color: #f8f9fa;
-  padding: 1rem;
-  border-radius: 4px;
-  overflow-x: auto;
-  font-family: monospace;
-  font-size: 0.85rem;
-  white-space: pre-wrap;
+.idea-terms {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.term-chip {
+  padding: 0.3rem 0.7rem;
+  border-radius: 9999px;
+  background: #ecfeff;
+  border: 1px solid #a5f3fc;
+  color: #155e75;
+  font-size: 0.82rem;
 }
 
 .loading-container,
@@ -121,4 +157,10 @@
 
 .error-container {
   color: #ef4444;
+}
+
+@media (max-width: 720px) {
+  .generated-ideas-heading {
+    flex-direction: column;
+  }
 }

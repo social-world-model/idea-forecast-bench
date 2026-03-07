@@ -14,12 +14,11 @@
 - [ ] Deploy frontend image.
 - [ ] Run DB/data migration checks (if any).
 - [ ] Confirm `/healthz` is healthy.
-- [ ] Confirm `/metrics` returns run stats.
+- [ ] Confirm `/metrics` returns strategy stats.
 
 ## Post-Deploy Validation
 
-- [ ] Start one run from `/runs`.
-- [ ] Verify run appears in `/runs/history`.
-- [ ] Verify run detail page loads and export buttons work.
-- [ ] Verify report charts render.
+- [ ] Open the leaderboard and verify strategies load.
+- [ ] Open Generated Ideas and verify strategy generation cards render.
+- [ ] Trigger one strategy generation and verify it appears in the UI.
 - [ ] Verify logs and alerts are clean for 15 minutes.
