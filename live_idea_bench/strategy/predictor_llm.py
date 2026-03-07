@@ -1,0 +1,38 @@
+from __future__ import annotations
+
+from typing import List
+
+from live_idea_bench.models import IdeaPrediction, PaperRecord
+from live_idea_bench.predictor import generate_predictions
+from live_idea_bench.strategy.base import IdeaStrategy
+
+
+class PredictorLLMStrategy(IdeaStrategy):
+    name = "predictor_llm"
+
+    def __init__(
+        self,
+        model_name: str | None = None,
+        predictor_config: str = "predictor.yaml",
+        similarity_config: str = "similarity.yaml",
+        temperature: float | None = None,
+    ) -> None:
+        self.model_name = model_name
+        self.predictor_config = predictor_config
+        self.similarity_config = similarity_config
+        self.temperature = temperature
+
+    def generate(
+        self,
+        train_papers: List[PaperRecord],
+        cutoff_month: str,
+        top_k: int,
+    ) -> List[IdeaPrediction]:
+        return generate_predictions(
+            train_papers=train_papers,
+            cutoff_month=cutoff_month,
+            top_k=top_k,
+            model_name=self.model_name,
+            predictor_config_path=self.predictor_config,
+            temperature=self.temperature,
+        )

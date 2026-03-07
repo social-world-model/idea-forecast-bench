@@ -142,10 +142,15 @@ def test_strategy_backtest_and_generate_async_status(monkeypatch, tmp_path) -> N
     monkeypatch.setattr(_app_mod, "run_backtest_sync", _fake_backtest)
 
     # --- monkeypatch run_generation_sync to a no-op that immediately marks done ---
-    def _fake_generation(strategy_id: str, cutoff_month=None) -> None:
+    def _fake_generation(strategy_id: str, cutoff_date=None) -> None:
+        resolved_cutoff_date = cutoff_date or "2024-06-01"
         _write_direct(strategy_id, {
             "generation_status": "done",
-            "generation": {"cutoff_month": cutoff_month or "2024-06", "predictions": [{"idea": "test"}]},
+            "generation": {
+                "cutoff_date": resolved_cutoff_date,
+                "cutoff_month": resolved_cutoff_date[:7],
+                "predictions": [{"idea": "test"}],
+            },
         })
 
     monkeypatch.setattr(strategy_store, "run_generation_sync", _fake_generation)
@@ -179,7 +184,7 @@ def test_strategy_backtest_and_generate_async_status(monkeypatch, tmp_path) -> N
     assert record["backtest_status"] in ("done", "failed")
 
     # Trigger generation
-    gen_resp = client.post(f"/api/strategies/{sid}/generate", json={"cutoff_month": "2024-06"})
+    gen_resp = client.post(f"/api/strategies/{sid}/generate", json={"cutoff_date": "2024-06-01"})
     assert gen_resp.status_code in (200, 202)
 
     # Status race check: immediately after trigger, must NOT be 'pending'.
@@ -217,7 +222,7 @@ def test_strategy_generation_failure_persists_error(monkeypatch, tmp_path) -> No
         p.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
     # --- monkeypatch run_generation_sync to always fail ---
-    def _failing_generation(strategy_id: str, cutoff_month=None) -> None:
+    def _failing_generation(strategy_id: str, cutoff_date=None) -> None:
         _write_direct(strategy_id, {
             "generation_status": "failed",
             "generation_error": "intentional test failure",
@@ -232,7 +237,7 @@ def test_strategy_generation_failure_persists_error(monkeypatch, tmp_path) -> No
     r = client.post("/api/strategies", json={"strategy_name": "keyword_trend"})
     sid = r.get_json()["id"]
 
-    gen_resp = client.post(f"/api/strategies/{sid}/generate", json={"cutoff_month": "bad-month"})
+    gen_resp = client.post(f"/api/strategies/{sid}/generate", json={"cutoff_date": "2024-06-01"})
     assert gen_resp.status_code in (200, 202)
 
     gen_status = _poll_status(client, sid, "generation_status", timeout=5.0)
@@ -267,6 +272,19 @@ def test_strategy_generate_not_found(monkeypatch, tmp_path) -> None:
     assert resp.get_json()["error"]["code"] == "not_found"
 
 
+def test_strategy_generate_requires_cutoff_date(monkeypatch, tmp_path) -> None:
+    from backend import app as app_module
+
+    _isolate_strategy_store(monkeypatch, tmp_path)
+    client = app_module.app.test_client()
+
+    created = client.post("/api/strategies", json={"strategy_name": "keyword_trend"}).get_json()
+    sid = created["id"]
+    resp = client.post(f"/api/strategies/{sid}/generate", json={})
+    assert resp.status_code == 400
+    assert "cutoff_date is required" in resp.get_json()["error"]["message"]
+
+
 def test_run_generation_sync_real_worker(monkeypatch, tmp_path) -> None:
     """
     Exercise the real run_generation_sync code path (not monkeypatched away) using
@@ -275,23 +293,23 @@ def test_run_generation_sync_real_worker(monkeypatch, tmp_path) -> None:
     signature (missing top_k) or no paper filtering.
     """
     from backend import strategy_store
-    from src.backtest.models import PaperRecord
-    from src.strategy.keyword_trend import KeywordTrendStrategy
+    from live_idea_bench.models import PaperRecord
+    from live_idea_bench.strategy.keyword_trend import KeywordTrendStrategy
 
     _isolate_strategy_store(monkeypatch, tmp_path)
 
     # Build small paper fixtures (3 papers strictly before cutoff, 1 after)
     train_fixture = [
         PaperRecord(paper_id="p1", title="A", month="2024-04", summary="s1",
-                    keywords=["attention", "transformer"], source_path="/fake/p1.md"),
+                    keywords=["attention", "transformer"], source_path="/fake/p1.md", published_date="2024-04-10"),
         PaperRecord(paper_id="p2", title="B", month="2024-05", summary="s2",
-                    keywords=["attention", "diffusion"], source_path="/fake/p2.md"),
+                    keywords=["attention", "diffusion"], source_path="/fake/p2.md", published_date="2024-05-12"),
         PaperRecord(paper_id="p3", title="C", month="2024-06", summary="s3",
-                    keywords=["diffusion", "rl"], source_path="/fake/p3.md"),
+                    keywords=["diffusion", "rl"], source_path="/fake/p3.md", published_date="2024-06-20"),
     ]
     future_fixture = [
         PaperRecord(paper_id="p4", title="D", month="2024-07", summary="s4",
-                    keywords=["leaked_future_term"], source_path="/fake/p4.md"),
+                    keywords=["leaked_future_term"], source_path="/fake/p4.md", published_date="2024-07-05"),
     ]
     all_papers = train_fixture + future_fixture
 
@@ -310,7 +328,7 @@ def test_run_generation_sync_real_worker(monkeypatch, tmp_path) -> None:
     sid = s["id"]
 
     # Run synchronously (not via thread) to simplify test
-    strategy_store.run_generation_sync(sid, cutoff_month="2024-06")
+    strategy_store.run_generation_sync(sid, cutoff_date="2024-06-30")
 
     record = strategy_store.get_strategy(sid)
     assert record["generation_status"] == "done", (
@@ -318,6 +336,7 @@ def test_run_generation_sync_real_worker(monkeypatch, tmp_path) -> None:
     )
     gen = record["generation"]
     assert gen["cutoff_month"] == "2024-06"
+    assert gen["cutoff_date"] == "2024-06-30"
     assert isinstance(gen["predictions"], list)
     assert len(gen["predictions"]) > 0
 
@@ -327,11 +346,11 @@ def test_run_generation_sync_real_worker(monkeypatch, tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Task 11 – Regression: strategy CRUD with prompt_llm params (migration surface)
+# Task 11 – Regression: strategy CRUD with predictor_llm params (migration surface)
 # ---------------------------------------------------------------------------
 
 
-def test_strategy_create_with_prompt_llm_params_persisted(monkeypatch, tmp_path) -> None:
+def test_strategy_create_with_predictor_params_persisted(monkeypatch, tmp_path) -> None:
     """
     Regression: creating a strategy with prompt/model params persists them exactly.
     Catches schema drift if strategy_store.create_strategy silently drops new param keys.
@@ -342,11 +361,11 @@ def test_strategy_create_with_prompt_llm_params_persisted(monkeypatch, tmp_path)
     client = app_module.app.test_client()
 
     payload = {
-        "strategy_name": "prompt_llm",
+        "strategy_name": "predictor_llm",
         "params": {
-            "model_id": "gpt-4o-mini",
-            "prompt_id": "llm_baseline",
-            "prompt_version": "v1",
+            "model_name": "gpt-4o-mini",
+            "predictor_config": "predictor.yaml",
+            "similarity_config": "similarity.yaml",
             "temperature": 0.7,
         },
         "config": {
@@ -360,12 +379,12 @@ def test_strategy_create_with_prompt_llm_params_persisted(monkeypatch, tmp_path)
     created = r.get_json()
     sid = created["id"]
 
-    # Verify all prompt/model params survived the round-trip
+    # Verify all predictor/model params survived the round-trip
     detail = client.get(f"/api/strategies/{sid}").get_json()
     params = detail["params"]
-    assert params["model_id"] == "gpt-4o-mini", f"model_id lost: {params}"
-    assert params["prompt_id"] == "llm_baseline", f"prompt_id lost: {params}"
-    assert params["prompt_version"] == "v1", f"prompt_version lost: {params}"
+    assert params["model_name"] == "gpt-4o-mini", f"model_name lost: {params}"
+    assert params["predictor_config"] == "predictor.yaml", f"predictor_config lost: {params}"
+    assert params["similarity_config"] == "similarity.yaml", f"similarity_config lost: {params}"
 
     # Status defaults must be pending
     status = client.get(f"/api/strategies/{sid}/status").get_json()
@@ -499,3 +518,21 @@ def test_strategy_backtest_status_field_in_response(monkeypatch, tmp_path) -> No
     # Thread should be triggered
     import time; time.sleep(0.05)  # tiny wait for daemon thread to start
     assert len(captured) > 0 or True  # non-flaky: thread may or may not have run yet
+
+
+def test_strategy_response_includes_daily_fields(monkeypatch, tmp_path) -> None:
+    from backend import app as app_module
+
+    _isolate_strategy_store(monkeypatch, tmp_path)
+    client = app_module.app.test_client()
+
+    created = client.post("/api/strategies", json={"strategy_name": "keyword_trend"}).get_json()
+    sid = created["id"]
+
+    detail = client.get(f"/api/strategies/{sid}").get_json()
+    assert "leaderboard_score" in detail
+    assert "daily_evaluation" in detail
+    assert "last_daily_run_at" in detail
+    assert "last_generation_cutoff_month" in detail
+    assert detail["leaderboard_score"] is None
+    assert detail["daily_evaluation"] is None

@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from backend import llm_utils
+import live_idea_bench.llm as llm_utils
 
 
 def test_create_client_unsupported_model_raises_value_error() -> None:

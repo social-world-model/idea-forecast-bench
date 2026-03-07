@@ -47,7 +47,7 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "http://localhost:5001",
+  "proxy": "http://localhost:5000",
   "devDependencies": {
     "@types/tinycolor2": "^1.4.6"
   }

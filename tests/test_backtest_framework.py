@@ -3,8 +3,8 @@ from typing import List
 
 import pytest
 
-from src.backtest import BacktestConfig, backtest, evaluate, generate, load_papers_from_markdown
-from src.strategy import create_strategy
+from live_idea_bench.backtest import BacktestConfig, backtest, evaluate, generate, load_papers_from_markdown
+from live_idea_bench.strategy import create_strategy
 
 
 def _setup_mock_data(tmp_path: Path) -> Path:
@@ -92,6 +92,8 @@ def test_backtest_returns_windows_and_summary(tmp_path: Path) -> None:
     assert "avg_hit_at_k" in summary
     assert "avg_recall_at_k" in summary
     assert "avg_mrr" in summary
+    assert "cutoff_date" in windows[0]
+    assert "future_end_date" in windows[0]
 
 
 def test_create_strategy_invalid_name() -> None:

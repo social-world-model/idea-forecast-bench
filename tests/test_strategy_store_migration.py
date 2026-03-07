@@ -13,7 +13,7 @@ def _isolate_strategy_store(monkeypatch, tmp_path: Path) -> Path:
     return strategies_dir
 
 
-def test_prompt_llm_params_round_trip(monkeypatch, tmp_path: Path) -> None:
+def test_prompt_llm_params_round_trip_migrates_to_predictor_mainline(monkeypatch, tmp_path: Path) -> None:
     from backend import strategy_store
 
     _isolate_strategy_store(monkeypatch, tmp_path)
@@ -23,8 +23,6 @@ def test_prompt_llm_params_round_trip(monkeypatch, tmp_path: Path) -> None:
             "strategy_name": "prompt_llm",
             "params": {
                 "model_id": "gpt-4o-mini",
-                "prompt_id": "llm_baseline",
-                "prompt_version": "v1",
                 "temperature": 0.2,
             },
         }
@@ -32,10 +30,10 @@ def test_prompt_llm_params_round_trip(monkeypatch, tmp_path: Path) -> None:
 
     loaded = strategy_store.get_strategy(created["id"])
     assert loaded is not None
-    assert loaded["strategy_name"] == "prompt_llm"
-    assert loaded["params"]["model_id"] == "gpt-4o-mini"
-    assert loaded["params"]["prompt_id"] == "llm_baseline"
-    assert loaded["params"]["prompt_version"] == "v1"
+    assert loaded["strategy_name"] == "predictor_llm"
+    assert loaded["params"]["model_name"] == "gpt-4o-mini"
+    assert loaded["params"]["predictor_config"] == "predictor.yaml"
+    assert loaded["params"]["similarity_config"] == "similarity.yaml"
     assert loaded["params"]["temperature"] == 0.2
     assert "recent_months" not in loaded["params"]
     assert "min_keyword_freq" not in loaded["params"]
@@ -45,7 +43,7 @@ def test_legacy_keyword_strategy_missing_prompt_model_keys_still_generates(
     monkeypatch, tmp_path: Path
 ) -> None:
     from backend import strategy_store
-    from src.backtest.models import PaperRecord
+    from live_idea_bench.models import PaperRecord
 
     strategies_dir = _isolate_strategy_store(monkeypatch, tmp_path)
     legacy_id = "legacykw"
@@ -73,6 +71,7 @@ def test_legacy_keyword_strategy_missing_prompt_model_keys_still_generates(
             summary="S1",
             keywords=["attention", "transformer"],
             source_path="/fake/p1.md",
+            published_date="2024-06-20",
         ),
     ]
     monkeypatch.setattr(strategy_store, "_load_papers", lambda _s: papers)
@@ -85,27 +84,28 @@ def test_legacy_keyword_strategy_missing_prompt_model_keys_still_generates(
     assert "prompt_id" not in loaded["params"]
     assert "prompt_version" not in loaded["params"]
 
-    strategy_store.run_generation_sync(legacy_id, cutoff_month="2024-06")
+    strategy_store.run_generation_sync(legacy_id, cutoff_date="2024-06-30")
 
     refreshed = strategy_store.get_strategy(legacy_id)
     assert refreshed is not None
     assert refreshed["generation_status"] == "done"
     assert refreshed["generation"]["cutoff_month"] == "2024-06"
+    assert refreshed["generation"]["cutoff_date"] == "2024-06-30"
     assert isinstance(refreshed["generation"]["predictions"], list)
 
 
-def test_make_strategy_obj_passes_prompt_llm_params(monkeypatch, tmp_path: Path) -> None:
+def test_make_strategy_obj_passes_predictor_params(monkeypatch, tmp_path: Path) -> None:
     from backend import strategy_store
-    from src.strategy.prompt_llm import PromptLLMStrategy
+    from live_idea_bench.strategy.predictor_llm import PredictorLLMStrategy
 
     _isolate_strategy_store(monkeypatch, tmp_path)
 
     strategy_data = {
-        "strategy_name": "prompt_llm",
+        "strategy_name": "predictor_llm",
         "params": {
-            "model_id": "test-model",
-            "prompt_id": "test-prompt",
-            "prompt_version": "v2",
+            "model_name": "test-model",
+            "predictor_config": "predictor.yaml",
+            "similarity_config": "similarity.yaml",
             "temperature": 0.5,
         },
     }
@@ -114,10 +114,10 @@ def test_make_strategy_obj_passes_prompt_llm_params(monkeypatch, tmp_path: Path)
     # This calls _make_strategy_obj internally
     obj = strategy_store._make_strategy_obj(created)
 
-    assert isinstance(obj, PromptLLMStrategy)
-    assert obj.model_id == "test-model"
-    assert obj.prompt_id == "test-prompt"
-    assert obj.prompt_version == "v2"
+    assert isinstance(obj, PredictorLLMStrategy)
+    assert obj.model_name == "test-model"
+    assert obj.predictor_config == "predictor.yaml"
+    assert obj.similarity_config == "similarity.yaml"
     assert obj.temperature == 0.5
 
 

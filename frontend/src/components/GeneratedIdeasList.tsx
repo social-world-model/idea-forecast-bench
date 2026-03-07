@@ -1,118 +1,159 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import './GeneratedIdeasList.css';
+import { API_BASE_URL, API_ENDPOINTS } from '../config';
+import type { IdeaPrediction, Strategy } from '../types';
 
-interface GeneratedIdea {
-    id: string;
-    Title: string;
-    Background?: string;
-    Method?: string;
-    Experiment?: any;
-    ComparisonTable?: string;
-    source_paper?: string;
-    source_url?: string;
-    NoveltyScore?: number;
-    FeasibilityScore?: number;
-    ImpactScore?: number;
-    [key: string]: any;
+interface GeneratedIdeaItem {
+  id: string;
+  strategyId: string;
+  strategyName: string;
+  strategyType: string;
+  cutoffDate: string;
+  cutoffMonth: string;
+  rank: number;
+  prediction: IdeaPrediction;
 }
 
 const GeneratedIdeasList: React.FC = () => {
-    const [ideas, setIdeas] = useState<GeneratedIdea[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+  const [strategies, setStrategies] = useState<Strategy[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-    const fetchIdeas = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            // GET request triggers backend to return existing file or generate new one using config
-            const response = await fetch('http://localhost:5000/api/generate-ideas');
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch ideas');
-            }
-
-            const data = await response.json();
-            setIdeas(data);
-        } catch (err: any) {
-            console.error("Error fetching ideas:", err);
-            setError(err.message || 'An error occurred');
-        } finally {
-            setLoading(false);
+  const ideas = useMemo<GeneratedIdeaItem[]>(() => {
+    return strategies
+      .flatMap((strategy) => {
+        if (!strategy.generation) {
+          return [];
         }
-    };
 
-    // Auto-fetch on mount
-    useEffect(() => {
-        fetchIdeas();
-    }, []);
+        return strategy.generation.predictions.map((prediction) => ({
+          id: `${strategy.id}-${strategy.generation?.cutoff_date}-${prediction.rank}`,
+          strategyId: strategy.id,
+          strategyName: strategy.name,
+          strategyType: strategy.strategy_name,
+          cutoffDate: strategy.generation?.cutoff_date ?? '',
+          cutoffMonth: strategy.generation?.cutoff_month ?? '',
+          rank: prediction.rank,
+          prediction,
+        }));
+      })
+      .sort((left, right) => {
+        const cutoffCmp = right.cutoffDate.localeCompare(left.cutoffDate);
+        if (cutoffCmp !== 0) {
+          return cutoffCmp;
+        }
+        const strategyCmp = left.strategyName.localeCompare(right.strategyName);
+        if (strategyCmp !== 0) {
+          return strategyCmp;
+        }
+        return left.rank - right.rank;
+      });
+  }, [strategies]);
 
-    return (
-        <div className="generated-ideas-container">
-            <h1 className="generated-ideas-title">Generated Research Ideas (ICLR)</h1>
+  const fetchIdeas = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.STRATEGIES}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch strategies');
+      }
 
-            <div className="controls-container" style={{ marginBottom: '20px', textAlign: 'center' }}>
-                <button
-                    onClick={fetchIdeas}
-                    disabled={loading}
-                    style={{ padding: '10px 20px', cursor: loading ? 'not-allowed' : 'pointer' }}
-                >
-                    {loading ? 'Refreshing...' : 'Refresh Ideas'}
-                </button>
-            </div>
+      const data: Strategy[] = await response.json();
+      setStrategies(data);
+    } catch (err: unknown) {
+      console.error('Error fetching strategy generations:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-            {error && <div className="error-container">Error: {error}</div>}
+  useEffect(() => {
+    fetchIdeas();
+  }, []);
 
-            {ideas.length === 0 && !loading && !error && (
-                <div className="empty-container">Enter keywords and click Generate to see ideas.</div>
-            )}
-
-            <div className="ideas-grid">
-                {ideas.map((idea) => (
-                    <div key={idea.id} className="idea-card">
-                        <div className="idea-header">
-                            <div>
-                                <h2 className="idea-title">{idea.Title}</h2>
-                                {idea.source_paper && (
-                                    <p className="idea-source">
-                                        Based on: <a href={idea.source_url || '#'} target="_blank" rel="noopener noreferrer">{idea.source_paper}</a>
-                                    </p>
-                                )}
-                            </div>
-                            <div className="idea-badges">
-                                {idea.NoveltyScore && <span className="badge">Novelty: {idea.NoveltyScore}</span>}
-                                {idea.FeasibilityScore && <span className="badge">Feasibility: {idea.FeasibilityScore}</span>}
-                                {idea.ImpactScore && <span className="badge">Impact: {idea.ImpactScore}</span>}
-                            </div>
-                        </div>
-
-                        <div className="idea-content">
-                            {idea.Background && (
-                                <div>
-                                    <div className="section-title">Background</div>
-                                    <p className="section-text">{idea.Background}</p>
-                                </div>
-                            )}
-                            {idea.Method && (
-                                <div>
-                                    <div className="section-title">Proposed Method</div>
-                                    <p className="section-text">{idea.Method}</p>
-                                </div>
-                            )}
-                            {idea.ComparisonTable && (
-                                <div>
-                                    <div className="section-title">Comparison</div>
-                                    <div className="comparison-table">
-                                        {idea.ComparisonTable}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                ))}
-            </div>
+  return (
+    <div className="generated-ideas-container">
+      <div className="generated-ideas-heading">
+        <div>
+          <h1 className="generated-ideas-title">Generated Ideas</h1>
+          <p className="generated-ideas-subtitle">
+            Latest predictions from each strategy&apos;s persisted generation snapshot.
+          </p>
         </div>
-    );
+        <button className="refresh-button" onClick={fetchIdeas} disabled={loading}>
+          {loading ? 'Refreshing...' : 'Refresh'}
+        </button>
+      </div>
+
+      {error && <div className="error-container">Error: {error}</div>}
+
+      {!loading && ideas.length === 0 && !error && (
+        <div className="empty-container">No strategy generations are available yet.</div>
+      )}
+
+      <div className="ideas-grid">
+        {ideas.map((idea) => (
+          <article key={idea.id} className="idea-card">
+            <div className="idea-header">
+              <div>
+                <div className="idea-meta-row">
+                  <span className="badge">#{idea.rank}</span>
+                  <span className="badge">{idea.strategyType}</span>
+                  <span className="badge">cutoff {idea.cutoffMonth}</span>
+                </div>
+                <h2 className="idea-title">{idea.prediction.title}</h2>
+                <p className="idea-source">{idea.strategyName}</p>
+              </div>
+              <div className="idea-badges">
+                <span className="badge confidence-badge">
+                  score {(idea.prediction.score * 100).toFixed(0)}%
+                </span>
+                {idea.prediction.confidence !== undefined && idea.prediction.confidence !== null && (
+                  <span className="badge confidence-badge">
+                    {(idea.prediction.confidence * 100).toFixed(0)}% confidence
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="idea-content">
+              <div>
+                <div className="section-title">Rationale</div>
+                <p className="section-text">{idea.prediction.rationale || 'No rationale provided.'}</p>
+              </div>
+
+              <div>
+                <div className="section-title">Approach</div>
+                <p className="section-text">{idea.prediction.approach || 'No approach provided.'}</p>
+              </div>
+
+              <div>
+                <div className="section-title">Signals</div>
+                <div className="idea-terms">
+                  {idea.prediction.key_terms && idea.prediction.key_terms.length > 0 ? (
+                    idea.prediction.key_terms.map((term) => (
+                      <span key={term} className="term-chip">
+                        {term}
+                      </span>
+                    ))
+                  ) : (
+                    <>
+                      <span className="term-chip">score {(idea.prediction.score * 100).toFixed(0)}%</span>
+                      {idea.prediction.confidence !== undefined && idea.prediction.confidence !== null && (
+                        <span className="term-chip">confidence {(idea.prediction.confidence * 100).toFixed(0)}%</span>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
 };
 
 export default GeneratedIdeasList;

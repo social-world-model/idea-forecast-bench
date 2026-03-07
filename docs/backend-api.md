@@ -7,47 +7,26 @@ Base URL: `http://localhost:5000`
 - `GET /healthz`
   - Returns service status.
 - `GET /metrics`
-  - Returns run counters and success rate.
+  - Returns strategy, backtest, and generation counters.
 
-## Ideas
+## Strategies
 
-- `GET /api/generate-ideas`
-  - Returns cached generated ideas if present.
-- `POST /api/generate-ideas`
-  - Body:
-    - `keywords: string[]` (required)
-    - `n: number` (optional)
-  - Generates ideas synchronously and stores them.
-- `GET /api/research-ideas`
-  - Returns transformed ideas for frontend leaderboard.
+- `GET /api/strategies`
+  - Returns persisted strategy configurations plus any backtest, generation, and daily evaluation payloads.
+- `POST /api/strategies`
+  - Creates a new strategy configuration.
+- `GET /api/strategies/<strategy_id>`
+  - Returns one strategy record.
+- `GET /api/strategies/<strategy_id>/status`
+  - Returns current `backtest_status` and `generation_status`.
+- `POST /api/strategies/<strategy_id>/backtest`
+  - Runs historical month-level backtest for that strategy.
+- `POST /api/strategies/<strategy_id>/generate`
+  - Runs one forward-looking generation at the provided cutoff date.
 
-## Runs
-
-- `POST /api/runs/start`
-  - Body:
-    - `keywords: string[]` (optional, defaults to config)
-    - `n: number` (optional, defaults to config)
-  - Response `202 Accepted` with:
-    - `run.run_id`
-    - `run.status` (`pending` -> `running` -> `success` | `failed`)
-
-- `GET /api/runs` or `GET /api/runs/list`
-  - Query:
-    - `limit` (1-500, default 50)
-  - Returns latest runs.
-
-- `GET /api/runs/<run_id>`
-- `GET /api/runs/detail/<run_id>`
-  - Query:
-    - `includeIdeas=true|false` (default false)
-  - Returns one run and optional generated ideas payload.
-
-- `GET /api/runs/report`
-  - Returns aggregated report with:
-    - `summary` counters
-    - `keyword_frequency`
-    - `score_trend`
-    - `comparison` (top runs)
+Startup bootstrap rule:
+- If any local strategy already has a non-empty `backtest_result`, backend startup skips automatic backtesting.
+- If no strategy has backtest data yet, startup may run one automatic backtest pass.
 
 ## Views
 

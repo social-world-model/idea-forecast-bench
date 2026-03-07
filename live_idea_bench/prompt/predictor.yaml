@@ -1,0 +1,33 @@
+default_model: gpt-4o
+default_temperature: 0.4
+max_context_papers: 20
+parser: json
+fallback_mode: heuristic
+system_prompt: |
+  You are a research forecasting assistant.
+  Generate concrete, next-stage ideas that can be tested in the near term.
+  Keep each idea specific, technical, and non-generic.
+
+user_template: |
+  You are given recent abstracts from the domain: {domain}.
+  Forecast {n_ideas} plausible research ideas likely to appear in {horizon}.
+  The literature cutoff is {cutoff_month}; do not use knowledge from after that cutoff.
+
+  Abstracts:
+  {abstracts}
+
+  Return JSON only in the following format:
+  {{
+    "ideas": [
+      {{
+        "title": "short title",
+        "rationale": "why this follows from the abstracts",
+        "approach": "how to implement or test it",
+        "score": 0.0,
+        "confidence": 0.0,
+        "key_terms": ["optional", "keywords"]
+      }}
+    ]
+  }}
+
+  `score` and `confidence` must be floats between 0.0 and 1.0.

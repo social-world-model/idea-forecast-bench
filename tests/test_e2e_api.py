@@ -23,4 +23,7 @@ def test_health_metrics_and_views_endpoints() -> None:
 
     metrics = client.get('/metrics')
     assert metrics.status_code == 200
-    assert 'runs_total' in metrics.get_json()
+    payload = metrics.get_json()
+    assert 'strategies_total' in payload
+    assert 'backtests_done' in payload
+    assert 'generations_done' in payload

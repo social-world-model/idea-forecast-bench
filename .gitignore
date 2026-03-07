@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.DS_Store
 
 # C extensions
 *.so
@@ -165,3 +166,5 @@ cython_debug/
 **/data/*
 **/keywords_results.json
 backend/strategies/*.json
+frontend/build/
+frontend/node_modules/

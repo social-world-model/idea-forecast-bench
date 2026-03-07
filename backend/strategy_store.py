@@ -14,8 +14,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+from live_idea_bench.papers import load_papers_from_markdown
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DATA_DIR = PROJECT_ROOT / "data" / "arxiv_csml" / "raw_markdown"
+DEFAULT_MODEL_NAME = "gpt-4o"
 
 STRATEGIES_DIR = Path(__file__).parent / "strategies"
 STRATEGIES_DIR.mkdir(exist_ok=True)
@@ -63,15 +66,130 @@ def _normalize_params(
             normalized_params["min_keyword_freq"] = _coerce_int(
                 raw_params.get("min_keyword_freq", 2), 2
             )
+    else:
+        if raw_params.get("model_name") in {None, ""} and raw_params.get("model_id") not in {None, ""}:
+            normalized_params["model_name"] = raw_params.get("model_id")
+        normalized_params.setdefault("model_name", DEFAULT_MODEL_NAME)
+        normalized_params.setdefault("predictor_config", "predictor.yaml")
+        normalized_params.setdefault("similarity_config", "similarity.yaml")
+        if raw_params.get("temperature") is not None:
+            normalized_params["temperature"] = float(raw_params.get("temperature"))
+
+    normalized_params.pop("model_id", None)
+    normalized_params.pop("prompt_id", None)
+    normalized_params.pop("prompt_version", None)
 
     return normalized_params
 
 
+def _normalize_prediction(raw: object, rank_fallback: int) -> dict | None:
+    if not isinstance(raw, dict):
+        return None
+
+    key_terms_raw = raw.get("key_terms") or raw.get("keywords") or []
+    if not isinstance(key_terms_raw, list):
+        key_terms_raw = []
+
+    def _coerce_score(value: object, default: float = 0.0) -> float:
+        try:
+            resolved = float(value)
+        except (TypeError, ValueError):
+            resolved = default
+        if resolved > 1.0:
+            resolved = resolved / 10.0
+        return round(min(1.0, max(0.0, resolved)), 4)
+
+    confidence = _coerce_score(
+        raw.get("confidence", raw.get("Confidence", raw.get("score", raw.get("Score", 0.0)))),
+        default=0.0,
+    )
+    score = _coerce_score(raw.get("score", raw.get("Score", confidence)), default=confidence)
+
+    try:
+        rank = int(raw.get("rank", rank_fallback))
+    except (TypeError, ValueError):
+        rank = rank_fallback
+
+    return {
+        "rank": rank,
+        "title": str(raw.get("title") or raw.get("Title") or ""),
+        "rationale": str(raw.get("rationale") or raw.get("Rationale") or ""),
+        "approach": str(raw.get("approach") or raw.get("Approach") or ""),
+        "score": score,
+        "confidence": confidence,
+        "key_terms": [str(term).strip() for term in key_terms_raw if str(term).strip()],
+    }
+
+
+def _normalize_generation(generation: object) -> object:
+    if not isinstance(generation, dict):
+        return generation
+
+    predictions_raw = generation.get("predictions")
+    predictions = []
+    if isinstance(predictions_raw, list):
+        for idx, raw in enumerate(predictions_raw, start=1):
+            normalized = _normalize_prediction(raw, idx)
+            if normalized is not None:
+                predictions.append(normalized)
+
+    normalized = dict(generation)
+    if predictions:
+        normalized["predictions"] = predictions
+    cutoff_month = str(normalized.get("cutoff_month") or "").strip()
+    cutoff_date = str(normalized.get("cutoff_date") or "").strip()
+    if not cutoff_date and cutoff_month:
+        normalized["cutoff_date"] = f"{cutoff_month}-01"
+    return normalized
+
+
+def _normalize_evaluation(evaluation: object) -> object:
+    if not isinstance(evaluation, dict):
+        return evaluation
+    normalized = dict(evaluation)
+    normalized.setdefault("matched_paper_ids", [])
+    normalized.pop("matched_terms", None)
+    return normalized
+
+
+def _normalize_backtest_result(backtest_result: object) -> object:
+    if not isinstance(backtest_result, dict):
+        return backtest_result
+    normalized = dict(backtest_result)
+    windows = normalized.get("windows")
+    if isinstance(windows, list):
+        normalized_windows = []
+        for window in windows:
+            if not isinstance(window, dict):
+                continue
+            updated = dict(window)
+            predictions_raw = updated.get("predictions")
+            if isinstance(predictions_raw, list):
+                predictions = []
+                for idx, raw in enumerate(predictions_raw, start=1):
+                    pred = _normalize_prediction(raw, idx)
+                    if pred is not None:
+                        predictions.append(pred)
+                updated["predictions"] = predictions
+            updated["evaluation"] = _normalize_evaluation(updated.get("evaluation"))
+            normalized_windows.append(updated)
+        normalized["windows"] = normalized_windows
+    return normalized
+
+
 def _normalize_strategy(strategy: dict) -> dict:
     strategy_name = str(strategy.get("strategy_name") or "keyword_trend")
+    if strategy_name == "prompt_llm":
+        strategy_name = "predictor_llm"
     normalized = dict(strategy)
     normalized["strategy_name"] = strategy_name
     normalized["params"] = _normalize_params(strategy_name, strategy.get("params"))
+    normalized["generation"] = _normalize_generation(strategy.get("generation"))
+    normalized["backtest_result"] = _normalize_backtest_result(strategy.get("backtest_result"))
+    normalized["daily_evaluation"] = _normalize_evaluation(strategy.get("daily_evaluation"))
+    normalized.setdefault("leaderboard_score", None)
+    normalized.setdefault("last_daily_run_at", None)
+    normalized.setdefault("last_generation_cutoff_month", None)
     return normalized
 
 
@@ -95,6 +213,12 @@ def _write(strategy: dict) -> None:
 
 
 def _sort_key(s: dict) -> tuple:
+    score = s.get("leaderboard_score")
+    if score is not None:
+        try:
+            return (float(score), s.get("created_at", ""))
+        except (TypeError, ValueError):
+            pass
     summary = (s.get("backtest_result") or {}).get("summary") or {}
     hit = summary.get("avg_hit_at_k", -1)
     return (hit, s.get("created_at", ""))
@@ -122,6 +246,8 @@ def get_strategy(strategy_id: str) -> Optional[dict]:
 def create_strategy(data: dict) -> dict:
     strategy_id = uuid.uuid4().hex[:8]
     strategy_name = str(data.get("strategy_name", "keyword_trend"))
+    if strategy_name == "prompt_llm":
+        strategy_name = "predictor_llm"
     config = data.get("config") or {}
     raw_data_dir = config.get("data_dir", "")
     data_dir = str(raw_data_dir).strip() if raw_data_dir is not None else ""
@@ -152,7 +278,11 @@ def create_strategy(data: dict) -> dict:
         "backtest_status": "pending",
         "generation_status": "pending",
         "backtest_result": None,    # { summary: {...}, windows: [...] }
-        "generation": None,         # { cutoff_month: str, predictions: [...] }
+        "generation": None,         # { cutoff_date: str, cutoff_month: str, predictions: [...] }
+        "leaderboard_score": None,
+        "daily_evaluation": None,
+        "last_daily_run_at": None,
+        "last_generation_cutoff_month": None,
     }
     _write(strategy)
     return strategy
@@ -196,7 +326,6 @@ def _resolve_data_dir(s: dict) -> Path:
 
 def _load_papers(s: dict):
     """Load PaperRecord list for this strategy's data_dir and time window."""
-    from src.backtest import load_papers_from_markdown
     return load_papers_from_markdown(
         _resolve_data_dir(s),
         start_month=s["config"].get("start_month"),
@@ -204,36 +333,26 @@ def _load_papers(s: dict):
     )
 
 
+def resolve_data_dir_for_strategy(strategy: dict) -> Path:
+    return _resolve_data_dir(strategy)
+
+
+def load_papers_for_strategy(strategy: dict):
+    return _load_papers(strategy)
+
+
 def _make_strategy_obj(s: dict):
-    """Instantiate the IdeaStrategy from src.strategy registry."""
-    from src import create_strategy as src_create
+    """Instantiate the IdeaStrategy from the live_idea_bench registry."""
+    from live_idea_bench.strategy.execution import build_strategy
 
-    strategy_name = str(s.get("strategy_name") or "keyword_trend")
-    params = s.get("params") or {}
-
-    return src_create(
-        strategy_name,
-        recent_months=_coerce_int(params.get("recent_months", 3), 3),
-        min_keyword_freq=_coerce_int(params.get("min_keyword_freq", 2), 2),
-        model_id=str(params.get("model_id", "gpt-4o-mini")),
-        prompt_id=str(params.get("prompt_id", "llm_baseline")),
-        prompt_version=str(params.get("prompt_version", "v1")),
-        temperature=(
-            float(params.get("temperature"))  # type: ignore[arg-type]
-            if params.get("temperature") is not None
-            else None
-        ),
-    )
+    return build_strategy(s)
 
 
 # ── Synchronous execution (used for seeding / testing) ───────────────────────
 
 def run_backtest_sync(strategy_id: str) -> None:
     """Run backtest synchronously and persist the result."""
-    import sys
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-    from src import BacktestConfig, backtest
+    from live_idea_bench.strategy.execution import run_strategy_backtest
 
     s = _read(strategy_id)
     if s is None:
@@ -242,15 +361,7 @@ def run_backtest_sync(strategy_id: str) -> None:
     update_strategy(strategy_id, {"backtest_status": "running"})
     try:
         papers = _load_papers(s)
-        strategy_obj = _make_strategy_obj(s)
-        cfg = BacktestConfig(
-            top_k=s["config"]["top_k"],
-            horizon_months=s["config"]["horizon_months"],
-            min_train_papers=s["config"]["min_train_papers"],
-            start_month=s["config"].get("start_month"),
-            end_month=s["config"].get("end_month"),
-        )
-        result = backtest(papers, strategy_obj, cfg)
+        result = run_strategy_backtest(s, papers)
         update_strategy(strategy_id, {
             "backtest_status": "done",
             "backtest_result": result,
@@ -262,57 +373,33 @@ def run_backtest_sync(strategy_id: str) -> None:
         })
 
 
-def run_generation_sync(strategy_id: str, cutoff_month: str | None = None) -> None:
+def run_generation_sync(strategy_id: str, cutoff_date: str | None = None) -> None:
     """Run idea generation synchronously and persist the result."""
-    import dataclasses
-    import sys
-    sys.path.insert(0, str(PROJECT_ROOT))
-
     s = _read(strategy_id)
     if s is None:
         return
 
     update_strategy(strategy_id, {"generation_status": "running"})
     try:
-        # Resolve cutoff_month: use supplied value or derive from config end_month
-        if not cutoff_month:
-            cutoff_month = (s.get("config") or {}).get("end_month") or ""
+        # Resolve cutoff_date: use supplied value or derive from config end_month.
+        if not cutoff_date:
+            config_end_month = (s.get("config") or {}).get("end_month") or ""
+            cutoff_date = f"{config_end_month}-01" if config_end_month else ""
 
-        if not cutoff_month:
-            raise ValueError("cutoff_month is required for generation")
+        if not cutoff_date:
+            raise ValueError("cutoff_date is required for generation")
 
-        from src.backtest.data import month_to_index
+        from live_idea_bench.strategy.execution import run_strategy_generation
 
-        top_k = int((s.get("config") or {}).get("top_k", 5))
-        cutoff_idx = month_to_index(cutoff_month)
-
-        all_papers = _load_papers(s)
-        # Filter to train-only: papers whose month index <= cutoff_month index
-        train_papers = [p for p in all_papers if month_to_index(p.month) <= cutoff_idx]
-
-        strategy_obj = _make_strategy_obj(s)
-
-        # generate() signature: (train_papers, cutoff_month, top_k)
-        predictions_raw = strategy_obj.generate(
-            train_papers=train_papers,
-            cutoff_month=cutoff_month,
-            top_k=top_k,
+        generation = run_strategy_generation(
+            s,
+            _load_papers(s),
+            cutoff_date=cutoff_date,
         )
-
-        # IdeaPrediction is a dataclass — serialize with dataclasses.asdict
-        predictions = [
-            dataclasses.asdict(p) if dataclasses.is_dataclass(p) else
-            (p._asdict() if hasattr(p, "_asdict") else
-             (dict(p) if hasattr(p, "keys") else str(p)))
-            for p in predictions_raw
-        ]
 
         update_strategy(strategy_id, {
             "generation_status": "done",
-            "generation": {
-                "cutoff_month": cutoff_month,
-                "predictions": predictions,
-            },
+            "generation": generation,
         })
     except Exception as e:
         update_strategy(strategy_id, {
@@ -374,3 +461,35 @@ def seed_demo_strategies() -> None:
         print(f"    → status={result.get('backtest_status')}  "
               f"windows={summary.get('windows', 0)}  "
               f"avg_hit@k={summary.get('avg_hit_at_k', 0)}")
+
+
+def has_leaderboard_baseline() -> bool:
+    for strategy in list_strategies():
+        backtest_result = strategy.get("backtest_result")
+        if isinstance(backtest_result, dict) and backtest_result:
+            return True
+    return False
+
+
+def bootstrap_backtest_if_missing() -> dict:
+    strategies = list_strategies()
+    if not strategies:
+        return {"triggered": False, "reason": "no_strategies", "count": 0, "strategy_ids": []}
+
+    if has_leaderboard_baseline():
+        return {"triggered": False, "reason": "baseline_exists", "count": 0, "strategy_ids": []}
+
+    executed_ids = []
+    for strategy in strategies:
+        strategy_id = strategy.get("id")
+        if not strategy_id:
+            continue
+        run_backtest_sync(strategy_id)
+        executed_ids.append(strategy_id)
+
+    return {
+        "triggered": True,
+        "reason": "missing_baseline",
+        "count": len(executed_ids),
+        "strategy_ids": executed_ids,
+    }

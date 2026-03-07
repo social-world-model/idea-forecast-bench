@@ -1,78 +1,4 @@
-// ── Legacy types (used by Run pages) ─────────────────────────────────────────
-
-export interface ResearchIdea {
-  id: string;
-  title: string;
-  description: string;
-  author: string;
-  institution?: string;
-  tags: string[];
-  upvotes: number;
-  created_at: string;
-  updated_at?: string;
-  url?: string;
-  citations?: number;
-  impact_score?: number;
-}
-
-export type RunStatus = 'pending' | 'running' | 'success' | 'failed';
-
-export interface RunRecord {
-  run_id: string;
-  status: RunStatus;
-  keywords: string[];
-  n: number;
-  created_at: string;
-  updated_at: string;
-  started_at?: string;
-  finished_at?: string;
-  duration_seconds?: number;
-  error?: string;
-  output_path?: string;
-  ideas_count: number;
-  report?: {
-    run_id: string;
-    keywords: string[];
-    n: number;
-    ideas_count: number;
-    average_score: number;
-    average_novelty: number;
-    average_feasibility: number;
-    generated_at: string;
-    model: string;
-  };
-  ideas?: Array<Record<string, unknown>>;
-}
-
-export interface RunsReport {
-  summary: {
-    total_runs: number;
-    running_runs: number;
-    successful_runs: number;
-    failed_runs: number;
-    success_rate: number;
-    average_duration_seconds: number;
-    average_ideas_per_run: number;
-  };
-  keyword_frequency: Record<string, number>;
-  score_trend: Array<{
-    run_id: string;
-    timestamp: string;
-    average_score: number;
-    ideas_count: number;
-  }>;
-  comparison: Array<{
-    run_id: string;
-    average_score: number;
-    average_novelty: number;
-    average_feasibility: number;
-    ideas_count: number;
-    keywords: string[];
-  }>;
-  generated_at: string;
-}
-
-// ── Backtest engine types (mirrors src/backtest/models.py) ────────────────────
+// ── Backtest engine types (mirrors live_idea_bench/models.py) ─────────────────
 
 export type StrategyStatus = 'pending' | 'running' | 'done' | 'failed';
 
@@ -81,8 +7,10 @@ export interface IdeaPrediction {
   rank: number;
   title: string;
   rationale: string;
-  key_terms: string[];
-  confidence: number;
+  approach: string;
+  score: number;
+  confidence?: number | null;
+  key_terms?: string[];
 }
 
 /** Mirrors EvaluationResult dataclass */
@@ -94,13 +22,15 @@ export interface EvaluationResult {
   novelty: number;
   diversity: number;
   matched_prediction_ranks: number[];
-  matched_terms: string[];
+  matched_paper_ids: string[];
 }
 
 /** Mirrors BacktestWindowResult dataclass */
 export interface WindowResult {
   cutoff_month: string;
+  cutoff_date: string;
   future_end_month: string;
+  future_end_date: string;
   train_papers: number;
   future_papers: number;
   predictions: IdeaPrediction[];
@@ -127,9 +57,9 @@ export interface BacktestResult {
 export interface StrategyParams {
   recent_months?: number;
   min_keyword_freq?: number;
-  model_id?: string;
-  prompt_id?: string;
-  prompt_version?: string;
+  model_name?: string;
+  predictor_config?: string;
+  similarity_config?: string;
   temperature?: number | null;
   [key: string]: unknown;
 }
@@ -146,8 +76,25 @@ export interface StrategyConfig {
 
 /** Generation result: predictions at a single cutoff */
 export interface GenerationResult {
+  cutoff_date: string;
   cutoff_month: string;
   predictions: IdeaPrediction[];
+}
+
+export interface DailyEvaluation {
+  evaluated_at: string;
+  prediction_cutoff_date: string;
+  prediction_cutoff_month: string;
+  new_papers_count: number;
+  prediction_count: number;
+  hit_at_k: number;
+  recall_at_k: number;
+  precision_at_k: number;
+  mrr: number;
+  novelty: number;
+  diversity: number;
+  matched_prediction_ranks: number[];
+  matched_paper_ids: string[];
 }
 
 export interface Strategy {
@@ -161,4 +108,8 @@ export interface Strategy {
   generation_status: StrategyStatus;
   backtest_result?: BacktestResult | null;
   generation?: GenerationResult | null;
+  leaderboard_score?: number | null;
+  daily_evaluation?: DailyEvaluation | null;
+  last_daily_run_at?: string | null;
+  last_generation_cutoff_month?: string | null;
 }
