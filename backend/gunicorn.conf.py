@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-from backend import config
+from backend import config as backend_config
 
 # The repo is still single-host and file-backed, so default to one worker.
-bind = config.gunicorn_bind()
-workers = config.gunicorn_workers()
-threads = config.gunicorn_threads()
+bind = backend_config.gunicorn_bind()
+workers = backend_config.gunicorn_workers()
+threads = backend_config.gunicorn_threads()
 worker_class = "gthread"
 
-timeout = config.gunicorn_timeout()
-graceful_timeout = config.gunicorn_graceful_timeout()
-keepalive = config.gunicorn_keepalive()
+timeout = backend_config.gunicorn_timeout()
+graceful_timeout = backend_config.gunicorn_graceful_timeout()
+keepalive = backend_config.gunicorn_keepalive()
 
 accesslog = "-"
 errorlog = "-"
 capture_output = True
-loglevel = config.gunicorn_log_level()
+loglevel = backend_config.gunicorn_log_level()
 preload_app = False

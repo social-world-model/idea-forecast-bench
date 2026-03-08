@@ -17,6 +17,21 @@ This repo is organized for a single AWS EC2 host running Docker Compose:
 
 Detailed EC2 operations live in [docs/ops.md](docs/ops.md).
 
+## Supported Model Families
+
+The backend can execute strategies against these model families:
+
+- `gpt-4o*`, `gpt-5*` via OpenAI
+- `claude-*` via Anthropic
+- `*gemini*` via Google
+- `deepseek*` via Together's OpenAI-compatible API
+- `qwen*` via DashScope's OpenAI-compatible API
+- `kimi*`, `moonshot*` via Moonshot's OpenAI-compatible API
+- `grok*` via xAI's OpenAI-compatible API
+- `llama*`, `meta-llama/*` via Together's OpenAI-compatible API
+
+For DeepSeek on Together, prefer Together model IDs such as `deepseek-ai/DeepSeek-V3.1` and `deepseek-ai/DeepSeek-R1`. The backend also maps `deepseek-chat` and `deepseek-reasoner` onto those Together IDs. Export only the provider API keys that match the strategies you plan to run. The full environment variable list lives in [docs/ops.md](docs/ops.md).
+
 ## Repo Layout
 
 ```text
