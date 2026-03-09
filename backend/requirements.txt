@@ -10,3 +10,15 @@ openreview-py
 beartype
 backoff
 rich
+
+# Optional server-side RL training stack
+# Replace torch with a CUDA-specific build on the training server if needed.
+torch>=2.3.0
+transformers>=4.51.0
+datasets>=2.21.0
+peft>=0.13.0
+trl>=0.25.0
+accelerate>=1.0.0
+sentencepiece>=0.2.0
+bitsandbytes>=0.43.0; platform_system == "Linux"
+vllm>=0.8.5; platform_system == "Linux"

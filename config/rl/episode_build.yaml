@@ -1,5 +1,7 @@
 top_k: 5
-horizon_months: 3
+past_window_months: 24
+horizon_months: 6
+step_months: 3
 min_train_papers: 6
 start_month:
 end_month:

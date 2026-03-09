@@ -1,9 +1,11 @@
 from live_idea_bench.rl.config import (
+    CandidateGenerationConfig,
     DPOTrainConfig,
     EpisodeBuildConfig,
     GRPOTrainConfig,
     RewardConfig,
     RewardWeights,
+    load_candidate_generation_config,
     load_dpo_train_config,
     load_episode_build_config,
     load_grpo_train_config,
@@ -12,11 +14,20 @@ from live_idea_bench.rl.config import (
 from live_idea_bench.rl.dpo import CandidateListSample, EpisodeCandidateLists, build_dpo_pairs
 from live_idea_bench.rl.episodes import RLEpisode, build_rl_episodes, serialize_episodes
 from live_idea_bench.rl.grpo import RewardAlignmentReport, build_grpo_advantages, compute_reward_alignment
+from live_idea_bench.rl.local_generation import build_prediction_prompt, generate_local_predictions, parse_completion_predictions
+from live_idea_bench.rl.model_zoo import SmallModelSpec, list_small_model_payloads, list_small_model_specs, resolve_small_model
+from live_idea_bench.rl.pipeline import (
+    build_grpo_prompt_rows,
+    generate_episode_candidate_lists,
+    run_policy_rl_pipeline,
+    serialize_episode_candidate_lists,
+)
 from live_idea_bench.rl.reward import RLRewardEvaluation, evaluate_rl_reward, serialize_reward_evaluation, spearman_correlation
 from live_idea_bench.rl.trainers import train_dpo_with_trl, train_grpo_with_trl
 
 __all__ = [
     "CandidateListSample",
+    "CandidateGenerationConfig",
     "DPOTrainConfig",
     "EpisodeBuildConfig",
     "EpisodeCandidateLists",
@@ -26,16 +37,28 @@ __all__ = [
     "RewardAlignmentReport",
     "RewardConfig",
     "RewardWeights",
+    "SmallModelSpec",
+    "build_grpo_prompt_rows",
+    "build_prediction_prompt",
     "build_dpo_pairs",
     "build_grpo_advantages",
     "build_rl_episodes",
     "compute_reward_alignment",
     "evaluate_rl_reward",
+    "generate_episode_candidate_lists",
+    "generate_local_predictions",
+    "load_candidate_generation_config",
     "load_dpo_train_config",
     "load_episode_build_config",
     "load_grpo_train_config",
     "load_reward_config",
+    "list_small_model_payloads",
+    "list_small_model_specs",
+    "parse_completion_predictions",
+    "resolve_small_model",
+    "run_policy_rl_pipeline",
     "serialize_episodes",
+    "serialize_episode_candidate_lists",
     "serialize_reward_evaluation",
     "spearman_correlation",
     "train_dpo_with_trl",

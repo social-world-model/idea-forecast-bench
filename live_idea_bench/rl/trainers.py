@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import importlib
 import json
 from pathlib import Path
 from typing import Any
 
-from live_idea_bench.rl.config import DPOTrainConfig, GRPOTrainConfig
+from live_idea_bench.rl.config import DPOTrainConfig, GRPOTrainConfig, RewardConfig
+from live_idea_bench.rl.reward import build_grpo_reward_function
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -21,24 +23,22 @@ def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
 
 def _require_trl_stack() -> dict[str, Any]:
     try:
-        from datasets import Dataset
-        from peft import LoraConfig
-        from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
-        from trl import DPOTrainer, GRPOTrainer
-    except ImportError as exc:  # pragma: no cover - exercised only with external deps installed
+        datasets = importlib.import_module("datasets")
+        peft = importlib.import_module("peft")
+        trl = importlib.import_module("trl")
+    except ImportError as exc:
         raise RuntimeError(
-            "TRL training dependencies are not installed. Install datasets, transformers, peft, and trl "
-            "to run non-dry-run RL training."
+            "TRL training dependencies are not installed. Install torch, datasets, transformers, peft, "
+            "accelerate, and trl to run non-dry-run RL training."
         ) from exc
 
     return {
-        "Dataset": Dataset,
-        "LoraConfig": LoraConfig,
-        "AutoModelForCausalLM": AutoModelForCausalLM,
-        "AutoTokenizer": AutoTokenizer,
-        "TrainingArguments": TrainingArguments,
-        "DPOTrainer": DPOTrainer,
-        "GRPOTrainer": GRPOTrainer,
+        "Dataset": getattr(datasets, "Dataset"),
+        "LoraConfig": getattr(peft, "LoraConfig"),
+        "DPOConfig": getattr(trl, "DPOConfig"),
+        "DPOTrainer": getattr(trl, "DPOTrainer"),
+        "GRPOConfig": getattr(trl, "GRPOConfig"),
+        "GRPOTrainer": getattr(trl, "GRPOTrainer"),
     }
 
 
@@ -93,10 +93,6 @@ def train_dpo_with_trl(
         return manifest
 
     deps = _require_trl_stack()
-    tokenizer = deps["AutoTokenizer"].from_pretrained(model_name)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    model = deps["AutoModelForCausalLM"].from_pretrained(model_name)
     peft_config = deps["LoraConfig"](
         r=config.lora_r,
         lora_alpha=config.lora_alpha,
@@ -114,21 +110,22 @@ def train_dpo_with_trl(
             for row in dataset_rows
         ]
     )
-    args = deps["TrainingArguments"](
+    args = deps["DPOConfig"](
         output_dir=str(target_dir / "artifacts"),
         per_device_train_batch_size=config.per_device_batch_size,
+        gradient_accumulation_steps=config.gradient_accumulation_steps,
         num_train_epochs=config.num_train_epochs,
         learning_rate=config.learning_rate,
-        logging_steps=1,
+        beta=config.beta,
+        max_length=config.max_length,
+        logging_steps=config.logging_steps,
+        report_to="none",
         remove_unused_columns=False,
     )
     trainer = deps["DPOTrainer"](
-        model=model,
-        ref_model=None,
+        model=model_name,
         args=args,
-        beta=config.beta,
         train_dataset=train_dataset,
-        tokenizer=tokenizer,
         peft_config=peft_config,
     )
     trainer.train()
@@ -144,6 +141,9 @@ def train_grpo_with_trl(
     model_name: str,
     predictor_config: str,
     output_dir: str,
+    reward_config: RewardConfig,
+    similarity_config_path: str = "similarity.yaml",
+    runtime_config_path: str | None = None,
 ) -> dict[str, Any]:
     target_dir = Path(output_dir).resolve()
     dataset_path = target_dir / "grpo_dataset.jsonl"
@@ -163,10 +163,6 @@ def train_grpo_with_trl(
         return manifest
 
     deps = _require_trl_stack()
-    tokenizer = deps["AutoTokenizer"].from_pretrained(model_name)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    model = deps["AutoModelForCausalLM"].from_pretrained(model_name)
     peft_config = deps["LoraConfig"](
         r=config.lora_r,
         lora_alpha=config.lora_alpha,
@@ -175,19 +171,30 @@ def train_grpo_with_trl(
         task_type="CAUSAL_LM",
     )
     train_dataset = deps["Dataset"].from_list(dataset_rows)
-    args = deps["TrainingArguments"](
+    args = deps["GRPOConfig"](
         output_dir=str(target_dir / "artifacts"),
         per_device_train_batch_size=config.per_device_batch_size,
+        gradient_accumulation_steps=config.gradient_accumulation_steps,
         num_train_epochs=config.num_train_epochs,
         learning_rate=config.learning_rate,
-        logging_steps=1,
-        remove_unused_columns=False,
+        num_generations=config.num_generations,
+        max_completion_length=config.max_completion_length,
+        use_vllm=config.use_vllm,
+        vllm_gpu_memory_utilization=config.vllm_gpu_memory_utilization,
+        logging_steps=config.logging_steps,
+        report_to="none",
+    )
+    reward_func = build_grpo_reward_function(
+        reward_config,
+        similarity_config_path=similarity_config_path,
+        runtime_config_path=runtime_config_path,
+        model_name=model_name,
     )
     trainer = deps["GRPOTrainer"](
-        model=model,
+        model=model_name,
         args=args,
+        reward_funcs=reward_func,
         train_dataset=train_dataset,
-        tokenizer=tokenizer,
         peft_config=peft_config,
     )
     trainer.train()

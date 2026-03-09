@@ -3,7 +3,7 @@ import json
 import sys
 from dataclasses import asdict
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Mapping, cast
 
 # Add project root to sys.path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -18,7 +18,7 @@ from live_idea_bench.backtest import (  # noqa: E402
 from live_idea_bench.strategy import create_strategy  # noqa: E402
 
 
-def _write_json(path: Path, payload: Dict[str, object]) -> None:
+def _write_json(path: Path, payload: Mapping[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -37,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--strategy",
         type=str,
         default="keyword_trend",
-        help="Strategy name (keyword_trend or predictor_llm).",
+        help="Strategy name (keyword_trend, predictor_llm, or policy_rl).",
     )
     parser.add_argument("--recent-months", type=int, default=3, help="Recent window used by strategy.")
     parser.add_argument("--min-keyword-freq", type=int, default=2, help="Minimum keyword frequency.")
@@ -45,6 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--predictor-config", type=str, default="predictor.yaml", help="Predictor prompt config.")
     parser.add_argument("--similarity-config", type=str, default="similarity.yaml", help="Similarity prompt config.")
     parser.add_argument("--temperature", type=float, help="Optional temperature override.")
+    parser.add_argument("--policy-manifest-path", type=str, help="Optional RL policy manifest for policy_rl.")
     parser.add_argument("--top-k", type=int, default=5, help="Number of ideas to generate.")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -93,6 +94,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
         predictor_config=args.predictor_config,
         similarity_config=args.similarity_config,
         temperature=args.temperature,
+        policy_manifest_path=args.policy_manifest_path,
     )
 
     predictions = generate(
@@ -139,6 +141,7 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         predictor_config=args.predictor_config,
         similarity_config=args.similarity_config,
         temperature=args.temperature,
+        policy_manifest_path=args.policy_manifest_path,
     )
     config = BacktestConfig(
         top_k=args.top_k,
@@ -148,8 +151,11 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         end_month=args.end_month,
         similarity_config=args.similarity_config,
     )
-    report = backtest(papers=papers, strategy=strategy, config=config)
-    payload = {
+    report_obj = backtest(papers=papers, strategy=strategy, config=config)
+    if not isinstance(report_obj, dict):
+        raise ValueError("backtest must return a mapping")
+    report = cast(Dict[str, object], report_obj)
+    payload: Dict[str, object] = {
         "mode": "backtest",
         "strategy": args.strategy,
         "config": asdict(config),
@@ -161,7 +167,8 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         output_path = PROJECT_ROOT / output_path
     _write_json(output_path, payload)
 
-    summary = report.get("summary", {})
+    summary_obj = report.get("summary", {})
+    summary = cast(Dict[str, object], summary_obj) if isinstance(summary_obj, dict) else {}
     print("Backtest finished: {} windows".format(summary.get("windows", 0)))
     print("avg_hit_at_k={}, avg_recall_at_k={}, avg_mrr={}".format(
         summary.get("avg_hit_at_k", 0.0),

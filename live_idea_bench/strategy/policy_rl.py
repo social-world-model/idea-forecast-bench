@@ -4,21 +4,10 @@ import json
 from pathlib import Path
 from typing import Any, List
 
-from live_idea_bench.config import load_predictor_config
 from live_idea_bench.daily import coerce_prediction
 from live_idea_bench.models import IdeaPrediction, PaperRecord
-from live_idea_bench.predictor import (
-    _build_abstract_block,
-    _coerce_key_terms,
-    _coerce_score,
-    _extract_json_payload,
-    _infer_domain,
-    _parse_prediction_items,
-    generate_predictions,
-)
+from live_idea_bench.predictor import generate_predictions
 from live_idea_bench.strategy.base import IdeaStrategy
-
-_LOCAL_POLICY_CACHE: dict[str, tuple[Any, Any]] = {}
 
 
 class PolicyRLStrategy(IdeaStrategy):
@@ -71,24 +60,6 @@ class PolicyRLStrategy(IdeaStrategy):
             prediction.rank = idx
         return predictions
 
-    @staticmethod
-    def _load_local_policy(checkpoint_path: str) -> tuple[Any, Any]:
-        if checkpoint_path in _LOCAL_POLICY_CACHE:
-            return _LOCAL_POLICY_CACHE[checkpoint_path]
-        try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-        except ImportError as exc:  # pragma: no cover - depends on optional deps
-            raise RuntimeError(
-                "transformers is required to load a local RL checkpoint for policy_rl."
-            ) from exc
-
-        tokenizer = AutoTokenizer.from_pretrained(checkpoint_path)
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-        model = AutoModelForCausalLM.from_pretrained(checkpoint_path)
-        _LOCAL_POLICY_CACHE[checkpoint_path] = (model, tokenizer)
-        return model, tokenizer
-
     def _generate_from_local_checkpoint(
         self,
         train_papers: List[PaperRecord],
@@ -98,51 +69,26 @@ class PolicyRLStrategy(IdeaStrategy):
         checkpoint_path: str,
         predictor_config_path: str,
         temperature: float | None,
+        base_model_name: str | None,
     ) -> list[IdeaPrediction]:
-        model, tokenizer = self._load_local_policy(checkpoint_path)
-        predictor_config = load_predictor_config(predictor_config_path)
-        prompt = predictor_config.user_template.format(
-            domain=_infer_domain(train_papers),
-            horizon=f"the months after {cutoff_month}",
-            n_ideas=top_k,
-            abstracts=_build_abstract_block(train_papers, predictor_config.max_context_papers),
-            cutoff_month=cutoff_month,
-        )
-        full_prompt = f"{predictor_config.system_prompt}\n\n{prompt}".strip()
-        encoded = tokenizer(full_prompt, return_tensors="pt")
-        generation_kwargs = {
-            "max_new_tokens": 768,
-            "do_sample": temperature is not None and temperature > 0,
-            "temperature": temperature if temperature is not None else 1.0,
-            "pad_token_id": tokenizer.pad_token_id,
-        }
-        generated = model.generate(**encoded, **generation_kwargs)
-        decoded = tokenizer.decode(generated[0], skip_special_tokens=True)
-        raw_text = decoded[len(full_prompt) :].strip() if decoded.startswith(full_prompt) else decoded.strip()
-        payload = _extract_json_payload(raw_text)
-        items = _parse_prediction_items(payload)
+        from live_idea_bench.rl.local_generation import generate_local_predictions
 
-        predictions: list[IdeaPrediction] = []
-        for item in items:
-            title = str(item.get("title") or item.get("Title") or "").strip()
-            if not title:
-                continue
-            predictions.append(
-                IdeaPrediction(
-                    rank=len(predictions) + 1,
-                    title=title,
-                    rationale=str(item.get("rationale") or item.get("Rationale") or "").strip(),
-                    approach=str(item.get("approach") or item.get("Approach") or "").strip(),
-                    score=_coerce_score(item.get("score", item.get("Score", 0.5))),
-                    confidence=_coerce_score(
-                        item.get("confidence", item.get("Confidence", item.get("score", item.get("Score", 0.5))))
-                    ),
-                    key_terms=_coerce_key_terms(item.get("key_terms") or item.get("keywords")),
-                    metadata={"checkpoint_path": checkpoint_path},
-                )
-            )
-            if len(predictions) >= top_k:
-                break
+        predictions = generate_local_predictions(
+            train_papers=train_papers,
+            cutoff_month=cutoff_month,
+            top_k=top_k,
+            model_name_or_path=checkpoint_path,
+            predictor_config_path=predictor_config_path,
+            temperature=temperature,
+            max_new_tokens=768,
+            top_p=0.9,
+            sampling_top_k=40,
+            repetition_penalty=1.05,
+            seed=0,
+            base_model_name=base_model_name,
+        )
+        for prediction in predictions:
+            prediction.metadata.setdefault("checkpoint_path", checkpoint_path)
         return predictions
 
     def generate(
@@ -185,6 +131,9 @@ class PolicyRLStrategy(IdeaStrategy):
                 checkpoint_path=str(Path(checkpoint_path).expanduser()),
                 predictor_config_path=resolved_predictor_config,
                 temperature=resolved_temperature,
+                base_model_name=(
+                    str(manifest.get("inference_model_name") or "").strip() or None
+                ),
             )
             if predictions:
                 return predictions[:top_k]

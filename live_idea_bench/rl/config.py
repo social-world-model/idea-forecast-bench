@@ -12,9 +12,10 @@ DEFAULT_RL_CONFIG_DIR = PROJECT_ROOT / "config" / "rl"
 
 @dataclass
 class RewardWeights:
-    future_match: float = 0.6
+    future_match: float = 0.5
     novelty: float = 0.15
     specificity: float = 0.15
+    lead_time: float = 0.1
     duplicate_penalty: float = 0.1
 
 
@@ -34,7 +35,9 @@ class RewardConfig:
 @dataclass
 class EpisodeBuildConfig:
     top_k: int = 5
-    horizon_months: int = 3
+    past_window_months: int | None = 24
+    horizon_months: int = 6
+    step_months: int = 3
     min_train_papers: int = 6
     start_month: str | None = None
     end_month: str | None = None
@@ -44,13 +47,31 @@ class EpisodeBuildConfig:
 
 
 @dataclass
-class DPOTrainConfig:
+class CandidateGenerationConfig:
     num_candidate_lists: int = 8
+    ideas_per_list: int = 20
+    backend: str = "auto"
+    predictor_config: str = "predictor.yaml"
+    min_temperature: float = 0.55
+    max_temperature: float = 1.15
+    top_p: float = 0.9
+    top_k: int = 40
+    max_new_tokens: int = 1536
+    repetition_penalty: float = 1.05
+    seed: int = 7
+    enable_thinking: bool | None = False
+
+
+@dataclass
+class DPOTrainConfig:
     quantile_fraction: float = 0.25
     beta: float = 0.1
     per_device_batch_size: int = 1
+    gradient_accumulation_steps: int = 1
     num_train_epochs: int = 1
     learning_rate: float = 5e-5
+    max_length: int = 4096
+    logging_steps: int = 1
     lora_r: int = 16
     lora_alpha: int = 32
     lora_dropout: float = 0.05
@@ -59,16 +80,19 @@ class DPOTrainConfig:
 
 @dataclass
 class GRPOTrainConfig:
-    num_candidate_lists: int = 8
-    kl_coef: float = 0.05
-    clip_range: float = 0.2
     per_device_batch_size: int = 1
+    gradient_accumulation_steps: int = 1
     num_train_epochs: int = 1
-    learning_rate: float = 3e-5
+    learning_rate: float = 2e-6
+    num_generations: int = 8
+    max_completion_length: int = 1024
+    use_vllm: bool = False
+    vllm_gpu_memory_utilization: float = 0.4
     lora_r: int = 16
     lora_alpha: int = 32
     lora_dropout: float = 0.05
     reward_alignment_threshold: float = 0.5
+    logging_steps: int = 1
     dry_run: bool = False
 
 
@@ -107,6 +131,10 @@ def load_reward_config(name_or_path: str = "reward.yaml") -> RewardConfig:
 
 def load_episode_build_config(name_or_path: str = "episode_build.yaml") -> EpisodeBuildConfig:
     return _load_model_config(name_or_path, EpisodeBuildConfig)
+
+
+def load_candidate_generation_config(name_or_path: str = "candidate_generation.yaml") -> CandidateGenerationConfig:
+    return _load_model_config(name_or_path, CandidateGenerationConfig)
 
 
 def load_dpo_train_config(name_or_path: str = "dpo_train.yaml") -> DPOTrainConfig:

@@ -1,0 +1,270 @@
+# Backend Runbook
+
+This directory contains the Flask API for `live-idea-bench`, plus the Python dependency set used by the backend and the new RL training workflow.
+
+## What lives here
+
+- `backend/app.py`: Flask API entrypoint
+- `backend/strategy_store.py`: JSON-backed strategy persistence under `backend/strategies/`
+- `backend/requirements.txt`: backend dependencies, plus optional RL training stack
+- `backend/services/daily_pipeline.py`: daily ingest/eval/generate pipeline logic
+
+## 1. Environment setup
+
+From the repo root:
+
+```bash
+conda create -n live-idea-bench python=3.11 -y
+conda activate live-idea-bench
+pip install -r backend/requirements.txt
+```
+
+Notes:
+
+- `backend/requirements.txt` now includes the RL stack: `torch`, `transformers`, `datasets`, `peft`, `trl`, `accelerate`
+- On a Linux GPU server, you may want to install the CUDA-specific PyTorch build first, then install the rest of the requirements
+- `bitsandbytes` and `vllm` are Linux-only extras in the requirements file
+
+## 2. Required and useful environment variables
+
+Common variables:
+
+```bash
+export LIVE_IDEA_ADMIN_TOKEN="change-me"
+export LIVE_IDEA_BENCH_DATA_DIR="$(pwd)/data/arxiv_csml/raw_markdown"
+export PORT=5000
+export FLASK_DEBUG=0
+```
+
+Optional variables:
+
+- `LIVE_IDEA_CORS_ORIGINS`: comma-separated frontend origins; defaults include `localhost:3000` and `localhost:5173`
+- `LIVE_IDEA_BOOTSTRAP_BACKTEST=0`: disables startup backtest bootstrap
+- `LIVE_IDEA_PIPELINE_LOCK_TTL_SECONDS`: lock timeout for the daily pipeline
+
+Model API keys are only needed for API-backed strategies:
+
+```bash
+export OPENAI_API_KEY="..."
+export ANTHROPIC_API_KEY="..."
+export GOOGLE_API_KEY="..."
+```
+
+## 3. Start the backend
+
+From the repo root:
+
+```bash
+python backend/app.py
+```
+
+The backend listens on `http://localhost:5000` by default.
+
+Quick checks:
+
+```bash
+curl http://localhost:5000/healthz
+curl http://localhost:5000/metrics
+curl http://localhost:5000/api/strategies
+```
+
+## 4. Strategy API basics
+
+All write endpoints require the admin token in non-test environments:
+
+```bash
+-H "X-Live-Idea-Admin-Token: $LIVE_IDEA_ADMIN_TOKEN"
+```
+
+Create a simple keyword baseline:
+
+```bash
+curl -X POST http://localhost:5000/api/strategies \
+  -H "Content-Type: application/json" \
+  -H "X-Live-Idea-Admin-Token: $LIVE_IDEA_ADMIN_TOKEN" \
+  -d '{
+    "strategy_name": "keyword_trend",
+    "config": {
+      "top_k": 5,
+      "horizon_months": 3,
+      "end_month": "2024-09"
+    }
+  }'
+```
+
+Create an LLM predictor strategy:
+
+```bash
+curl -X POST http://localhost:5000/api/strategies \
+  -H "Content-Type: application/json" \
+  -H "X-Live-Idea-Admin-Token: $LIVE_IDEA_ADMIN_TOKEN" \
+  -d '{
+    "strategy_name": "predictor_llm",
+    "params": {
+      "model_name": "gpt-4o-mini",
+      "predictor_config": "predictor.yaml",
+      "similarity_config": "similarity.yaml",
+      "temperature": 0.7
+    },
+    "config": {
+      "top_k": 5,
+      "horizon_months": 3,
+      "end_month": "2024-09"
+    }
+  }'
+```
+
+Create an RL policy strategy from a trained manifest:
+
+```bash
+curl -X POST http://localhost:5000/api/strategies \
+  -H "Content-Type: application/json" \
+  -H "X-Live-Idea-Admin-Token: $LIVE_IDEA_ADMIN_TOKEN" \
+  -d '{
+    "strategy_name": "policy_rl",
+    "params": {
+      "policy_manifest_path": "/absolute/path/to/policy_manifest.json",
+      "predictor_config": "predictor.yaml",
+      "similarity_config": "similarity.yaml"
+    },
+    "config": {
+      "top_k": 5,
+      "horizon_months": 3,
+      "end_month": "2024-09"
+    }
+  }'
+```
+
+Run backtest for one strategy:
+
+```bash
+curl -X POST http://localhost:5000/api/strategies/<strategy_id>/backtest \
+  -H "X-Live-Idea-Admin-Token: $LIVE_IDEA_ADMIN_TOKEN"
+```
+
+Run generation for one cutoff:
+
+```bash
+curl -X POST http://localhost:5000/api/strategies/<strategy_id>/generate \
+  -H "Content-Type: application/json" \
+  -H "X-Live-Idea-Admin-Token: $LIVE_IDEA_ADMIN_TOKEN" \
+  -d '{"cutoff_date": "2024-06-01"}'
+```
+
+Check status:
+
+```bash
+curl http://localhost:5000/api/strategies/<strategy_id>/status
+curl http://localhost:5000/api/strategies/<strategy_id>
+```
+
+## 5. Offline CLI commands
+
+The repo also includes two useful offline commands.
+
+Generate/backtest without the API:
+
+```bash
+bash scripts/research_idea_engine.sh \
+  --input-dir data/arxiv_csml/raw_markdown \
+  --strategy predictor_llm \
+  --model-name gpt-4o-mini \
+  backtest \
+  --horizon-months 3 \
+  --output /tmp/backtest.json
+```
+
+Use a trained RL policy manifest with the same CLI:
+
+```bash
+bash scripts/research_idea_engine.sh \
+  --input-dir data/arxiv_csml/raw_markdown \
+  --strategy policy_rl \
+  --policy-manifest-path /absolute/path/to/policy_manifest.json \
+  generate \
+  --cutoff-month 2024-06 \
+  --output /tmp/policy_rl_generate.json
+```
+
+## 6. RL training workflow
+
+List the built-in small-model presets:
+
+```bash
+python examples/run_policy_rl_training.py --list-model-presets
+```
+
+Recommended first choices:
+
+- `qwen2.5-3b-instruct`
+- `qwen3-4b-instruct-2507`
+- `llama3.2-3b-instruct` as a comparison baseline
+
+Prepare RL artifacts only:
+
+```bash
+bash scripts/run_policy_rl_training.sh \
+  --input-dir data/arxiv_csml/raw_markdown \
+  --model-preset qwen3-4b-instruct-2507 \
+  --stage prepare \
+  --split train \
+  --output-dir data/rl_runs/qwen3_4b_prepare
+```
+
+Run DPO training:
+
+```bash
+bash scripts/run_policy_rl_training.sh \
+  --input-dir data/arxiv_csml/raw_markdown \
+  --model-preset qwen2.5-3b-instruct \
+  --stage dpo \
+  --split train \
+  --output-dir data/rl_runs/qwen25_3b_dpo
+```
+
+Run both DPO and GRPO in one pass:
+
+```bash
+bash scripts/run_policy_rl_training.sh \
+  --input-dir data/arxiv_csml/raw_markdown \
+  --model-preset qwen3-4b-instruct-2507 \
+  --stage both \
+  --split train \
+  --output-dir data/rl_runs/qwen3_4b_full
+```
+
+Important notes:
+
+- `prepare` writes `episodes.json`, `candidate_rollouts.json`, `dpo_pairs.jsonl`, `grpo_prompts.jsonl`, and `pipeline_manifest.json`
+- `dpo` trains from offline preference pairs
+- `grpo` uses prompt-only rows plus the repo's reward callback, matching current TRL usage more closely than offline advantage replay
+- `policy_manifest.json` under the run output is what the `policy_rl` strategy consumes later
+
+## 7. Daily pipeline
+
+If you want to run the daily ingest/eval/generate flow directly:
+
+```bash
+python -c "from backend.services.daily_pipeline import run_daily_pipeline; print(run_daily_pipeline())"
+```
+
+This will ingest fresh arXiv papers, score yesterday's generation, update leaderboard state, and generate the next cutoff.
+
+## 8. Docker
+
+Build and run:
+
+```bash
+docker build -t live-idea-bench-backend -f backend/Dockerfile .
+docker run --rm -p 5000:5000 \
+  -e LIVE_IDEA_ADMIN_TOKEN=change-me \
+  -e OPENAI_API_KEY=$OPENAI_API_KEY \
+  live-idea-bench-backend
+```
+
+## 9. Default paths
+
+- Default paper directory: `data/arxiv_csml/raw_markdown`
+- Default strategy store: `backend/strategies/`
+- Default backend port: `5000`
+- Default RL output example: `data/rl_runs/...`
