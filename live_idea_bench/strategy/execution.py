@@ -51,6 +51,11 @@ def build_strategy(strategy_record: dict[str, Any]):
             if params.get("temperature") is not None
             else None
         ),
+        policy_manifest_path=(
+            str(params.get("policy_manifest_path"))
+            if params.get("policy_manifest_path") not in {None, ""}
+            else None
+        ),
     )
 
 

@@ -7,8 +7,18 @@ from typing import Iterable, Optional
 
 from live_idea_bench.config import Config, SimilarityConfig, load_runtime_config, load_similarity_config
 from live_idea_bench.llm import create_client, get_response_from_llm
-from live_idea_bench.models import EvaluationResult, IdeaPrediction, MatchResult, PaperRecord
-from live_idea_bench.papers import clean_paper_content, read_file_content
+from live_idea_bench.models import (
+    EvaluationResult,
+    IdeaPrediction,
+    MatchResult,
+    PaperRecord,
+    PredictionMatchDetail,
+    ScoredPredictionList,
+)
+from live_idea_bench.papers import (
+    date_to_ordinal,
+    get_paper_published_date,
+)
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -162,6 +172,173 @@ def is_match(
     )
 
 
+def _prefilter_future_papers(
+    prediction_text: str,
+    future_papers: Iterable[PaperRecord],
+    *,
+    candidate_limit: int | None,
+) -> list[PaperRecord]:
+    pool = list(future_papers)
+    if candidate_limit is None or candidate_limit <= 0 or len(pool) <= candidate_limit:
+        return pool
+
+    ranked = sorted(
+        pool,
+        key=lambda paper: max(
+            _hybrid_similarity(prediction_text, paper_text(paper)),
+            _keyword_overlap(prediction_text, paper_text(paper)),
+        ),
+        reverse=True,
+    )
+    return ranked[:candidate_limit]
+
+
+def _lead_time_fraction(
+    paper: PaperRecord,
+    *,
+    cutoff_date: str | None,
+    future_end_date: str | None,
+) -> float:
+    if not cutoff_date or not future_end_date:
+        return 0.0
+    cutoff_ord = date_to_ordinal(cutoff_date)
+    future_end_ord = date_to_ordinal(future_end_date)
+    horizon = max(1, future_end_ord - cutoff_ord)
+    lead_time_days = max(0, date_to_ordinal(get_paper_published_date(paper)) - cutoff_ord)
+    return max(0.0, min(1.0, lead_time_days / horizon))
+
+
+def score_prediction_list(
+    predictions: list[IdeaPrediction],
+    train_papers: list[PaperRecord],
+    future_papers: list[PaperRecord],
+    k: int,
+    *,
+    similarity_config_path: str = "similarity.yaml",
+    runtime_config_path: str | None = None,
+    model_name: str | None = None,
+    cutoff_date: str | None = None,
+    future_end_date: str | None = None,
+    candidate_limit: int | None = None,
+) -> ScoredPredictionList:
+    similarity_config = load_similarity_config(similarity_config_path)
+    runtime_config = load_runtime_config(runtime_config_path)
+    top_preds = predictions[:k]
+
+    matched_ranks: list[int] = []
+    matched_paper_ids: list[str] = []
+    matched_lead_times: list[float] = []
+    matches: list[PredictionMatchDetail] = []
+    used_paper_ids: set[str] = set()
+    duplicate_blocked = 0
+
+    for pred in top_preds:
+        pred_text = idea_text(pred)
+        candidate_papers = _prefilter_future_papers(
+            pred_text,
+            future_papers,
+            candidate_limit=candidate_limit,
+        )
+        scored_candidates: list[tuple[PaperRecord, MatchResult, bool]] = []
+        for paper in candidate_papers:
+            paper_body = paper_text(paper)
+            result = compute_similarity(
+                pred_text,
+                paper_body,
+                similarity_config,
+                runtime_config,
+                model_name=model_name,
+            )
+            result.paper_id = paper.paper_id
+            scored_candidates.append(
+                (
+                    paper,
+                    result,
+                    is_match(result, pred_text, paper_body, similarity_config),
+                )
+            )
+
+        scored_candidates.sort(key=lambda item: (item[1].score, item[0].paper_id), reverse=True)
+
+        duplicate_candidate_ids = [
+            paper.paper_id
+            for paper, result, matched in scored_candidates
+            if matched and paper.paper_id in used_paper_ids and result.paper_id
+        ]
+
+        selected: tuple[PaperRecord, MatchResult, bool] | None = None
+        for paper, result, matched in scored_candidates:
+            if not matched or paper.paper_id in used_paper_ids:
+                continue
+            selected = (paper, result, matched)
+            break
+
+        if selected is None:
+            if duplicate_candidate_ids:
+                duplicate_blocked += 1
+            matches.append(
+                PredictionMatchDetail(
+                    prediction_rank=pred.rank,
+                    prediction_title=pred.title,
+                    score=0.0,
+                    is_match=False,
+                    duplicate_candidate_paper_ids=duplicate_candidate_ids,
+                )
+            )
+            continue
+
+        paper, result, _ = selected
+        used_paper_ids.add(paper.paper_id)
+        matched_ranks.append(pred.rank)
+        matched_paper_ids.append(paper.paper_id)
+        lead_time = _lead_time_fraction(
+            paper,
+            cutoff_date=cutoff_date,
+            future_end_date=future_end_date,
+        )
+        matched_lead_times.append(lead_time)
+        matches.append(
+            PredictionMatchDetail(
+                prediction_rank=pred.rank,
+                prediction_title=pred.title,
+                paper_id=paper.paper_id,
+                score=round(result.score, 4),
+                is_match=True,
+                lead_time=round(lead_time, 4),
+                matched_reasoning=result.reasoning,
+                duplicate_candidate_paper_ids=duplicate_candidate_ids,
+            )
+        )
+
+    hit_at_k = 1.0 if matched_ranks else 0.0
+    recall_at_k = (len(matched_paper_ids) / len(future_papers)) if future_papers else 0.0
+    precision_at_k = (len(matched_paper_ids) / max(1, min(k, len(top_preds)))) if top_preds else 0.0
+    mrr = (1.0 / min(matched_ranks)) if matched_ranks else 0.0
+    novelty = _novelty_at_k(top_preds, [paper_text(paper) for paper in train_papers], k)
+    diversity = _diversity_at_k(top_preds, k)
+    lead_time = sum(matched_lead_times) / len(matched_lead_times) if matched_lead_times else 0.0
+    duplicate_rate = (duplicate_blocked / len(top_preds)) if top_preds else 0.0
+
+    return ScoredPredictionList(
+        evaluation=EvaluationResult(
+            hit_at_k=round(hit_at_k, 4),
+            recall_at_k=round(recall_at_k, 4),
+            precision_at_k=round(precision_at_k, 4),
+            mrr=round(mrr, 4),
+            novelty=round(novelty, 4),
+            diversity=round(diversity, 4),
+            matched_prediction_ranks=matched_ranks,
+            matched_paper_ids=matched_paper_ids,
+            lead_time=round(lead_time, 4),
+            duplicate_rate=round(duplicate_rate, 4),
+        ),
+        matches=matches,
+        unmatched_future_paper_ids=[
+            paper.paper_id for paper in future_papers if paper.paper_id not in used_paper_ids
+        ],
+    )
+
+
 def best_paper_match(
     prediction: IdeaPrediction,
     future_papers: Iterable[PaperRecord],
@@ -174,7 +351,7 @@ def best_paper_match(
     resolved_runtime = runtime_config or load_runtime_config()
     pred_text = idea_text(prediction)
     best: MatchResult | None = None
-    for paper in future_papers:
+    for paper in _prefilter_future_papers(pred_text, future_papers, candidate_limit=None):
         result = compute_similarity(
             pred_text,
             paper_text(paper),
@@ -225,53 +402,22 @@ def evaluate_predictions(
     similarity_config_path: str = "similarity.yaml",
     runtime_config_path: str | None = None,
     model_name: str | None = None,
+    cutoff_date: str | None = None,
+    future_end_date: str | None = None,
+    candidate_limit: int | None = None,
 ) -> EvaluationResult:
-    similarity_config = load_similarity_config(similarity_config_path)
-    runtime_config = load_runtime_config(runtime_config_path)
-    top_preds = predictions[:k]
-
-    matched_ranks: list[int] = []
-    matched_paper_ids: list[str] = []
-    seen_paper_ids: set[str] = set()
-
-    for pred in top_preds:
-        match = best_paper_match(
-            pred,
-            future_papers,
-            similarity_config=similarity_config,
-            runtime_config=runtime_config,
-            model_name=model_name,
-        )
-        if match is None or not match.paper_id:
-            continue
-        future_paper = next((paper for paper in future_papers if paper.paper_id == match.paper_id), None)
-        if future_paper is None:
-            continue
-        pred_text = idea_text(pred)
-        paper_body = paper_text(future_paper)
-        if is_match(match, pred_text, paper_body, similarity_config):
-            matched_ranks.append(pred.rank)
-            if future_paper.paper_id not in seen_paper_ids:
-                seen_paper_ids.add(future_paper.paper_id)
-                matched_paper_ids.append(future_paper.paper_id)
-
-    hit_at_k = 1.0 if matched_ranks else 0.0
-    recall_at_k = (len(matched_paper_ids) / len(future_papers)) if future_papers else 0.0
-    precision_at_k = (len(matched_ranks) / max(1, min(k, len(top_preds)))) if top_preds else 0.0
-    mrr = (1.0 / min(matched_ranks)) if matched_ranks else 0.0
-    novelty = _novelty_at_k(top_preds, [paper_text(paper) for paper in train_papers], k)
-    diversity = _diversity_at_k(top_preds, k)
-
-    return EvaluationResult(
-        hit_at_k=round(hit_at_k, 4),
-        recall_at_k=round(recall_at_k, 4),
-        precision_at_k=round(precision_at_k, 4),
-        mrr=round(mrr, 4),
-        novelty=round(novelty, 4),
-        diversity=round(diversity, 4),
-        matched_prediction_ranks=matched_ranks,
-        matched_paper_ids=matched_paper_ids,
-    )
+    return score_prediction_list(
+        predictions=predictions,
+        train_papers=train_papers,
+        future_papers=future_papers,
+        k=k,
+        similarity_config_path=similarity_config_path,
+        runtime_config_path=runtime_config_path,
+        model_name=model_name,
+        cutoff_date=cutoff_date,
+        future_end_date=future_end_date,
+        candidate_limit=candidate_limit,
+    ).evaluation
 
 
 def serialize_evaluation(result: EvaluationResult) -> dict[str, object]:

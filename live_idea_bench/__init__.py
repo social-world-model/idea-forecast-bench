@@ -35,6 +35,8 @@ from live_idea_bench.models import (
     IdeaPrediction,
     MatchResult,
     PaperRecord,
+    PredictionMatchDetail,
+    ScoredPredictionList,
     SimilarityPrompt,
 )
 from live_idea_bench.papers import (
@@ -58,10 +60,11 @@ from live_idea_bench.papers import (
     truncate,
 )
 from live_idea_bench.predictor import extract_abstract, generate_predictions
-from live_idea_bench.similarity import evaluate_predictions
+from live_idea_bench.similarity import evaluate_predictions, score_prediction_list
 from live_idea_bench.strategy import (
     IdeaStrategy,
     KeywordTrendStrategy,
+    PolicyRLStrategy,
     PredictorLLMStrategy,
     create_strategy,
 )
@@ -83,9 +86,12 @@ __all__ = [
     "KeywordTrendStrategy",
     "MatchResult",
     "PaperRecord",
+    "PolicyRLStrategy",
     "PredictorConfig",
     "PredictorLLMStrategy",
+    "PredictionMatchDetail",
     "PromptTemplate",
+    "ScoredPredictionList",
     "SimilarityConfig",
     "SimilarityPrompt",
     "TimeWindow",
@@ -130,5 +136,6 @@ __all__ = [
     "run_strategy_backtest",
     "run_strategy_generation",
     "save_json",
+    "score_prediction_list",
     "truncate",
 ]
