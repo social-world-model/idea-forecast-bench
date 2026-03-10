@@ -264,6 +264,27 @@ def _extract_keywords(metadata: Dict[str, object]) -> List[str]:
     return []
 
 
+_TITLE_STOP_WORDS = frozenset({
+    "a", "an", "the", "of", "for", "in", "on", "with", "and", "or", "to",
+    "is", "by", "from", "at", "its", "via", "are", "we", "our", "can",
+    "be", "has", "have", "this", "that", "it", "not", "but", "as", "do",
+    "how", "what", "which", "into", "over", "new", "more", "than",
+})
+
+
+def _keywords_from_title(title: str) -> List[str]:
+    tokens = re.findall(r"[A-Za-z][A-Za-z0-9]+", title)
+    seen: set = set()
+    keywords: List[str] = []
+    for token in tokens:
+        low = token.lower()
+        if low in _TITLE_STOP_WORDS or len(low) < 3 or low in seen:
+            continue
+        seen.add(low)
+        keywords.append(low)
+    return keywords
+
+
 def _extract_title(metadata: Dict[str, object], body: str, path: Path) -> str:
     title = metadata.get("title")
     if isinstance(title, str) and title.strip():
@@ -281,7 +302,10 @@ def parse_markdown_paper(path: Path) -> Optional[PaperRecord]:
         return None
 
     metadata, body = _extract_front_matter_and_body(text)
-    published_date = _extract_published_date(metadata, path)
+    try:
+        published_date = _extract_published_date(metadata, path)
+    except ValueError:
+        return None
     month = normalize_month(published_date)
 
     summary = _extract_section(body, "Summary")
@@ -293,6 +317,8 @@ def parse_markdown_paper(path: Path) -> Optional[PaperRecord]:
     paper_id = str(metadata.get("paper_id") or path.stem)
     title = _extract_title(metadata, body, path)
     keywords = _extract_keywords(metadata)
+    if not keywords:
+        keywords = _keywords_from_title(title)
 
     return PaperRecord(
         paper_id=paper_id,

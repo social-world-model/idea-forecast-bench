@@ -59,12 +59,12 @@ class KeywordTrendStrategy(IdeaStrategy):
         if not overall:
             return []
 
-        scored: List[Dict[str, float]] = []
+        scored: List[Dict[str, object]] = []
         for keyword, total_count in overall.items():
             if total_count < self.min_keyword_freq:
                 continue
             recent_count = recent.get(keyword, 0)
-            trend_gain = recent_count - max(1, total_count // self.recent_months) 
+            trend_gain = recent_count - max(1, total_count // self.recent_months)
             score = float(recent_count * 2 + trend_gain)
             scored.append(
                 {
