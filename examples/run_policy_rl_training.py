@@ -14,13 +14,9 @@ from live_idea_bench.rl import (  # noqa: E402
     load_grpo_train_config,
     load_reward_config,
 )
+from live_idea_bench.rl.io import _write_json  # noqa: E402
 from live_idea_bench.rl.model_zoo import list_small_model_payloads, resolve_small_model  # noqa: E402
 from live_idea_bench.rl.pipeline import run_policy_rl_pipeline  # noqa: E402
-
-
-def _write_json(path: Path, payload: dict[str, object]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import dataclasses
 import importlib
+import logging
+import threading
 from typing import Any
 
 from live_idea_bench.config import load_predictor_config
@@ -15,6 +18,8 @@ from live_idea_bench.predictor import (
 )
 
 _LOCAL_MODEL_CACHE: dict[tuple[str, str | None], tuple[Any, Any]] = {}
+_LOCAL_MODEL_CACHE_LOCK = threading.Lock()
+logger = logging.getLogger(__name__)
 
 
 def build_prediction_prompt(
@@ -68,7 +73,8 @@ def parse_completion_predictions(raw_completion: Any, *, limit: int) -> list[Ide
     try:
         payload = _extract_json_payload(raw_text)
         items = _parse_prediction_items(payload)
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to parse completion predictions: %s", exc)
         return []
 
     predictions: list[IdeaPrediction] = []
@@ -78,8 +84,7 @@ def parse_completion_predictions(raw_completion: Any, *, limit: int) -> list[Ide
         prediction = coerce_prediction(item, idx)
         if not prediction.title.strip():
             continue
-        prediction.rank = len(predictions) + 1
-        predictions.append(prediction)
+        predictions.append(dataclasses.replace(prediction, rank=len(predictions) + 1))
         if len(predictions) >= limit:
             break
     return predictions
@@ -106,35 +111,39 @@ def _load_local_model(model_name_or_path: str, *, base_model_name: str | None = 
     if cache_key in _LOCAL_MODEL_CACHE:
         return _LOCAL_MODEL_CACHE[cache_key]
 
-    deps = _require_local_generation_stack()
-    tokenizer_source = base_model_name or model_name_or_path
-    tokenizer = deps["AutoTokenizer"].from_pretrained(tokenizer_source)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    with _LOCAL_MODEL_CACHE_LOCK:
+        if cache_key in _LOCAL_MODEL_CACHE:
+            return _LOCAL_MODEL_CACHE[cache_key]
 
-    if base_model_name:
-        try:
-            peft = importlib.import_module("peft")
-        except ImportError as exc:
-            raise RuntimeError(
-                "Loading LoRA adapters for local RL inference requires peft to be installed."
-            ) from exc
-        peft_model = getattr(peft, "PeftModel")
-        model = deps["AutoModelForCausalLM"].from_pretrained(
-            base_model_name,
-            torch_dtype="auto",
-            device_map="auto",
-        )
-        model = peft_model.from_pretrained(model, model_name_or_path)
-    else:
-        model = deps["AutoModelForCausalLM"].from_pretrained(
-            model_name_or_path,
-            torch_dtype="auto",
-            device_map="auto",
-        )
+        deps = _require_local_generation_stack()
+        tokenizer_source = base_model_name or model_name_or_path
+        tokenizer = deps["AutoTokenizer"].from_pretrained(tokenizer_source)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
 
-    _LOCAL_MODEL_CACHE[cache_key] = (model, tokenizer)
-    return model, tokenizer
+        if base_model_name:
+            try:
+                peft = importlib.import_module("peft")
+            except ImportError as exc:
+                raise RuntimeError(
+                    "Loading LoRA adapters for local RL inference requires peft to be installed."
+                ) from exc
+            peft_model = getattr(peft, "PeftModel")
+            model = deps["AutoModelForCausalLM"].from_pretrained(
+                base_model_name,
+                torch_dtype="auto",
+                device_map="auto",
+            )
+            model = peft_model.from_pretrained(model, model_name_or_path)
+        else:
+            model = deps["AutoModelForCausalLM"].from_pretrained(
+                model_name_or_path,
+                torch_dtype="auto",
+                device_map="auto",
+            )
+
+        _LOCAL_MODEL_CACHE[cache_key] = (model, tokenizer)
+        return model, tokenizer
 
 
 def _apply_chat_template(tokenizer: Any, full_prompt: str, enable_thinking: bool | None) -> str:
@@ -209,9 +218,10 @@ def generate_local_predictions(
     if not predictions:
         predictions = _heuristic_predictions(train_papers, cutoff_month, top_k)
 
+    result: list[IdeaPrediction] = []
     for idx, prediction in enumerate(predictions[:top_k], start=1):
-        prediction.rank = idx
-        prediction.metadata.setdefault("local_model_name", model_name_or_path)
+        new_metadata = {**prediction.metadata, "local_model_name": model_name_or_path}
         if base_model_name:
-            prediction.metadata.setdefault("base_model_name", base_model_name)
-    return predictions[:top_k]
+            new_metadata.setdefault("base_model_name", base_model_name)
+        result.append(dataclasses.replace(prediction, rank=idx, metadata=new_metadata))
+    return result

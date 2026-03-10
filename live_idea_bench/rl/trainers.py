@@ -6,19 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from live_idea_bench.rl.config import DPOTrainConfig, GRPOTrainConfig, RewardConfig
+from live_idea_bench.rl.io import _write_json, _write_jsonl
 from live_idea_bench.rl.reward import build_grpo_reward_function
-
-
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-
-
-def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as fh:
-        for row in rows:
-            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
 def _require_trl_stack() -> dict[str, Any]:

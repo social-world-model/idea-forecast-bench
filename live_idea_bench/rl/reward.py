@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
 import math
 import re
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable, Sequence
 
 from live_idea_bench.models import EvaluationResult, IdeaPrediction, PaperRecord, PredictionMatchDetail
+
+logger = logging.getLogger(__name__)
 from live_idea_bench.rl.config import RewardConfig
 from live_idea_bench.rl.local_generation import parse_completion_predictions
 from live_idea_bench.similarity import idea_text, paper_text, score_prediction_list
@@ -199,9 +203,7 @@ def evaluate_rl_reward(
 
 
 def serialize_reward_evaluation(result: RLRewardEvaluation) -> dict[str, Any]:
-    payload = asdict(result)
-    payload["benchmark_evaluation"] = asdict(result.benchmark_evaluation)
-    return payload
+    return asdict(result)
 
 
 def spearman_correlation(xs: Sequence[float], ys: Sequence[float]) -> float:
@@ -242,7 +244,7 @@ def build_grpo_reward_function(
     similarity_config_path: str = "similarity.yaml",
     runtime_config_path: str | None = None,
     model_name: str | None = None,
-):
+) -> Callable[..., list[float]]:
     def reward_func(
         completions: Sequence[Any],
         train_papers: Sequence[list[dict[str, Any]]] | None = None,
@@ -259,8 +261,13 @@ def build_grpo_reward_function(
             future_payload = _value_for_index(future_papers, idx, total) or []
             cutoff_value = _value_for_index(cutoff_date, idx, total)
             future_end_value = _value_for_index(future_end_date, idx, total)
-            reconstructed_train = [PaperRecord(**paper) for paper in train_payload]
-            reconstructed_future = [PaperRecord(**paper) for paper in future_payload]
+            try:
+                reconstructed_train = [PaperRecord(**paper) for paper in train_payload]
+                reconstructed_future = [PaperRecord(**paper) for paper in future_payload]
+            except (TypeError, KeyError) as exc:
+                logger.warning("Failed to reconstruct PaperRecord at index %d: %s", idx, exc)
+                rewards.append(0.0)
+                continue
             if not predictions:
                 rewards.append(0.0)
                 continue

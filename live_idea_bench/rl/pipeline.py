@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -19,19 +18,8 @@ from live_idea_bench.rl.episodes import RLEpisode, build_rl_episodes, serialize_
 from live_idea_bench.rl.local_generation import build_prediction_prompt, generate_local_predictions
 from live_idea_bench.rl.model_zoo import list_small_model_payloads
 from live_idea_bench.rl.reward import evaluate_rl_reward, serialize_reward_evaluation
+from live_idea_bench.rl.io import _write_json, _write_jsonl
 from live_idea_bench.rl.trainers import train_dpo_with_trl, train_grpo_with_trl
-
-
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-
-
-def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as fh:
-        for row in rows:
-            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
 def _paper_lookup(papers: list[PaperRecord]) -> dict[str, PaperRecord]:

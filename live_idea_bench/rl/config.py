@@ -112,6 +112,11 @@ def _resolve_rl_config_path(name_or_path: str) -> Path:
     path = Path(raw)
     if path.is_absolute():
         return path
+    if path.parts[:-1]:  # has parent dirs
+        raise ValueError(
+            f"Relative RL config path must be a plain filename, not a path with directories: {raw!r}. "
+            "Use an absolute path to reference files outside the default config directory."
+        )
     return (DEFAULT_RL_CONFIG_DIR / path.name).resolve()
 
 
@@ -121,8 +126,20 @@ def _load_model_config(name_or_path: str, model_class: type[Any]) -> Any:
         weights_payload = payload.pop("weights", {}) or {}
         if not isinstance(weights_payload, dict):
             raise ValueError("reward weights must be a mapping")
-        return RewardConfig(weights=RewardWeights(**weights_payload), **payload)
-    return model_class(**payload)
+        try:
+            return RewardConfig(weights=RewardWeights(**weights_payload), **payload)
+        except TypeError as exc:
+            raise ValueError(
+                f"Invalid config for {RewardConfig.__name__}: {exc}. "
+                f"Check the YAML file at {name_or_path!r} for unknown or missing keys."
+            ) from exc
+    try:
+        return model_class(**payload)
+    except TypeError as exc:
+        raise ValueError(
+            f"Invalid config for {model_class.__name__}: {exc}. "
+            f"Check the YAML file at {name_or_path!r} for unknown or missing keys."
+        ) from exc
 
 
 def load_reward_config(name_or_path: str = "reward.yaml") -> RewardConfig:

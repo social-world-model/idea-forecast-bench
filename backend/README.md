@@ -1,17 +1,18 @@
 # Backend Runbook
 
-This directory contains the Flask API for `live-idea-bench`, plus the Python dependency set used by the backend and the new RL training workflow.
+This directory contains the Flask API for `live-idea-bench`, plus the backend dependency file and the separate RL setup flow.
 
 ## What lives here
 
 - `backend/app.py`: Flask API entrypoint
 - `backend/strategy_store.py`: JSON-backed strategy persistence under `backend/strategies/`
-- `backend/requirements.txt`: backend dependencies, plus optional RL training stack
+- `backend/requirements.txt`: backend-only dependencies
+- `scripts/setup_rl_a100_env.sh`: installs the separate RL stack for Linux + A100
 - `backend/services/daily_pipeline.py`: daily ingest/eval/generate pipeline logic
 
 ## 1. Environment setup
 
-From the repo root:
+Backend environment from the repo root:
 
 ```bash
 conda create -n live-idea-bench python=3.11 -y
@@ -21,9 +22,22 @@ pip install -r backend/requirements.txt
 
 Notes:
 
-- `backend/requirements.txt` now includes the RL stack: `torch`, `transformers`, `datasets`, `peft`, `trl`, `accelerate`
-- On a Linux GPU server, you may want to install the CUDA-specific PyTorch build first, then install the rest of the requirements
-- `bitsandbytes` and `vllm` are Linux-only extras in the requirements file
+- `backend/requirements.txt` is intentionally backend-only; it does not install `torch`, `trl`, or the local HuggingFace RL stack
+- The backend Docker image uses this file, so the default API runtime stays lightweight
+
+Separate RL environment for Linux + A100:
+
+```bash
+conda create -n live-idea-bench-rl python=3.11 -y
+conda activate live-idea-bench-rl
+bash scripts/setup_rl_a100_env.sh
+```
+
+RL notes:
+
+- `scripts/setup_rl_a100_env.sh` installs the dedicated training/inference stack for local HuggingFace RL on Linux + A100
+- It installs `torch==2.6.0+cu124` by default
+- `bitsandbytes` and `vllm` stay Linux-only
 
 ## 2. Required and useful environment variables
 
@@ -187,6 +201,8 @@ bash scripts/research_idea_engine.sh \
 ```
 
 ## 6. RL training workflow
+
+Run the RL workflow inside the separate RL environment.
 
 List the built-in small-model presets:
 
