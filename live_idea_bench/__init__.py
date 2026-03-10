@@ -15,12 +15,14 @@ from live_idea_bench.config import (
     PredictorConfig,
     PromptTemplate,
     SimilarityConfig,
+    TopicDefinition,
     get_prompt_policy,
     get_prompt_template,
     list_prompts,
     load_predictor_config,
     load_runtime_config,
     load_similarity_config,
+    load_topics,
 )
 from live_idea_bench.daily import (
     coerce_prediction,
@@ -73,6 +75,7 @@ from live_idea_bench.strategy.execution import (
     run_strategy_backtest,
     run_strategy_generation,
 )
+from live_idea_bench.topics import classify_paper_topics, classify_papers_by_topic, normalize_topic_text
 
 __all__ = [
     "BacktestConfig",
@@ -94,6 +97,7 @@ __all__ = [
     "ScoredPredictionList",
     "SimilarityConfig",
     "SimilarityPrompt",
+    "TopicDefinition",
     "TimeWindow",
     "add_months",
     "backtest",
@@ -124,11 +128,13 @@ __all__ = [
     "load_predictor_config",
     "load_runtime_config",
     "load_similarity_config",
+    "load_topics",
     "month_end_date",
     "month_start_date",
     "month_to_index",
     "normalize_date",
     "normalize_month",
+    "normalize_topic_text",
     "parse_markdown_paper",
     "read_file_content",
     "read_text",
@@ -137,5 +143,7 @@ __all__ = [
     "run_strategy_generation",
     "save_json",
     "score_prediction_list",
+    "classify_paper_topics",
+    "classify_papers_by_topic",
     "truncate",
 ]

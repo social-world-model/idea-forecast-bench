@@ -12,3 +12,67 @@ embedding:
   introduction_weight: 0.2
   method_weight: 0.2
   conclusion_weight: 0.2
+
+topics:
+  - id: "diffusion_language_model"
+    name: "Diffusion Language Model"
+    aliases:
+      - "diffusion language model"
+      - "diffusion lm"
+      - "diffusion llm"
+      - "text diffusion"
+    keywords:
+      - "discrete diffusion"
+      - "masked diffusion"
+      - "diffusion transformer"
+      - "language diffusion"
+  - id: "multimodal_visual_reasoning"
+    name: "Multimodal Visual Reasoning"
+    aliases:
+      - "multimodal visual reasoning"
+      - "visual reasoning"
+      - "vision language reasoning"
+      - "image reasoning"
+    keywords:
+      - "vision-language"
+      - "vqa"
+      - "chart reasoning"
+      - "document reasoning"
+      - "multimodal reasoning"
+  - id: "gui_computer_use_web_agent"
+    name: "GUI / Computer Use / Web Agent"
+    aliases:
+      - "gui agent"
+      - "computer use"
+      - "web agent"
+      - "browser agent"
+    keywords:
+      - "web navigation"
+      - "browser automation"
+      - "computer-use"
+      - "gui grounding"
+      - "agentic browsing"
+  - id: "optimizer"
+    name: "Optimizer"
+    aliases:
+      - "optimizer"
+      - "optimization"
+      - "optimization algorithm"
+    keywords:
+      - "gradient descent"
+      - "adam"
+      - "adamw"
+      - "sgd"
+      - "training dynamics"
+  - id: "time_series_forecasting"
+    name: "Time-series Forecasting"
+    aliases:
+      - "time-series forecasting"
+      - "time series forecasting"
+      - "time series"
+    keywords:
+      - "temporal forecasting"
+      - "multivariate forecasting"
+      - "long-term forecasting"
+      - "sequence forecasting"
+      - "timeseries"

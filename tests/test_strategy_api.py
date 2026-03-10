@@ -28,6 +28,7 @@ def test_strategy_crud_and_status(monkeypatch, tmp_path) -> None:
     created = create_resp.get_json()
     strategy_id = created["id"]
     assert created["strategy_name"] == "keyword_trend"
+    assert created["topic_runs"] == []
 
     get_resp = client.get(f"/api/strategies/{strategy_id}")
     assert get_resp.status_code == 200
@@ -293,6 +294,7 @@ def test_run_generation_sync_real_worker(monkeypatch, tmp_path) -> None:
     signature (missing top_k) or no paper filtering.
     """
     from backend import strategy_store
+    from live_idea_bench.config import TopicDefinition
     from live_idea_bench.models import PaperRecord
     from live_idea_bench.strategy.keyword_trend import KeywordTrendStrategy
 
@@ -319,6 +321,11 @@ def test_run_generation_sync_real_worker(monkeypatch, tmp_path) -> None:
         strategy_store, "_make_strategy_obj",
         lambda s: KeywordTrendStrategy(recent_months=3, min_keyword_freq=1),
     )
+    monkeypatch.setattr(
+        strategy_store,
+        "load_topics",
+        lambda: [TopicDefinition(id="diffusion", name="Diffusion", keywords=["diffusion"])],
+    )
 
     # Create a strategy record in the isolated store
     s = strategy_store.create_strategy({
@@ -334,7 +341,11 @@ def test_run_generation_sync_real_worker(monkeypatch, tmp_path) -> None:
     assert record["generation_status"] == "done", (
         f"Expected done, got {record['generation_status']}: {record.get('generation_error')}"
     )
-    gen = record["generation"]
+    assert record["generation"] is None
+    assert len(record["topic_runs"]) == 1
+    topic_run = record["topic_runs"][0]
+    gen = topic_run["generation"]
+    assert topic_run["generation_status"] == "done"
     assert gen["cutoff_month"] == "2024-06"
     assert gen["cutoff_date"] == "2024-06-30"
     assert isinstance(gen["predictions"], list)
@@ -534,5 +545,7 @@ def test_strategy_response_includes_daily_fields(monkeypatch, tmp_path) -> None:
     assert "daily_evaluation" in detail
     assert "last_daily_run_at" in detail
     assert "last_generation_cutoff_month" in detail
+    assert "topic_runs" in detail
     assert detail["leaderboard_score"] is None
     assert detail["daily_evaluation"] is None
+    assert detail["topic_runs"] == []

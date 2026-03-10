@@ -11,6 +11,90 @@ from live_idea_bench.models import SimilarityPrompt
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "config.yaml"
 DEFAULT_PROMPT_DIR = Path(__file__).resolve().parent / "prompt"
+DEFAULT_TOPICS: tuple[dict[str, Any], ...] = (
+    {
+        "id": "diffusion_language_model",
+        "name": "Diffusion Language Model",
+        "aliases": [
+            "diffusion language model",
+            "diffusion lm",
+            "diffusion llm",
+            "text diffusion",
+        ],
+        "keywords": [
+            "discrete diffusion",
+            "masked diffusion",
+            "diffusion transformer",
+            "language diffusion",
+        ],
+    },
+    {
+        "id": "multimodal_visual_reasoning",
+        "name": "Multimodal Visual Reasoning",
+        "aliases": [
+            "multimodal visual reasoning",
+            "visual reasoning",
+            "vision language reasoning",
+            "image reasoning",
+        ],
+        "keywords": [
+            "vision-language",
+            "vqa",
+            "chart reasoning",
+            "document reasoning",
+            "multimodal reasoning",
+        ],
+    },
+    {
+        "id": "gui_computer_use_web_agent",
+        "name": "GUI / Computer Use / Web Agent",
+        "aliases": [
+            "gui agent",
+            "computer use",
+            "web agent",
+            "browser agent",
+        ],
+        "keywords": [
+            "web navigation",
+            "browser automation",
+            "computer-use",
+            "gui grounding",
+            "agentic browsing",
+        ],
+    },
+    {
+        "id": "optimizer",
+        "name": "Optimizer",
+        "aliases": [
+            "optimizer",
+            "optimization",
+            "optimization algorithm",
+        ],
+        "keywords": [
+            "gradient descent",
+            "adam",
+            "adamw",
+            "sgd",
+            "training dynamics",
+        ],
+    },
+    {
+        "id": "time_series_forecasting",
+        "name": "Time-series Forecasting",
+        "aliases": [
+            "time-series forecasting",
+            "time series forecasting",
+            "time series",
+        ],
+        "keywords": [
+            "temporal forecasting",
+            "multivariate forecasting",
+            "long-term forecasting",
+            "sequence forecasting",
+            "timeseries",
+        ],
+    },
+)
 
 
 @dataclass
@@ -22,6 +106,14 @@ class EmbeddingConfig:
     introduction_weight: float = 0.2
     method_weight: float = 0.2
     conclusion_weight: float = 0.2
+
+
+@dataclass
+class TopicDefinition:
+    id: str
+    name: str
+    aliases: list[str] = field(default_factory=list)
+    keywords: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -57,6 +149,7 @@ class Config:
     temperature: float = 0.0
     openai_api_key: str | None = None
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
+    topics: list[TopicDefinition] = field(default_factory=list)
     prompt_template: PromptTemplate | None = None
 
     @classmethod
@@ -122,9 +215,64 @@ def _resolve_prompt_path(name_or_path: str, prompt_dir: str | None = None) -> Pa
     return (base_dir / path.name).resolve()
 
 
+def _coerce_string_list(raw: object) -> list[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        value = raw.strip()
+        return [value] if value else []
+    if not isinstance(raw, list):
+        raise ValueError("topic aliases/keywords must be a list of strings")
+
+    values: list[str] = []
+    for item in raw:
+        value = str(item).strip()
+        if value:
+            values.append(value)
+    return values
+
+
+def _default_topics() -> list[TopicDefinition]:
+    return [
+        TopicDefinition(
+            id=str(item["id"]),
+            name=str(item["name"]),
+            aliases=list(item.get("aliases", [])),
+            keywords=list(item.get("keywords", [])),
+        )
+        for item in DEFAULT_TOPICS
+    ]
+
+
+def _load_topics(payload: object) -> list[TopicDefinition]:
+    if payload is None:
+        return _default_topics()
+    if not isinstance(payload, list):
+        raise ValueError("topics config must be a list")
+
+    topics: list[TopicDefinition] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            raise ValueError("each topic config must be a mapping")
+        topic_id = str(item.get("id") or "").strip()
+        name = str(item.get("name") or "").strip()
+        if not topic_id or not name:
+            raise ValueError("each topic config requires non-empty id and name")
+        topics.append(
+            TopicDefinition(
+                id=topic_id,
+                name=name,
+                aliases=_coerce_string_list(item.get("aliases")),
+                keywords=_coerce_string_list(item.get("keywords")),
+            )
+        )
+    return topics
+
+
 def load_runtime_config(config_path: str | None = None) -> Config:
     payload = _read_yaml(_resolve_config_path(config_path))
     embedding_payload = payload.pop("embedding", {}) or {}
+    topics_payload = payload.pop("topics", None)
     if not isinstance(embedding_payload, dict):
         raise ValueError("embedding config must be a mapping")
     return Config(
@@ -137,7 +285,12 @@ def load_runtime_config(config_path: str | None = None) -> Config:
             else None
         ),
         embedding=EmbeddingConfig(**embedding_payload),
+        topics=_load_topics(topics_payload),
     )
+
+
+def load_topics(config_path: str | None = None) -> list[TopicDefinition]:
+    return load_runtime_config(config_path).topics
 
 
 def load_predictor_config(
