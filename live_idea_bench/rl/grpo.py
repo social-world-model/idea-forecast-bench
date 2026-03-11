@@ -2,10 +2,15 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from math import sqrt
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from live_idea_bench.rl.dpo import EpisodeCandidateLists
 from live_idea_bench.rl.reward import RLRewardEvaluation, spearman_correlation
+
+
+@runtime_checkable
+class HasAlignmentThreshold(Protocol):
+    reward_alignment_threshold: float
 
 
 @dataclass
@@ -24,7 +29,7 @@ class RewardAlignmentReport:
 
 def compute_reward_alignment(
     evaluations: list[RLRewardEvaluation],
-    config: Any,
+    config: HasAlignmentThreshold,
 ) -> RewardAlignmentReport:
     reward_scores = [evaluation.list_reward for evaluation in evaluations]
     benchmark_scores = [evaluation.benchmark_score for evaluation in evaluations]

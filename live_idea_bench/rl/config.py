@@ -149,11 +149,12 @@ def _resolve_rl_config_path(name_or_path: str) -> Path:
 def _load_model_config(name_or_path: str, model_class: type[Any]) -> Any:
     payload = _read_yaml(_resolve_rl_config_path(name_or_path))
     if model_class is RewardConfig:
-        weights_payload = payload.pop("weights", {}) or {}
+        weights_payload = payload.get("weights", {}) or {}
         if not isinstance(weights_payload, dict):
             raise ValueError("reward weights must be a mapping")
+        remaining = {k: v for k, v in payload.items() if k != "weights"}
         try:
-            return RewardConfig(weights=RewardWeights(**weights_payload), **payload)
+            return RewardConfig(weights=RewardWeights(**weights_payload), **remaining)
         except TypeError as exc:
             raise ValueError(
                 f"Invalid config for {RewardConfig.__name__}: {exc}. "

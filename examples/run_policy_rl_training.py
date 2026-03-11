@@ -1,6 +1,7 @@
 import argparse
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +42,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--similarity-config", type=str, default="similarity.yaml", help="Similarity config used for reward evaluation.")
     parser.add_argument("--list-model-presets", action="store_true", help="Print the built-in small-model candidates and exit.")
     return parser
+
+
+_HF_MODEL_ID_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_./")
+
+
+def _validate_init_policy_path(path: str | None) -> str | None:
+    if path is None:
+        return None
+    p = Path(path)
+    if p.is_absolute() or "/" in path or "\\" in path:
+        resolved = p.resolve()
+        if not resolved.exists():
+            raise ValueError(f"--init-policy-path does not exist: {resolved}")
+        return str(resolved)
+    if not all(c in _HF_MODEL_ID_CHARS for c in path):
+        raise ValueError(
+            f"--init-policy-path {path!r} is not a valid local path or Hugging Face model ID."
+        )
+    return path
 
 
 def _resolve_model_name(args: argparse.Namespace) -> str:
@@ -90,10 +110,13 @@ def main() -> int:
     reward_config = load_reward_config(args.reward_config)
     trainer_config_path, trainer_config = _resolve_trainer_config(args)
 
+    overrides: dict[str, str] = {}
     if args.start_month:
-        episode_config.start_month = args.start_month
+        overrides["start_month"] = args.start_month
     if args.end_month:
-        episode_config.end_month = args.end_month
+        overrides["end_month"] = args.end_month
+    if overrides:
+        episode_config = replace(episode_config, **overrides)
 
     manifest = run_policy_rl_pipeline(
         papers,
@@ -109,7 +132,7 @@ def main() -> int:
         max_episodes=args.max_episodes,
         similarity_config_path=args.similarity_config,
         prepare_only=args.prepare_only,
-        init_policy_path=args.init_policy_path,
+        init_policy_path=_validate_init_policy_path(args.init_policy_path),
         skip_alignment_check=args.skip_alignment_check,
     )
     manifest_path = Path(args.output_dir)

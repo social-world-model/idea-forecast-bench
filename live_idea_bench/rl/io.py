@@ -18,7 +18,12 @@ def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
 
 
 def _read_json(path: Path) -> Any:
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise FileNotFoundError(f"JSON file does not exist: {path}") from None
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Malformed JSON in {path}: {exc}") from exc
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:

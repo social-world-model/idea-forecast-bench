@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
 from live_idea_bench.rl.config import GRPOTrainConfig, RewardConfig
 from live_idea_bench.rl.io import _write_jsonl
+
+logger = logging.getLogger(__name__)
 from live_idea_bench.rl.reward import build_online_rl_reward_function
 from live_idea_bench.rl.trainers.base import (
     PreparedRLContext,
@@ -114,7 +117,12 @@ def train_grpo_with_trl(
             "peft_config": peft_config,
         },
     )
-    trainer.train()
-    trainer.save_model(str(target_dir / "artifacts"))
+    try:
+        trainer.train()
+        trainer.save_model(str(target_dir / "artifacts"))
+    except Exception as exc:
+        logger.error("GRPO training failed: %s", exc, exc_info=True)
+        write_policy_manifest(target_dir / "policy_manifest.json", {**manifest, "failed": True, "error": str(exc)})
+        raise
     write_policy_manifest(target_dir / "policy_manifest.json", manifest)
     return manifest

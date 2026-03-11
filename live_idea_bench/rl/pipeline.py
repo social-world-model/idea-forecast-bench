@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
@@ -47,13 +47,23 @@ def _temperature_schedule(config: CandidateGenerationConfig) -> list[float]:
     return [round(config.min_temperature + (idx * step), 4) for idx in range(config.num_candidate_lists)]
 
 
+_ALLOWED_BACKENDS = frozenset({"auto", "api", "local_hf", "heuristic"})
+_API_MODEL_PREFIXES = ("gpt-4o", "gpt-4", "gpt-3", "claude-", "o1", "o3")
+_API_MODEL_SUBSTRINGS = ("gemini",)
+
+
 def _resolve_generation_backend(model_name: str, backend: str) -> str:
     normalized = backend.strip().lower()
+    if normalized not in _ALLOWED_BACKENDS:
+        raise ValueError(
+            f"Unsupported generation backend {backend!r}. "
+            f"Allowed values: {sorted(_ALLOWED_BACKENDS)}"
+        )
     if normalized != "auto":
         return normalized
-    if model_name.startswith("gpt-4o") or model_name.startswith("gpt-5") or model_name.startswith("claude-"):
+    if any(model_name.startswith(prefix) for prefix in _API_MODEL_PREFIXES):
         return "api"
-    if "gemini" in model_name:
+    if any(substr in model_name for substr in _API_MODEL_SUBSTRINGS):
         return "api"
     return "local_hf"
 
@@ -125,10 +135,19 @@ def generate_episode_candidate_lists(
                 temperature,
                 candidate_config,
             )
-            for idx, prediction in enumerate(predictions, start=1):
-                prediction.rank = idx
-                prediction.metadata.setdefault("sampling_temperature", temperature)
-                prediction.metadata.setdefault("generation_backend", _resolve_generation_backend(model_name, candidate_config.backend))
+            backend = _resolve_generation_backend(model_name, candidate_config.backend)
+            predictions = [
+                replace(
+                    prediction,
+                    rank=idx,
+                    metadata={
+                        "sampling_temperature": temperature,
+                        "generation_backend": backend,
+                        **prediction.metadata,
+                    },
+                )
+                for idx, prediction in enumerate(predictions, start=1)
+            ]
             reward = evaluate_rl_reward(
                 predictions=predictions,
                 train_papers=train_papers,

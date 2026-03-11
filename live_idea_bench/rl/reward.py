@@ -50,10 +50,13 @@ def _text_similarity(a: str, b: str) -> float:
     return len(sa & sb) / len(sa | sb)
 
 
+_SPECIFICITY_MIN_CHARS = 80
+
+
 def _specificity_score(prediction: IdeaPrediction, config: RewardConfig) -> float:
     title_score = 1.0 if prediction.title.strip() else 0.0
-    rationale_score = min(1.0, len(prediction.rationale.strip()) / 80.0)
-    approach_score = min(1.0, len(prediction.approach.strip()) / 80.0)
+    rationale_score = min(1.0, len(prediction.rationale.strip()) / _SPECIFICITY_MIN_CHARS)
+    approach_score = min(1.0, len(prediction.approach.strip()) / _SPECIFICITY_MIN_CHARS)
     total_weight = (
         config.specificity_title_weight
         + config.specificity_rationale_weight
@@ -105,8 +108,15 @@ def _value_for_index(rows: Sequence[Any] | None, index: int, total: int) -> Any:
         return rows[index]
     if len(rows) == 1:
         return rows[0]
-    if total > 0 and len(rows) > 0 and total % len(rows) == 0:
+    if total > 0 and total % len(rows) == 0:
         return rows[index // (total // len(rows))]
+    logger.warning(
+        "Batch size mismatch in reward function: rows=%d, total=%d at index=%d — "
+        "reward will be zeroed for this completion.",
+        len(rows),
+        total,
+        index,
+    )
     return None
 
 
@@ -271,33 +281,25 @@ def build_online_rl_reward_function(
             if not predictions:
                 rewards.append(0.0)
                 continue
-            evaluation = evaluate_rl_reward(
-                predictions=predictions,
-                train_papers=reconstructed_train,
-                future_papers=reconstructed_future,
-                reward_config=reward_config,
-                similarity_config_path=similarity_config_path,
-                runtime_config_path=runtime_config_path,
-                model_name=model_name,
-                cutoff_date=str(cutoff_value) if cutoff_value else None,
-                future_end_date=str(future_end_value) if future_end_value else None,
-            )
+            try:
+                evaluation = evaluate_rl_reward(
+                    predictions=predictions,
+                    train_papers=reconstructed_train,
+                    future_papers=reconstructed_future,
+                    reward_config=reward_config,
+                    similarity_config_path=similarity_config_path,
+                    runtime_config_path=runtime_config_path,
+                    model_name=model_name,
+                    cutoff_date=str(cutoff_value) if cutoff_value else None,
+                    future_end_date=str(future_end_value) if future_end_value else None,
+                )
+            except Exception as exc:
+                logger.warning("evaluate_rl_reward failed at index %d: %s", idx, exc, exc_info=True)
+                rewards.append(0.0)
+                continue
             rewards.append(evaluation.list_reward)
         return rewards
 
     return reward_func
 
 
-def build_grpo_reward_function(
-    reward_config: RewardConfig,
-    *,
-    similarity_config_path: str = "similarity.yaml",
-    runtime_config_path: str | None = None,
-    model_name: str | None = None,
-) -> Callable[..., list[float]]:
-    return build_online_rl_reward_function(
-        reward_config,
-        similarity_config_path=similarity_config_path,
-        runtime_config_path=runtime_config_path,
-        model_name=model_name,
-    )
