@@ -153,7 +153,7 @@ class PolicyRLStrategy(IdeaStrategy):
         )
         for idx, prediction in enumerate(predictions, start=1):
             prediction.rank = idx
-            prediction.metadata.setdefault("policy_stage", str(manifest.get("stage") or "policy_rl"))
+            prediction.metadata.setdefault("policy_stage", str(manifest.get("trainer") or manifest.get("stage") or "policy_rl"))
             if self.policy_manifest_path:
                 prediction.metadata.setdefault("policy_manifest_path", self.policy_manifest_path)
         return predictions[:top_k]

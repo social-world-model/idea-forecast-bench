@@ -86,6 +86,32 @@ class GRPOTrainConfig:
     learning_rate: float = 2e-6
     num_generations: int = 8
     max_completion_length: int = 1024
+    beta: float = 0.04
+    loss_type: str = "dapo"
+    scale_rewards: str = "batch"
+    mask_truncated_completions: bool = True
+    use_vllm: bool = False
+    vllm_gpu_memory_utilization: float = 0.4
+    lora_r: int = 16
+    lora_alpha: int = 32
+    lora_dropout: float = 0.05
+    reward_alignment_threshold: float = 0.5
+    logging_steps: int = 1
+    dry_run: bool = False
+
+
+@dataclass
+class RLOOTrainConfig:
+    per_device_batch_size: int = 1
+    gradient_accumulation_steps: int = 1
+    num_train_epochs: int = 1
+    learning_rate: float = 2e-6
+    num_generations: int = 8
+    max_completion_length: int = 1024
+    beta: float = 0.04
+    num_iterations: int = 1
+    epsilon: float = 0.2
+    normalize_advantages: bool = True
     use_vllm: bool = False
     vllm_gpu_memory_utilization: float = 0.4
     lora_r: int = 16
@@ -160,3 +186,7 @@ def load_dpo_train_config(name_or_path: str = "dpo_train.yaml") -> DPOTrainConfi
 
 def load_grpo_train_config(name_or_path: str = "grpo_train.yaml") -> GRPOTrainConfig:
     return _load_model_config(name_or_path, GRPOTrainConfig)
+
+
+def load_rloo_train_config(name_or_path: str = "rloo_train.yaml") -> RLOOTrainConfig:
+    return _load_model_config(name_or_path, RLOOTrainConfig)

@@ -9,9 +9,10 @@ sys.path.append(str(PROJECT_ROOT))
 from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
 from live_idea_bench.rl import (  # noqa: E402
     load_candidate_generation_config,
-    load_dpo_train_config,
     load_episode_build_config,
+    load_dpo_train_config,
     load_grpo_train_config,
+    load_rloo_train_config,
     load_reward_config,
 )
 from live_idea_bench.rl.io import _write_json  # noqa: E402
@@ -25,7 +26,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", type=str, default="data/rl_runs/policy_rl", help="Directory for RL artifacts.")
     parser.add_argument("--model-name", type=str, help="Hugging Face model id or local checkpoint path.")
     parser.add_argument("--model-preset", type=str, help="Shortcut alias from the built-in 3B/4B model registry.")
-    parser.add_argument("--stage", type=str, default="prepare", choices=["prepare", "dpo", "grpo", "both"], help="Pipeline stage to run.")
+    parser.add_argument("--trainer", type=str, choices=["dpo", "grpo", "rloo"], help="Trainer algorithm to run.")
+    parser.add_argument("--trainer-config", type=str, help="Optional trainer config file under config/rl.")
+    parser.add_argument("--init-policy-path", type=str, help="Optional checkpoint path used to warm-start GRPO or RLOO.")
+    parser.add_argument("--prepare-only", action="store_true", help="Prepare common artifacts and trainer datasets without training.")
+    parser.add_argument("--skip-alignment-check", action="store_true", help="Skip the online reward alignment check for GRPO/RLOO.")
     parser.add_argument("--split", type=str, default="train", choices=["train", "validation", "test", "all"], help="Episode split to use.")
     parser.add_argument("--max-episodes", type=int, help="Optional cap for quick experiments.")
     parser.add_argument("--start-month", type=str, help="Optional lower bound month for loading papers.")
@@ -33,8 +38,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--episode-config", type=str, default="episode_build.yaml", help="RL episode config file under config/rl.")
     parser.add_argument("--candidate-config", type=str, default="candidate_generation.yaml", help="Candidate generation config file under config/rl.")
     parser.add_argument("--reward-config", type=str, default="reward.yaml", help="Reward config file under config/rl.")
-    parser.add_argument("--dpo-config", type=str, default="dpo_train.yaml", help="DPO config file under config/rl.")
-    parser.add_argument("--grpo-config", type=str, default="grpo_train.yaml", help="GRPO config file under config/rl.")
     parser.add_argument("--similarity-config", type=str, default="similarity.yaml", help="Similarity config used for reward evaluation.")
     parser.add_argument("--list-model-presets", action="store_true", help="Print the built-in small-model candidates and exit.")
     return parser
@@ -46,6 +49,22 @@ def _resolve_model_name(args: argparse.Namespace) -> str:
     if args.model_preset:
         return resolve_small_model(str(args.model_preset)).model_id
     raise ValueError("Either --model-name or --model-preset is required unless --list-model-presets is used.")
+
+
+def _resolve_trainer_config(args: argparse.Namespace) -> tuple[str, object]:
+    if not args.trainer:
+        raise ValueError("--trainer is required unless --list-model-presets is used.")
+    explicit = str(args.trainer_config).strip() if args.trainer_config else ""
+    if args.trainer == "dpo":
+        path = explicit or "dpo_train.yaml"
+        return path, load_dpo_train_config(path)
+    if args.trainer == "grpo":
+        path = explicit or "grpo_train.yaml"
+        return path, load_grpo_train_config(path)
+    if args.trainer == "rloo":
+        path = explicit or "rloo_train.yaml"
+        return path, load_rloo_train_config(path)
+    raise ValueError(f"Unsupported trainer: {args.trainer}")
 
 
 def main() -> int:
@@ -69,8 +88,7 @@ def main() -> int:
     episode_config = load_episode_build_config(args.episode_config)
     candidate_config = load_candidate_generation_config(args.candidate_config)
     reward_config = load_reward_config(args.reward_config)
-    dpo_config = load_dpo_train_config(args.dpo_config)
-    grpo_config = load_grpo_train_config(args.grpo_config)
+    trainer_config_path, trainer_config = _resolve_trainer_config(args)
 
     if args.start_month:
         episode_config.start_month = args.start_month
@@ -79,24 +97,28 @@ def main() -> int:
 
     manifest = run_policy_rl_pipeline(
         papers,
+        trainer=args.trainer,
         model_name=_resolve_model_name(args),
         output_dir=args.output_dir,
         episode_config=episode_config,
         candidate_config=candidate_config,
         reward_config=reward_config,
-        dpo_config=dpo_config,
-        grpo_config=grpo_config,
-        stage=args.stage,
+        trainer_config=trainer_config,
+        trainer_config_path=trainer_config_path,
         split=args.split,
         max_episodes=args.max_episodes,
         similarity_config_path=args.similarity_config,
+        prepare_only=args.prepare_only,
+        init_policy_path=args.init_policy_path,
+        skip_alignment_check=args.skip_alignment_check,
     )
     manifest_path = Path(args.output_dir)
     if not manifest_path.is_absolute():
         manifest_path = PROJECT_ROOT / manifest_path
     _write_json(manifest_path / "run_summary.json", manifest)
 
-    print(f"RL pipeline stage '{args.stage}' finished for {manifest['selected_episode_count']} episodes.")
+    action = "prepared" if args.prepare_only else "finished"
+    print(f"RL trainer '{args.trainer}' {action} for {manifest['selected_episode_count']} episodes.")
     print(f"Artifacts saved to {manifest_path.resolve()}")
     return 0
 

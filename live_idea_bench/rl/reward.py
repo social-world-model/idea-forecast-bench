@@ -238,7 +238,7 @@ def spearman_correlation(xs: Sequence[float], ys: Sequence[float]) -> float:
     return round(numerator / (x_denom * y_denom), 4)
 
 
-def build_grpo_reward_function(
+def build_online_rl_reward_function(
     reward_config: RewardConfig,
     *,
     similarity_config_path: str = "similarity.yaml",
@@ -286,3 +286,18 @@ def build_grpo_reward_function(
         return rewards
 
     return reward_func
+
+
+def build_grpo_reward_function(
+    reward_config: RewardConfig,
+    *,
+    similarity_config_path: str = "similarity.yaml",
+    runtime_config_path: str | None = None,
+    model_name: str | None = None,
+) -> Callable[..., list[float]]:
+    return build_online_rl_reward_function(
+        reward_config,
+        similarity_config_path=similarity_config_path,
+        runtime_config_path=runtime_config_path,
+        model_name=model_name,
+    )

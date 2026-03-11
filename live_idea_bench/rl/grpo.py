@@ -4,7 +4,6 @@ from dataclasses import asdict, dataclass
 from math import sqrt
 from typing import Any
 
-from live_idea_bench.rl.config import GRPOTrainConfig
 from live_idea_bench.rl.dpo import EpisodeCandidateLists
 from live_idea_bench.rl.reward import RLRewardEvaluation, spearman_correlation
 
@@ -25,7 +24,7 @@ class RewardAlignmentReport:
 
 def compute_reward_alignment(
     evaluations: list[RLRewardEvaluation],
-    config: GRPOTrainConfig,
+    config: Any,
 ) -> RewardAlignmentReport:
     reward_scores = [evaluation.list_reward for evaluation in evaluations]
     benchmark_scores = [evaluation.benchmark_score for evaluation in evaluations]

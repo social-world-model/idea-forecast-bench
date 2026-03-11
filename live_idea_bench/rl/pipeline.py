@@ -6,20 +6,16 @@ from typing import Any
 
 from live_idea_bench.models import PaperRecord
 from live_idea_bench.predictor import _heuristic_predictions, generate_predictions
-from live_idea_bench.rl.config import (
-    CandidateGenerationConfig,
-    DPOTrainConfig,
-    EpisodeBuildConfig,
-    GRPOTrainConfig,
-    RewardConfig,
-)
-from live_idea_bench.rl.dpo import CandidateListSample, EpisodeCandidateLists, build_dpo_pairs
+from live_idea_bench.rl.config import CandidateGenerationConfig, EpisodeBuildConfig, RewardConfig
+from live_idea_bench.rl.dpo import CandidateListSample, EpisodeCandidateLists
 from live_idea_bench.rl.episodes import RLEpisode, build_rl_episodes, serialize_episodes
+from live_idea_bench.rl.grpo import compute_reward_alignment
+from live_idea_bench.rl.io import _read_json, _read_jsonl, _write_json, _write_jsonl
 from live_idea_bench.rl.local_generation import build_prediction_prompt, generate_local_predictions
 from live_idea_bench.rl.model_zoo import list_small_model_payloads
 from live_idea_bench.rl.reward import evaluate_rl_reward, serialize_reward_evaluation
-from live_idea_bench.rl.io import _write_json, _write_jsonl
-from live_idea_bench.rl.trainers import train_dpo_with_trl, train_grpo_with_trl
+from live_idea_bench.rl.trainers import PreparedRLContext, TrainerPreparedArtifacts, create_trainer_runner
+from live_idea_bench.rl.trainers.base import build_config_fingerprint
 
 
 def _paper_lookup(papers: list[PaperRecord]) -> dict[str, PaperRecord]:
@@ -34,6 +30,12 @@ def _materialize_episode(episode: RLEpisode, paper_lookup: dict[str, PaperRecord
 
 def _serialize_papers(papers: list[PaperRecord]) -> list[dict[str, Any]]:
     return [asdict(paper) for paper in papers]
+
+
+def _deserialize_episodes(path: Path) -> list[RLEpisode]:
+    payload = _read_json(path)
+    rows = payload.get("episodes", []) if isinstance(payload, dict) else []
+    return [RLEpisode(**row) for row in rows if isinstance(row, dict)]
 
 
 def _temperature_schedule(config: CandidateGenerationConfig) -> list[float]:
@@ -218,7 +220,73 @@ def _select_episodes(episodes: list[RLEpisode], split: str, max_episodes: int | 
     return selected
 
 
-def run_policy_rl_pipeline(
+def _shared_fingerprint(
+    *,
+    model_name: str,
+    split: str,
+    max_episodes: int | None,
+    episode_config: EpisodeBuildConfig,
+    candidate_config: CandidateGenerationConfig,
+    reward_config: RewardConfig,
+    similarity_config_path: str,
+) -> str:
+    return build_config_fingerprint(
+        {
+            "model_name": model_name,
+            "split": split,
+            "max_episodes": max_episodes,
+            "episode_config": episode_config,
+            "candidate_config": candidate_config,
+            "reward_config": reward_config,
+            "similarity_config_path": similarity_config_path,
+        }
+    )
+
+
+def _load_cached_context(
+    *,
+    papers: list[PaperRecord],
+    target_dir: Path,
+    fingerprint: str,
+    split: str,
+    max_episodes: int | None,
+    model_name: str,
+    similarity_config_path: str,
+    runtime_config_path: str | None,
+) -> PreparedRLContext | None:
+    shared_dir = target_dir / "shared"
+    manifest_path = shared_dir / "shared_manifest.json"
+    episodes_path = shared_dir / "episodes.json"
+    prompt_rows_path = shared_dir / "prompts.jsonl"
+    if not manifest_path.exists() or not episodes_path.exists() or not prompt_rows_path.exists():
+        return None
+    payload = _read_json(manifest_path)
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("fingerprint") != fingerprint:
+        return None
+    all_episodes = _deserialize_episodes(episodes_path)
+    selected_episodes = _select_episodes(all_episodes, split, max_episodes)
+    return PreparedRLContext(
+        papers=papers,
+        all_episodes=all_episodes,
+        selected_episodes=selected_episodes,
+        prompt_rows=_read_jsonl(prompt_rows_path),
+        shared_dir=shared_dir,
+        episodes_path=episodes_path,
+        prompt_rows_path=prompt_rows_path,
+        paper_lookup=_paper_lookup(papers),
+        config_fingerprint=fingerprint,
+        selected_split=split,
+        model_name=model_name,
+        similarity_config_path=similarity_config_path,
+        runtime_config_path=runtime_config_path,
+        episode_cache_root=target_dir / "episode_cache",
+        shared_manifest_path=manifest_path,
+    )
+
+
+def prepare_common_rl_context(
     papers: list[PaperRecord],
     *,
     model_name: str,
@@ -226,91 +294,216 @@ def run_policy_rl_pipeline(
     episode_config: EpisodeBuildConfig,
     candidate_config: CandidateGenerationConfig,
     reward_config: RewardConfig,
-    dpo_config: DPOTrainConfig,
-    grpo_config: GRPOTrainConfig,
-    stage: str = "prepare",
     split: str = "train",
     max_episodes: int | None = None,
     similarity_config_path: str = "similarity.yaml",
     runtime_config_path: str | None = None,
-) -> dict[str, Any]:
-    normalized_stage = stage.strip().lower()
-    if normalized_stage not in {"prepare", "dpo", "grpo", "both"}:
-        raise ValueError(f"Unsupported RL pipeline stage: {stage}")
-
+) -> PreparedRLContext:
     target_dir = Path(output_dir).resolve()
+    shared_dir = target_dir / "shared"
+    fingerprint = _shared_fingerprint(
+        model_name=model_name,
+        split=split,
+        max_episodes=max_episodes,
+        episode_config=episode_config,
+        candidate_config=candidate_config,
+        reward_config=reward_config,
+        similarity_config_path=similarity_config_path,
+    )
+    cached = _load_cached_context(
+        papers=papers,
+        target_dir=target_dir,
+        fingerprint=fingerprint,
+        split=split,
+        max_episodes=max_episodes,
+        model_name=model_name,
+        similarity_config_path=similarity_config_path,
+        runtime_config_path=runtime_config_path,
+    )
+    if cached is not None:
+        return cached
+
     episode_cache_root = target_dir / "episode_cache"
     episodes = build_rl_episodes(papers, episode_config, cache_root=episode_cache_root)
     selected_episodes = _select_episodes(episodes, split, max_episodes)
     if not selected_episodes:
         raise ValueError("No RL episodes were selected. Adjust split, window, or date settings.")
-
-    episodes_path = target_dir / "episodes.json"
-    _write_json(episodes_path, {"episodes": serialize_episodes(selected_episodes)})
-
     prompt_rows = build_grpo_prompt_rows(
         papers,
         selected_episodes,
         candidate_config=candidate_config,
     )
-    grpo_prompt_path = target_dir / "grpo_prompts.jsonl"
-    _write_jsonl(grpo_prompt_path, prompt_rows)
+    episodes_path = shared_dir / "episodes.json"
+    prompt_rows_path = shared_dir / "prompts.jsonl"
+    shared_manifest_path = shared_dir / "shared_manifest.json"
+    _write_json(episodes_path, {"episodes": serialize_episodes(episodes)})
+    _write_jsonl(prompt_rows_path, prompt_rows)
+    _write_json(
+        shared_manifest_path,
+        {
+            "split": split,
+            "selected_episode_count": len(selected_episodes),
+            "episode_config": asdict(episode_config),
+            "candidate_config": asdict(candidate_config),
+            "reward_config": asdict(reward_config),
+            "similarity_config_path": similarity_config_path,
+            "model_name": model_name,
+            "fingerprint": fingerprint,
+        },
+    )
+    return PreparedRLContext(
+        papers=papers,
+        all_episodes=episodes,
+        selected_episodes=selected_episodes,
+        prompt_rows=prompt_rows,
+        shared_dir=shared_dir,
+        episodes_path=episodes_path,
+        prompt_rows_path=prompt_rows_path,
+        paper_lookup=_paper_lookup(papers),
+        config_fingerprint=fingerprint,
+        selected_split=split,
+        model_name=model_name,
+        similarity_config_path=similarity_config_path,
+        runtime_config_path=runtime_config_path,
+        episode_cache_root=episode_cache_root,
+        shared_manifest_path=shared_manifest_path,
+    )
 
-    dpo_pairs: list[dict[str, Any]] = []
-    rollout_path = target_dir / "candidate_rollouts.json"
-    dpo_pairs_path = target_dir / "dpo_pairs.jsonl"
-    if normalized_stage in {"prepare", "dpo", "both"}:
-        candidate_lists = generate_episode_candidate_lists(
-            papers,
-            selected_episodes,
+
+def _alignment_episodes(common_context: PreparedRLContext) -> list[RLEpisode]:
+    validation_episodes = [episode for episode in common_context.all_episodes if getattr(episode, "split", "") == "validation"]
+    if validation_episodes:
+        return validation_episodes
+    return common_context.selected_episodes
+
+
+def run_online_alignment_gate(
+    common_context: PreparedRLContext,
+    *,
+    model_name: str,
+    candidate_config: CandidateGenerationConfig,
+    reward_config: RewardConfig,
+    trainer_config: Any,
+    trainer_output_dir: Path,
+) -> dict[str, Any]:
+    episodes = _alignment_episodes(common_context)
+    candidate_lists = generate_episode_candidate_lists(
+        common_context.papers,
+        episodes,
+        model_name=model_name,
+        candidate_config=candidate_config,
+        reward_config=reward_config,
+        similarity_config_path=common_context.similarity_config_path,
+        runtime_config_path=common_context.runtime_config_path,
+    )
+    evaluations = [candidate.reward for batch in candidate_lists for candidate in batch.candidates]
+    report = compute_reward_alignment(evaluations, trainer_config)
+    zero_reward_fraction = (
+        round(sum(1 for evaluation in evaluations if evaluation.list_reward == 0.0) / len(evaluations), 4)
+        if evaluations
+        else 0.0
+    )
+    diagnostics = {
+        "alignment_rho": report.correlation,
+        "alignment_passed": report.passed,
+        "parse_failure_rate": 0.0,
+        "zero_reward_fraction": zero_reward_fraction,
+        "sample_count": len(evaluations),
+    }
+    _write_json(trainer_output_dir / "alignment_summary.json", diagnostics)
+    return diagnostics
+
+
+def run_policy_rl_pipeline(
+    papers: list[PaperRecord],
+    *,
+    trainer: str,
+    model_name: str,
+    output_dir: str,
+    episode_config: EpisodeBuildConfig,
+    candidate_config: CandidateGenerationConfig,
+    reward_config: RewardConfig,
+    trainer_config: Any,
+    trainer_config_path: str,
+    split: str = "train",
+    max_episodes: int | None = None,
+    similarity_config_path: str = "similarity.yaml",
+    runtime_config_path: str | None = None,
+    prepare_only: bool = False,
+    init_policy_path: str | None = None,
+    skip_alignment_check: bool = False,
+) -> dict[str, Any]:
+    runner = create_trainer_runner(trainer)
+    target_dir = Path(output_dir).resolve()
+    common_context = prepare_common_rl_context(
+        papers,
+        model_name=model_name,
+        output_dir=output_dir,
+        episode_config=episode_config,
+        candidate_config=candidate_config,
+        reward_config=reward_config,
+        split=split,
+        max_episodes=max_episodes,
+        similarity_config_path=similarity_config_path,
+        runtime_config_path=runtime_config_path,
+    )
+    prepared = runner.prepare(
+        common_context,
+        model_name=model_name,
+        candidate_config=candidate_config,
+        reward_config=reward_config,
+        trainer_config=trainer_config,
+    )
+
+    diagnostics: dict[str, Any] = {}
+    if runner.trainer_name in {"grpo", "rloo"} and not skip_alignment_check:
+        diagnostics = run_online_alignment_gate(
+            common_context,
             model_name=model_name,
             candidate_config=candidate_config,
             reward_config=reward_config,
-            similarity_config_path=similarity_config_path,
-            runtime_config_path=runtime_config_path,
+            trainer_config=trainer_config,
+            trainer_output_dir=prepared.output_dir,
         )
-        dpo_pairs = build_dpo_pairs(candidate_lists, dpo_config)
-        _write_json(rollout_path, {"episodes": serialize_episode_candidate_lists(candidate_lists)})
-        _write_jsonl(dpo_pairs_path, dpo_pairs)
+        if not diagnostics.get("alignment_passed", False):
+            raise ValueError(
+                f"{runner.trainer_name.upper()} reward alignment check failed with rho="
+                f"{diagnostics.get('alignment_rho', 0.0)}"
+            )
 
-    dpo_manifest: dict[str, Any] | None = None
-    if normalized_stage in {"dpo", "both"}:
-        dpo_manifest = train_dpo_with_trl(
-            dpo_pairs,
-            dpo_config,
+    trainer_manifest: dict[str, Any] | None = None
+    if not prepare_only:
+        trainer_manifest = runner.train(
+            prepared,
+            config=trainer_config,
             model_name=model_name,
             predictor_config=candidate_config.predictor_config,
-            output_dir=str(target_dir / "dpo"),
-        )
-
-    grpo_manifest: dict[str, Any] | None = None
-    if normalized_stage in {"grpo", "both"}:
-        grpo_manifest = train_grpo_with_trl(
-            prompt_rows,
-            grpo_config,
-            model_name=model_name,
-            predictor_config=candidate_config.predictor_config,
-            output_dir=str(target_dir / "grpo"),
+            output_dir=str(prepared.output_dir),
             reward_config=reward_config,
             similarity_config_path=similarity_config_path,
             runtime_config_path=runtime_config_path,
+            trainer_config_path=trainer_config_path,
+            init_policy_path=init_policy_path,
+            diagnostics=diagnostics or None,
         )
 
     manifest = {
-        "pipeline_manifest_version": 1,
-        "stage": normalized_stage,
+        "pipeline_manifest_version": 2,
+        "trainer": runner.trainer_name,
         "model_name": model_name,
         "split": split,
-        "selected_episode_count": len(selected_episodes),
-        "episodes_path": str(episodes_path),
-        "grpo_prompt_path": str(grpo_prompt_path),
-        "candidate_rollout_path": str(rollout_path) if rollout_path.exists() else "",
-        "dpo_pairs_path": str(dpo_pairs_path) if dpo_pairs_path.exists() else "",
-        "dpo_pair_count": len(dpo_pairs),
-        "grpo_prompt_count": len(prompt_rows),
-        "dpo_policy_manifest_path": str((target_dir / "dpo" / "policy_manifest.json")) if dpo_manifest else "",
-        "grpo_policy_manifest_path": str((target_dir / "grpo" / "policy_manifest.json")) if grpo_manifest else "",
+        "selected_episode_count": len(common_context.selected_episodes),
+        "shared_manifest_path": str(common_context.shared_manifest_path),
+        "episodes_path": str(common_context.episodes_path),
+        "prompt_rows_path": str(common_context.prompt_rows_path),
+        "trainer_dataset_path": str(prepared.dataset_path.resolve()),
+        "trainer_output_dir": str(prepared.output_dir.resolve()),
+        "trainer_policy_manifest_path": str((prepared.output_dir / "policy_manifest.json").resolve()) if trainer_manifest else "",
+        "prepare_only": prepare_only,
         "recommended_small_models": list_small_model_payloads(),
+        "shared_fingerprint": common_context.config_fingerprint,
+        "trainer_metadata": prepared.metadata,
+        "diagnostics": diagnostics,
     }
     _write_json(target_dir / "pipeline_manifest.json", manifest)
     return manifest

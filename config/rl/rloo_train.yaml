@@ -5,9 +5,9 @@ learning_rate: 2e-6
 num_generations: 8
 max_completion_length: 1024
 beta: 0.04
-loss_type: dapo
-scale_rewards: batch
-mask_truncated_completions: true
+num_iterations: 1
+epsilon: 0.2
+normalize_advantages: true
 use_vllm: false
 vllm_gpu_memory_utilization: 0.4
 lora_r: 16

@@ -6,22 +6,26 @@ from pathlib import Path
 
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.rl import (
-    CandidateListSample,
     CandidateGenerationConfig,
+    CandidateListSample,
     DPOTrainConfig,
     EpisodeBuildConfig,
     EpisodeCandidateLists,
     GRPOTrainConfig,
+    RLOOTrainConfig,
     RewardConfig,
     build_dpo_pairs,
     build_grpo_advantages,
     build_rl_episodes,
     compute_reward_alignment,
+    create_trainer_runner,
     evaluate_rl_reward,
     list_small_model_specs,
+    prepare_common_rl_context,
     run_policy_rl_pipeline,
     train_dpo_with_trl,
     train_grpo_with_trl,
+    train_rloo_with_trl,
 )
 
 
@@ -81,9 +85,7 @@ def test_build_rl_episodes_respects_past_window_and_step_size() -> None:
 
 def test_evaluate_rl_reward_includes_duplicate_penalty() -> None:
     train = [_paper("train-1", "2024-01", published_date="2024-01-01", summary="old retrieval baseline")]
-    future = [
-        _paper("future-1", "2024-02", published_date="2024-02-15", summary="retrieval agent planning")
-    ]
+    future = [_paper("future-1", "2024-02", published_date="2024-02-15", summary="retrieval agent planning")]
     predictions = [
         _prediction(1, "retrieval agent planning", "retrieval agent planning"),
         _prediction(2, "retrieval agent planning v2", "retrieval agent planning"),
@@ -141,29 +143,24 @@ def test_build_dpo_pairs_and_grpo_advantages_from_episode_candidates() -> None:
 
 
 def test_train_dpo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path) -> None:
-    rows = [
-        {
-            "prompt": "prompt",
-            "chosen": [{"title": "chosen"}],
-            "rejected": [{"title": "rejected"}],
-        }
-    ]
+    rows = [{"prompt": "prompt", "chosen": [{"title": "chosen"}], "rejected": [{"title": "rejected"}]}]
     manifest = train_dpo_with_trl(
         rows,
         DPOTrainConfig(dry_run=True),
         model_name="gpt-4o-mini",
         predictor_config="predictor.yaml",
         output_dir=str(tmp_path / "policy"),
+        trainer_config_path="dpo_train.yaml",
     )
 
     manifest_path = tmp_path / "policy" / "policy_manifest.json"
-    dataset_path = tmp_path / "policy" / "dpo_dataset.jsonl"
+    dataset_path = tmp_path / "policy" / "trainer_dataset.jsonl"
 
     assert manifest["dry_run"] is True
     assert manifest_path.exists()
     assert dataset_path.exists()
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert payload["stage"] == "dpo"
+    assert payload["trainer"] == "dpo"
 
 
 def test_train_grpo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path) -> None:
@@ -174,12 +171,8 @@ def test_train_grpo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path)
             "cutoff_date": "2024-06-01",
             "future_end_month": "2024-07",
             "future_end_date": "2024-07-31",
-            "train_papers": [
-                asdict(_paper("train-1", "2024-05", published_date="2024-05-01", summary="old topic"))
-            ],
-            "future_papers": [
-                asdict(_paper("future-1", "2024-07", published_date="2024-07-01", summary="new topic"))
-            ],
+            "train_papers": [asdict(_paper("train-1", "2024-05", published_date="2024-05-01", summary="old topic"))],
+            "future_papers": [asdict(_paper("future-1", "2024-07", published_date="2024-07-01", summary="new topic"))],
         }
     ]
     manifest = train_grpo_with_trl(
@@ -189,19 +182,81 @@ def test_train_grpo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path)
         predictor_config="predictor.yaml",
         output_dir=str(tmp_path / "policy"),
         reward_config=RewardConfig(top_k=1),
+        trainer_config_path="grpo_train.yaml",
     )
 
     manifest_path = tmp_path / "policy" / "policy_manifest.json"
-    dataset_path = tmp_path / "policy" / "grpo_dataset.jsonl"
+    dataset_path = tmp_path / "policy" / "trainer_dataset.jsonl"
 
     assert manifest["dry_run"] is True
     assert manifest_path.exists()
     assert dataset_path.exists()
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert payload["stage"] == "grpo"
+    assert payload["trainer"] == "grpo"
 
 
-def test_run_policy_rl_pipeline_prepare_writes_expected_artifacts(tmp_path: Path) -> None:
+def test_train_rloo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path) -> None:
+    rows = [
+        {
+            "prompt": "prompt",
+            "cutoff_month": "2024-06",
+            "cutoff_date": "2024-06-01",
+            "future_end_month": "2024-07",
+            "future_end_date": "2024-07-31",
+            "train_papers": [asdict(_paper("train-1", "2024-05", published_date="2024-05-01", summary="old topic"))],
+            "future_papers": [asdict(_paper("future-1", "2024-07", published_date="2024-07-01", summary="new topic"))],
+        }
+    ]
+    manifest = train_rloo_with_trl(
+        rows,
+        RLOOTrainConfig(dry_run=True),
+        model_name="Qwen/Qwen2.5-3B-Instruct",
+        predictor_config="predictor.yaml",
+        output_dir=str(tmp_path / "policy"),
+        reward_config=RewardConfig(top_k=1),
+        trainer_config_path="rloo_train.yaml",
+    )
+
+    manifest_path = tmp_path / "policy" / "policy_manifest.json"
+    dataset_path = tmp_path / "policy" / "trainer_dataset.jsonl"
+
+    assert manifest["dry_run"] is True
+    assert manifest_path.exists()
+    assert dataset_path.exists()
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert payload["trainer"] == "rloo"
+
+
+def test_prepare_common_rl_context_reuses_shared_artifacts(tmp_path: Path) -> None:
+    papers = [
+        _paper(f"p-{month:02d}", f"2024-{month:02d}", published_date=f"2024-{month:02d}-01", summary=f"summary {month}")
+        for month in range(1, 13)
+    ]
+    common = prepare_common_rl_context(
+        papers,
+        model_name="Qwen/Qwen2.5-3B-Instruct",
+        output_dir=str(tmp_path / "rl-run"),
+        episode_config=EpisodeBuildConfig(horizon_months=1, min_train_papers=2, past_window_months=6, step_months=3),
+        candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=3, ideas_per_list=4),
+        reward_config=RewardConfig(top_k=2),
+        split="all",
+    )
+    cached = prepare_common_rl_context(
+        papers,
+        model_name="Qwen/Qwen2.5-3B-Instruct",
+        output_dir=str(tmp_path / "rl-run"),
+        episode_config=EpisodeBuildConfig(horizon_months=1, min_train_papers=2, past_window_months=6, step_months=3),
+        candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=3, ideas_per_list=4),
+        reward_config=RewardConfig(top_k=2),
+        split="all",
+    )
+
+    assert common.config_fingerprint == cached.config_fingerprint
+    assert common.prompt_rows_path.exists()
+    assert cached.shared_manifest_path.exists()
+
+
+def test_run_policy_rl_pipeline_prepare_only_writes_expected_artifacts(tmp_path: Path) -> None:
     papers = [
         _paper(f"p-{month:02d}", f"2024-{month:02d}", published_date=f"2024-{month:02d}-01", summary=f"summary {month}")
         for month in range(1, 13)
@@ -209,26 +264,62 @@ def test_run_policy_rl_pipeline_prepare_writes_expected_artifacts(tmp_path: Path
 
     manifest = run_policy_rl_pipeline(
         papers,
+        trainer="dpo",
         model_name="Qwen/Qwen2.5-3B-Instruct",
         output_dir=str(tmp_path / "rl-run"),
         episode_config=EpisodeBuildConfig(horizon_months=1, min_train_papers=2, past_window_months=6, step_months=3),
         candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=3, ideas_per_list=4),
         reward_config=RewardConfig(top_k=2),
-        dpo_config=DPOTrainConfig(dry_run=True, quantile_fraction=0.34),
-        grpo_config=GRPOTrainConfig(dry_run=True),
-        stage="prepare",
+        trainer_config=DPOTrainConfig(dry_run=True, quantile_fraction=0.34),
+        trainer_config_path="dpo_train.yaml",
         split="all",
+        prepare_only=True,
     )
 
     run_root = tmp_path / "rl-run"
     assert manifest["selected_episode_count"] > 0
-    assert (run_root / "episodes.json").exists()
-    assert (run_root / "grpo_prompts.jsonl").exists()
-    assert (run_root / "candidate_rollouts.json").exists()
-    assert (run_root / "dpo_pairs.jsonl").exists()
+    assert (run_root / "shared" / "episodes.json").exists()
+    assert (run_root / "shared" / "prompts.jsonl").exists()
+    assert (run_root / "dpo" / "candidate_rollouts.json").exists()
+    assert (run_root / "dpo" / "trainer_dataset.jsonl").exists()
     assert (run_root / "pipeline_manifest.json").exists()
-    assert manifest["dpo_pair_count"] > 0
-    assert manifest["grpo_prompt_count"] == manifest["selected_episode_count"]
+    assert manifest["prepare_only"] is True
+    assert manifest["trainer_policy_manifest_path"] == ""
+
+
+def test_run_policy_rl_pipeline_grpo_supports_init_policy_and_skip_alignment(tmp_path: Path) -> None:
+    papers = [
+        _paper(f"p-{month:02d}", f"2024-{month:02d}", published_date=f"2024-{month:02d}-01", summary=f"summary {month}")
+        for month in range(1, 13)
+    ]
+    init_path = tmp_path / "warmstart"
+    init_path.mkdir()
+
+    manifest = run_policy_rl_pipeline(
+        papers,
+        trainer="grpo",
+        model_name="Qwen/Qwen2.5-3B-Instruct",
+        output_dir=str(tmp_path / "rl-run"),
+        episode_config=EpisodeBuildConfig(horizon_months=1, min_train_papers=2, past_window_months=6, step_months=3),
+        candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=2, ideas_per_list=4),
+        reward_config=RewardConfig(top_k=2),
+        trainer_config=GRPOTrainConfig(dry_run=True),
+        trainer_config_path="grpo_train.yaml",
+        split="all",
+        init_policy_path=str(init_path),
+        skip_alignment_check=True,
+    )
+
+    payload = json.loads((tmp_path / "rl-run" / "grpo" / "policy_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["trainer"] == "grpo"
+    assert payload["trainer"] == "grpo"
+    assert payload["init_policy_path"] == str(init_path)
+
+
+def test_trainer_registry_supports_all_three_algorithms() -> None:
+    assert create_trainer_runner("dpo").trainer_name == "dpo"
+    assert create_trainer_runner("grpo").trainer_name == "grpo"
+    assert create_trainer_runner("rloo").trainer_name == "rloo"
 
 
 def test_small_model_registry_includes_requested_qwen_and_llama_candidates() -> None:

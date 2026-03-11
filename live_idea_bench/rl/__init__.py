@@ -3,12 +3,14 @@ from live_idea_bench.rl.config import (
     DPOTrainConfig,
     EpisodeBuildConfig,
     GRPOTrainConfig,
+    RLOOTrainConfig,
     RewardConfig,
     RewardWeights,
     load_candidate_generation_config,
     load_dpo_train_config,
     load_episode_build_config,
     load_grpo_train_config,
+    load_rloo_train_config,
     load_reward_config,
 )
 from live_idea_bench.rl.dpo import CandidateListSample, EpisodeCandidateLists, build_dpo_pairs
@@ -19,11 +21,21 @@ from live_idea_bench.rl.model_zoo import SmallModelSpec, list_small_model_payloa
 from live_idea_bench.rl.pipeline import (
     build_grpo_prompt_rows,
     generate_episode_candidate_lists,
+    prepare_common_rl_context,
     run_policy_rl_pipeline,
     serialize_episode_candidate_lists,
 )
 from live_idea_bench.rl.reward import RLRewardEvaluation, evaluate_rl_reward, serialize_reward_evaluation, spearman_correlation
-from live_idea_bench.rl.trainers import train_dpo_with_trl, train_grpo_with_trl
+from live_idea_bench.rl.trainers import (
+    PreparedRLContext,
+    RLTrainerRunner,
+    RLOOTrainerRunner,
+    TrainerPreparedArtifacts,
+    create_trainer_runner,
+    train_dpo_with_trl,
+    train_grpo_with_trl,
+    train_rloo_with_trl,
+)
 
 __all__ = [
     "CandidateListSample",
@@ -32,18 +44,24 @@ __all__ = [
     "EpisodeBuildConfig",
     "EpisodeCandidateLists",
     "GRPOTrainConfig",
+    "PreparedRLContext",
     "RLRewardEvaluation",
+    "RLTrainerRunner",
+    "RLOOTrainConfig",
+    "RLOOTrainerRunner",
     "RLEpisode",
     "RewardAlignmentReport",
     "RewardConfig",
     "RewardWeights",
     "SmallModelSpec",
+    "TrainerPreparedArtifacts",
     "build_grpo_prompt_rows",
     "build_prediction_prompt",
     "build_dpo_pairs",
     "build_grpo_advantages",
     "build_rl_episodes",
     "compute_reward_alignment",
+    "create_trainer_runner",
     "evaluate_rl_reward",
     "generate_episode_candidate_lists",
     "generate_local_predictions",
@@ -51,10 +69,12 @@ __all__ = [
     "load_dpo_train_config",
     "load_episode_build_config",
     "load_grpo_train_config",
+    "load_rloo_train_config",
     "load_reward_config",
     "list_small_model_payloads",
     "list_small_model_specs",
     "parse_completion_predictions",
+    "prepare_common_rl_context",
     "resolve_small_model",
     "run_policy_rl_pipeline",
     "serialize_episodes",
@@ -63,4 +83,5 @@ __all__ = [
     "spearman_correlation",
     "train_dpo_with_trl",
     "train_grpo_with_trl",
+    "train_rloo_with_trl",
 ]
