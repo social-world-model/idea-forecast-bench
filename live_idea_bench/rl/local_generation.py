@@ -90,6 +90,14 @@ def parse_completion_predictions(raw_completion: Any, *, limit: int) -> list[Ide
     return predictions
 
 
+def parse_single_completion_prediction(raw_completion: Any) -> IdeaPrediction | None:
+    predictions = parse_completion_predictions(raw_completion, limit=2)
+    if len(predictions) != 1:
+        return None
+    prediction = predictions[0]
+    return dataclasses.replace(prediction, rank=1)
+
+
 def _require_local_generation_stack() -> dict[str, Any]:
     try:
         import torch

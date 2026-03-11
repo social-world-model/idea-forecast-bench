@@ -10,6 +10,7 @@ def create_strategy(
     min_keyword_freq: int = 2,
     model_name: str | None = None,
     predictor_config: str = "predictor.yaml",
+    selection_config: str = "selection.yaml",
     similarity_config: str = "similarity.yaml",
     temperature: float | None = None,
     **legacy_params,
@@ -33,6 +34,7 @@ def create_strategy(
         return PolicyRLStrategy(
             model_name=str(resolved_model) if resolved_model else None,
             predictor_config=str(legacy_params.get("predictor_config", predictor_config)),
+            selection_config=str(legacy_params.get("selection_config", selection_config)),
             similarity_config=str(legacy_params.get("similarity_config", similarity_config)),
             temperature=temperature,
             policy_manifest_path=(

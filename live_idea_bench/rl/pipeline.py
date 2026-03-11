@@ -6,7 +6,7 @@ from typing import Any
 
 from live_idea_bench.models import PaperRecord
 from live_idea_bench.predictor import _heuristic_predictions, generate_predictions
-from live_idea_bench.rl.config import CandidateGenerationConfig, EpisodeBuildConfig, RewardConfig
+from live_idea_bench.rl.config import CandidateGenerationConfig, EpisodeBuildConfig, RewardConfig, SelectionConfig
 from live_idea_bench.rl.dpo import CandidateListSample, EpisodeCandidateLists
 from live_idea_bench.rl.episodes import RLEpisode, build_rl_episodes, serialize_episodes
 from live_idea_bench.rl.grpo import compute_reward_alignment
@@ -105,6 +105,10 @@ def _generate_candidate_predictions(
     raise ValueError(f"Unsupported candidate generation backend: {backend}")
 
 
+def _single_idea_candidate_config(config: CandidateGenerationConfig) -> CandidateGenerationConfig:
+    return replace(config, ideas_per_list=1)
+
+
 def generate_episode_candidate_lists(
     papers: list[PaperRecord],
     episodes: list[RLEpisode],
@@ -116,15 +120,16 @@ def generate_episode_candidate_lists(
     runtime_config_path: str | None = None,
 ) -> list[EpisodeCandidateLists]:
     paper_lookup = _paper_lookup(papers)
-    temperatures = _temperature_schedule(candidate_config)
+    single_config = _single_idea_candidate_config(candidate_config)
+    temperatures = _temperature_schedule(single_config)
     outputs: list[EpisodeCandidateLists] = []
     for episode in episodes:
         train_papers, future_papers = _materialize_episode(episode, paper_lookup)
         prompt = build_prediction_prompt(
             train_papers,
             episode.cutoff_month,
-            candidate_config.ideas_per_list,
-            predictor_config_path=candidate_config.predictor_config,
+            1,
+            predictor_config_path=single_config.predictor_config,
         )
         candidates: list[CandidateListSample] = []
         for temperature in temperatures:
@@ -133,9 +138,9 @@ def generate_episode_candidate_lists(
                 episode.cutoff_month,
                 model_name,
                 temperature,
-                candidate_config,
+                single_config,
             )
-            backend = _resolve_generation_backend(model_name, candidate_config.backend)
+            backend = _resolve_generation_backend(model_name, single_config.backend)
             predictions = [
                 replace(
                     prediction,
@@ -214,7 +219,7 @@ def build_grpo_prompt_rows(
                 "prompt": build_prediction_prompt(
                     train_papers,
                     episode.cutoff_month,
-                    candidate_config.ideas_per_list,
+                    1,
                     predictor_config_path=candidate_config.predictor_config,
                 ),
                 "cutoff_month": episode.cutoff_month,
@@ -247,6 +252,7 @@ def _shared_fingerprint(
     episode_config: EpisodeBuildConfig,
     candidate_config: CandidateGenerationConfig,
     reward_config: RewardConfig,
+    selection_config: SelectionConfig,
     similarity_config_path: str,
 ) -> str:
     return build_config_fingerprint(
@@ -257,6 +263,7 @@ def _shared_fingerprint(
             "episode_config": episode_config,
             "candidate_config": candidate_config,
             "reward_config": reward_config,
+            "selection_config": selection_config,
             "similarity_config_path": similarity_config_path,
         }
     )
@@ -313,6 +320,7 @@ def prepare_common_rl_context(
     episode_config: EpisodeBuildConfig,
     candidate_config: CandidateGenerationConfig,
     reward_config: RewardConfig,
+    selection_config: SelectionConfig,
     split: str = "train",
     max_episodes: int | None = None,
     similarity_config_path: str = "similarity.yaml",
@@ -327,6 +335,7 @@ def prepare_common_rl_context(
         episode_config=episode_config,
         candidate_config=candidate_config,
         reward_config=reward_config,
+        selection_config=selection_config,
         similarity_config_path=similarity_config_path,
     )
     cached = _load_cached_context(
@@ -365,6 +374,7 @@ def prepare_common_rl_context(
             "episode_config": asdict(episode_config),
             "candidate_config": asdict(candidate_config),
             "reward_config": asdict(reward_config),
+            "selection_config": asdict(selection_config),
             "similarity_config_path": similarity_config_path,
             "model_name": model_name,
             "fingerprint": fingerprint,
@@ -442,8 +452,10 @@ def run_policy_rl_pipeline(
     episode_config: EpisodeBuildConfig,
     candidate_config: CandidateGenerationConfig,
     reward_config: RewardConfig,
+    selection_config: SelectionConfig,
     trainer_config: Any,
     trainer_config_path: str,
+    selection_config_path: str,
     split: str = "train",
     max_episodes: int | None = None,
     similarity_config_path: str = "similarity.yaml",
@@ -461,6 +473,7 @@ def run_policy_rl_pipeline(
         episode_config=episode_config,
         candidate_config=candidate_config,
         reward_config=reward_config,
+        selection_config=selection_config,
         split=split,
         max_episodes=max_episodes,
         similarity_config_path=similarity_config_path,
@@ -502,6 +515,8 @@ def run_policy_rl_pipeline(
             similarity_config_path=similarity_config_path,
             runtime_config_path=runtime_config_path,
             trainer_config_path=trainer_config_path,
+            selection_config=selection_config,
+            selection_config_path=selection_config_path,
             init_policy_path=init_policy_path,
             diagnostics=diagnostics or None,
         )
@@ -519,6 +534,7 @@ def run_policy_rl_pipeline(
         "trainer_output_dir": str(prepared.output_dir.resolve()),
         "trainer_policy_manifest_path": str((prepared.output_dir / "policy_manifest.json").resolve()) if trainer_manifest else "",
         "prepare_only": prepare_only,
+        "selection_config_path": selection_config_path,
         "recommended_small_models": list_small_model_payloads(),
         "shared_fingerprint": common_context.config_fingerprint,
         "trainer_metadata": prepared.metadata,

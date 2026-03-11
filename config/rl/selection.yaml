@@ -1,0 +1,8 @@
+candidate_pool_size: 24
+output_top_k: 5
+dedup_similarity_threshold: 0.8
+relevance_frequency_weight: 0.5
+relevance_confidence_weight: 0.3
+relevance_heuristic_weight: 0.2
+mmr_relevance_weight: 0.7
+mmr_diversity_weight: 0.3

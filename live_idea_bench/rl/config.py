@@ -12,23 +12,23 @@ DEFAULT_RL_CONFIG_DIR = PROJECT_ROOT / "config" / "rl"
 
 @dataclass
 class RewardWeights:
-    future_match: float = 0.5
-    novelty: float = 0.15
-    specificity: float = 0.15
-    lead_time: float = 0.1
-    duplicate_penalty: float = 0.1
+    future_match: float = 0.7
+    novelty: float = 0.05
+    specificity: float = 0.1
+    lead_time: float = 0.15
+    duplicate_penalty: float = 0.0
 
 
 @dataclass
 class RewardConfig:
-    top_k: int = 5
+    top_k: int = 1
     candidate_limit: int = 25
     duplicate_similarity_threshold: float = 0.8
     specificity_title_weight: float = 0.2
     specificity_rationale_weight: float = 0.4
     specificity_approach_weight: float = 0.4
     rank_decay: float = 0.15
-    benchmark_score_weight: float = 0.4
+    benchmark_score_weight: float = 0.0
     weights: RewardWeights = field(default_factory=RewardWeights)
 
 
@@ -60,6 +60,18 @@ class CandidateGenerationConfig:
     repetition_penalty: float = 1.05
     seed: int = 7
     enable_thinking: bool | None = False
+
+
+@dataclass
+class SelectionConfig:
+    candidate_pool_size: int = 24
+    output_top_k: int = 5
+    dedup_similarity_threshold: float = 0.8
+    relevance_frequency_weight: float = 0.5
+    relevance_confidence_weight: float = 0.3
+    relevance_heuristic_weight: float = 0.2
+    mmr_relevance_weight: float = 0.7
+    mmr_diversity_weight: float = 0.3
 
 
 @dataclass
@@ -179,6 +191,10 @@ def load_episode_build_config(name_or_path: str = "episode_build.yaml") -> Episo
 
 def load_candidate_generation_config(name_or_path: str = "candidate_generation.yaml") -> CandidateGenerationConfig:
     return _load_model_config(name_or_path, CandidateGenerationConfig)
+
+
+def load_selection_config(name_or_path: str = "selection.yaml") -> SelectionConfig:
+    return _load_model_config(name_or_path, SelectionConfig)
 
 
 def load_dpo_train_config(name_or_path: str = "dpo_train.yaml") -> DPOTrainConfig:

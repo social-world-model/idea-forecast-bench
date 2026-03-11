@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from live_idea_bench.rl.config import GRPOTrainConfig, RewardConfig
+from live_idea_bench.rl.config import GRPOTrainConfig, RewardConfig, SelectionConfig
 from live_idea_bench.rl.io import _write_jsonl
 
 logger = logging.getLogger(__name__)
@@ -53,6 +53,8 @@ def train_grpo_with_trl(
     similarity_config_path: str = "similarity.yaml",
     runtime_config_path: str | None = None,
     trainer_config_path: str,
+    selection_config: SelectionConfig,
+    selection_config_path: str,
     init_policy_path: str | None = None,
     diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -71,6 +73,9 @@ def train_grpo_with_trl(
         dataset_path=dataset_path,
         dataset_size=len(dataset_rows),
         dry_run=config.dry_run,
+        selection_config_path=selection_config_path,
+        candidate_pool_size=selection_config.candidate_pool_size,
+        output_top_k=selection_config.output_top_k,
         diagnostics=diagnostics,
     )
 

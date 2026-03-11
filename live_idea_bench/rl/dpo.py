@@ -22,7 +22,9 @@ class EpisodeCandidateLists:
     candidates: list[CandidateListSample] = field(default_factory=list)
 
 
-def _serialize_prediction_list(predictions: list[IdeaPrediction]) -> list[dict[str, Any]]:
+def _serialize_prediction_value(predictions: list[IdeaPrediction]) -> dict[str, Any] | list[dict[str, Any]]:
+    if len(predictions) == 1:
+        return asdict(predictions[0])
     return [asdict(prediction) for prediction in predictions]
 
 
@@ -51,8 +53,8 @@ def build_dpo_pairs(
                 {
                     "episode": asdict(episode_batch.episode),
                     "prompt": episode_batch.prompt,
-                    "chosen": _serialize_prediction_list(chosen.predictions),
-                    "rejected": _serialize_prediction_list(rejected.predictions),
+                    "chosen": _serialize_prediction_value(chosen.predictions),
+                    "rejected": _serialize_prediction_value(rejected.predictions),
                     "chosen_reward": chosen.reward.list_reward,
                     "rejected_reward": rejected.reward.list_reward,
                     "chosen_breakdown": chosen.reward.reward_breakdown,

@@ -14,6 +14,7 @@ from live_idea_bench.rl import (
     GRPOTrainConfig,
     RLOOTrainConfig,
     RewardConfig,
+    SelectionConfig,
     build_dpo_pairs,
     build_grpo_advantages,
     build_rl_episodes,
@@ -23,6 +24,7 @@ from live_idea_bench.rl import (
     list_small_model_specs,
     prepare_common_rl_context,
     run_policy_rl_pipeline,
+    select_top_k_predictions,
     train_dpo_with_trl,
     train_grpo_with_trl,
     train_rloo_with_trl,
@@ -83,7 +85,7 @@ def test_build_rl_episodes_respects_past_window_and_step_size() -> None:
     assert episodes[2].train_paper_ids == ["p-05", "p-06", "p-07"]
 
 
-def test_evaluate_rl_reward_includes_duplicate_penalty() -> None:
+def test_evaluate_rl_reward_is_single_idea_and_no_duplicate_penalty() -> None:
     train = [_paper("train-1", "2024-01", published_date="2024-01-01", summary="old retrieval baseline")]
     future = [_paper("future-1", "2024-02", published_date="2024-02-15", summary="retrieval agent planning")]
     predictions = [
@@ -95,14 +97,14 @@ def test_evaluate_rl_reward_includes_duplicate_penalty() -> None:
         predictions=predictions,
         train_papers=train,
         future_papers=future,
-        reward_config=RewardConfig(top_k=2),
+        reward_config=RewardConfig(top_k=1),
         cutoff_date="2024-02-01",
         future_end_date="2024-03-31",
     )
 
     assert reward.benchmark_evaluation.matched_paper_ids == ["future-1"]
-    assert len(reward.per_idea_rewards) == 2
-    assert reward.per_idea_rewards[1].duplicate_penalty > 0.0
+    assert len(reward.per_idea_rewards) == 1
+    assert reward.per_idea_rewards[0].duplicate_penalty == 0.0
     assert reward.reward_breakdown["benchmark_score"] == reward.benchmark_score
 
 
@@ -151,6 +153,8 @@ def test_train_dpo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path) 
         predictor_config="predictor.yaml",
         output_dir=str(tmp_path / "policy"),
         trainer_config_path="dpo_train.yaml",
+        selection_config=SelectionConfig(),
+        selection_config_path="selection.yaml",
     )
 
     manifest_path = tmp_path / "policy" / "policy_manifest.json"
@@ -183,6 +187,8 @@ def test_train_grpo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path)
         output_dir=str(tmp_path / "policy"),
         reward_config=RewardConfig(top_k=1),
         trainer_config_path="grpo_train.yaml",
+        selection_config=SelectionConfig(),
+        selection_config_path="selection.yaml",
     )
 
     manifest_path = tmp_path / "policy" / "policy_manifest.json"
@@ -215,6 +221,8 @@ def test_train_rloo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path)
         output_dir=str(tmp_path / "policy"),
         reward_config=RewardConfig(top_k=1),
         trainer_config_path="rloo_train.yaml",
+        selection_config=SelectionConfig(),
+        selection_config_path="selection.yaml",
     )
 
     manifest_path = tmp_path / "policy" / "policy_manifest.json"
@@ -239,6 +247,7 @@ def test_prepare_common_rl_context_reuses_shared_artifacts(tmp_path: Path) -> No
         episode_config=EpisodeBuildConfig(horizon_months=1, min_train_papers=2, past_window_months=6, step_months=3),
         candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=3, ideas_per_list=4),
         reward_config=RewardConfig(top_k=2),
+        selection_config=SelectionConfig(),
         split="all",
     )
     cached = prepare_common_rl_context(
@@ -248,6 +257,7 @@ def test_prepare_common_rl_context_reuses_shared_artifacts(tmp_path: Path) -> No
         episode_config=EpisodeBuildConfig(horizon_months=1, min_train_papers=2, past_window_months=6, step_months=3),
         candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=3, ideas_per_list=4),
         reward_config=RewardConfig(top_k=2),
+        selection_config=SelectionConfig(),
         split="all",
     )
 
@@ -270,8 +280,10 @@ def test_run_policy_rl_pipeline_prepare_only_writes_expected_artifacts(tmp_path:
         episode_config=EpisodeBuildConfig(horizon_months=1, min_train_papers=2, past_window_months=6, step_months=3),
         candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=3, ideas_per_list=4),
         reward_config=RewardConfig(top_k=2),
+        selection_config=SelectionConfig(),
         trainer_config=DPOTrainConfig(dry_run=True, quantile_fraction=0.34),
         trainer_config_path="dpo_train.yaml",
+        selection_config_path="selection.yaml",
         split="all",
         prepare_only=True,
     )
@@ -303,8 +315,10 @@ def test_run_policy_rl_pipeline_grpo_supports_init_policy_and_skip_alignment(tmp
         episode_config=EpisodeBuildConfig(horizon_months=1, min_train_papers=2, past_window_months=6, step_months=3),
         candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=2, ideas_per_list=4),
         reward_config=RewardConfig(top_k=2),
+        selection_config=SelectionConfig(),
         trainer_config=GRPOTrainConfig(dry_run=True),
         trainer_config_path="grpo_train.yaml",
+        selection_config_path="selection.yaml",
         split="all",
         init_policy_path=str(init_path),
         skip_alignment_check=True,
@@ -320,6 +334,26 @@ def test_trainer_registry_supports_all_three_algorithms() -> None:
     assert create_trainer_runner("dpo").trainer_name == "dpo"
     assert create_trainer_runner("grpo").trainer_name == "grpo"
     assert create_trainer_runner("rloo").trainer_name == "rloo"
+
+
+def test_select_top_k_predictions_uses_candidate_pool_dedup_and_mmr() -> None:
+    train_papers = [
+        _paper("p-01", "2024-01", published_date="2024-01-01", summary="retrieval planning agents"),
+        _paper("p-02", "2024-02", published_date="2024-02-01", summary="vision reasoning grounded planning"),
+    ]
+    candidates = [
+        IdeaPrediction(rank=1, title="Retrieval Agents", rationale="retrieval planning", approach="agent", confidence=0.9),
+        IdeaPrediction(rank=1, title="Retrieval Agents", rationale="retrieval planning", approach="agent", confidence=0.8),
+        IdeaPrediction(rank=1, title="Grounded Vision", rationale="grounded reasoning", approach="vision", confidence=0.7),
+        IdeaPrediction(rank=1, title="Planning Memory", rationale="memory planning", approach="memory", confidence=0.6),
+    ]
+
+    selected = select_top_k_predictions(candidates, train_papers, SelectionConfig(candidate_pool_size=4, output_top_k=3))
+
+    assert len(selected) == 3
+    assert selected[0].rank == 1
+    assert len({prediction.title for prediction in selected}) == 3
+    assert all("selector_relevance" in prediction.metadata for prediction in selected)
 
 
 def test_small_model_registry_includes_requested_qwen_and_llama_candidates() -> None:

@@ -140,6 +140,9 @@ def build_policy_manifest(
     dataset_path: Path,
     dataset_size: int,
     dry_run: bool,
+    selection_config_path: str,
+    candidate_pool_size: int,
+    output_top_k: int,
     diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     checkpoint_path = output_dir / "artifacts"
@@ -156,6 +159,10 @@ def build_policy_manifest(
         "dataset_path": str(dataset_path.resolve()),
         "dataset_size": dataset_size,
         "trainer_config_path": str(trainer_config_path),
+        "reward_mode": "single_idea",
+        "selection_config_path": str(selection_config_path),
+        "candidate_pool_size": int(candidate_pool_size),
+        "output_top_k": int(output_top_k),
         "dry_run": dry_run,
     }
     if diagnostics:

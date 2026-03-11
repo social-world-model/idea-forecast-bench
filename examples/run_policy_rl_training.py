@@ -15,6 +15,7 @@ from live_idea_bench.rl import (  # noqa: E402
     load_grpo_train_config,
     load_rloo_train_config,
     load_reward_config,
+    load_selection_config,
 )
 from live_idea_bench.rl.io import _write_json  # noqa: E402
 from live_idea_bench.rl.model_zoo import list_small_model_payloads, resolve_small_model  # noqa: E402
@@ -39,6 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--episode-config", type=str, default="episode_build.yaml", help="RL episode config file under config/rl.")
     parser.add_argument("--candidate-config", type=str, default="candidate_generation.yaml", help="Candidate generation config file under config/rl.")
     parser.add_argument("--reward-config", type=str, default="reward.yaml", help="Reward config file under config/rl.")
+    parser.add_argument("--selection-config", type=str, default="selection.yaml", help="Selector config file under config/rl.")
     parser.add_argument("--similarity-config", type=str, default="similarity.yaml", help="Similarity config used for reward evaluation.")
     parser.add_argument("--list-model-presets", action="store_true", help="Print the built-in small-model candidates and exit.")
     return parser
@@ -108,6 +110,7 @@ def main() -> int:
     episode_config = load_episode_build_config(args.episode_config)
     candidate_config = load_candidate_generation_config(args.candidate_config)
     reward_config = load_reward_config(args.reward_config)
+    selection_config = load_selection_config(args.selection_config)
     trainer_config_path, trainer_config = _resolve_trainer_config(args)
 
     overrides: dict[str, str] = {}
@@ -126,8 +129,10 @@ def main() -> int:
         episode_config=episode_config,
         candidate_config=candidate_config,
         reward_config=reward_config,
+        selection_config=selection_config,
         trainer_config=trainer_config,
         trainer_config_path=trainer_config_path,
+        selection_config_path=args.selection_config,
         split=args.split,
         max_episodes=args.max_episodes,
         similarity_config_path=args.similarity_config,

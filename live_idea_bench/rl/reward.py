@@ -8,11 +8,11 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable, Sequence
 
 from live_idea_bench.models import EvaluationResult, IdeaPrediction, PaperRecord, PredictionMatchDetail
+from live_idea_bench.rl.config import RewardConfig
+from live_idea_bench.rl.local_generation import parse_single_completion_prediction
+from live_idea_bench.similarity import idea_text, paper_text, score_prediction_list
 
 logger = logging.getLogger(__name__)
-from live_idea_bench.rl.config import RewardConfig
-from live_idea_bench.rl.local_generation import parse_completion_predictions
-from live_idea_bench.similarity import idea_text, paper_text, score_prediction_list
 
 
 @dataclass
@@ -150,52 +150,39 @@ def evaluate_rl_reward(
     )
     evaluation = scored.evaluation
     reward_items: list[PerIdeaReward] = []
-    weighted_total = 0.0
-    total_rank_weight = 0.0
-    prior_predictions: list[IdeaPrediction] = []
-
-    top_predictions = predictions[: reward_config.top_k]
-    for idx, prediction in enumerate(top_predictions):
-        detail = scored.matches[idx] if idx < len(scored.matches) else PredictionMatchDetail(
-            prediction_rank=prediction.rank,
-            prediction_title=prediction.title,
-        )
-        future_match_value = detail.score if detail.is_match else 0.0
-        novelty_value = _novelty_score(prediction, train_papers)
-        specificity_value = _specificity_score(prediction, reward_config)
-        lead_time_value = round(max(0.0, min(1.0, detail.lead_time if detail.is_match else 0.0)), 4)
-        duplicate_penalty = _duplicate_penalty(prediction, detail, prior_predictions, reward_config)
-        total = (
-            (reward_config.weights.future_match * future_match_value)
-            + (reward_config.weights.novelty * novelty_value)
-            + (reward_config.weights.specificity * specificity_value)
-            + (reward_config.weights.lead_time * lead_time_value)
-            - (reward_config.weights.duplicate_penalty * duplicate_penalty)
-        )
-        rank_weight = 1.0 / (1.0 + (reward_config.rank_decay * max(0, prediction.rank - 1)))
-        weighted_total += rank_weight * total
-        total_rank_weight += rank_weight
-        reward_items.append(
-            PerIdeaReward(
-                rank=prediction.rank,
-                title=prediction.title,
-                matched_paper_id=detail.paper_id,
-                future_match=round(future_match_value, 4),
-                novelty=novelty_value,
-                specificity=specificity_value,
-                lead_time=lead_time_value,
-                duplicate_penalty=duplicate_penalty,
-                total=round(total, 4),
-            )
-        )
-        prior_predictions.append(prediction)
-
-    dense_reward = weighted_total / total_rank_weight if total_rank_weight else 0.0
-    bench_score = benchmark_score(evaluation)
-    final_reward = (
-        ((1.0 - reward_config.benchmark_score_weight) * dense_reward)
-        + (reward_config.benchmark_score_weight * bench_score)
+    top_predictions = predictions[:1]
+    prediction = top_predictions[0] if top_predictions else IdeaPrediction(rank=1, title="", rationale="", approach="")
+    detail = scored.matches[0] if scored.matches else PredictionMatchDetail(
+        prediction_rank=prediction.rank,
+        prediction_title=prediction.title,
     )
+    future_match_value = detail.score if detail.is_match else 0.0
+    novelty_value = _novelty_score(prediction, train_papers)
+    specificity_value = _specificity_score(prediction, reward_config)
+    lead_time_value = round(max(0.0, min(1.0, detail.lead_time if detail.is_match else 0.0)), 4)
+    total = (
+        (reward_config.weights.future_match * future_match_value)
+        + (reward_config.weights.novelty * novelty_value)
+        + (reward_config.weights.specificity * specificity_value)
+        + (reward_config.weights.lead_time * lead_time_value)
+    )
+    reward_items.append(
+        PerIdeaReward(
+            rank=prediction.rank,
+            title=prediction.title,
+            matched_paper_id=detail.paper_id,
+            future_match=round(future_match_value, 4),
+            novelty=novelty_value,
+            specificity=specificity_value,
+            lead_time=lead_time_value,
+            duplicate_penalty=0.0,
+            total=round(total, 4),
+        )
+    )
+
+    dense_reward = round(total, 4)
+    bench_score = benchmark_score(evaluation)
+    final_reward = dense_reward
 
     return RLRewardEvaluation(
         benchmark_evaluation=evaluation,
@@ -266,7 +253,7 @@ def build_online_rl_reward_function(
         rewards: list[float] = []
         total = len(completions)
         for idx, completion in enumerate(completions):
-            predictions = parse_completion_predictions(completion, limit=reward_config.top_k)
+            prediction = parse_single_completion_prediction(completion)
             train_payload = _value_for_index(train_papers, idx, total) or []
             future_payload = _value_for_index(future_papers, idx, total) or []
             cutoff_value = _value_for_index(cutoff_date, idx, total)
@@ -278,12 +265,12 @@ def build_online_rl_reward_function(
                 logger.warning("Failed to reconstruct PaperRecord at index %d: %s", idx, exc)
                 rewards.append(0.0)
                 continue
-            if not predictions:
+            if prediction is None:
                 rewards.append(0.0)
                 continue
             try:
                 evaluation = evaluate_rl_reward(
-                    predictions=predictions,
+                    predictions=[prediction],
                     train_papers=reconstructed_train,
                     future_papers=reconstructed_future,
                     reward_config=reward_config,
@@ -301,5 +288,4 @@ def build_online_rl_reward_function(
         return rewards
 
     return reward_func
-
 
