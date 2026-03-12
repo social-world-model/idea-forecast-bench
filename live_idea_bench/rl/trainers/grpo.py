@@ -61,11 +61,11 @@ def train_grpo_with_trl(
     target_dir = Path(output_dir).resolve()
     dataset_path = target_dir / "trainer_dataset.jsonl"
     _write_jsonl(dataset_path, dataset_rows)
-    inference_model_name = str(init_policy_path or model_name)
+    training_model_name = str(init_policy_path or model_name)
     manifest = build_policy_manifest(
         trainer="grpo",
         base_model_name=model_name,
-        inference_model_name=inference_model_name,
+        inference_model_name=model_name,
         init_policy_path=init_policy_path,
         predictor_config=predictor_config,
         trainer_config_path=trainer_config_path,
@@ -115,7 +115,7 @@ def train_grpo_with_trl(
     trainer = create_trl_trainer(
         deps["GRPOTrainer"],
         {
-            "model": inference_model_name,
+            "model": training_model_name,
             "args": args,
             "reward_funcs": reward_func,
             "train_dataset": train_dataset,

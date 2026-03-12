@@ -96,6 +96,11 @@ def main() -> int:
     if args.list_model_presets:
         print(json.dumps(list_small_model_payloads(), indent=2, ensure_ascii=False))
         return 0
+    if args.split != "train" and not args.prepare_only:
+        parser.error(
+            "--split validation|test|all is only allowed with --prepare-only. "
+            "RL training runs must use --split train."
+        )
 
     input_dir = Path(args.input_dir)
     papers = load_papers_from_markdown(

@@ -4,6 +4,8 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
+import pytest
+
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.rl import (
     CandidateGenerationConfig,
@@ -29,6 +31,7 @@ from live_idea_bench.rl import (
     train_grpo_with_trl,
     train_rloo_with_trl,
 )
+from live_idea_bench.rl.reward import build_online_rl_reward_function
 
 
 def _paper(paper_id: str, month: str, *, published_date: str, summary: str) -> PaperRecord:
@@ -106,6 +109,22 @@ def test_evaluate_rl_reward_is_single_idea_and_no_duplicate_penalty() -> None:
     assert len(reward.per_idea_rewards) == 1
     assert reward.per_idea_rewards[0].duplicate_penalty == 0.0
     assert reward.reward_breakdown["benchmark_score"] == reward.benchmark_score
+    assert reward.invalid_completion is False
+    assert reward.reward_breakdown["invalid_completion"] == 0.0
+
+
+def test_build_online_reward_function_penalizes_invalid_completion() -> None:
+    reward_func = build_online_rl_reward_function(RewardConfig(top_k=1, invalid_completion_reward=-0.05))
+
+    rewards = reward_func(
+        completions=['{"ideas":[{"title":"one"},{"title":"two"}]}'],
+        train_papers=[[asdict(_paper("train-1", "2024-01", published_date="2024-01-01", summary="old topic"))]],
+        future_papers=[[asdict(_paper("future-1", "2024-02", published_date="2024-02-01", summary="new topic"))]],
+        cutoff_date=["2024-02-01"],
+        future_end_date=["2024-03-31"],
+    )
+
+    assert rewards == [-0.05]
 
 
 def test_build_dpo_pairs_and_grpo_advantages_from_episode_candidates() -> None:
@@ -165,6 +184,7 @@ def test_train_dpo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path) 
     assert dataset_path.exists()
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert payload["trainer"] == "dpo"
+    assert payload["inference_model_name"] == "gpt-4o-mini"
 
 
 def test_train_grpo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path) -> None:
@@ -199,6 +219,7 @@ def test_train_grpo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path)
     assert dataset_path.exists()
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert payload["trainer"] == "grpo"
+    assert payload["inference_model_name"] == "Qwen/Qwen2.5-3B-Instruct"
 
 
 def test_train_rloo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path) -> None:
@@ -233,6 +254,7 @@ def test_train_rloo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path)
     assert dataset_path.exists()
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert payload["trainer"] == "rloo"
+    assert payload["inference_model_name"] == "Qwen/Qwen2.5-3B-Instruct"
 
 
 def test_prepare_common_rl_context_reuses_shared_artifacts(tmp_path: Path) -> None:
@@ -297,6 +319,7 @@ def test_run_policy_rl_pipeline_prepare_only_writes_expected_artifacts(tmp_path:
     assert (run_root / "pipeline_manifest.json").exists()
     assert manifest["prepare_only"] is True
     assert manifest["trainer_policy_manifest_path"] == ""
+    assert manifest["training_split_policy"] == "train_only"
 
 
 def test_run_policy_rl_pipeline_grpo_supports_init_policy_and_skip_alignment(tmp_path: Path) -> None:
@@ -319,7 +342,7 @@ def test_run_policy_rl_pipeline_grpo_supports_init_policy_and_skip_alignment(tmp
         trainer_config=GRPOTrainConfig(dry_run=True),
         trainer_config_path="grpo_train.yaml",
         selection_config_path="selection.yaml",
-        split="all",
+        split="train",
         init_policy_path=str(init_path),
         skip_alignment_check=True,
     )
@@ -328,6 +351,94 @@ def test_run_policy_rl_pipeline_grpo_supports_init_policy_and_skip_alignment(tmp
     assert manifest["trainer"] == "grpo"
     assert payload["trainer"] == "grpo"
     assert payload["init_policy_path"] == str(init_path)
+    assert payload["base_model_name"] == "Qwen/Qwen2.5-3B-Instruct"
+    assert payload["inference_model_name"] == "Qwen/Qwen2.5-3B-Instruct"
+
+
+def test_run_policy_rl_pipeline_rejects_non_train_training_split(tmp_path: Path) -> None:
+    papers = [
+        _paper(f"p-{month:02d}", f"2024-{month:02d}", published_date=f"2024-{month:02d}-01", summary=f"summary {month}")
+        for month in range(1, 13)
+    ]
+
+    with pytest.raises(ValueError, match="restricted to --split train"):
+        run_policy_rl_pipeline(
+            papers,
+            trainer="grpo",
+            model_name="Qwen/Qwen2.5-3B-Instruct",
+            output_dir=str(tmp_path / "rl-run"),
+            episode_config=EpisodeBuildConfig(horizon_months=1, min_train_papers=2, past_window_months=6, step_months=3),
+            candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=2, ideas_per_list=4),
+            reward_config=RewardConfig(top_k=1),
+            selection_config=SelectionConfig(),
+            trainer_config=GRPOTrainConfig(dry_run=True),
+            trainer_config_path="grpo_train.yaml",
+            selection_config_path="selection.yaml",
+            split="validation",
+            skip_alignment_check=True,
+        )
+
+
+def test_run_policy_rl_pipeline_grpo_writes_alignment_report(tmp_path: Path) -> None:
+    papers = [
+        _paper(f"p-{month:02d}", f"2024-{month:02d}", published_date=f"2024-{month:02d}-01", summary=f"summary {month}")
+        for month in range(1, 13)
+    ]
+
+    manifest = run_policy_rl_pipeline(
+        papers,
+        trainer="grpo",
+        model_name="Qwen/Qwen2.5-3B-Instruct",
+        output_dir=str(tmp_path / "rl-run"),
+        episode_config=EpisodeBuildConfig(horizon_months=1, min_train_papers=2, past_window_months=6, step_months=3),
+        candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=2, ideas_per_list=4),
+        reward_config=RewardConfig(top_k=1),
+        selection_config=SelectionConfig(),
+        trainer_config=GRPOTrainConfig(dry_run=True, reward_alignment_threshold=0.0),
+        trainer_config_path="grpo_train.yaml",
+        selection_config_path="selection.yaml",
+        split="train",
+        skip_alignment_check=False,
+    )
+
+    report_path = tmp_path / "rl-run" / "grpo" / "alignment_report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+
+    assert manifest["trainer"] == "grpo"
+    assert report_path.exists()
+    assert report["episodes_used"] >= 1
+    assert "reward_selected_avg_hit_at_1" in report
+    assert "prompt_baseline_avg_mrr" in report
+    assert "invalid_completion_rate" in report
+
+
+def test_run_policy_rl_pipeline_requires_validation_for_alignment(tmp_path: Path) -> None:
+    papers = [
+        _paper(f"p-{month:02d}", f"2024-{month:02d}", published_date=f"2024-{month:02d}-01", summary=f"summary {month}")
+        for month in range(1, 13)
+    ]
+
+    with pytest.raises(ValueError, match="Validation episodes are required"):
+        run_policy_rl_pipeline(
+            papers,
+            trainer="grpo",
+            model_name="Qwen/Qwen2.5-3B-Instruct",
+            output_dir=str(tmp_path / "rl-run"),
+            episode_config=EpisodeBuildConfig(
+                horizon_months=1,
+                min_train_papers=2,
+                past_window_months=6,
+                step_months=9,
+            ),
+            candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=2, ideas_per_list=4),
+            reward_config=RewardConfig(top_k=1),
+            selection_config=SelectionConfig(),
+            trainer_config=GRPOTrainConfig(dry_run=True, reward_alignment_threshold=0.0),
+            trainer_config_path="grpo_train.yaml",
+            selection_config_path="selection.yaml",
+            split="train",
+            skip_alignment_check=False,
+        )
 
 
 def test_trainer_registry_supports_all_three_algorithms() -> None:
@@ -354,6 +465,8 @@ def test_select_top_k_predictions_uses_candidate_pool_dedup_and_mmr() -> None:
     assert selected[0].rank == 1
     assert len({prediction.title for prediction in selected}) == 3
     assert all("selector_relevance" in prediction.metadata for prediction in selected)
+    assert all("unique_candidate_titles" in prediction.metadata for prediction in selected)
+    assert all("dedup_retention_ratio" in prediction.metadata for prediction in selected)
 
 
 def test_small_model_registry_includes_requested_qwen_and_llama_candidates() -> None:

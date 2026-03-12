@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, List
 
 import dataclasses
+import random
 
 from live_idea_bench.daily import coerce_prediction
 from live_idea_bench.models import IdeaPrediction, PaperRecord
@@ -68,11 +69,44 @@ class PolicyRLStrategy(IdeaStrategy):
         path = str(manifest.get("selection_config_path") or "").strip() or self.selection_config
         return load_selection_config(path)
 
+    @staticmethod
+    def _sampling_plan(selection_config: SelectionConfig, default_temperature: float | None) -> list[dict[str, Any]]:
+        temperatures = list(selection_config.temperature_schedule) or [default_temperature or 0.8]
+        top_ps = list(selection_config.top_p_schedule) or [0.9]
+        combinations = [(temperature, top_p) for temperature in temperatures for top_p in top_ps]
+        if not combinations:
+            combinations = [(default_temperature or 0.8, 0.9)]
+
+        plan: list[dict[str, Any]] = []
+        for idx in range(selection_config.candidate_pool_size):
+            temperature, top_p = combinations[idx % len(combinations)]
+            plan.append(
+                {
+                    "candidate_sample_index": idx,
+                    "sampling_temperature": float(temperature),
+                    "sampling_top_p": float(top_p),
+                    "context_shuffle_seed": idx if selection_config.enable_context_shuffle else None,
+                }
+            )
+        return plan
+
+    @staticmethod
+    def _shuffle_train_papers(
+        train_papers: List[PaperRecord],
+        context_shuffle_seed: int | None,
+    ) -> List[PaperRecord]:
+        ordered = list(train_papers)
+        if context_shuffle_seed is None:
+            return ordered
+        rng = random.Random(context_shuffle_seed)
+        rng.shuffle(ordered)
+        return ordered
+
     def _generate_from_local_checkpoint(
         self,
         train_papers: List[PaperRecord],
         cutoff_month: str,
-        candidate_pool_size: int,
+        selection_config: SelectionConfig,
         *,
         checkpoint_path: str,
         predictor_config_path: str,
@@ -82,25 +116,26 @@ class PolicyRLStrategy(IdeaStrategy):
         from live_idea_bench.rl.local_generation import generate_local_predictions
 
         candidates: list[IdeaPrediction] = []
-        for idx in range(candidate_pool_size):
+        for sample in self._sampling_plan(selection_config, temperature):
             predictions = generate_local_predictions(
-                train_papers=train_papers,
+                train_papers=self._shuffle_train_papers(train_papers, sample["context_shuffle_seed"]),
                 cutoff_month=cutoff_month,
                 top_k=1,
                 model_name_or_path=checkpoint_path,
                 predictor_config_path=predictor_config_path,
-                temperature=temperature,
+                temperature=sample["sampling_temperature"],
                 max_new_tokens=768,
-                top_p=0.9,
+                top_p=sample["sampling_top_p"],
                 sampling_top_k=40,
                 repetition_penalty=1.05,
-                seed=idx,
+                seed=sample["candidate_sample_index"],
                 base_model_name=base_model_name,
+                fallback_to_heuristic=False,
             )
             for prediction in predictions[:1]:
                 candidates.append(dataclasses.replace(prediction, metadata={
                     "checkpoint_path": checkpoint_path,
-                    "candidate_sample_index": idx,
+                    **sample,
                     **prediction.metadata,
                 }))
         return candidates
@@ -113,21 +148,24 @@ class PolicyRLStrategy(IdeaStrategy):
         model_name: str | None,
         predictor_config_path: str,
         temperature: float | None,
-        candidate_pool_size: int,
+        selection_config: SelectionConfig,
     ) -> list[IdeaPrediction]:
         candidates: list[IdeaPrediction] = []
-        for idx in range(candidate_pool_size):
+        for sample in self._sampling_plan(selection_config, temperature):
             predictions = generate_predictions(
-                train_papers=train_papers,
+                train_papers=self._shuffle_train_papers(train_papers, sample["context_shuffle_seed"]),
                 cutoff_month=cutoff_month,
                 top_k=1,
                 model_name=model_name,
                 predictor_config_path=predictor_config_path,
-                temperature=temperature,
+                temperature=sample["sampling_temperature"],
+                top_p=sample["sampling_top_p"],
+                seed=sample["candidate_sample_index"],
+                fallback_to_heuristic=False,
             )
             for prediction in predictions[:1]:
                 candidates.append(dataclasses.replace(prediction, metadata={
-                    "candidate_sample_index": idx,
+                    **sample,
                     **prediction.metadata,
                 }))
         return candidates
@@ -169,43 +207,43 @@ class PolicyRLStrategy(IdeaStrategy):
             candidates = self._generate_from_local_checkpoint(
                 train_papers=train_papers,
                 cutoff_month=cutoff_month,
-                candidate_pool_size=resolved_selection_config.candidate_pool_size,
+                selection_config=resolved_selection_config,
                 checkpoint_path=str(Path(checkpoint_path).expanduser()),
                 predictor_config_path=resolved_predictor_config,
                 temperature=resolved_temperature,
                 base_model_name=(
-                    str(manifest.get("inference_model_name") or "").strip() or None
+                    str(manifest.get("base_model_name") or "").strip()
+                    or str(manifest.get("inference_model_name") or "").strip()
+                    or None
                 ),
             )
-            if candidates:
-                selected = select_top_k_predictions(
-                    candidates,
-                    train_papers,
-                    resolved_selection_config,
-                    top_k=top_k,
-                )
-                if selected:
-                    return selected
-
-        resolved_model = (
-            self.model_name
-            or str(manifest.get("inference_model_name") or "").strip()
-            or None
-        )
-        candidates = self._generate_candidate_pool_from_model(
-            train_papers=train_papers,
-            cutoff_month=cutoff_month,
-            model_name=resolved_model,
-            predictor_config_path=resolved_predictor_config,
-            temperature=resolved_temperature,
-            candidate_pool_size=resolved_selection_config.candidate_pool_size,
-        )
-        predictions = select_top_k_predictions(
-            candidates,
-            train_papers,
-            resolved_selection_config,
-            top_k=top_k,
-        )
+            selected = select_top_k_predictions(
+                candidates,
+                train_papers,
+                resolved_selection_config,
+                top_k=top_k,
+            )
+            predictions = selected
+        else:
+            resolved_model = (
+                self.model_name
+                or str(manifest.get("inference_model_name") or "").strip()
+                or None
+            )
+            candidates = self._generate_candidate_pool_from_model(
+                train_papers=train_papers,
+                cutoff_month=cutoff_month,
+                model_name=resolved_model,
+                predictor_config_path=resolved_predictor_config,
+                temperature=resolved_temperature,
+                selection_config=resolved_selection_config,
+            )
+            predictions = select_top_k_predictions(
+                candidates,
+                train_papers,
+                resolved_selection_config,
+                top_k=top_k,
+            )
         policy_stage = str(manifest.get("trainer") or manifest.get("stage") or "policy_rl")
         return [
             dataclasses.replace(p, rank=idx, metadata={

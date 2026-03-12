@@ -24,6 +24,7 @@ class RewardConfig:
     top_k: int = 1
     candidate_limit: int = 25
     duplicate_similarity_threshold: float = 0.8
+    invalid_completion_reward: float = -0.05
     specificity_title_weight: float = 0.2
     specificity_rationale_weight: float = 0.4
     specificity_approach_weight: float = 0.4
@@ -67,6 +68,9 @@ class SelectionConfig:
     candidate_pool_size: int = 24
     output_top_k: int = 5
     dedup_similarity_threshold: float = 0.8
+    temperature_schedule: list[float] = field(default_factory=lambda: [0.35, 0.55, 0.75, 0.95])
+    top_p_schedule: list[float] = field(default_factory=lambda: [0.8, 0.9, 0.95])
+    enable_context_shuffle: bool = True
     relevance_frequency_weight: float = 0.5
     relevance_confidence_weight: float = 0.3
     relevance_heuristic_weight: float = 0.2

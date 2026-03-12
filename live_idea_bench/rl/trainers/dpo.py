@@ -47,6 +47,12 @@ class DPOTrainerRunner(RLTrainerRunner):
         )
         rollout_path = output_dir / "candidate_rollouts.json"
         _write_json(rollout_path, {"episodes": serialize_episode_candidate_lists(candidate_lists)})
+        invalid_candidate_count = sum(
+            1
+            for episode_batch in candidate_lists
+            for candidate in episode_batch.candidates
+            if candidate.reward.invalid_completion or not candidate.predictions
+        )
         dpo_pairs = build_dpo_pairs(candidate_lists, trainer_config)
         dataset_path = output_dir / "trainer_dataset.jsonl"
         _write_jsonl(dataset_path, dpo_pairs)
@@ -58,6 +64,7 @@ class DPOTrainerRunner(RLTrainerRunner):
             metadata={
                 "candidate_rollout_path": str(rollout_path.resolve()),
                 "dpo_pair_count": len(dpo_pairs),
+                "invalid_candidate_count": invalid_candidate_count,
             },
         )
 
@@ -85,11 +92,11 @@ def train_dpo_with_trl(
     target_dir = Path(output_dir).resolve()
     dataset_path = target_dir / "trainer_dataset.jsonl"
     _write_jsonl(dataset_path, dataset_rows)
-    inference_model_name = str(init_policy_path or model_name)
+    training_model_name = str(init_policy_path or model_name)
     manifest = build_policy_manifest(
         trainer="dpo",
         base_model_name=model_name,
-        inference_model_name=inference_model_name,
+        inference_model_name=model_name,
         init_policy_path=init_policy_path,
         predictor_config=predictor_config,
         trainer_config_path=trainer_config_path,
@@ -137,7 +144,7 @@ def train_dpo_with_trl(
     trainer = create_trl_trainer(
         deps["DPOTrainer"],
         {
-            "model": inference_model_name,
+            "model": training_model_name,
             "args": args,
             "train_dataset": train_dataset,
             "peft_config": peft_config,

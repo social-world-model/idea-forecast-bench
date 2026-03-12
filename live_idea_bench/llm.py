@@ -65,6 +65,8 @@ def get_response_from_llm(
     print_debug: bool = False,
     msg_history: list[dict[str, Any]] | None = None,
     temperature: float = 0.75,
+    top_p: float | None = None,
+    seed: int | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     if msg_history is None:
         msg_history = []
@@ -76,13 +78,16 @@ def get_response_from_llm(
                 "content": [{"type": "text", "text": msg}],
             }
         ]
-        response = client.messages.create(
-            model=model,
-            max_tokens=MAX_NUM_TOKENS,
-            temperature=temperature,
-            system=system_message,
-            messages=new_msg_history,
-        )
+        request_kwargs = {
+            "model": model,
+            "max_tokens": MAX_NUM_TOKENS,
+            "temperature": temperature,
+            "system": system_message,
+            "messages": new_msg_history,
+        }
+        if top_p is not None:
+            request_kwargs["top_p"] = top_p
+        response = client.messages.create(**request_kwargs)
         content = response.content[0].text
         new_msg_history = new_msg_history + [
             {
@@ -100,13 +105,15 @@ def get_response_from_llm(
             ],
             "n": 1,
             "stop": None,
-            "seed": 0,
+            "seed": 0 if seed is None else seed,
         }
         if model.startswith("gpt-5"):
             request_kwargs["max_completion_tokens"] = MAX_NUM_TOKENS
         else:
             request_kwargs["temperature"] = temperature
             request_kwargs["max_tokens"] = MAX_NUM_TOKENS
+            if top_p is not None:
+                request_kwargs["top_p"] = top_p
 
         response = client.chat.completions.create(**request_kwargs)
         content = response.choices[0].message.content or ""
@@ -119,13 +126,16 @@ def get_response_from_llm(
                 {"role": history_msg["role"], "parts": history_msg["content"]}
             )
 
+        generation_kwargs: dict[str, Any] = {
+            "temperature": temperature,
+            "max_output_tokens": MAX_NUM_TOKENS,
+            "candidate_count": 1,
+        }
+        if top_p is not None:
+            generation_kwargs["top_p"] = top_p
         response = client.generate_content(
             contents=gemini_contents,
-            generation_config=GenerationConfig(
-                temperature=temperature,
-                max_output_tokens=MAX_NUM_TOKENS,
-                candidate_count=1,
-            ),
+            generation_config=GenerationConfig(**generation_kwargs),
         )
         content = response.text or ""
         new_msg_history = new_msg_history + [{"role": "assistant", "content": content}]

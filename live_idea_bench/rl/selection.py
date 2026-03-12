@@ -47,7 +47,16 @@ def select_top_k_predictions(
         key = _title_key(candidate)
         title_frequency[key] = title_frequency.get(key, 0) + 1
 
+    unique_candidate_titles = len(title_frequency)
     deduped = _dedup_predictions(candidates, threshold=selection_config.dedup_similarity_threshold)
+    dedup_retention_ratio = round(len(deduped) / max(1, len(candidates)), 4)
+    logger.info(
+        "Selector candidate pool: total=%d unique_titles=%d deduped=%d retention=%.4f",
+        len(candidates),
+        unique_candidate_titles,
+        len(deduped),
+        dedup_retention_ratio,
+    )
     signal_terms = _signal_terms(train_papers)
     total_candidates = max(1, len(candidates))
 
@@ -70,6 +79,8 @@ def select_top_k_predictions(
             "mean_model_confidence": round(confidence, 4),
             "heuristic_base_score": round(heuristic, 4),
             "selector_relevance": round(relevance, 4),
+            "unique_candidate_titles": unique_candidate_titles,
+            "dedup_retention_ratio": dedup_retention_ratio,
         }
         scored_pool.append((dataclasses.replace(candidate, metadata=metadata), relevance))
 

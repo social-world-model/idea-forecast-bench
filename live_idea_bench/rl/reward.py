@@ -33,6 +33,7 @@ class RLRewardEvaluation:
     benchmark_evaluation: EvaluationResult
     benchmark_score: float
     list_reward: float
+    invalid_completion: bool = False
     per_idea_rewards: list[PerIdeaReward] = field(default_factory=list)
     reward_breakdown: dict[str, float] = field(default_factory=dict)
     match_details: list[PredictionMatchDetail] = field(default_factory=list)
@@ -124,6 +125,45 @@ def benchmark_score(evaluation: EvaluationResult) -> float:
     return round((0.7 * evaluation.hit_at_k) + (0.3 * evaluation.mrr), 4)
 
 
+def _empty_evaluation() -> EvaluationResult:
+    return EvaluationResult(
+        hit_at_k=0.0,
+        recall_at_k=0.0,
+        precision_at_k=0.0,
+        mrr=0.0,
+        novelty=0.0,
+        diversity=0.0,
+        matched_prediction_ranks=[],
+        matched_paper_ids=[],
+        lead_time=0.0,
+        duplicate_rate=0.0,
+    )
+
+
+def build_invalid_reward_evaluation(
+    reward_config: RewardConfig,
+    *,
+    parse_failure: bool = True,
+) -> RLRewardEvaluation:
+    invalid_reward = round(reward_config.invalid_completion_reward, 4)
+    return RLRewardEvaluation(
+        benchmark_evaluation=_empty_evaluation(),
+        benchmark_score=0.0,
+        list_reward=invalid_reward,
+        invalid_completion=True,
+        reward_breakdown={
+            "dense_reward": invalid_reward,
+            "benchmark_score": 0.0,
+            "lead_time": 0.0,
+            "duplicate_rate": 0.0,
+            "invalid_completion": 1.0,
+            "parse_failure": 1.0 if parse_failure else 0.0,
+            "invalid_completion_reward": invalid_reward,
+        },
+        match_details=[],
+    )
+
+
 def evaluate_rl_reward(
     predictions: list[IdeaPrediction],
     train_papers: list[PaperRecord],
@@ -188,12 +228,16 @@ def evaluate_rl_reward(
         benchmark_evaluation=evaluation,
         benchmark_score=bench_score,
         list_reward=round(final_reward, 4),
+        invalid_completion=False,
         per_idea_rewards=reward_items,
         reward_breakdown={
             "dense_reward": round(dense_reward, 4),
             "benchmark_score": bench_score,
             "lead_time": evaluation.lead_time,
             "duplicate_rate": evaluation.duplicate_rate,
+            "invalid_completion": 0.0,
+            "parse_failure": 0.0,
+            "invalid_completion_reward": round(reward_config.invalid_completion_reward, 4),
         },
         match_details=scored.matches,
     )
@@ -263,10 +307,10 @@ def build_online_rl_reward_function(
                 reconstructed_future = [PaperRecord(**paper) for paper in future_payload]
             except (TypeError, KeyError) as exc:
                 logger.warning("Failed to reconstruct PaperRecord at index %d: %s", idx, exc)
-                rewards.append(0.0)
+                rewards.append(round(reward_config.invalid_completion_reward, 4))
                 continue
             if prediction is None:
-                rewards.append(0.0)
+                rewards.append(round(reward_config.invalid_completion_reward, 4))
                 continue
             try:
                 evaluation = evaluate_rl_reward(
@@ -282,10 +326,9 @@ def build_online_rl_reward_function(
                 )
             except Exception as exc:
                 logger.warning("evaluate_rl_reward failed at index %d: %s", idx, exc, exc_info=True)
-                rewards.append(0.0)
+                rewards.append(round(reward_config.invalid_completion_reward, 4))
                 continue
             rewards.append(evaluation.list_reward)
         return rewards
 
     return reward_func
-

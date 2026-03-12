@@ -37,6 +37,12 @@ def build_prediction_prompt(
         abstracts=_build_abstract_block(train_papers, predictor_config.max_context_papers),
         cutoff_month=cutoff_month,
     )
+    if n_ideas == 1:
+        user_prompt = (
+            f"{user_prompt}\n\n"
+            "Return exactly one idea as a single JSON object. "
+            "Do not return a list, and do not include an `ideas` array."
+        )
     return f"{predictor_config.system_prompt}\n\n{user_prompt}".strip()
 
 
@@ -91,10 +97,28 @@ def parse_completion_predictions(raw_completion: Any, *, limit: int) -> list[Ide
 
 
 def parse_single_completion_prediction(raw_completion: Any) -> IdeaPrediction | None:
-    predictions = parse_completion_predictions(raw_completion, limit=2)
-    if len(predictions) != 1:
+    raw_text = _completion_to_text(raw_completion).strip()
+    if not raw_text:
         return None
-    prediction = predictions[0]
+    try:
+        payload = _extract_json_payload(raw_text)
+        if not isinstance(payload, dict):
+            return None
+        item: dict[str, Any] | None = None
+        if payload.get("title") or payload.get("Title"):
+            item = payload
+        else:
+            ideas = payload.get("ideas")
+            if isinstance(ideas, list) and len(ideas) == 1 and isinstance(ideas[0], dict):
+                item = ideas[0]
+        if item is None:
+            return None
+        prediction = coerce_prediction(item, 1)
+    except Exception as exc:
+        logger.warning("Failed to parse single completion prediction: %s", exc)
+        return None
+    if not prediction.title.strip():
+        return None
     return dataclasses.replace(prediction, rank=1)
 
 
@@ -186,6 +210,7 @@ def generate_local_predictions(
     enable_thinking: bool | None = None,
     seed: int | None = None,
     base_model_name: str | None = None,
+    fallback_to_heuristic: bool = True,
 ) -> list[IdeaPrediction]:
     prompt = build_prediction_prompt(
         train_papers,
@@ -222,8 +247,14 @@ def generate_local_predictions(
     generated = model.generate(**encoded, **generation_kwargs)
     output_ids = generated[0][len(encoded["input_ids"][0]) :].tolist()
     raw_text = tokenizer.decode(output_ids, skip_special_tokens=True)
-    predictions = parse_completion_predictions(raw_text, limit=top_k)
+    if top_k == 1:
+        prediction = parse_single_completion_prediction(raw_text)
+        predictions = [prediction] if prediction is not None else []
+    else:
+        predictions = parse_completion_predictions(raw_text, limit=top_k)
     if not predictions:
+        if not fallback_to_heuristic:
+            return []
         predictions = _heuristic_predictions(train_papers, cutoff_month, top_k)
 
     result: list[IdeaPrediction] = []

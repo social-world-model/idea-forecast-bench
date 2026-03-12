@@ -36,8 +36,13 @@ def build_dpo_pairs(
     quantile = min(0.49, max(0.05, config.quantile_fraction))
 
     for episode_batch in episodes:
+        valid_candidates = [
+            candidate
+            for candidate in episode_batch.candidates
+            if candidate.predictions and not candidate.reward.invalid_completion
+        ]
         ranked = sorted(
-            episode_batch.candidates,
+            valid_candidates,
             key=lambda candidate: candidate.reward.list_reward,
             reverse=True,
         )

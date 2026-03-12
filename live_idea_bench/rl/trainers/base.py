@@ -143,6 +143,7 @@ def build_policy_manifest(
     selection_config_path: str,
     candidate_pool_size: int,
     output_top_k: int,
+    training_split_policy: str = "train_only",
     diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     checkpoint_path = output_dir / "artifacts"
@@ -163,10 +164,13 @@ def build_policy_manifest(
         "selection_config_path": str(selection_config_path),
         "candidate_pool_size": int(candidate_pool_size),
         "output_top_k": int(output_top_k),
+        "training_split_policy": training_split_policy,
         "dry_run": dry_run,
     }
     if diagnostics:
         payload["diagnostics"] = diagnostics
+        payload["parse_failure_rate"] = float(diagnostics.get("parse_failure_rate", 0.0))
+        payload["invalid_completion_rate"] = float(diagnostics.get("invalid_completion_rate", 0.0))
     return payload
 
 
