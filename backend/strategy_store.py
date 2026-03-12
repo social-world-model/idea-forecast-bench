@@ -118,6 +118,7 @@ def _normalize_prediction(raw: object, rank_fallback: int) -> dict | None:
         "score": score,
         "confidence": confidence,
         "key_terms": [str(term).strip() for term in key_terms_raw if str(term).strip()],
+        "metadata": raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {},
     }
 
 
@@ -148,6 +149,9 @@ def _normalize_evaluation(evaluation: object) -> object:
         return evaluation
     normalized = dict(evaluation)
     normalized.setdefault("matched_paper_ids", [])
+    normalized.setdefault("matched_prediction_ranks", [])
+    normalized.setdefault("lead_time", 0.0)
+    normalized.setdefault("duplicate_rate", 0.0)
     normalized.pop("matched_terms", None)
     return normalized
 

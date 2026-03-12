@@ -1,0 +1,10 @@
+top_k: 5
+past_window_months: 24
+horizon_months: 6
+step_months: 3
+min_train_papers: 6
+start_month:
+end_month:
+train_ratio: 0.7
+validation_ratio: 0.15
+similarity_config: similarity.yaml

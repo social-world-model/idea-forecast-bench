@@ -44,6 +44,7 @@ def coerce_prediction(raw: Dict[str, Any], rank_fallback: int) -> IdeaPrediction
         score=_maybe_float(raw.get("score", raw.get("Score", raw.get("confidence", 0.0)))) or 0.0,
         confidence=_maybe_float(raw.get("confidence", raw.get("Confidence", raw.get("score")))),
         key_terms=[str(term).strip() for term in key_terms_raw if str(term).strip()],
+        metadata=(raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}),
     )
 
 

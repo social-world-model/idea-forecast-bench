@@ -126,11 +126,11 @@ def evaluate_at_cutoff(
     similarity_config: str = "similarity.yaml",
     model_name: str | None = None,
 ) -> EvaluationResult:
-    resolved_cutoff_month, _ = _resolve_cutoff(
+    resolved_cutoff_month, resolved_cutoff_date = _resolve_cutoff(
         cutoff_month=cutoff_month,
         cutoff_date=cutoff_date,
     )
-    train, future, _, _ = split_train_future_by_cutoff(
+    train, future, _future_end_month, future_end_date = split_train_future_by_cutoff(
         papers=papers,
         cutoff_month=resolved_cutoff_month,
         horizon_months=horizon_months,
@@ -148,6 +148,8 @@ def evaluate_at_cutoff(
         k=top_k,
         similarity_config_path=similarity_config,
         model_name=model_name,
+        cutoff_date=resolved_cutoff_date,
+        future_end_date=future_end_date,
     )
 
 
@@ -161,6 +163,8 @@ def _summarize_windows(windows: list[BacktestWindowResult]) -> dict[str, float]:
             "avg_mrr": 0.0,
             "avg_novelty": 0.0,
             "avg_diversity": 0.0,
+            "avg_lead_time": 0.0,
+            "avg_duplicate_rate": 0.0,
         }
 
     def _avg(name: str) -> float:
@@ -174,6 +178,8 @@ def _summarize_windows(windows: list[BacktestWindowResult]) -> dict[str, float]:
         "avg_mrr": _avg("mrr"),
         "avg_novelty": _avg("novelty"),
         "avg_diversity": _avg("diversity"),
+        "avg_lead_time": _avg("lead_time"),
+        "avg_duplicate_rate": _avg("duplicate_rate"),
     }
 
 
@@ -220,6 +226,8 @@ def run_backtest(
             k=config.top_k,
             similarity_config_path=config.similarity_config,
             model_name=model_name,
+            cutoff_date=cutoff_date,
+            future_end_date=future_end_date,
         )
 
         window_results.append(

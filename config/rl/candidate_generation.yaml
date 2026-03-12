@@ -1,0 +1,12 @@
+num_candidate_lists: 8
+ideas_per_list: 20
+backend: auto
+predictor_config: predictor.yaml
+min_temperature: 0.55
+max_temperature: 1.15
+top_p: 0.9
+top_k: 40
+max_new_tokens: 1536
+repetition_penalty: 1.05
+seed: 7
+enable_thinking: false

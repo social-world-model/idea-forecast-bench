@@ -38,6 +38,8 @@ class EvaluationResult:
     diversity: float
     matched_prediction_ranks: List[int]
     matched_paper_ids: List[str]
+    lead_time: float = 0.0
+    duplicate_rate: float = 0.0
 
 
 @dataclass
@@ -58,6 +60,25 @@ class MatchResult:
     reasoning: Optional[str] = None
     engine_name: str = "hybrid"
     paper_id: Optional[str] = None
+
+
+@dataclass
+class PredictionMatchDetail:
+    prediction_rank: int
+    prediction_title: str
+    paper_id: Optional[str] = None
+    score: float = 0.0
+    is_match: bool = False
+    lead_time: float = 0.0
+    matched_reasoning: Optional[str] = None
+    duplicate_candidate_paper_ids: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ScoredPredictionList:
+    evaluation: EvaluationResult
+    matches: List[PredictionMatchDetail] = field(default_factory=list)
+    unmatched_future_paper_ids: List[str] = field(default_factory=list)
 
 
 @dataclass

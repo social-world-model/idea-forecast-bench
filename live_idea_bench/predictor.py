@@ -231,6 +231,17 @@ def _parse_prediction_items(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
+def _parse_single_prediction_item(payload: Any) -> dict[str, Any] | None:
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("title") or payload.get("Title"):
+        return payload
+    ideas = payload.get("ideas")
+    if isinstance(ideas, list) and len(ideas) == 1 and isinstance(ideas[0], dict):
+        return ideas[0]
+    return None
+
+
 def _infer_domain(train_papers: list[PaperRecord]) -> str:
     terms = _top_terms(
         list(paper.summary for paper in train_papers[-20:]) + [kw for p in train_papers[-20:] for kw in p.keywords],
@@ -256,6 +267,8 @@ def _llm_predictions(
     model_name: str,
     predictor_config_path: str,
     temperature: float | None,
+    top_p: float | None,
+    seed: int | None,
 ) -> list[IdeaPrediction]:
     predictor_config = load_predictor_config(predictor_config_path)
     runtime_config = load_runtime_config()
@@ -275,15 +288,27 @@ def _llm_predictions(
         abstracts=_build_abstract_block(train_papers, predictor_config.max_context_papers),
         cutoff_month=cutoff_month,
     )
+    if top_k == 1:
+        message = (
+            f"{message}\n\n"
+            "Return exactly one idea as a single JSON object, not a list and not an `ideas` array. "
+            "Do not include more than one idea."
+        )
     raw_text, _ = get_response_from_llm(
         msg=message,
         client=client,
         model=resolved_model,
         system_message=predictor_config.system_prompt,
         temperature=resolved_temperature,
+        top_p=top_p,
+        seed=seed,
     )
     payload = _extract_json_payload(raw_text)
-    items = _parse_prediction_items(payload)
+    if top_k == 1:
+        single_item = _parse_single_prediction_item(payload)
+        items = [single_item] if single_item is not None else []
+    else:
+        items = _parse_prediction_items(payload)
 
     predictions: list[IdeaPrediction] = []
     for item in items:
@@ -372,6 +397,9 @@ def generate_predictions(
     model_name: str | None = None,
     predictor_config_path: str = "predictor.yaml",
     temperature: float | None = None,
+    top_p: float | None = None,
+    seed: int | None = None,
+    fallback_to_heuristic: bool = True,
 ) -> list[IdeaPrediction]:
     if not train_papers or top_k <= 0:
         return []
@@ -388,8 +416,12 @@ def generate_predictions(
             model_name=resolved_model,
             predictor_config_path=predictor_config_path,
             temperature=temperature,
+            top_p=top_p,
+            seed=seed,
         )
     except Exception:
+        if not fallback_to_heuristic:
+            return []
         predictions = _heuristic_predictions(
             train_papers=train_papers,
             cutoff_month=cutoff_month,
