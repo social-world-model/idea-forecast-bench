@@ -64,7 +64,7 @@ class KeywordTrendStrategy(IdeaStrategy):
             if total_count < self.min_keyword_freq:
                 continue
             recent_count = recent.get(keyword, 0)
-            trend_gain = recent_count - max(1, total_count // 3)
+            trend_gain = recent_count - max(1, total_count // self.recent_months) 
             score = float(recent_count * 2 + trend_gain)
             scored.append(
                 {
