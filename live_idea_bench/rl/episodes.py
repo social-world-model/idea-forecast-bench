@@ -41,7 +41,7 @@ def _filter_by_month(
     return filtered
 
 
-def _split_labels(total: int, train_ratio: float, validation_ratio: float) -> list[str]:
+def _split_labels_by_ratio(total: int, train_ratio: float, validation_ratio: float) -> list[str]:
     if total <= 0:
         return []
 
@@ -69,6 +69,32 @@ def _split_labels(total: int, train_ratio: float, validation_ratio: float) -> li
     if len(labels) < total:
         labels.extend(["test"] * (total - len(labels)))
     return labels[:total]
+
+
+def _split_labels_by_calendar(
+    cutoff_months: list[str],
+    *,
+    validation_start_month: str | None,
+    test_start_month: str | None,
+) -> list[str] | None:
+    if not validation_start_month and not test_start_month:
+        return None
+
+    validation_idx = month_to_index(validation_start_month) if validation_start_month else None
+    test_idx = month_to_index(test_start_month) if test_start_month else None
+    if validation_idx is not None and test_idx is not None and test_idx < validation_idx:
+        raise ValueError("test_start_month must be on or after validation_start_month")
+
+    labels: list[str] = []
+    for cutoff_month in cutoff_months:
+        cutoff_idx = month_to_index(cutoff_month)
+        if test_idx is not None and cutoff_idx >= test_idx:
+            labels.append("test")
+        elif validation_idx is not None and cutoff_idx >= validation_idx:
+            labels.append("validation")
+        else:
+            labels.append("train")
+    return labels
 
 
 def build_rl_episodes(
@@ -121,7 +147,14 @@ def build_rl_episodes(
             }
         )
 
-    labels = _split_labels(len(candidate_rows), config.train_ratio, config.validation_ratio)
+    cutoff_months = [str(row["cutoff_month"]) for row in candidate_rows]
+    labels = _split_labels_by_calendar(
+        cutoff_months,
+        validation_start_month=config.validation_start_month,
+        test_start_month=config.test_start_month,
+    )
+    if labels is None:
+        labels = _split_labels_by_ratio(len(candidate_rows), config.train_ratio, config.validation_ratio)
     episodes: list[RLEpisode] = []
     for idx, row in enumerate(candidate_rows):
         split = labels[idx] if idx < len(labels) else "test"

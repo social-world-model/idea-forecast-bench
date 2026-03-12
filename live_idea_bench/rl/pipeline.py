@@ -277,8 +277,8 @@ def _require_train_split_for_training(split: str, prepare_only: bool) -> None:
         return
     if normalized_split != "train":
         raise ValueError(
-            "RL training is restricted to --split train. "
-            "Use --prepare-only if you need to inspect validation/test/all artifacts."
+            "RL training is restricted to the train split. "
+            "Use prepare_only if you need to inspect validation/test/all artifacts."
         )
 
 

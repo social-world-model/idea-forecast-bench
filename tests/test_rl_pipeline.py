@@ -67,6 +67,38 @@ def test_build_rl_episodes_assigns_contiguous_train_validation_test_splits() -> 
     assert splits == sorted(splits, key=lambda split: {"train": 0, "validation": 1, "test": 2}[split])
 
 
+def test_build_rl_episodes_supports_calendar_split_boundaries() -> None:
+    papers = [
+        _paper(
+            f"p-{year}-{month:02d}",
+            f"{year}-{month:02d}",
+            published_date=f"{year}-{month:02d}-01",
+            summary=f"summary {year}-{month:02d}",
+        )
+        for year, month in (
+            (2025, 10),
+            (2025, 11),
+            (2025, 12),
+            (2026, 1),
+            (2026, 2),
+            (2026, 3),
+        )
+    ]
+    config = EpisodeBuildConfig(
+        horizon_months=1,
+        min_train_papers=1,
+        start_month="2025-10",
+        end_month="2026-03",
+        step_months=1,
+        validation_start_month="2026-01",
+    )
+
+    episodes = build_rl_episodes(papers, config)
+
+    assert [episode.cutoff_month for episode in episodes] == ["2025-10", "2025-11", "2025-12", "2026-01", "2026-02"]
+    assert [episode.split for episode in episodes] == ["train", "train", "train", "validation", "validation"]
+
+
 def test_build_rl_episodes_respects_past_window_and_step_size() -> None:
     papers = [
         _paper(f"p-{month:02d}", f"2024-{month:02d}", published_date=f"2024-{month:02d}-01", summary=f"summary {month}")
@@ -361,7 +393,7 @@ def test_run_policy_rl_pipeline_rejects_non_train_training_split(tmp_path: Path)
         for month in range(1, 13)
     ]
 
-    with pytest.raises(ValueError, match="restricted to --split train"):
+    with pytest.raises(ValueError, match="restricted to the train split"):
         run_policy_rl_pipeline(
             papers,
             trainer="grpo",

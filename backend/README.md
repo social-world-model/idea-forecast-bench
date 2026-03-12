@@ -222,8 +222,8 @@ Prepare RL artifacts only:
 bash scripts/run_policy_rl_training.sh \
   --input-dir data/arxiv_csml/raw_markdown \
   --model-preset qwen3-4b-instruct-2507 \
-  --stage prepare \
-  --split train \
+  --trainer grpo \
+  --prepare-only \
   --output-dir data/rl_runs/qwen3_4b_prepare
 ```
 
@@ -233,28 +233,28 @@ Run DPO training:
 bash scripts/run_policy_rl_training.sh \
   --input-dir data/arxiv_csml/raw_markdown \
   --model-preset qwen2.5-3b-instruct \
-  --stage dpo \
-  --split train \
+  --trainer dpo \
   --output-dir data/rl_runs/qwen25_3b_dpo
 ```
 
-Run both DPO and GRPO in one pass:
+Run GRPO training:
 
 ```bash
 bash scripts/run_policy_rl_training.sh \
   --input-dir data/arxiv_csml/raw_markdown \
   --model-preset qwen3-4b-instruct-2507 \
-  --stage both \
-  --split train \
-  --output-dir data/rl_runs/qwen3_4b_full
+  --trainer grpo \
+  --output-dir data/rl_runs/qwen3_4b_grpo
 ```
 
 Important notes:
 
-- `prepare` writes `episodes.json`, `candidate_rollouts.json`, `dpo_pairs.jsonl`, `grpo_prompts.jsonl`, and `pipeline_manifest.json`
+- Training CLI no longer exposes `--split`; non-prepare runs always train on the `train` split
+- Use `--prepare-only --prepare-split validation|test|all` if you need non-train artifacts for inspection
+- Default RL episode config keeps all data through `2025-12` in the training split and assigns `2026-01` onward to validation
 - `dpo` trains from offline preference pairs
-- `grpo` uses prompt-only rows plus the repo's reward callback, matching current TRL usage more closely than offline advantage replay
-- `policy_manifest.json` under the run output is what the `policy_rl` strategy consumes later
+- `grpo` and `rloo` train against the online reward callback; their alignment gate reads validation episodes automatically
+- `policy_manifest.json` under the trainer output is what the `policy_rl` strategy consumes later
 
 ## 7. Daily pipeline
 
