@@ -113,3 +113,29 @@ def test_compute_score_matches_rule_reward_and_handles_invalid_completion() -> N
     )
     assert score == expected.list_reward
     assert compute_score("live_idea_bench", "not-json", "", extra_info=extra_info) == RewardConfig().invalid_completion_reward
+
+
+def test_rl_runtime_no_longer_imports_trl() -> None:
+    rl_root = Path(__file__).resolve().parents[1] / "live_idea_bench" / "rl"
+    banned_patterns = (
+        'import_module("trl")',
+        "import trl",
+        "from trl import",
+        "train_rloo_with_trl",
+    )
+
+    for path in rl_root.rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        assert all(pattern not in text for pattern in banned_patterns), path
+
+
+def test_rl_setup_and_docs_reference_verl_only() -> None:
+    project_root = Path(__file__).resolve().parents[1]
+    setup_script = (project_root / "scripts" / "setup_rl_a100_env.sh").read_text(encoding="utf-8")
+    assert '"trl' not in setup_script
+
+    readme = (project_root / "rl" / "README.md").read_text(encoding="utf-8")
+    assert "scripts/run_policy_rl_training.sh" in readme
+    assert "--trainer ppo" in readme
+    assert "--trainer grpo" in readme
+    assert "--trainer rloo" in readme

@@ -13,7 +13,7 @@ echo "Installing base backend dependencies into the current environment..."
 "$PYTHON_BIN" -m pip install --upgrade pip
 "$PYTHON_BIN" -m pip install -r "$ROOT_DIR/backend/requirements.txt"
 
-echo "Installing CUDA PyTorch and veRL / TRL training stack for A100..."
+echo "Installing CUDA PyTorch and veRL training stack for A100..."
 "$PYTHON_BIN" -m pip install \
   --extra-index-url https://download.pytorch.org/whl/cu124 \
   "torch==2.6.0+cu124" \
@@ -22,7 +22,6 @@ echo "Installing CUDA PyTorch and veRL / TRL training stack for A100..."
   "pandas>=2.2.0" \
   "pyarrow>=15.0.0" \
   "peft>=0.13.0" \
-  "trl>=0.25.0" \
   "verl>=0.4.1" \
   "accelerate>=1.0.0" \
   "sentencepiece>=0.2.0" \

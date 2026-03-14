@@ -30,7 +30,7 @@ from live_idea_bench.rl import (
     select_top_k_predictions,
     train_grpo_with_verl,
     train_ppo_with_verl,
-    train_rloo_with_trl,
+    train_rloo_with_verl,
 )
 from live_idea_bench.rl.reward import build_online_rl_reward_function
 from live_idea_bench.rl.verl import dataset as verl_dataset_module
@@ -264,19 +264,13 @@ def test_train_grpo_with_verl_dry_run_writes_manifest_and_launch_files(tmp_path:
     assert "launch_command" in payload
 
 
-def test_train_rloo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path) -> None:
-    rows = [
-        {
-            "prompt": "prompt",
-            "cutoff_month": "2024-06",
-            "cutoff_date": "2024-06-01",
-            "future_end_month": "2024-07",
-            "future_end_date": "2024-07-31",
-            "train_papers": [asdict(_paper("train-1", "2024-05", published_date="2024-05-01", summary="old topic"))],
-            "future_papers": [asdict(_paper("future-1", "2024-07", published_date="2024-07-01", summary="new topic"))],
-        }
-    ]
-    manifest = train_rloo_with_trl(
+def test_train_rloo_with_verl_dry_run_writes_manifest_and_launch_files(tmp_path: Path) -> None:
+    dataset_path = tmp_path / "policy" / "trainer_dataset.parquet"
+    dataset_path.parent.mkdir(parents=True, exist_ok=True)
+    dataset_path.write_text("placeholder", encoding="utf-8")
+    rows = [{"prompt": "prompt", "ground_truth": "", "data_source": "live_idea_bench", "extra_info": "{}"}]
+
+    manifest = train_rloo_with_verl(
         rows,
         RLOOTrainConfig(dry_run=True),
         model_name="Qwen/Qwen2.5-3B-Instruct",
@@ -286,18 +280,18 @@ def test_train_rloo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path)
         trainer_config_path="rloo_train.yaml",
         selection_config=SelectionConfig(),
         selection_config_path="selection.yaml",
+        dataset_path=str(dataset_path),
+        dataset_metadata={"parquet_ready": True, "prepared_parquet_path": str(dataset_path)},
     )
 
     manifest_path = tmp_path / "policy" / "policy_manifest.json"
-    dataset_path = tmp_path / "policy" / "trainer_dataset.jsonl"
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     assert manifest["dry_run"] is True
-    assert manifest_path.exists()
-    assert dataset_path.exists()
-    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert payload["trainer"] == "rloo"
-    assert payload["backend"] == "trl"
-    assert payload["inference_model_name"] == "Qwen/Qwen2.5-3B-Instruct"
+    assert payload["backend"] == "verl"
+    assert "launch_config_path" in payload
+    assert "launch_command" in payload
 
 
 def test_prepare_common_rl_context_reuses_shared_artifacts(tmp_path: Path) -> None:
@@ -504,7 +498,11 @@ def test_run_policy_rl_pipeline_requires_validation_for_alignment(tmp_path: Path
         )
 
 
-def test_run_policy_rl_pipeline_rloo_stays_on_trl_backend(tmp_path: Path) -> None:
+def test_run_policy_rl_pipeline_rloo_uses_verl_backend(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _enable_fake_parquet(monkeypatch)
     papers = [
         _paper(f"p-{month:02d}", f"2024-{month:02d}", published_date=f"2024-{month:02d}-01", summary=f"summary {month}")
         for month in range(1, 13)
@@ -528,8 +526,8 @@ def test_run_policy_rl_pipeline_rloo_stays_on_trl_backend(tmp_path: Path) -> Non
     )
 
     payload = json.loads((tmp_path / "rl-run" / "rloo" / "policy_manifest.json").read_text(encoding="utf-8"))
-    assert manifest["trainer_backend"] == "trl"
-    assert payload["backend"] == "trl"
+    assert manifest["trainer_backend"] == "verl"
+    assert payload["backend"] == "verl"
 
 
 def test_trainer_registry_supports_all_three_algorithms() -> None:

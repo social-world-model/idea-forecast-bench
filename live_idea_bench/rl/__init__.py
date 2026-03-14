@@ -52,7 +52,7 @@ __all__ = [
     "spearman_correlation",
     "train_grpo_with_verl",
     "train_ppo_with_verl",
-    "train_rloo_with_trl",
+    "train_rloo_with_verl",
 ]
 
 _EXPORTS = {
@@ -105,7 +105,7 @@ _EXPORTS = {
     "create_trainer_runner": ("live_idea_bench.rl.trainers", "create_trainer_runner"),
     "train_grpo_with_verl": ("live_idea_bench.rl.trainers", "train_grpo_with_verl"),
     "train_ppo_with_verl": ("live_idea_bench.rl.trainers", "train_ppo_with_verl"),
-    "train_rloo_with_trl": ("live_idea_bench.rl.trainers", "train_rloo_with_trl"),
+    "train_rloo_with_verl": ("live_idea_bench.rl.trainers", "train_rloo_with_verl"),
 }
 
 

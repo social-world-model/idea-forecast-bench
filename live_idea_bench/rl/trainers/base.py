@@ -3,8 +3,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field, is_dataclass
 import hashlib
-import importlib
-import inspect
 import json
 from pathlib import Path
 from typing import Any
@@ -72,59 +70,6 @@ def build_config_fingerprint(payload: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def _require_trl_stack() -> dict[str, Any]:
-    try:
-        datasets = importlib.import_module("datasets")
-        peft = importlib.import_module("peft")
-        trl = importlib.import_module("trl")
-    except ImportError as exc:
-        raise RuntimeError(
-            "TRL training dependencies are not installed. Install torch, datasets, transformers, peft, "
-            "accelerate, and trl to run non-dry-run RL training."
-        ) from exc
-
-    return {
-        "Dataset": getattr(datasets, "Dataset"),
-        "LoraConfig": getattr(peft, "LoraConfig"),
-        "RLOOConfig": getattr(trl, "RLOOConfig", None),
-        "RLOOTrainer": getattr(trl, "RLOOTrainer", None),
-    }
-
-
-def _peft_config(deps: dict[str, Any], *, r: int, lora_alpha: int, lora_dropout: float) -> Any:
-    return deps["LoraConfig"](
-        r=r,
-        lora_alpha=lora_alpha,
-        lora_dropout=lora_dropout,
-        bias="none",
-        task_type="CAUSAL_LM",
-    )
-
-
-def _filter_supported_kwargs(factory: Any, values: dict[str, Any]) -> dict[str, Any]:
-    try:
-        signature = inspect.signature(factory)
-    except (TypeError, ValueError):
-        return values
-
-    if any(param.kind == inspect.Parameter.VAR_KEYWORD for param in signature.parameters.values()):
-        return values
-    accepted = set(signature.parameters)
-    return {key: value for key, value in values.items() if key in accepted}
-
-
-def create_trl_config(factory: Any, values: dict[str, Any]) -> Any:
-    if factory is None:
-        raise RuntimeError("The selected TRL trainer is not available in the installed trl package.")
-    return factory(**_filter_supported_kwargs(factory, values))
-
-
-def create_trl_trainer(factory: Any, values: dict[str, Any]) -> Any:
-    if factory is None:
-        raise RuntimeError("The selected TRL trainer is not available in the installed trl package.")
-    return factory(**_filter_supported_kwargs(factory, values))
-
-
 def build_policy_manifest(
     *,
     trainer: str,
@@ -142,7 +87,7 @@ def build_policy_manifest(
     output_top_k: int,
     training_split_policy: str = "train_only",
     diagnostics: dict[str, Any] | None = None,
-    backend: str = "trl",
+    backend: str = "verl",
     launch_config_path: str | None = None,
     launch_command: str | None = None,
     launch_command_path: str | None = None,

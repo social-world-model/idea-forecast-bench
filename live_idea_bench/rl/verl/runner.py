@@ -9,7 +9,7 @@ import subprocess
 import sys
 from typing import Any
 
-from live_idea_bench.rl.config import GRPOTrainConfig, PPOTrainConfig, RewardConfig, SelectionConfig
+from live_idea_bench.rl.config import GRPOTrainConfig, PPOTrainConfig, RLOOTrainConfig, RewardConfig, SelectionConfig
 from live_idea_bench.rl.io import _write_json
 from live_idea_bench.rl.trainers.base import (
     PreparedRLContext,
@@ -21,6 +21,11 @@ from live_idea_bench.rl.verl.dataset import build_verl_dataset_rows, write_verl_
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 REWARD_FN_PATH = (Path(__file__).resolve().parent / "reward_fn.py").resolve()
+_ADV_ESTIMATOR_MAP = {
+    "ppo": "gae",
+    "grpo": "grpo",
+    "rloo": "rloo",
+}
 
 
 def _require_verl_stack() -> None:
@@ -61,7 +66,7 @@ def prepare_verl_artifacts(
     )
 
 
-def _coerce_config_payload(config: PPOTrainConfig | GRPOTrainConfig) -> dict[str, Any]:
+def _coerce_config_payload(config: PPOTrainConfig | GRPOTrainConfig | RLOOTrainConfig) -> dict[str, Any]:
     if is_dataclass(config):
         return asdict(config)
     return dict(config)
@@ -80,7 +85,7 @@ def _hydra_value(value: Any) -> str:
 def _build_overrides(
     *,
     trainer_name: str,
-    config: PPOTrainConfig | GRPOTrainConfig,
+    config: PPOTrainConfig | GRPOTrainConfig | RLOOTrainConfig,
     model_name: str,
     dataset_path: Path,
     output_dir: Path,
@@ -123,7 +128,7 @@ def _build_overrides(
         "trainer.default_local_dir": str((output_dir / "artifacts").resolve()),
         "trainer.total_epochs": config.num_train_epochs,
         "trainer.total_training_steps": max(1, config.num_train_epochs),
-        "algorithm.adv_estimator": "grpo" if trainer_name == "grpo" else "gae",
+        "algorithm.adv_estimator": _ADV_ESTIMATOR_MAP[trainer_name],
     }
     if runtime_config_path:
         overrides["custom_reward_function.reward_kwargs.runtime_config_path"] = runtime_config_path
@@ -160,7 +165,7 @@ def train_with_verl(
     *,
     trainer_name: str,
     prepared_artifacts: TrainerPreparedArtifacts | None,
-    config: PPOTrainConfig | GRPOTrainConfig,
+    config: PPOTrainConfig | GRPOTrainConfig | RLOOTrainConfig,
     model_name: str,
     predictor_config: str,
     output_dir: str,
