@@ -13,17 +13,29 @@ echo "Installing base backend dependencies into the current environment..."
 "$PYTHON_BIN" -m pip install --upgrade pip
 "$PYTHON_BIN" -m pip install -r "$ROOT_DIR/backend/requirements.txt"
 
-echo "Installing CUDA PyTorch and RL / 2L training stack for A100..."
+echo "Installing CUDA PyTorch and veRL / TRL training stack for A100..."
 "$PYTHON_BIN" -m pip install \
   --extra-index-url https://download.pytorch.org/whl/cu124 \
   "torch==2.6.0+cu124" \
   "transformers>=4.51.0" \
   "datasets>=2.21.0" \
+  "pandas>=2.2.0" \
+  "pyarrow>=15.0.0" \
   "peft>=0.13.0" \
   "trl>=0.25.0" \
+  "verl>=0.4.1" \
   "accelerate>=1.0.0" \
   "sentencepiece>=0.2.0" \
   "bitsandbytes>=0.43.0" \
   "vllm>=0.8.5"
+
+echo "Validating veRL launcher..."
+"$PYTHON_BIN" - <<'PY'
+import importlib
+import sys
+
+if importlib.util.find_spec("verl.trainer.main_ppo") is None:
+    sys.exit("verl.trainer.main_ppo is not importable after installation.")
+PY
 
 echo "RL / 2L environment setup complete."

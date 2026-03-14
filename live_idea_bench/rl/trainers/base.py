@@ -44,6 +44,7 @@ class TrainerPreparedArtifacts:
 class RLTrainerRunner(ABC):
     trainer_name: str
     default_config_filename: str
+    backend_name: str = "unknown"
 
     @abstractmethod
     def prepare(self, common_context: PreparedRLContext, **kwargs: Any) -> TrainerPreparedArtifacts:
@@ -85,10 +86,6 @@ def _require_trl_stack() -> dict[str, Any]:
     return {
         "Dataset": getattr(datasets, "Dataset"),
         "LoraConfig": getattr(peft, "LoraConfig"),
-        "DPOConfig": getattr(trl, "DPOConfig", None),
-        "DPOTrainer": getattr(trl, "DPOTrainer", None),
-        "GRPOConfig": getattr(trl, "GRPOConfig", None),
-        "GRPOTrainer": getattr(trl, "GRPOTrainer", None),
         "RLOOConfig": getattr(trl, "RLOOConfig", None),
         "RLOOTrainer": getattr(trl, "RLOOTrainer", None),
     }
@@ -145,11 +142,17 @@ def build_policy_manifest(
     output_top_k: int,
     training_split_policy: str = "train_only",
     diagnostics: dict[str, Any] | None = None,
+    backend: str = "trl",
+    launch_config_path: str | None = None,
+    launch_command: str | None = None,
+    launch_command_path: str | None = None,
+    prepared_parquet_path: str | None = None,
 ) -> dict[str, Any]:
     checkpoint_path = output_dir / "artifacts"
     payload = {
         "policy_manifest_version": 1,
         "policy_type": "policy_rl",
+        "backend": backend,
         "trainer": trainer,
         "base_model_name": base_model_name,
         "inference_model_name": inference_model_name,
@@ -167,6 +170,14 @@ def build_policy_manifest(
         "training_split_policy": training_split_policy,
         "dry_run": dry_run,
     }
+    if launch_config_path:
+        payload["launch_config_path"] = str(launch_config_path)
+    if launch_command:
+        payload["launch_command"] = str(launch_command)
+    if launch_command_path:
+        payload["launch_command_path"] = str(launch_command_path)
+    if prepared_parquet_path:
+        payload["prepared_parquet_path"] = str(prepared_parquet_path)
     if diagnostics:
         payload["diagnostics"] = diagnostics
         payload["parse_failure_rate"] = float(diagnostics.get("parse_failure_rate", 0.0))

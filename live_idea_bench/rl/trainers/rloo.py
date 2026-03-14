@@ -25,6 +25,7 @@ from live_idea_bench.rl.trainers.base import (
 class RLOOTrainerRunner(RLTrainerRunner):
     trainer_name = "rloo"
     default_config_filename = "rloo_train.yaml"
+    backend_name = "trl"
 
     def prepare(self, common_context: PreparedRLContext, **_: Any) -> TrainerPreparedArtifacts:
         output_dir = common_context.shared_dir.parent / self.trainer_name
@@ -39,6 +40,7 @@ class RLOOTrainerRunner(RLTrainerRunner):
 
     def train(self, prepared_artifacts: TrainerPreparedArtifacts, **kwargs: Any) -> dict[str, Any]:
         kwargs.pop("output_dir", None)
+        kwargs.pop("reward_config_path", None)
         return train_rloo_with_trl(prepared_artifacts.dataset_rows, output_dir=str(prepared_artifacts.output_dir), **kwargs)
 
 
@@ -77,6 +79,7 @@ def train_rloo_with_trl(
         candidate_pool_size=selection_config.candidate_pool_size,
         output_top_k=selection_config.output_top_k,
         diagnostics=diagnostics,
+        backend="trl",
     )
 
     if config.dry_run:

@@ -2,21 +2,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from live_idea_bench.rl.config import GRPOTrainConfig
+from live_idea_bench.rl.config import PPOTrainConfig
 from live_idea_bench.rl.trainers.base import PreparedRLContext, RLTrainerRunner, TrainerPreparedArtifacts
 from live_idea_bench.rl.verl.runner import prepare_verl_artifacts, train_with_verl
 
 
-class GRPOTrainerRunner(RLTrainerRunner):
-    trainer_name = "grpo"
-    default_config_filename = "grpo_train.yaml"
+class PPOTrainerRunner(RLTrainerRunner):
+    trainer_name = "ppo"
+    default_config_filename = "ppo_train.yaml"
     backend_name = "verl"
 
     def prepare(
         self,
         common_context: PreparedRLContext,
         *,
-        trainer_config: GRPOTrainConfig,
+        trainer_config: PPOTrainConfig,
         **_: Any,
     ) -> TrainerPreparedArtifacts:
         return prepare_verl_artifacts(
@@ -35,9 +35,9 @@ class GRPOTrainerRunner(RLTrainerRunner):
         )
 
 
-def train_grpo_with_verl(
+def train_ppo_with_verl(
     dataset_rows: list[dict[str, Any]],
-    config: GRPOTrainConfig,
+    config: PPOTrainConfig,
     *,
     model_name: str,
     predictor_config: str,
@@ -55,7 +55,7 @@ def train_grpo_with_verl(
     diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return train_with_verl(
-        trainer_name="grpo",
+        trainer_name="ppo",
         prepared_artifacts=None,
         dataset_rows=dataset_rows,
         dataset_path=dataset_path,

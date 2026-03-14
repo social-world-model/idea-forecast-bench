@@ -81,63 +81,44 @@ class SelectionConfig:
 
 
 @dataclass
-class DPOTrainConfig:
-    quantile_fraction: float = 0.25
-    beta: float = 0.1
-    per_device_batch_size: int = 1
-    gradient_accumulation_steps: int = 1
-    num_train_epochs: int = 1
-    learning_rate: float = 5e-5
-    max_length: int = 4096
-    logging_steps: int = 1
-    lora_r: int = 16
-    lora_alpha: int = 32
-    lora_dropout: float = 0.05
-    dry_run: bool = False
-
-
-@dataclass
-class GRPOTrainConfig:
+class OnlineRLTrainConfig:
     per_device_batch_size: int = 1
     gradient_accumulation_steps: int = 1
     num_train_epochs: int = 1
     learning_rate: float = 2e-6
     num_generations: int = 8
+    max_prompt_length: int = 4096
     max_completion_length: int = 1024
-    beta: float = 0.04
-    loss_type: str = "dapo"
-    scale_rewards: str = "batch"
-    mask_truncated_completions: bool = True
+    kl_coef: float = 0.001
     use_vllm: bool = False
     vllm_gpu_memory_utilization: float = 0.4
+    logging_steps: int = 1
     lora_r: int = 16
     lora_alpha: int = 32
     lora_dropout: float = 0.05
     reward_alignment_threshold: float = 0.5
-    logging_steps: int = 1
     dry_run: bool = False
 
 
 @dataclass
-class RLOOTrainConfig:
-    per_device_batch_size: int = 1
-    gradient_accumulation_steps: int = 1
-    num_train_epochs: int = 1
-    learning_rate: float = 2e-6
-    num_generations: int = 8
-    max_completion_length: int = 1024
+class PPOTrainConfig(OnlineRLTrainConfig):
+    critic_learning_rate: float = 1e-5
+    critic_micro_batch_size: int = 1
+    gamma: float = 1.0
+    lam: float = 0.95
+
+
+@dataclass
+class GRPOTrainConfig(OnlineRLTrainConfig):
+    pass
+
+
+@dataclass
+class RLOOTrainConfig(OnlineRLTrainConfig):
     beta: float = 0.04
     num_iterations: int = 1
     epsilon: float = 0.2
     normalize_advantages: bool = True
-    use_vllm: bool = False
-    vllm_gpu_memory_utilization: float = 0.4
-    lora_r: int = 16
-    lora_alpha: int = 32
-    lora_dropout: float = 0.05
-    reward_alignment_threshold: float = 0.5
-    logging_steps: int = 1
-    dry_run: bool = False
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
@@ -203,8 +184,8 @@ def load_selection_config(name_or_path: str = "selection.yaml") -> SelectionConf
     return _load_model_config(name_or_path, SelectionConfig)
 
 
-def load_dpo_train_config(name_or_path: str = "dpo_train.yaml") -> DPOTrainConfig:
-    return _load_model_config(name_or_path, DPOTrainConfig)
+def load_ppo_train_config(name_or_path: str = "ppo_train.yaml") -> PPOTrainConfig:
+    return _load_model_config(name_or_path, PPOTrainConfig)
 
 
 def load_grpo_train_config(name_or_path: str = "grpo_train.yaml") -> GRPOTrainConfig:

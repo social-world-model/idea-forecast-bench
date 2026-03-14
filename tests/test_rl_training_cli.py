@@ -21,6 +21,10 @@ def test_rl_training_cli_help_hides_split_and_exposes_prepare_split() -> None:
     assert completed.returncode == 0
     assert "--prepare-split" in completed.stdout
     assert "--split" not in completed.stdout
+    assert "ppo" in completed.stdout
+    assert "grpo" in completed.stdout
+    assert "rloo" in completed.stdout
+    assert "dpo" not in completed.stdout
 
 
 def test_rl_training_cli_rejects_legacy_split_flag() -> None:
@@ -34,3 +38,16 @@ def test_rl_training_cli_rejects_legacy_split_flag() -> None:
 
     assert completed.returncode != 0
     assert "--split was removed from the training CLI" in completed.stderr
+
+
+def test_rl_training_cli_rejects_removed_dpo_trainer() -> None:
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--trainer", "dpo"],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "invalid choice" in completed.stderr

@@ -6,8 +6,8 @@ from typing import Any
 
 from live_idea_bench.models import PaperRecord
 from live_idea_bench.predictor import _heuristic_predictions, generate_predictions
+from live_idea_bench.rl.candidates import CandidateListSample, EpisodeCandidateLists
 from live_idea_bench.rl.config import CandidateGenerationConfig, EpisodeBuildConfig, RewardConfig, SelectionConfig
-from live_idea_bench.rl.dpo import CandidateListSample, EpisodeCandidateLists
 from live_idea_bench.rl.episodes import RLEpisode, build_rl_episodes, serialize_episodes
 from live_idea_bench.rl.grpo import compute_reward_alignment
 from live_idea_bench.rl.io import _read_json, _read_jsonl, _write_json, _write_jsonl
@@ -634,6 +634,7 @@ def run_policy_rl_pipeline(
     episode_config: EpisodeBuildConfig,
     candidate_config: CandidateGenerationConfig,
     reward_config: RewardConfig,
+    reward_config_path: str = "reward.yaml",
     selection_config: SelectionConfig,
     trainer_config: Any,
     trainer_config_path: str,
@@ -671,7 +672,7 @@ def run_policy_rl_pipeline(
     )
 
     diagnostics: dict[str, Any] = {}
-    if runner.trainer_name in {"grpo", "rloo"} and not skip_alignment_check:
+    if runner.trainer_name in {"ppo", "grpo", "rloo"} and not skip_alignment_check and not prepare_only:
         diagnostics = run_online_alignment_gate(
             common_context,
             model_name=model_name,
@@ -696,6 +697,7 @@ def run_policy_rl_pipeline(
             predictor_config=candidate_config.predictor_config,
             output_dir=str(prepared.output_dir),
             reward_config=reward_config,
+            reward_config_path=reward_config_path,
             similarity_config_path=similarity_config_path,
             runtime_config_path=runtime_config_path,
             trainer_config_path=trainer_config_path,
@@ -708,6 +710,7 @@ def run_policy_rl_pipeline(
     manifest = {
         "pipeline_manifest_version": 2,
         "trainer": runner.trainer_name,
+        "trainer_backend": runner.backend_name,
         "model_name": model_name,
         "split": split,
         "training_split_policy": "train_only",

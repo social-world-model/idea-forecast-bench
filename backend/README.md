@@ -22,7 +22,7 @@ pip install -r backend/requirements.txt
 
 Notes:
 
-- `backend/requirements.txt` is intentionally backend-only; it does not install `torch`, `trl`, or the local HuggingFace RL stack
+- `backend/requirements.txt` is intentionally backend-only; it does not install `torch`, `verl`, `trl`, or the local RL stack
 - The backend Docker image uses this file, so the default API runtime stays lightweight
 
 Separate RL environment for Linux + A100:
@@ -35,7 +35,7 @@ bash scripts/setup_rl_a100_env.sh
 
 RL notes:
 
-- `scripts/setup_rl_a100_env.sh` installs the dedicated training/inference stack for local HuggingFace RL on Linux + A100
+- `scripts/setup_rl_a100_env.sh` installs the dedicated veRL / TRL training stack for Linux + A100
 - It installs `torch==2.6.0+cu124` by default
 - `bitsandbytes` and `vllm` stay Linux-only
 
@@ -227,14 +227,14 @@ bash scripts/run_policy_rl_training.sh \
   --output-dir data/rl_runs/qwen3_4b_prepare
 ```
 
-Run DPO training:
+Run PPO training:
 
 ```bash
 bash scripts/run_policy_rl_training.sh \
   --input-dir data/arxiv_csml/raw_markdown \
   --model-preset qwen2.5-3b-instruct \
-  --trainer dpo \
-  --output-dir data/rl_runs/qwen25_3b_dpo
+  --trainer ppo \
+  --output-dir data/rl_runs/qwen25_3b_ppo
 ```
 
 Run GRPO training:
@@ -252,8 +252,8 @@ Important notes:
 - Training CLI no longer exposes `--split`; non-prepare runs always train on the `train` split
 - Use `--prepare-only --prepare-split validation|test|all` if you need non-train artifacts for inspection
 - Default RL episode config keeps all data through `2025-12` in the training split and assigns `2026-01` onward to validation
-- `dpo` trains from offline preference pairs
-- `grpo` and `rloo` train against the online reward callback; their alignment gate reads validation episodes automatically
+- `ppo` and `grpo` share the veRL online-RL backend and train against the existing rule-based reward callback
+- `rloo` remains on the legacy TRL path for now; its alignment gate still reads validation episodes automatically
 - `policy_manifest.json` under the trainer output is what the `policy_rl` strategy consumes later
 
 ## 7. Daily pipeline
