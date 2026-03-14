@@ -25,6 +25,7 @@ from live_idea_bench.rl import (
     evaluate_rl_reward,
     list_small_model_specs,
     prepare_common_rl_context,
+    resolve_small_model,
     run_policy_rl_pipeline,
     select_top_k_predictions,
     train_dpo_with_trl,
@@ -504,7 +505,24 @@ def test_select_top_k_predictions_uses_candidate_pool_dedup_and_mmr() -> None:
 def test_small_model_registry_includes_requested_qwen_and_llama_candidates() -> None:
     specs = list_small_model_specs()
 
-    assert len(specs) == 6
+    assert len(specs) == 10
+    assert any(spec.model_id == "Qwen/Qwen2.5-3B" for spec in specs)
     assert any(spec.model_id == "Qwen/Qwen2.5-3B-Instruct" for spec in specs)
+    assert any(spec.model_id == "Qwen/Qwen2.5-7B" for spec in specs)
+    assert any(spec.model_id == "Qwen/Qwen2.5-7B-Instruct" for spec in specs)
+    assert any(spec.model_id == "Qwen/Qwen3-4B-Base" for spec in specs)
     assert any(spec.model_id == "Qwen/Qwen3-4B-Instruct-2507" for spec in specs)
+    assert any(spec.model_id == "Qwen/Qwen3-8B-Base" for spec in specs)
+    assert any(spec.model_id == "Qwen/Qwen3-8B" for spec in specs)
     assert any(spec.model_id == "meta-llama/Llama-3.2-3B-Instruct" for spec in specs)
+
+
+def test_resolve_small_model_accepts_requested_qwen_short_names() -> None:
+    assert resolve_small_model("qwen2.5-3b-base").model_id == "Qwen/Qwen2.5-3B"
+    assert resolve_small_model("qwen2.5-3b-instruct").model_id == "Qwen/Qwen2.5-3B-Instruct"
+    assert resolve_small_model("qwen2.5-7b-base").model_id == "Qwen/Qwen2.5-7B"
+    assert resolve_small_model("qwen2.5-7b-instruct").model_id == "Qwen/Qwen2.5-7B-Instruct"
+    assert resolve_small_model("qwen3-4b-base").model_id == "Qwen/Qwen3-4B-Base"
+    assert resolve_small_model("qwen3-4b-instruct").model_id == "Qwen/Qwen3-4B-Instruct-2507"
+    assert resolve_small_model("qwen3-8b-base").model_id == "Qwen/Qwen3-8B-Base"
+    assert resolve_small_model("qwen3-8b-instruct").model_id == "Qwen/Qwen3-8B"
