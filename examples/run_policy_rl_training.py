@@ -32,8 +32,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--trainer-config", type=str, help="Optional trainer config file under config/rl.")
     parser.add_argument("--init-policy-path", type=str, help="Optional checkpoint path used to warm-start GRPO or RLOO.")
     parser.add_argument("--prepare-only", action="store_true", help="Prepare common artifacts and trainer datasets without training.")
+    parser.add_argument(
+        "--prepare-split",
+        type=str,
+        choices=["train", "validation", "test", "all"],
+        help="Episode split to materialize when used with --prepare-only.",
+    )
     parser.add_argument("--skip-alignment-check", action="store_true", help="Skip the online reward alignment check for GRPO/RLOO.")
-    parser.add_argument("--split", type=str, default="train", choices=["train", "validation", "test", "all"], help="Episode split to use.")
     parser.add_argument("--max-episodes", type=int, help="Optional cap for quick experiments.")
     parser.add_argument("--start-month", type=str, help="Optional lower bound month for loading papers.")
     parser.add_argument("--end-month", type=str, help="Optional upper bound month for loading papers.")
@@ -91,16 +96,20 @@ def _resolve_trainer_config(args: argparse.Namespace) -> tuple[str, object]:
 
 def main() -> int:
     parser = build_parser()
-    args = parser.parse_args()
+    raw_args = sys.argv[1:]
+    if any(arg == "--split" or arg.startswith("--split=") for arg in raw_args):
+        parser.error(
+            "--split was removed from the training CLI. Training always uses the train split; "
+            "use --prepare-only with --prepare-split if you need validation/test/all artifacts."
+        )
+    args = parser.parse_args(raw_args)
 
     if args.list_model_presets:
         print(json.dumps(list_small_model_payloads(), indent=2, ensure_ascii=False))
         return 0
-    if args.split != "train" and not args.prepare_only:
-        parser.error(
-            "--split validation|test|all is only allowed with --prepare-only. "
-            "RL training runs must use --split train."
-        )
+    if args.prepare_split and not args.prepare_only:
+        parser.error("--prepare-split requires --prepare-only.")
+    selected_split = args.prepare_split or "train"
 
     input_dir = Path(args.input_dir)
     papers = load_papers_from_markdown(
@@ -138,7 +147,7 @@ def main() -> int:
         trainer_config=trainer_config,
         trainer_config_path=trainer_config_path,
         selection_config_path=args.selection_config,
-        split=args.split,
+        split=selected_split,
         max_episodes=args.max_episodes,
         similarity_config_path=args.similarity_config,
         prepare_only=args.prepare_only,

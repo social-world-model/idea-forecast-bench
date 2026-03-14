@@ -38,6 +38,26 @@ _SMALL_MODEL_SPECS = (
         notes="Safest first DPO baseline for structured JSON idea generation.",
     ),
     SmallModelSpec(
+        alias="qwen2.5-7b-base",
+        model_id="Qwen/Qwen2.5-7B",
+        family="qwen2.5",
+        params_billions=7.61,
+        variant="base",
+        license_name="apache-2.0",
+        min_transformers_version="4.37.0",
+        notes="Larger Qwen2.5 base checkpoint if you want more headroom for continued pretraining or RL warm starts.",
+    ),
+    SmallModelSpec(
+        alias="qwen2.5-7b-instruct",
+        model_id="Qwen/Qwen2.5-7B-Instruct",
+        family="qwen2.5",
+        params_billions=7.61,
+        variant="instruct",
+        license_name="apache-2.0",
+        min_transformers_version="4.37.0",
+        notes="Stronger structured-generation baseline than 3B when you can afford the extra VRAM.",
+    ),
+    SmallModelSpec(
         alias="qwen3-4b-base",
         model_id="Qwen/Qwen3-4B-Base",
         family="qwen3",
@@ -68,6 +88,26 @@ _SMALL_MODEL_SPECS = (
         notes="Strongest small Qwen3 non-thinking instruct checkpoint for this repo's JSON-heavy prompt style.",
     ),
     SmallModelSpec(
+        alias="qwen3-8b-base",
+        model_id="Qwen/Qwen3-8B-Base",
+        family="qwen3",
+        params_billions=8.2,
+        variant="base",
+        license_name="apache-2.0",
+        min_transformers_version="4.51.0",
+        notes="Best Qwen3 8B starting point if you want a clean pretraining checkpoint for post-training.",
+    ),
+    SmallModelSpec(
+        alias="qwen3-8b",
+        model_id="Qwen/Qwen3-8B",
+        family="qwen3",
+        params_billions=8.2,
+        variant="thinking-switchable",
+        license_name="apache-2.0",
+        min_transformers_version="4.51.0",
+        notes="Qwen3 8B post-trained checkpoint with switchable thinking and strong general instruction following.",
+    ),
+    SmallModelSpec(
         alias="llama3.2-3b-instruct",
         model_id="meta-llama/Llama-3.2-3B-Instruct",
         family="llama3.2",
@@ -81,6 +121,12 @@ _SMALL_MODEL_SPECS = (
 )
 
 
+_MODEL_ALIAS_REDIRECTS = {
+    "qwen3-4b-instruct": "qwen3-4b-instruct-2507",
+    "qwen3-8b-instruct": "qwen3-8b",
+}
+
+
 def list_small_model_specs() -> list[SmallModelSpec]:
     return list(_SMALL_MODEL_SPECS)
 
@@ -90,7 +136,7 @@ def list_small_model_payloads() -> list[dict[str, object]]:
 
 
 def resolve_small_model(alias_or_model_id: str) -> SmallModelSpec:
-    normalized = alias_or_model_id.strip().lower()
+    normalized = _MODEL_ALIAS_REDIRECTS.get(alias_or_model_id.strip().lower(), alias_or_model_id.strip().lower())
     for spec in _SMALL_MODEL_SPECS:
         if spec.alias == normalized or spec.model_id.lower() == normalized:
             return spec

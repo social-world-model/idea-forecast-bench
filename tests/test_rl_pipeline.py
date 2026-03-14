@@ -25,6 +25,7 @@ from live_idea_bench.rl import (
     evaluate_rl_reward,
     list_small_model_specs,
     prepare_common_rl_context,
+    resolve_small_model,
     run_policy_rl_pipeline,
     select_top_k_predictions,
     train_dpo_with_trl,
@@ -65,6 +66,38 @@ def test_build_rl_episodes_assigns_contiguous_train_validation_test_splits() -> 
     assert "validation" in splits
     assert "test" in splits
     assert splits == sorted(splits, key=lambda split: {"train": 0, "validation": 1, "test": 2}[split])
+
+
+def test_build_rl_episodes_supports_calendar_split_boundaries() -> None:
+    papers = [
+        _paper(
+            f"p-{year}-{month:02d}",
+            f"{year}-{month:02d}",
+            published_date=f"{year}-{month:02d}-01",
+            summary=f"summary {year}-{month:02d}",
+        )
+        for year, month in (
+            (2025, 10),
+            (2025, 11),
+            (2025, 12),
+            (2026, 1),
+            (2026, 2),
+            (2026, 3),
+        )
+    ]
+    config = EpisodeBuildConfig(
+        horizon_months=1,
+        min_train_papers=1,
+        start_month="2025-10",
+        end_month="2026-03",
+        step_months=1,
+        validation_start_month="2026-01",
+    )
+
+    episodes = build_rl_episodes(papers, config)
+
+    assert [episode.cutoff_month for episode in episodes] == ["2025-10", "2025-11", "2025-12", "2026-01", "2026-02"]
+    assert [episode.split for episode in episodes] == ["train", "train", "train", "validation", "validation"]
 
 
 def test_build_rl_episodes_respects_past_window_and_step_size() -> None:
@@ -361,7 +394,7 @@ def test_run_policy_rl_pipeline_rejects_non_train_training_split(tmp_path: Path)
         for month in range(1, 13)
     ]
 
-    with pytest.raises(ValueError, match="restricted to --split train"):
+    with pytest.raises(ValueError, match="restricted to the train split"):
         run_policy_rl_pipeline(
             papers,
             trainer="grpo",
@@ -472,7 +505,24 @@ def test_select_top_k_predictions_uses_candidate_pool_dedup_and_mmr() -> None:
 def test_small_model_registry_includes_requested_qwen_and_llama_candidates() -> None:
     specs = list_small_model_specs()
 
-    assert len(specs) == 6
+    assert len(specs) == 10
+    assert any(spec.model_id == "Qwen/Qwen2.5-3B" for spec in specs)
     assert any(spec.model_id == "Qwen/Qwen2.5-3B-Instruct" for spec in specs)
+    assert any(spec.model_id == "Qwen/Qwen2.5-7B" for spec in specs)
+    assert any(spec.model_id == "Qwen/Qwen2.5-7B-Instruct" for spec in specs)
+    assert any(spec.model_id == "Qwen/Qwen3-4B-Base" for spec in specs)
     assert any(spec.model_id == "Qwen/Qwen3-4B-Instruct-2507" for spec in specs)
+    assert any(spec.model_id == "Qwen/Qwen3-8B-Base" for spec in specs)
+    assert any(spec.model_id == "Qwen/Qwen3-8B" for spec in specs)
     assert any(spec.model_id == "meta-llama/Llama-3.2-3B-Instruct" for spec in specs)
+
+
+def test_resolve_small_model_accepts_requested_qwen_short_names() -> None:
+    assert resolve_small_model("qwen2.5-3b-base").model_id == "Qwen/Qwen2.5-3B"
+    assert resolve_small_model("qwen2.5-3b-instruct").model_id == "Qwen/Qwen2.5-3B-Instruct"
+    assert resolve_small_model("qwen2.5-7b-base").model_id == "Qwen/Qwen2.5-7B"
+    assert resolve_small_model("qwen2.5-7b-instruct").model_id == "Qwen/Qwen2.5-7B-Instruct"
+    assert resolve_small_model("qwen3-4b-base").model_id == "Qwen/Qwen3-4B-Base"
+    assert resolve_small_model("qwen3-4b-instruct").model_id == "Qwen/Qwen3-4B-Instruct-2507"
+    assert resolve_small_model("qwen3-8b-base").model_id == "Qwen/Qwen3-8B-Base"
+    assert resolve_small_model("qwen3-8b-instruct").model_id == "Qwen/Qwen3-8B"

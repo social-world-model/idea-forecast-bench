@@ -42,6 +42,8 @@ class EpisodeBuildConfig:
     min_train_papers: int = 6
     start_month: str | None = None
     end_month: str | None = None
+    validation_start_month: str | None = None
+    test_start_month: str | None = None
     train_ratio: float = 0.7
     validation_ratio: float = 0.15
     similarity_config: str = "similarity.yaml"
