@@ -25,10 +25,11 @@ class RLOOTrainerRunner(RLTrainerRunner):
             dry_run=trainer_config.dry_run,
         )
 
-    def train(self, prepared_artifacts: TrainerPreparedArtifacts, **kwargs: Any) -> dict[str, Any]:
+    def train(self, prepared_artifacts: TrainerPreparedArtifacts, *, config: RLOOTrainConfig, **kwargs: Any) -> dict[str, Any]:
         kwargs.pop("output_dir", None)
         return train_rloo_with_verl(
             prepared_artifacts.dataset_rows,
+            config=config,
             output_dir=str(prepared_artifacts.output_dir),
             dataset_path=str(prepared_artifacts.dataset_path),
             dataset_metadata=prepared_artifacts.metadata,

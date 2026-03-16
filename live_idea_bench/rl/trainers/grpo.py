@@ -25,12 +25,13 @@ class GRPOTrainerRunner(RLTrainerRunner):
             dry_run=trainer_config.dry_run,
         )
 
-    def train(self, prepared_artifacts: TrainerPreparedArtifacts, **kwargs: Any) -> dict[str, Any]:
+    def train(self, prepared_artifacts: TrainerPreparedArtifacts, *, config: GRPOTrainConfig, **kwargs: Any) -> dict[str, Any]:
         kwargs.pop("output_dir", None)
         return train_with_verl(
             trainer_name=self.trainer_name,
             prepared_artifacts=prepared_artifacts,
             output_dir=str(prepared_artifacts.output_dir),
+            config=config,
             **kwargs,
         )
 

@@ -127,7 +127,6 @@ def _build_overrides(
         "trainer.experiment_name": f"{trainer_name}-{output_dir.name}",
         "trainer.default_local_dir": str((output_dir / "artifacts").resolve()),
         "trainer.total_epochs": config.num_train_epochs,
-        "trainer.total_training_steps": max(1, config.num_train_epochs),
         "algorithm.adv_estimator": _ADV_ESTIMATOR_MAP[trainer_name],
     }
     if runtime_config_path:
@@ -184,6 +183,8 @@ def train_with_verl(
 ) -> dict[str, Any]:
     target_dir = Path(output_dir).resolve()
     dataset_rows = list(prepared_artifacts.dataset_rows if prepared_artifacts else (dataset_rows or []))
+    if not dataset_rows:
+        raise ValueError("train_with_verl: dataset_rows is empty — no training data available.")
     dataset_metadata = dict(prepared_artifacts.metadata if prepared_artifacts else (dataset_metadata or {}))
     dataset_path_value = Path(
         dataset_path or (str(prepared_artifacts.dataset_path) if prepared_artifacts else str(target_dir / "trainer_dataset.parquet"))

@@ -38,7 +38,7 @@ RL notes:
 - `scripts/setup_rl_a100_env.sh` installs the dedicated veRL training stack for Linux + A100
 - It installs `torch==2.6.0+cu124` by default
 - `bitsandbytes` and `vllm` stay Linux-only
-- End-to-end RL usage is documented in [`rl/README.md`](/Users/4r5t/.codex/worktrees/82f8/live-idea-bench/rl/README.md)
+- End-to-end RL usage is documented in [`rl/README.md`](../rl/README.md)
 
 ## 2. Required and useful environment variables
 

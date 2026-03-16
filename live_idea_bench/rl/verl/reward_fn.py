@@ -25,7 +25,10 @@ def _coerce_extra_info(extra_info: Any) -> dict[str, Any]:
     if isinstance(extra_info, dict):
         return extra_info
     if isinstance(extra_info, str):
-        payload = json.loads(extra_info)
+        try:
+            payload = json.loads(extra_info)
+        except json.JSONDecodeError:
+            return {}
         if isinstance(payload, dict):
             return payload
     return {}
