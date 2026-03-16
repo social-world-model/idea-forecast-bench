@@ -4,20 +4,20 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.rl import (
     CandidateGenerationConfig,
     CandidateListSample,
-    DPOTrainConfig,
     EpisodeBuildConfig,
     EpisodeCandidateLists,
     GRPOTrainConfig,
+    PPOTrainConfig,
     RLOOTrainConfig,
     RewardConfig,
     SelectionConfig,
-    build_dpo_pairs,
     build_grpo_advantages,
     build_rl_episodes,
     compute_reward_alignment,
@@ -28,11 +28,12 @@ from live_idea_bench.rl import (
     resolve_small_model,
     run_policy_rl_pipeline,
     select_top_k_predictions,
-    train_dpo_with_trl,
-    train_grpo_with_trl,
-    train_rloo_with_trl,
+    train_grpo_with_verl,
+    train_ppo_with_verl,
+    train_rloo_with_verl,
 )
 from live_idea_bench.rl.reward import build_online_rl_reward_function
+from live_idea_bench.rl.verl import dataset as verl_dataset_module
 
 
 def _paper(paper_id: str, month: str, *, published_date: str, summary: str) -> PaperRecord:
@@ -49,6 +50,15 @@ def _paper(paper_id: str, month: str, *, published_date: str, summary: str) -> P
 
 def _prediction(rank: int, title: str, rationale: str) -> IdeaPrediction:
     return IdeaPrediction(rank=rank, title=title, rationale=rationale, approach=rationale)
+
+
+def _enable_fake_parquet(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(verl_dataset_module, "_detect_parquet_engine", lambda: "pyarrow")
+
+    def _fake_to_parquet(self, path, engine=None, index=False):  # type: ignore[no-untyped-def]
+        Path(path).write_text(self.to_json(orient="records"), encoding="utf-8")
+
+    monkeypatch.setattr(pd.DataFrame, "to_parquet", _fake_to_parquet)
 
 
 def test_build_rl_episodes_assigns_contiguous_train_validation_test_splits() -> None:
@@ -160,7 +170,7 @@ def test_build_online_reward_function_penalizes_invalid_completion() -> None:
     assert rewards == [-0.05]
 
 
-def test_build_dpo_pairs_and_grpo_advantages_from_episode_candidates() -> None:
+def test_build_grpo_advantages_from_episode_candidates() -> None:
     episode = build_rl_episodes(
         [
             _paper("p-01", "2024-01", published_date="2024-01-01", summary="a"),
@@ -185,54 +195,52 @@ def test_build_dpo_pairs_and_grpo_advantages_from_episode_candidates() -> None:
         )
 
     episodes = [EpisodeCandidateLists(episode=episode, prompt="prompt", candidates=candidate_rewards)]
-    dpo_pairs = build_dpo_pairs(episodes, DPOTrainConfig(quantile_fraction=0.25))
     grpo_rows = build_grpo_advantages(episodes, GRPOTrainConfig())
     alignment = compute_reward_alignment([sample.reward for sample in candidate_rewards], GRPOTrainConfig())
 
-    assert len(dpo_pairs) == 1
-    assert dpo_pairs[0]["chosen_reward"] > dpo_pairs[0]["rejected_reward"]
     assert len(grpo_rows) == 1
     assert len(grpo_rows[0]["candidates"]) == 4
     assert alignment.passed is True
 
 
-def test_train_dpo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path) -> None:
-    rows = [{"prompt": "prompt", "chosen": [{"title": "chosen"}], "rejected": [{"title": "rejected"}]}]
-    manifest = train_dpo_with_trl(
+def test_train_ppo_with_verl_dry_run_writes_manifest_and_launch_files(tmp_path: Path) -> None:
+    dataset_path = tmp_path / "policy" / "trainer_dataset.parquet"
+    dataset_path.parent.mkdir(parents=True, exist_ok=True)
+    dataset_path.write_text("placeholder", encoding="utf-8")
+    rows = [{"prompt": "prompt", "ground_truth": "", "data_source": "live_idea_bench", "extra_info": "{}"}]
+
+    manifest = train_ppo_with_verl(
         rows,
-        DPOTrainConfig(dry_run=True),
-        model_name="gpt-4o-mini",
+        PPOTrainConfig(dry_run=True),
+        model_name="Qwen/Qwen2.5-3B-Instruct",
         predictor_config="predictor.yaml",
         output_dir=str(tmp_path / "policy"),
-        trainer_config_path="dpo_train.yaml",
+        reward_config=RewardConfig(top_k=1),
+        trainer_config_path="ppo_train.yaml",
         selection_config=SelectionConfig(),
         selection_config_path="selection.yaml",
+        dataset_path=str(dataset_path),
+        dataset_metadata={"parquet_ready": True, "prepared_parquet_path": str(dataset_path)},
     )
 
     manifest_path = tmp_path / "policy" / "policy_manifest.json"
-    dataset_path = tmp_path / "policy" / "trainer_dataset.jsonl"
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     assert manifest["dry_run"] is True
-    assert manifest_path.exists()
-    assert dataset_path.exists()
-    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert payload["trainer"] == "dpo"
-    assert payload["inference_model_name"] == "gpt-4o-mini"
+    assert payload["trainer"] == "ppo"
+    assert payload["backend"] == "verl"
+    assert "launch_config_path" in payload
+    assert "launch_command" in payload
+    assert payload["prepared_parquet_path"] == str(dataset_path.resolve())
 
 
-def test_train_grpo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path) -> None:
-    rows = [
-        {
-            "prompt": "prompt",
-            "cutoff_month": "2024-06",
-            "cutoff_date": "2024-06-01",
-            "future_end_month": "2024-07",
-            "future_end_date": "2024-07-31",
-            "train_papers": [asdict(_paper("train-1", "2024-05", published_date="2024-05-01", summary="old topic"))],
-            "future_papers": [asdict(_paper("future-1", "2024-07", published_date="2024-07-01", summary="new topic"))],
-        }
-    ]
-    manifest = train_grpo_with_trl(
+def test_train_grpo_with_verl_dry_run_writes_manifest_and_launch_files(tmp_path: Path) -> None:
+    dataset_path = tmp_path / "policy" / "trainer_dataset.parquet"
+    dataset_path.parent.mkdir(parents=True, exist_ok=True)
+    dataset_path.write_text("placeholder", encoding="utf-8")
+    rows = [{"prompt": "prompt", "ground_truth": "", "data_source": "live_idea_bench", "extra_info": "{}"}]
+
+    manifest = train_grpo_with_verl(
         rows,
         GRPOTrainConfig(dry_run=True),
         model_name="Qwen/Qwen2.5-3B-Instruct",
@@ -242,32 +250,27 @@ def test_train_grpo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path)
         trainer_config_path="grpo_train.yaml",
         selection_config=SelectionConfig(),
         selection_config_path="selection.yaml",
+        dataset_path=str(dataset_path),
+        dataset_metadata={"parquet_ready": True, "prepared_parquet_path": str(dataset_path)},
     )
 
     manifest_path = tmp_path / "policy" / "policy_manifest.json"
-    dataset_path = tmp_path / "policy" / "trainer_dataset.jsonl"
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     assert manifest["dry_run"] is True
-    assert manifest_path.exists()
-    assert dataset_path.exists()
-    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert payload["trainer"] == "grpo"
-    assert payload["inference_model_name"] == "Qwen/Qwen2.5-3B-Instruct"
+    assert payload["backend"] == "verl"
+    assert "launch_config_path" in payload
+    assert "launch_command" in payload
 
 
-def test_train_rloo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path) -> None:
-    rows = [
-        {
-            "prompt": "prompt",
-            "cutoff_month": "2024-06",
-            "cutoff_date": "2024-06-01",
-            "future_end_month": "2024-07",
-            "future_end_date": "2024-07-31",
-            "train_papers": [asdict(_paper("train-1", "2024-05", published_date="2024-05-01", summary="old topic"))],
-            "future_papers": [asdict(_paper("future-1", "2024-07", published_date="2024-07-01", summary="new topic"))],
-        }
-    ]
-    manifest = train_rloo_with_trl(
+def test_train_rloo_with_verl_dry_run_writes_manifest_and_launch_files(tmp_path: Path) -> None:
+    dataset_path = tmp_path / "policy" / "trainer_dataset.parquet"
+    dataset_path.parent.mkdir(parents=True, exist_ok=True)
+    dataset_path.write_text("placeholder", encoding="utf-8")
+    rows = [{"prompt": "prompt", "ground_truth": "", "data_source": "live_idea_bench", "extra_info": "{}"}]
+
+    manifest = train_rloo_with_verl(
         rows,
         RLOOTrainConfig(dry_run=True),
         model_name="Qwen/Qwen2.5-3B-Instruct",
@@ -277,17 +280,18 @@ def test_train_rloo_with_trl_dry_run_writes_manifest_and_dataset(tmp_path: Path)
         trainer_config_path="rloo_train.yaml",
         selection_config=SelectionConfig(),
         selection_config_path="selection.yaml",
+        dataset_path=str(dataset_path),
+        dataset_metadata={"parquet_ready": True, "prepared_parquet_path": str(dataset_path)},
     )
 
     manifest_path = tmp_path / "policy" / "policy_manifest.json"
-    dataset_path = tmp_path / "policy" / "trainer_dataset.jsonl"
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     assert manifest["dry_run"] is True
-    assert manifest_path.exists()
-    assert dataset_path.exists()
-    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert payload["trainer"] == "rloo"
-    assert payload["inference_model_name"] == "Qwen/Qwen2.5-3B-Instruct"
+    assert payload["backend"] == "verl"
+    assert "launch_config_path" in payload
+    assert "launch_command" in payload
 
 
 def test_prepare_common_rl_context_reuses_shared_artifacts(tmp_path: Path) -> None:
@@ -321,7 +325,11 @@ def test_prepare_common_rl_context_reuses_shared_artifacts(tmp_path: Path) -> No
     assert cached.shared_manifest_path.exists()
 
 
-def test_run_policy_rl_pipeline_prepare_only_writes_expected_artifacts(tmp_path: Path) -> None:
+def test_run_policy_rl_pipeline_prepare_only_writes_expected_artifacts_for_ppo(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _enable_fake_parquet(monkeypatch)
     papers = [
         _paper(f"p-{month:02d}", f"2024-{month:02d}", published_date=f"2024-{month:02d}-01", summary=f"summary {month}")
         for month in range(1, 13)
@@ -329,15 +337,16 @@ def test_run_policy_rl_pipeline_prepare_only_writes_expected_artifacts(tmp_path:
 
     manifest = run_policy_rl_pipeline(
         papers,
-        trainer="dpo",
+        trainer="ppo",
         model_name="Qwen/Qwen2.5-3B-Instruct",
         output_dir=str(tmp_path / "rl-run"),
         episode_config=EpisodeBuildConfig(horizon_months=1, min_train_papers=2, past_window_months=6, step_months=3),
         candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=3, ideas_per_list=4),
         reward_config=RewardConfig(top_k=2),
+        reward_config_path="reward.yaml",
         selection_config=SelectionConfig(),
-        trainer_config=DPOTrainConfig(dry_run=True, quantile_fraction=0.34),
-        trainer_config_path="dpo_train.yaml",
+        trainer_config=PPOTrainConfig(dry_run=True),
+        trainer_config_path="ppo_train.yaml",
         selection_config_path="selection.yaml",
         split="all",
         prepare_only=True,
@@ -345,17 +354,22 @@ def test_run_policy_rl_pipeline_prepare_only_writes_expected_artifacts(tmp_path:
 
     run_root = tmp_path / "rl-run"
     assert manifest["selected_episode_count"] > 0
+    assert manifest["trainer_backend"] == "verl"
     assert (run_root / "shared" / "episodes.json").exists()
     assert (run_root / "shared" / "prompts.jsonl").exists()
-    assert (run_root / "dpo" / "candidate_rollouts.json").exists()
-    assert (run_root / "dpo" / "trainer_dataset.jsonl").exists()
+    assert (run_root / "ppo" / "trainer_dataset.parquet").exists()
+    assert (run_root / "ppo" / "trainer_dataset.preview.jsonl").exists()
     assert (run_root / "pipeline_manifest.json").exists()
     assert manifest["prepare_only"] is True
     assert manifest["trainer_policy_manifest_path"] == ""
     assert manifest["training_split_policy"] == "train_only"
 
 
-def test_run_policy_rl_pipeline_grpo_supports_init_policy_and_skip_alignment(tmp_path: Path) -> None:
+def test_run_policy_rl_pipeline_grpo_supports_init_policy_and_skip_alignment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _enable_fake_parquet(monkeypatch)
     papers = [
         _paper(f"p-{month:02d}", f"2024-{month:02d}", published_date=f"2024-{month:02d}-01", summary=f"summary {month}")
         for month in range(1, 13)
@@ -371,6 +385,7 @@ def test_run_policy_rl_pipeline_grpo_supports_init_policy_and_skip_alignment(tmp
         episode_config=EpisodeBuildConfig(horizon_months=1, min_train_papers=2, past_window_months=6, step_months=3),
         candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=2, ideas_per_list=4),
         reward_config=RewardConfig(top_k=2),
+        reward_config_path="reward.yaml",
         selection_config=SelectionConfig(),
         trainer_config=GRPOTrainConfig(dry_run=True),
         trainer_config_path="grpo_train.yaml",
@@ -382,7 +397,9 @@ def test_run_policy_rl_pipeline_grpo_supports_init_policy_and_skip_alignment(tmp
 
     payload = json.loads((tmp_path / "rl-run" / "grpo" / "policy_manifest.json").read_text(encoding="utf-8"))
     assert manifest["trainer"] == "grpo"
+    assert manifest["trainer_backend"] == "verl"
     assert payload["trainer"] == "grpo"
+    assert payload["backend"] == "verl"
     assert payload["init_policy_path"] == str(init_path)
     assert payload["base_model_name"] == "Qwen/Qwen2.5-3B-Instruct"
     assert payload["inference_model_name"] == "Qwen/Qwen2.5-3B-Instruct"
@@ -403,6 +420,7 @@ def test_run_policy_rl_pipeline_rejects_non_train_training_split(tmp_path: Path)
             episode_config=EpisodeBuildConfig(horizon_months=1, min_train_papers=2, past_window_months=6, step_months=3),
             candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=2, ideas_per_list=4),
             reward_config=RewardConfig(top_k=1),
+            reward_config_path="reward.yaml",
             selection_config=SelectionConfig(),
             trainer_config=GRPOTrainConfig(dry_run=True),
             trainer_config_path="grpo_train.yaml",
@@ -412,7 +430,11 @@ def test_run_policy_rl_pipeline_rejects_non_train_training_split(tmp_path: Path)
         )
 
 
-def test_run_policy_rl_pipeline_grpo_writes_alignment_report(tmp_path: Path) -> None:
+def test_run_policy_rl_pipeline_ppo_writes_alignment_report(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _enable_fake_parquet(monkeypatch)
     papers = [
         _paper(f"p-{month:02d}", f"2024-{month:02d}", published_date=f"2024-{month:02d}-01", summary=f"summary {month}")
         for month in range(1, 13)
@@ -420,24 +442,25 @@ def test_run_policy_rl_pipeline_grpo_writes_alignment_report(tmp_path: Path) -> 
 
     manifest = run_policy_rl_pipeline(
         papers,
-        trainer="grpo",
+        trainer="ppo",
         model_name="Qwen/Qwen2.5-3B-Instruct",
         output_dir=str(tmp_path / "rl-run"),
         episode_config=EpisodeBuildConfig(horizon_months=1, min_train_papers=2, past_window_months=6, step_months=3),
         candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=2, ideas_per_list=4),
         reward_config=RewardConfig(top_k=1),
+        reward_config_path="reward.yaml",
         selection_config=SelectionConfig(),
-        trainer_config=GRPOTrainConfig(dry_run=True, reward_alignment_threshold=0.0),
-        trainer_config_path="grpo_train.yaml",
+        trainer_config=PPOTrainConfig(dry_run=True, reward_alignment_threshold=0.0),
+        trainer_config_path="ppo_train.yaml",
         selection_config_path="selection.yaml",
         split="train",
         skip_alignment_check=False,
     )
 
-    report_path = tmp_path / "rl-run" / "grpo" / "alignment_report.json"
+    report_path = tmp_path / "rl-run" / "ppo" / "alignment_report.json"
     report = json.loads(report_path.read_text(encoding="utf-8"))
 
-    assert manifest["trainer"] == "grpo"
+    assert manifest["trainer"] == "ppo"
     assert report_path.exists()
     assert report["episodes_used"] >= 1
     assert "reward_selected_avg_hit_at_1" in report
@@ -465,6 +488,7 @@ def test_run_policy_rl_pipeline_requires_validation_for_alignment(tmp_path: Path
             ),
             candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=2, ideas_per_list=4),
             reward_config=RewardConfig(top_k=1),
+            reward_config_path="reward.yaml",
             selection_config=SelectionConfig(),
             trainer_config=GRPOTrainConfig(dry_run=True, reward_alignment_threshold=0.0),
             trainer_config_path="grpo_train.yaml",
@@ -474,8 +498,40 @@ def test_run_policy_rl_pipeline_requires_validation_for_alignment(tmp_path: Path
         )
 
 
+def test_run_policy_rl_pipeline_rloo_uses_verl_backend(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _enable_fake_parquet(monkeypatch)
+    papers = [
+        _paper(f"p-{month:02d}", f"2024-{month:02d}", published_date=f"2024-{month:02d}-01", summary=f"summary {month}")
+        for month in range(1, 13)
+    ]
+
+    manifest = run_policy_rl_pipeline(
+        papers,
+        trainer="rloo",
+        model_name="Qwen/Qwen2.5-3B-Instruct",
+        output_dir=str(tmp_path / "rl-run"),
+        episode_config=EpisodeBuildConfig(horizon_months=1, min_train_papers=2, past_window_months=6, step_months=3),
+        candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=2, ideas_per_list=4),
+        reward_config=RewardConfig(top_k=1),
+        reward_config_path="reward.yaml",
+        selection_config=SelectionConfig(),
+        trainer_config=RLOOTrainConfig(dry_run=True),
+        trainer_config_path="rloo_train.yaml",
+        selection_config_path="selection.yaml",
+        split="train",
+        skip_alignment_check=True,
+    )
+
+    payload = json.loads((tmp_path / "rl-run" / "rloo" / "policy_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["trainer_backend"] == "verl"
+    assert payload["backend"] == "verl"
+
+
 def test_trainer_registry_supports_all_three_algorithms() -> None:
-    assert create_trainer_runner("dpo").trainer_name == "dpo"
+    assert create_trainer_runner("ppo").trainer_name == "ppo"
     assert create_trainer_runner("grpo").trainer_name == "grpo"
     assert create_trainer_runner("rloo").trainer_name == "rloo"
 

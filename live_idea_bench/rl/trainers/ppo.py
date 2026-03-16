@@ -2,21 +2,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from live_idea_bench.rl.config import RLOOTrainConfig
+from live_idea_bench.rl.config import PPOTrainConfig
 from live_idea_bench.rl.trainers.base import PreparedRLContext, RLTrainerRunner, TrainerPreparedArtifacts
 from live_idea_bench.rl.verl.runner import prepare_verl_artifacts, train_with_verl
 
 
-class RLOOTrainerRunner(RLTrainerRunner):
-    trainer_name = "rloo"
-    default_config_filename = "rloo_train.yaml"
+class PPOTrainerRunner(RLTrainerRunner):
+    trainer_name = "ppo"
+    default_config_filename = "ppo_train.yaml"
     backend_name = "verl"
 
     def prepare(
         self,
         common_context: PreparedRLContext,
         *,
-        trainer_config: RLOOTrainConfig,
+        trainer_config: PPOTrainConfig,
         **_: Any,
     ) -> TrainerPreparedArtifacts:
         return prepare_verl_artifacts(
@@ -25,25 +25,24 @@ class RLOOTrainerRunner(RLTrainerRunner):
             dry_run=trainer_config.dry_run,
         )
 
-    def train(self, prepared_artifacts: TrainerPreparedArtifacts, *, config: RLOOTrainConfig, **kwargs: Any) -> dict[str, Any]:
+    def train(self, prepared_artifacts: TrainerPreparedArtifacts, *, config: PPOTrainConfig, **kwargs: Any) -> dict[str, Any]:
         kwargs.pop("output_dir", None)
-        return train_rloo_with_verl(
-            prepared_artifacts.dataset_rows,
-            config=config,
+        return train_with_verl(
+            trainer_name=self.trainer_name,
+            prepared_artifacts=prepared_artifacts,
             output_dir=str(prepared_artifacts.output_dir),
-            dataset_path=str(prepared_artifacts.dataset_path),
-            dataset_metadata=prepared_artifacts.metadata,
+            config=config,
             **kwargs,
         )
 
 
-def train_rloo_with_verl(
+def train_ppo_with_verl(
     dataset_rows: list[dict[str, Any]],
-    config: RLOOTrainConfig,
+    config: PPOTrainConfig,
     *,
-    output_dir: str,
     model_name: str,
     predictor_config: str,
+    output_dir: str,
     reward_config: Any,
     reward_config_path: str = "reward.yaml",
     trainer_config_path: str,
@@ -57,7 +56,7 @@ def train_rloo_with_verl(
     diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return train_with_verl(
-        trainer_name="rloo",
+        trainer_name="ppo",
         prepared_artifacts=None,
         dataset_rows=dataset_rows,
         dataset_path=dataset_path,

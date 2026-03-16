@@ -11,8 +11,8 @@ from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
 from live_idea_bench.rl import (  # noqa: E402
     load_candidate_generation_config,
     load_episode_build_config,
-    load_dpo_train_config,
     load_grpo_train_config,
+    load_ppo_train_config,
     load_rloo_train_config,
     load_reward_config,
     load_selection_config,
@@ -28,9 +28,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", type=str, default="data/rl_runs/policy_rl", help="Directory for RL artifacts.")
     parser.add_argument("--model-name", type=str, help="Hugging Face model id or local checkpoint path.")
     parser.add_argument("--model-preset", type=str, help="Shortcut alias from the built-in 3B/4B model registry.")
-    parser.add_argument("--trainer", type=str, choices=["dpo", "grpo", "rloo"], help="Trainer algorithm to run.")
+    parser.add_argument("--trainer", type=str, choices=["ppo", "grpo", "rloo"], help="Trainer algorithm to run.")
     parser.add_argument("--trainer-config", type=str, help="Optional trainer config file under config/rl.")
-    parser.add_argument("--init-policy-path", type=str, help="Optional checkpoint path used to warm-start GRPO or RLOO.")
+    parser.add_argument("--init-policy-path", type=str, help="Optional checkpoint path used to warm-start PPO, GRPO, or RLOO.")
     parser.add_argument("--prepare-only", action="store_true", help="Prepare common artifacts and trainer datasets without training.")
     parser.add_argument(
         "--prepare-split",
@@ -38,7 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["train", "validation", "test", "all"],
         help="Episode split to materialize when used with --prepare-only.",
     )
-    parser.add_argument("--skip-alignment-check", action="store_true", help="Skip the online reward alignment check for GRPO/RLOO.")
+    parser.add_argument("--skip-alignment-check", action="store_true", help="Skip the online reward alignment check for PPO/GRPO/RLOO.")
     parser.add_argument("--max-episodes", type=int, help="Optional cap for quick experiments.")
     parser.add_argument("--start-month", type=str, help="Optional lower bound month for loading papers.")
     parser.add_argument("--end-month", type=str, help="Optional upper bound month for loading papers.")
@@ -82,9 +82,9 @@ def _resolve_trainer_config(args: argparse.Namespace) -> tuple[str, object]:
     if not args.trainer:
         raise ValueError("--trainer is required unless --list-model-presets is used.")
     explicit = str(args.trainer_config).strip() if args.trainer_config else ""
-    if args.trainer == "dpo":
-        path = explicit or "dpo_train.yaml"
-        return path, load_dpo_train_config(path)
+    if args.trainer == "ppo":
+        path = explicit or "ppo_train.yaml"
+        return path, load_ppo_train_config(path)
     if args.trainer == "grpo":
         path = explicit or "grpo_train.yaml"
         return path, load_grpo_train_config(path)
@@ -143,6 +143,7 @@ def main() -> int:
         episode_config=episode_config,
         candidate_config=candidate_config,
         reward_config=reward_config,
+        reward_config_path=args.reward_config,
         selection_config=selection_config,
         trainer_config=trainer_config,
         trainer_config_path=trainer_config_path,

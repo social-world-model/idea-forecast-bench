@@ -4,7 +4,8 @@ from dataclasses import asdict, dataclass
 from math import sqrt
 from typing import Any, Protocol, runtime_checkable
 
-from live_idea_bench.rl.dpo import EpisodeCandidateLists
+from live_idea_bench.rl.candidates import EpisodeCandidateLists
+from live_idea_bench.rl.config import GRPOTrainConfig
 from live_idea_bench.rl.reward import RLRewardEvaluation, spearman_correlation
 
 

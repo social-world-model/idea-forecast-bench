@@ -3,8 +3,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field, is_dataclass
 import hashlib
-import importlib
-import inspect
 import json
 from pathlib import Path
 from typing import Any
@@ -44,6 +42,7 @@ class TrainerPreparedArtifacts:
 class RLTrainerRunner(ABC):
     trainer_name: str
     default_config_filename: str
+    backend_name: str = "unknown"
 
     @abstractmethod
     def prepare(self, common_context: PreparedRLContext, **kwargs: Any) -> TrainerPreparedArtifacts:
@@ -71,63 +70,6 @@ def build_config_fingerprint(payload: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def _require_trl_stack() -> dict[str, Any]:
-    try:
-        datasets = importlib.import_module("datasets")
-        peft = importlib.import_module("peft")
-        trl = importlib.import_module("trl")
-    except ImportError as exc:
-        raise RuntimeError(
-            "TRL training dependencies are not installed. Install torch, datasets, transformers, peft, "
-            "accelerate, and trl to run non-dry-run RL training."
-        ) from exc
-
-    return {
-        "Dataset": getattr(datasets, "Dataset"),
-        "LoraConfig": getattr(peft, "LoraConfig"),
-        "DPOConfig": getattr(trl, "DPOConfig", None),
-        "DPOTrainer": getattr(trl, "DPOTrainer", None),
-        "GRPOConfig": getattr(trl, "GRPOConfig", None),
-        "GRPOTrainer": getattr(trl, "GRPOTrainer", None),
-        "RLOOConfig": getattr(trl, "RLOOConfig", None),
-        "RLOOTrainer": getattr(trl, "RLOOTrainer", None),
-    }
-
-
-def _peft_config(deps: dict[str, Any], *, r: int, lora_alpha: int, lora_dropout: float) -> Any:
-    return deps["LoraConfig"](
-        r=r,
-        lora_alpha=lora_alpha,
-        lora_dropout=lora_dropout,
-        bias="none",
-        task_type="CAUSAL_LM",
-    )
-
-
-def _filter_supported_kwargs(factory: Any, values: dict[str, Any]) -> dict[str, Any]:
-    try:
-        signature = inspect.signature(factory)
-    except (TypeError, ValueError):
-        return values
-
-    if any(param.kind == inspect.Parameter.VAR_KEYWORD for param in signature.parameters.values()):
-        return values
-    accepted = set(signature.parameters)
-    return {key: value for key, value in values.items() if key in accepted}
-
-
-def create_trl_config(factory: Any, values: dict[str, Any]) -> Any:
-    if factory is None:
-        raise RuntimeError("The selected TRL trainer is not available in the installed trl package.")
-    return factory(**_filter_supported_kwargs(factory, values))
-
-
-def create_trl_trainer(factory: Any, values: dict[str, Any]) -> Any:
-    if factory is None:
-        raise RuntimeError("The selected TRL trainer is not available in the installed trl package.")
-    return factory(**_filter_supported_kwargs(factory, values))
-
-
 def build_policy_manifest(
     *,
     trainer: str,
@@ -145,11 +87,17 @@ def build_policy_manifest(
     output_top_k: int,
     training_split_policy: str = "train_only",
     diagnostics: dict[str, Any] | None = None,
+    backend: str = "verl",
+    launch_config_path: str | None = None,
+    launch_command: str | None = None,
+    launch_command_path: str | None = None,
+    prepared_parquet_path: str | None = None,
 ) -> dict[str, Any]:
     checkpoint_path = output_dir / "artifacts"
     payload = {
         "policy_manifest_version": 1,
         "policy_type": "policy_rl",
+        "backend": backend,
         "trainer": trainer,
         "base_model_name": base_model_name,
         "inference_model_name": inference_model_name,
@@ -167,6 +115,14 @@ def build_policy_manifest(
         "training_split_policy": training_split_policy,
         "dry_run": dry_run,
     }
+    if launch_config_path:
+        payload["launch_config_path"] = str(launch_config_path)
+    if launch_command:
+        payload["launch_command"] = str(launch_command)
+    if launch_command_path:
+        payload["launch_command_path"] = str(launch_command_path)
+    if prepared_parquet_path:
+        payload["prepared_parquet_path"] = str(prepared_parquet_path)
     if diagnostics:
         payload["diagnostics"] = diagnostics
         payload["parse_failure_rate"] = float(diagnostics.get("parse_failure_rate", 0.0))

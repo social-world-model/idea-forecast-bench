@@ -43,7 +43,7 @@ def test_policy_rl_strategy_uses_static_predictions_from_manifest(tmp_path: Path
         json.dumps(
             {
                 "policy_type": "policy_rl",
-                "stage": "dpo",
+                "stage": "ppo",
                 "static_predictions": {
                     "2024-06": [
                         {
