@@ -172,9 +172,18 @@ def main() -> int:
         print(f"  {k}: {v:.4f}")
 
     output_path = Path(args.output)
+    # Resolve the actual model name used (for predictor_llm)
+    resolved_model_name: str | None = None
+    if args.strategy == "predictor_llm":
+        from live_idea_bench.config import load_predictor_config, load_runtime_config
+        _pc = load_predictor_config()
+        _rc = load_runtime_config()
+        resolved_model_name = args.model_name or _pc.default_model or _rc.model_name
+
     payload = {
         "mode": "domain_backtest",
         "strategy": args.strategy,
+        "model_name": resolved_model_name,
         "config": {
             "top_k": args.top_k,
             "horizon_months": args.horizon_months,
