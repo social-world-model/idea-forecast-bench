@@ -106,6 +106,14 @@ class EmbeddingConfig:
     introduction_weight: float = 0.2
     method_weight: float = 0.2
     conclusion_weight: float = 0.2
+    # OpenAI-compatible embedding endpoint.
+    # "http://localhost:8000/v1" → local vllm/sglang deployment
+    # "https://some-provider.com/v1" → third-party API
+    # "" (empty, default) → official OpenAI API
+    # If not configured at all, falls back to local sentence-transformers
+    # with a warning.
+    embedding_base_url: str = ""
+    api_model: str = "text-embedding-3-small"
 
 
 @dataclass
@@ -132,6 +140,7 @@ class SimilarityConfig:
     engine: str = "hybrid"
     semantic_threshold: float = 0.5
     keyword_threshold: float = 0.3
+    embedding_threshold: float = 0.4
     llm_match_threshold: float = 0.7
     system_prompt: str = ""
     user_prompt_template: str = ""

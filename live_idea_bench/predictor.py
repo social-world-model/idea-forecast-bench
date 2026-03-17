@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import random
 import re
 from typing import Any, Iterable, List
+
+logger = logging.getLogger(__name__)
 
 from live_idea_bench.config import load_predictor_config, load_runtime_config
 from live_idea_bench.llm import create_client, get_response_from_llm
@@ -269,6 +272,7 @@ def _llm_predictions(
     temperature: float | None,
     top_p: float | None,
     seed: int | None,
+    retry_hint: str | None = None,
 ) -> list[IdeaPrediction]:
     predictor_config = load_predictor_config(predictor_config_path)
     runtime_config = load_runtime_config()
@@ -288,6 +292,8 @@ def _llm_predictions(
         abstracts=_build_abstract_block(train_papers, predictor_config.max_context_papers),
         cutoff_month=cutoff_month,
     )
+    if retry_hint:
+        message = f"{message}\n\n[IMPORTANT] {retry_hint}"
     if top_k == 1:
         message = (
             f"{message}\n\n"
@@ -408,25 +414,65 @@ def generate_predictions(
     predictor_config = load_predictor_config(predictor_config_path)
     resolved_model = model_name or predictor_config.default_model or runtime_config.model_name
 
-    try:
-        predictions = _llm_predictions(
-            train_papers=train_papers,
-            cutoff_month=cutoff_month,
-            top_k=top_k,
-            model_name=resolved_model,
-            predictor_config_path=predictor_config_path,
-            temperature=temperature,
-            top_p=top_p,
-            seed=seed,
-        )
-    except Exception:
-        if not fallback_to_heuristic:
-            return []
-        predictions = _heuristic_predictions(
-            train_papers=train_papers,
-            cutoff_month=cutoff_month,
-            top_k=top_k,
-        )
+    MAX_RETRIES = 3
+    predictions: list[IdeaPrediction] = []
+    last_exc: Exception | None = None
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        retry_hint: str | None = None
+        if attempt > 1:
+            retry_hint = (
+                f"Your previous response only contained {len(predictions)} idea(s). "
+                f"You MUST return exactly {top_k} ideas as a JSON array. "
+                "Do not include any explanation outside the JSON."
+            )
+        try:
+            predictions = _llm_predictions(
+                train_papers=train_papers,
+                cutoff_month=cutoff_month,
+                top_k=top_k,
+                model_name=resolved_model,
+                predictor_config_path=predictor_config_path,
+                temperature=temperature,
+                top_p=top_p,
+                seed=seed,
+                retry_hint=retry_hint,
+            )
+            if len(predictions) >= top_k:
+                break
+            print(
+                f"[predictor_llm WARNING] cutoff={cutoff_month}: got {len(predictions)}/{top_k} predictions "
+                f"(attempt {attempt}/{MAX_RETRIES}) — retrying",
+                flush=True,
+            )
+        except Exception as exc:
+            last_exc = exc
+            print(
+                f"[predictor_llm WARNING] cutoff={cutoff_month}: LLM call failed "
+                f"(attempt {attempt}/{MAX_RETRIES}). Error: {exc}",
+                flush=True,
+            )
+
+    if len(predictions) < top_k:
+        if len(predictions) == 0:
+            if not fallback_to_heuristic:
+                return []
+            print(
+                f"[predictor_llm WARNING] cutoff={cutoff_month}: all {MAX_RETRIES} attempts failed "
+                f"(model={resolved_model}) → heuristic fallback. Last error: {last_exc}",
+                flush=True,
+            )
+            predictions = _heuristic_predictions(
+                train_papers=train_papers,
+                cutoff_month=cutoff_month,
+                top_k=top_k,
+            )
+        else:
+            print(
+                f"[predictor_llm WARNING] cutoff={cutoff_month}: only {len(predictions)}/{top_k} predictions "
+                f"after {MAX_RETRIES} attempts — proceeding with partial results",
+                flush=True,
+            )
 
     for idx, prediction in enumerate(predictions, start=1):
         prediction.rank = idx

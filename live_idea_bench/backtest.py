@@ -9,6 +9,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from tqdm import tqdm
+
 from live_idea_bench.models import BacktestWindowResult, EvaluationResult, IdeaPrediction, PaperRecord
 from live_idea_bench.papers import (
     add_months,
@@ -21,7 +23,7 @@ from live_idea_bench.papers import (
     normalize_date,
     normalize_month,
 )
-from live_idea_bench.similarity import evaluate_predictions
+from live_idea_bench.similarity import evaluate_predictions, score_prediction_list
 from live_idea_bench.strategy.base import IdeaStrategy
 
 
@@ -202,12 +204,9 @@ def run_backtest(
     last_allowed_cutoff = add_months(month_values[-1], -config.horizon_months)
     max_cutoff_idx = month_to_index(last_allowed_cutoff)
 
+    eligible_cutoffs = [c for c in month_values if month_to_index(c) <= max_cutoff_idx]
     window_results: List[BacktestWindowResult] = []
-    for cutoff in month_values:
-        cutoff_idx = month_to_index(cutoff)
-        if cutoff_idx > max_cutoff_idx:
-            continue
-
+    for cutoff in tqdm(eligible_cutoffs, desc="windows", unit="win", leave=False):
         cutoff_date = month_start_date(cutoff)
         train, future, future_end, future_end_date = split_train_future_by_cutoff(
             papers=scoped_papers,
@@ -219,7 +218,14 @@ def run_backtest(
             continue
 
         predictions = strategy.generate(train_papers=train, cutoff_month=cutoff, top_k=config.top_k)
-        evaluation = evaluate_predictions(
+        if len(predictions) < config.top_k:
+            import sys as _sys
+            print(
+                f"[backtest WARNING] cutoff={cutoff}: got {len(predictions)}/{config.top_k} predictions "
+                f"(strategy={strategy.__class__.__name__})",
+                file=_sys.stderr, flush=True,
+            )
+        scored = score_prediction_list(
             predictions=predictions,
             train_papers=train,
             future_papers=future,
@@ -239,7 +245,8 @@ def run_backtest(
                 train_papers=len(train),
                 future_papers=len(future),
                 predictions=predictions,
-                evaluation=evaluation,
+                evaluation=scored.evaluation,
+                matches=scored.matches,
             )
         )
 

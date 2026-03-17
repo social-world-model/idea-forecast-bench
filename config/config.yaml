@@ -6,12 +6,19 @@ openai_api_key: ""
 
 embedding:
   model_name: "all-MiniLM-L6-v2"
-  max_context_chars: 50000
+  max_context_chars: 8000
   use_section_weights: true
   abstract_weight: 0.4
   introduction_weight: 0.2
   method_weight: 0.2
   conclusion_weight: 0.2
+  # Embedding endpoint (OpenAI-compatible):
+  #   "http://localhost:8000/v1" → local vllm/sglang
+  #   "https://some-provider.com/v1" → third-party
+  #   "" (empty) → official OpenAI API
+  # Leave unset to use local sentence-transformers (with a warning).
+  embedding_base_url: ""
+  api_model: "text-embedding-3-small"
 
 topics:
   - id: "diffusion_language_model"

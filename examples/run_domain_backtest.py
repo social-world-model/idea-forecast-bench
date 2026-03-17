@@ -51,12 +51,31 @@ def main() -> int:
     parser.add_argument("--end-month", type=str, default="2025-06")
     parser.add_argument("--similarity-config", type=str, default="similarity.yaml")
     parser.add_argument(
+        "--similarity-engine",
+        type=str,
+        default=None,
+        help="Override the similarity engine at runtime (e.g. heuristic, embedding, llm). "
+             "Useful when you want to skip API calls and re-evaluate later with reeval_from_json.py.",
+    )
+    parser.add_argument(
         "--output",
         type=str,
         default="/tmp/domain_backtest.json",
         help="Output JSON path.",
     )
     args = parser.parse_args()
+
+    # Apply runtime engine override: write a minimal temp YAML so the caller
+    # never needs to touch similarity.yaml just to change the engine.
+    _tmp_sim_cfg = None
+    if args.similarity_engine:
+        import tempfile
+        _tmp_sim_cfg = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yaml", delete=False, prefix="sim_override_"
+        )
+        _tmp_sim_cfg.write(f"engine: {args.similarity_engine}\n")
+        _tmp_sim_cfg.close()
+        args.similarity_config = _tmp_sim_cfg.name
 
     input_dir = Path(args.input_dir)
     if not input_dir.is_absolute():
@@ -171,6 +190,11 @@ def main() -> int:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nSaved to {output_path}")
+
+    if _tmp_sim_cfg:
+        import os
+        os.unlink(_tmp_sim_cfg.name)
+
     return 0
 
 
