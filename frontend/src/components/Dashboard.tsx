@@ -38,7 +38,7 @@ function fmtIso(raw?: string | null): string {
 function aggregateTopicSummary(topicRuns: TopicRun[]): BacktestSummary | null {
   const summaries = topicRuns
     .map((topicRun) => topicRun.backtest_result?.summary ?? null)
-    .filter((summary): summary is BacktestSummary => Boolean(summary) && summary.windows > 0);
+    .filter((summary): summary is BacktestSummary => summary !== null && summary.windows > 0);
 
   if (summaries.length === 0) {
     return null;
