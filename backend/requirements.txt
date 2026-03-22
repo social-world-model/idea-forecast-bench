@@ -10,3 +10,4 @@ openreview-py
 beartype
 backoff
 rich
+gunicorn>=21.0.0

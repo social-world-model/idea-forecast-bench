@@ -1,25 +1,33 @@
-version: '3.9'
-
 services:
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
     container_name: live-idea-backend
-    ports:
-      - '5000:5000'
+    restart: always
     volumes:
       - ./data:/app/data
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - LIVE_IDEA_ADMIN_TOKEN=${LIVE_IDEA_ADMIN_TOKEN:-}
+    expose:
+      - '5000'
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/healthz')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   frontend:
     build:
       context: .
       dockerfile: frontend/Dockerfile
     container_name: live-idea-frontend
+    restart: always
     ports:
-      - '3000:80'
+      - '80:80'
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
