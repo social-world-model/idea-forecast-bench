@@ -326,79 +326,97 @@ const WindowDetail: React.FC<{ window: WindowResult; index: number }> = ({
 };
 
 const TopicBacktestSection: React.FC<{ topicRun: TopicRun }> = ({ topicRun }) => {
+  const [open, setOpen] = useState(false);
   const summary = topicRun.backtest_result?.summary ?? null;
   const windows = topicRun.backtest_result?.windows ?? [];
 
   return (
     <div className="topic-section">
-      <div className="topic-section-header">
-        <div>
+      <div className="topic-section-header topic-section-clickable" onClick={() => setOpen(!open)}>
+        <div style={{ flex: 1 }}>
           <h3 className="topic-section-title">{topicRun.topic_name}</h3>
           <div className="topic-section-meta">
             <span className="meta-chip">papers={topicRun.matched_paper_count}</span>
-            <span className="meta-chip">status={topicRun.backtest_status}</span>
+            <span className="meta-chip">bt={topicRun.backtest_status}</span>
             {summary && <span className="meta-chip">windows={summary.windows}</span>}
+            {summary && <span className="eval-chip hit meta-chip">Hit@K {pct(summary.avg_hit_at_k)}</span>}
+            {summary && <span className="eval-chip mrr meta-chip">MRR {summary.avg_mrr.toFixed(3)}</span>}
+            {summary && <span className="meta-chip">Novelty {pct(summary.avg_novelty)}</span>}
           </div>
         </div>
+        <span className="window-toggle">{open ? '▲' : '▼'}</span>
       </div>
 
-      {!topicRun.backtest_result ? (
-        <div className="topic-empty">
-          {topicRun.backtest_status === 'running'
-            ? 'Backtest in progress for this topic.'
-            : topicRun.matched_paper_count === 0
-            ? 'No matched papers for this topic.'
-            : topicRun.backtest_status === 'failed'
-            ? topicRun.backtest_error || 'Backtest failed for this topic.'
-            : 'No backtest results yet for this topic.'}
-        </div>
-      ) : windows.length === 0 ? (
-        <div className="topic-empty">No valid backtest windows for this topic.</div>
-      ) : (
-        <div className="windows-list">
-          {windows.map((window, index) => (
-            <WindowDetail key={`${topicRun.topic_id}-${window.cutoff_date}`} window={window} index={index} />
-          ))}
-        </div>
+      {open && (
+        !topicRun.backtest_result ? (
+          <div className="topic-empty">
+            {topicRun.backtest_status === 'running'
+              ? 'Backtest in progress for this topic.'
+              : topicRun.matched_paper_count === 0
+              ? 'No matched papers for this topic.'
+              : topicRun.backtest_status === 'failed'
+              ? topicRun.backtest_error || 'Backtest failed for this topic.'
+              : 'No backtest results yet for this topic.'}
+          </div>
+        ) : windows.length === 0 ? (
+          <div className="topic-empty">No valid backtest windows for this topic.</div>
+        ) : (
+          <div className="windows-list">
+            {windows.map((window, index) => (
+              <WindowDetail key={`${topicRun.topic_id}-${window.cutoff_date}`} window={window} index={index} />
+            ))}
+          </div>
+        )
       )}
     </div>
   );
 };
 
-const TopicGenerationSection: React.FC<{ topicRun: TopicRun }> = ({ topicRun }) => (
-  <div className="topic-section">
-    <div className="topic-section-header">
-      <div>
-        <h3 className="topic-section-title">{topicRun.topic_name}</h3>
-        <div className="topic-section-meta">
-          <span className="meta-chip">papers={topicRun.matched_paper_count}</span>
-          <span className="meta-chip">status={topicRun.generation_status}</span>
-          {topicRun.generation && (
-            <span className="meta-chip">cutoff={topicRun.generation.cutoff_month}</span>
-          )}
-        </div>
-      </div>
-    </div>
+const TopicGenerationSection: React.FC<{ topicRun: TopicRun }> = ({ topicRun }) => {
+  const [open, setOpen] = useState(false);
+  const predCount = topicRun.generation?.predictions.length ?? 0;
 
-    {!topicRun.generation ? (
-      <div className="topic-empty">
-        {topicRun.generation_status === 'running'
-          ? 'Generation in progress for this topic.'
-          : topicRun.matched_paper_count === 0
-          ? 'No matched papers for this topic.'
-          : topicRun.generation_status === 'failed'
-          ? topicRun.generation_error || 'Generation failed for this topic.'
-          : 'No generated ideas yet for this topic.'}
+  return (
+    <div className="topic-section">
+      <div className="topic-section-header topic-section-clickable" onClick={() => setOpen(!open)}>
+        <div style={{ flex: 1 }}>
+          <h3 className="topic-section-title">{topicRun.topic_name}</h3>
+          <div className="topic-section-meta">
+            <span className="meta-chip">papers={topicRun.matched_paper_count}</span>
+            <span className="meta-chip">gen={topicRun.generation_status}</span>
+            {topicRun.generation && (
+              <span className="meta-chip">cutoff={topicRun.generation.cutoff_month}</span>
+            )}
+            {predCount > 0 && (
+              <span className="meta-chip">{predCount} ideas</span>
+            )}
+          </div>
+        </div>
+        <span className="window-toggle">{open ? '▲' : '▼'}</span>
       </div>
-    ) : (
-      <div className="predictions-grid">
-        {topicRun.generation.predictions.map((pred) => (
-          <PredictionCard key={`${topicRun.topic_id}-${pred.rank}`} pred={pred} />
-        ))}
-      </div>
-    )}
-  </div>
-);
+
+      {open && (
+        !topicRun.generation ? (
+          <div className="topic-empty">
+            {topicRun.generation_status === 'running'
+              ? 'Generation in progress for this topic.'
+              : topicRun.matched_paper_count === 0
+              ? 'No matched papers for this topic.'
+              : topicRun.generation_status === 'failed'
+              ? topicRun.generation_error || 'Generation failed for this topic.'
+              : 'No generated ideas yet for this topic.'}
+          </div>
+        ) : (
+          <div className="predictions-grid">
+            {topicRun.generation.predictions.map((pred) => (
+              <PredictionCard key={`${topicRun.topic_id}-${pred.rank}`} pred={pred} />
+            ))}
+          </div>
+        )
+      )}
+    </div>
+  );
+};
 
 
 type CompMetric = 'hit_at_k' | 'mrr' | 'novelty' | 'diversity';

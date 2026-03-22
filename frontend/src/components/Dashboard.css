@@ -797,6 +797,18 @@
   margin-bottom: 0.85rem;
 }
 
+.topic-section-clickable {
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 0.25rem 0.4rem;
+  margin: -0.25rem -0.4rem;
+  transition: background 0.15s;
+}
+
+.topic-section-clickable:hover {
+  background: rgba(255,255,255,0.05);
+}
+
 .topic-section-title {
   margin: 0 0 0.35rem;
   font-size: 1rem;
