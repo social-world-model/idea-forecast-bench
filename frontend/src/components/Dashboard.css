@@ -972,3 +972,19 @@
   .col-window, .col-metric { min-width: 80px; }
   .action-btn { padding: 0.25rem 0.5rem; font-size: 0.7rem; }
 }
+
+/* Domain Comparison Table */
+.domain-comp-table th {
+  font-size: 0.72rem;
+  max-width: 160px;
+  white-space: normal;
+  word-break: break-word;
+  vertical-align: top;
+}
+.domain-comp-table td {
+  padding: 10px 12px;
+  vertical-align: middle;
+}
+.domain-comp-table tbody tr:hover {
+  background: rgba(255,255,255,0.04);
+}

@@ -400,6 +400,128 @@ const TopicGenerationSection: React.FC<{ topicRun: TopicRun }> = ({ topicRun }) 
   </div>
 );
 
+
+type CompMetric = 'hit_at_k' | 'mrr' | 'novelty' | 'diversity';
+
+const COMP_METRICS: { key: CompMetric; label: string }[] = [
+  { key: 'hit_at_k', label: 'Hit@K' },
+  { key: 'mrr', label: 'MRR' },
+  { key: 'novelty', label: 'Novelty' },
+  { key: 'diversity', label: 'Diversity' },
+];
+
+const DomainComparisonTable: React.FC<{ strategies: Strategy[] }> = ({ strategies }) => {
+  const [metric, setMetric] = React.useState<CompMetric>('hit_at_k');
+
+  // Collect all topic IDs in stable order from first strategy that has topic_runs
+  const topicOrder: { id: string; name: string }[] = [];
+  const seen = new Set<string>();
+  for (const s of strategies) {
+    for (const t of s.topic_runs ?? []) {
+      if (!seen.has(t.topic_id)) {
+        seen.add(t.topic_id);
+        topicOrder.push({ id: t.topic_id, name: t.topic_name });
+      }
+    }
+  }
+
+  if (topicOrder.length === 0 || strategies.length < 2) return null;
+
+  // Build lookup: strategyId -> topicId -> metric value
+  const getValue = (s: Strategy, topicId: string): number | null => {
+    const run = (s.topic_runs ?? []).find(t => t.topic_id === topicId);
+    const summary = run?.backtest_result?.summary;
+    if (!summary) return null;
+    const mapKey: Record<CompMetric, keyof typeof summary> = {
+      hit_at_k: 'avg_hit_at_k',
+      mrr: 'avg_mrr',
+      novelty: 'avg_novelty',
+      diversity: 'avg_diversity',
+    };
+    const v = summary[mapKey[metric]];
+    return typeof v === 'number' ? v : null;
+  };
+
+  // Heat color: green best, red worst (per row)
+  const heatColor = (val: number | null, rowVals: (number | null)[]): string => {
+    if (val === null) return 'transparent';
+    const nums = rowVals.filter((v): v is number => v !== null);
+    if (nums.length < 2) return 'rgba(99,102,241,0.15)';
+    const min = Math.min(...nums);
+    const max = Math.max(...nums);
+    if (max === min) return 'rgba(99,102,241,0.15)';
+    const t = (val - min) / (max - min);
+    const r = Math.round(239 * (1 - t) + 16 * t);
+    const g = Math.round(68 * (1 - t) + 185 * t);
+    const b = Math.round(68 * (1 - t) + 129 * t);
+    return `rgba(${r},${g},${b},0.25)`;
+  };
+
+  const rankIn = (val: number | null, rowVals: (number | null)[]): number | null => {
+    if (val === null) return null;
+    const nums = rowVals.filter((v): v is number => v !== null).sort((a, b) => b - a);
+    return nums.indexOf(val) + 1;
+  };
+
+  return (
+    <section className="section">
+      <div className="section-header">
+        <h2 className="section-title">Domain Comparison</h2>
+        <div className="tab-bar">
+          {COMP_METRICS.map(m => (
+            <button
+              key={m.key}
+              className={`tab-btn ${metric === m.key ? 'active' : ''}`}
+              onClick={() => setMetric(m.key)}
+            >{m.label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="table-wrap">
+        <table className="strategy-table domain-comp-table">
+          <thead>
+            <tr>
+              <th>Domain</th>
+              {strategies.map((s, i) => (
+                <th key={s.id}>
+                  <span className={`rank-badge ${i < 3 ? `top-${i+1}` : ''}`}>#{i+1}</span>
+                  {' '}{s.name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {topicOrder.map(topic => {
+              const rowVals = strategies.map(s => getValue(s, topic.id));
+              return (
+                <tr key={topic.id}>
+                  <td className="col-name"><div className="strategy-name">{topic.name}</div></td>
+                  {strategies.map((s, si) => {
+                    const val = rowVals[si];
+                    const rank = rankIn(val, rowVals);
+                    return (
+                      <td key={s.id} style={{ background: heatColor(val, rowVals), textAlign: 'center' }}>
+                        {val !== null ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                            <span className="metric-value" style={{ fontSize: '1rem' }}>
+                              {metric === 'mrr' ? val.toFixed(3) : `${(val * 100).toFixed(1)}%`}
+                            </span>
+                            {rank === 1 && <span className="rank-badge top-1" style={{ fontSize: '0.65rem' }}>BEST</span>}
+                          </div>
+                        ) : <span className="metric-na">—</span>}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+};
+
 const Dashboard: React.FC<DashboardProps> = ({
   strategies,
   lastRefresh,
@@ -479,6 +601,8 @@ const Dashboard: React.FC<DashboardProps> = ({
           </div>
         )}
       </section>
+
+      <DomainComparisonTable strategies={strategies} />
 
       {selected && (
         <section className="section">
