@@ -109,6 +109,12 @@
   color: #4338ca;
 }
 
+.topic-badge {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
 .idea-content {
   display: flex;
   flex-direction: column;

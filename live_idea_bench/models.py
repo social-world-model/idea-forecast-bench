@@ -52,6 +52,7 @@ class BacktestWindowResult:
     future_papers: int
     predictions: List[IdeaPrediction]
     evaluation: EvaluationResult
+    matches: List["PredictionMatchDetail"] = field(default_factory=list)
 
 
 @dataclass

@@ -1,17 +1,78 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import './GeneratedIdeasList.css';
 import { API_BASE_URL, API_ENDPOINTS } from '../config';
-import type { IdeaPrediction, Strategy } from '../types';
+import type { IdeaPrediction, Strategy, TopicRun } from '../types';
 
 interface GeneratedIdeaItem {
   id: string;
   strategyId: string;
   strategyName: string;
   strategyType: string;
+  topicId: string;
+  topicName: string;
   cutoffDate: string;
   cutoffMonth: string;
   rank: number;
   prediction: IdeaPrediction;
+}
+
+function topicGeneratedIdeas(strategy: Strategy, topicRun: TopicRun): GeneratedIdeaItem[] {
+  if (!topicRun.generation) {
+    return [];
+  }
+
+  return topicRun.generation.predictions.map((prediction) => ({
+    id: `${strategy.id}-${topicRun.topic_id}-${topicRun.generation?.cutoff_date}-${prediction.rank}`,
+    strategyId: strategy.id,
+    strategyName: strategy.name,
+    strategyType: strategy.strategy_name,
+    topicId: topicRun.topic_id,
+    topicName: topicRun.topic_name,
+    cutoffDate: topicRun.generation?.cutoff_date ?? '',
+    cutoffMonth: topicRun.generation?.cutoff_month ?? '',
+    rank: prediction.rank,
+    prediction,
+  }));
+}
+
+export function flattenGeneratedIdeas(strategies: Strategy[]): GeneratedIdeaItem[] {
+  return strategies
+    .flatMap((strategy) => {
+      if ((strategy.topic_runs?.length ?? 0) > 0) {
+        return strategy.topic_runs.flatMap((topicRun) => topicGeneratedIdeas(strategy, topicRun));
+      }
+      if (!strategy.generation) {
+        return [];
+      }
+
+      return strategy.generation.predictions.map((prediction) => ({
+        id: `${strategy.id}-${strategy.generation?.cutoff_date}-${prediction.rank}`,
+        strategyId: strategy.id,
+        strategyName: strategy.name,
+        strategyType: strategy.strategy_name,
+        topicId: 'legacy',
+        topicName: 'Legacy',
+        cutoffDate: strategy.generation?.cutoff_date ?? '',
+        cutoffMonth: strategy.generation?.cutoff_month ?? '',
+        rank: prediction.rank,
+        prediction,
+      }));
+    })
+    .sort((left, right) => {
+      const cutoffCmp = right.cutoffDate.localeCompare(left.cutoffDate);
+      if (cutoffCmp !== 0) {
+        return cutoffCmp;
+      }
+      const topicCmp = left.topicName.localeCompare(right.topicName);
+      if (topicCmp !== 0) {
+        return topicCmp;
+      }
+      const strategyCmp = left.strategyName.localeCompare(right.strategyName);
+      if (strategyCmp !== 0) {
+        return strategyCmp;
+      }
+      return left.rank - right.rank;
+    });
 }
 
 const GeneratedIdeasList: React.FC = () => {
@@ -20,34 +81,7 @@ const GeneratedIdeasList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const ideas = useMemo<GeneratedIdeaItem[]>(() => {
-    return strategies
-      .flatMap((strategy) => {
-        if (!strategy.generation) {
-          return [];
-        }
-
-        return strategy.generation.predictions.map((prediction) => ({
-          id: `${strategy.id}-${strategy.generation?.cutoff_date}-${prediction.rank}`,
-          strategyId: strategy.id,
-          strategyName: strategy.name,
-          strategyType: strategy.strategy_name,
-          cutoffDate: strategy.generation?.cutoff_date ?? '',
-          cutoffMonth: strategy.generation?.cutoff_month ?? '',
-          rank: prediction.rank,
-          prediction,
-        }));
-      })
-      .sort((left, right) => {
-        const cutoffCmp = right.cutoffDate.localeCompare(left.cutoffDate);
-        if (cutoffCmp !== 0) {
-          return cutoffCmp;
-        }
-        const strategyCmp = left.strategyName.localeCompare(right.strategyName);
-        if (strategyCmp !== 0) {
-          return strategyCmp;
-        }
-        return left.rank - right.rank;
-      });
+    return flattenGeneratedIdeas(strategies);
   }, [strategies]);
 
   const fetchIdeas = async () => {
@@ -101,6 +135,7 @@ const GeneratedIdeasList: React.FC = () => {
                 <div className="idea-meta-row">
                   <span className="badge">#{idea.rank}</span>
                   <span className="badge">{idea.strategyType}</span>
+                  <span className="badge topic-badge">{idea.topicName}</span>
                   <span className="badge">cutoff {idea.cutoffMonth}</span>
                 </div>
                 <h2 className="idea-title">{idea.prediction.title}</h2>

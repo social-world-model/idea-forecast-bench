@@ -124,7 +124,9 @@ def _latest_month_from_data_dir(data_dir: Path) -> Optional[str]:
 
 
 def _fallback_backtest_score(strategy: Dict[str, Any]) -> Optional[float]:
-    summary = (strategy.get("backtest_result") or {}).get("summary") or {}
+    summary = strategy_store._aggregate_topic_backtest_summary(strategy.get("topic_runs") or [])
+    if summary is None:
+        summary = (strategy.get("backtest_result") or {}).get("summary") or {}
     score = summary.get("avg_hit_at_k")
     if score is None:
         return None

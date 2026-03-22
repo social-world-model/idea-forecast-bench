@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import './Dashboard.css';
 import type {
   Strategy,
+  TopicRun,
   IdeaPrediction,
   BacktestSummary,
   WindowResult,
@@ -34,6 +35,49 @@ function fmtIso(raw?: string | null): string {
   return parsed.toLocaleString();
 }
 
+function aggregateTopicSummary(topicRuns: TopicRun[]): BacktestSummary | null {
+  const summaries = topicRuns
+    .map((topicRun) => topicRun.backtest_result?.summary ?? null)
+    .filter((summary): summary is BacktestSummary => Boolean(summary) && summary.windows > 0);
+
+  if (summaries.length === 0) {
+    return null;
+  }
+
+  const totalWindows = summaries.reduce((sum, summary) => sum + summary.windows, 0);
+  const weightedAverage = (
+    selector: (summary: BacktestSummary) => number,
+  ): number => (
+    totalWindows > 0
+      ? summaries.reduce((sum, summary) => sum + (selector(summary) * summary.windows), 0) / totalWindows
+      : 0
+  );
+
+  return {
+    windows: totalWindows,
+    avg_hit_at_k: Number(weightedAverage((summary) => summary.avg_hit_at_k).toFixed(4)),
+    avg_recall_at_k: Number(weightedAverage((summary) => summary.avg_recall_at_k).toFixed(4)),
+    avg_precision_at_k: Number(weightedAverage((summary) => summary.avg_precision_at_k).toFixed(4)),
+    avg_mrr: Number(weightedAverage((summary) => summary.avg_mrr).toFixed(4)),
+    avg_novelty: Number(weightedAverage((summary) => summary.avg_novelty).toFixed(4)),
+    avg_diversity: Number(weightedAverage((summary) => summary.avg_diversity).toFixed(4)),
+  };
+}
+
+function strategyBacktestSummary(strategy: Strategy): BacktestSummary | null {
+  return aggregateTopicSummary(strategy.topic_runs ?? []) ?? strategy.backtest_result?.summary ?? null;
+}
+
+function activeTopicRuns(strategy: Strategy): TopicRun[] {
+  return (strategy.topic_runs ?? []).filter((topicRun) => (
+    topicRun.matched_paper_count > 0
+    || topicRun.generation
+    || topicRun.backtest_result
+    || topicRun.generation_status !== 'pending'
+    || topicRun.backtest_status !== 'pending'
+  ));
+}
+
 const MetricBar: React.FC<{ value: number; color?: string }> = ({
   value,
   color = '#9c9ef8',
@@ -52,9 +96,9 @@ const StrategyRow: React.FC<{
   isSelected: boolean;
   onSelect: () => void;
 }> = ({ strategy, rank, isSelected, onSelect }) => {
-  const summary: BacktestSummary | undefined | null =
-    strategy.backtest_result?.summary;
+  const summary = strategyBacktestSummary(strategy);
   const dailyEval = strategy.daily_evaluation ?? null;
+  const topicCount = activeTopicRuns(strategy).length;
   const leaderboardScore =
     strategy.leaderboard_score ??
     (summary ? summary.avg_hit_at_k : null);
@@ -109,6 +153,9 @@ const StrategyRow: React.FC<{
           {temperature !== null && (
             <span className="meta-chip">temp={temperature}</span>
           )}
+          {topicCount > 0 && (
+            <span className="meta-chip topic-chip">{topicCount} topics</span>
+          )}
         </div>
       </td>
       <td className="col-window">
@@ -155,7 +202,7 @@ const StrategyRow: React.FC<{
       <td className="col-metric">
         <div className="strategy-meta">
           <span className="meta-chip">
-            source: {dailyEval ? 'daily' : summary ? 'backtest' : 'pending'}
+            source: {dailyEval ? 'daily' : topicCount > 0 ? 'topic_runs' : summary ? 'legacy' : 'pending'}
           </span>
           <span className="meta-chip">daily_at: {fmtIso(strategy.last_daily_run_at)}</span>
           <span className="meta-chip">bt: {strategy.backtest_status}</span>
@@ -195,7 +242,7 @@ const PredictionCard: React.FC<{ pred: IdeaPrediction; matchedRanks?: number[] }
             </span>
             {isMatched && (
               <span className="score-badge matched-badge" title="Matched future paper">
-                ✓ Hit
+                Hit
               </span>
             )}
           </div>
@@ -278,6 +325,81 @@ const WindowDetail: React.FC<{ window: WindowResult; index: number }> = ({
   );
 };
 
+const TopicBacktestSection: React.FC<{ topicRun: TopicRun }> = ({ topicRun }) => {
+  const summary = topicRun.backtest_result?.summary ?? null;
+  const windows = topicRun.backtest_result?.windows ?? [];
+
+  return (
+    <div className="topic-section">
+      <div className="topic-section-header">
+        <div>
+          <h3 className="topic-section-title">{topicRun.topic_name}</h3>
+          <div className="topic-section-meta">
+            <span className="meta-chip">papers={topicRun.matched_paper_count}</span>
+            <span className="meta-chip">status={topicRun.backtest_status}</span>
+            {summary && <span className="meta-chip">windows={summary.windows}</span>}
+          </div>
+        </div>
+      </div>
+
+      {!topicRun.backtest_result ? (
+        <div className="topic-empty">
+          {topicRun.backtest_status === 'running'
+            ? 'Backtest in progress for this topic.'
+            : topicRun.matched_paper_count === 0
+            ? 'No matched papers for this topic.'
+            : topicRun.backtest_status === 'failed'
+            ? topicRun.backtest_error || 'Backtest failed for this topic.'
+            : 'No backtest results yet for this topic.'}
+        </div>
+      ) : windows.length === 0 ? (
+        <div className="topic-empty">No valid backtest windows for this topic.</div>
+      ) : (
+        <div className="windows-list">
+          {windows.map((window, index) => (
+            <WindowDetail key={`${topicRun.topic_id}-${window.cutoff_date}`} window={window} index={index} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TopicGenerationSection: React.FC<{ topicRun: TopicRun }> = ({ topicRun }) => (
+  <div className="topic-section">
+    <div className="topic-section-header">
+      <div>
+        <h3 className="topic-section-title">{topicRun.topic_name}</h3>
+        <div className="topic-section-meta">
+          <span className="meta-chip">papers={topicRun.matched_paper_count}</span>
+          <span className="meta-chip">status={topicRun.generation_status}</span>
+          {topicRun.generation && (
+            <span className="meta-chip">cutoff={topicRun.generation.cutoff_month}</span>
+          )}
+        </div>
+      </div>
+    </div>
+
+    {!topicRun.generation ? (
+      <div className="topic-empty">
+        {topicRun.generation_status === 'running'
+          ? 'Generation in progress for this topic.'
+          : topicRun.matched_paper_count === 0
+          ? 'No matched papers for this topic.'
+          : topicRun.generation_status === 'failed'
+          ? topicRun.generation_error || 'Generation failed for this topic.'
+          : 'No generated ideas yet for this topic.'}
+      </div>
+    ) : (
+      <div className="predictions-grid">
+        {topicRun.generation.predictions.map((pred) => (
+          <PredictionCard key={`${topicRun.topic_id}-${pred.rank}`} pred={pred} />
+        ))}
+      </div>
+    )}
+  </div>
+);
+
 const Dashboard: React.FC<DashboardProps> = ({
   strategies,
   lastRefresh,
@@ -288,7 +410,9 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [detailTab, setDetailTab] = useState<'windows' | 'generation'>('windows');
 
   const effectiveId = selectedId ?? (strategies[0]?.id ?? null);
-  const selected = strategies.find((s) => s.id === effectiveId);
+  const selected = strategies.find((strategy) => strategy.id === effectiveId);
+  const selectedSummary = selected ? strategyBacktestSummary(selected) : null;
+  const selectedTopicRuns = selected ? activeTopicRuns(selected) : [];
 
   if (isLoading) {
     return (
@@ -320,7 +444,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
       <section className="section">
         <div className="section-header">
-          <h2 className="section-title">📊 Strategy Leaderboard</h2>
+          <h2 className="section-title">Strategy Leaderboard</h2>
         </div>
 
         {strategies.length === 0 ? (
@@ -333,7 +457,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <th>#</th>
                   <th>Strategy</th>
                   <th>Window</th>
-                  <th>Score ↓</th>
+                  <th>Score</th>
                   <th>Hit@K</th>
                   <th>MRR</th>
                   <th>Windows</th>
@@ -341,13 +465,13 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {strategies.map((s, i) => (
+                {strategies.map((strategy, index) => (
                   <StrategyRow
-                    key={s.id}
-                    strategy={s}
-                    rank={i + 1}
-                    isSelected={s.id === effectiveId}
-                    onSelect={() => setSelectedId(s.id)}
+                    key={strategy.id}
+                    strategy={strategy}
+                    rank={index + 1}
+                    isSelected={strategy.id === effectiveId}
+                    onSelect={() => setSelectedId(strategy.id)}
                   />
                 ))}
               </tbody>
@@ -360,7 +484,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         <section className="section">
           <div className="section-header">
             <h2 className="section-title">
-              🔍 Detail
+              Detail
               <span className="section-subtitle">- {selected.name}</span>
             </h2>
             <div className="tab-bar">
@@ -379,16 +503,16 @@ const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
 
-          {selected.backtest_result?.summary && (
+          {selectedSummary && (
             <div className="metrics-summary">
               {[
-                { label: 'Hit@K', value: pct(selected.backtest_result.summary.avg_hit_at_k), color: '#9c9ef8' },
-                { label: 'Recall@K', value: pct(selected.backtest_result.summary.avg_recall_at_k), color: '#6ee7b7' },
-                { label: 'Precision@K', value: pct(selected.backtest_result.summary.avg_precision_at_k), color: '#fbbf24' },
-                { label: 'MRR', value: selected.backtest_result.summary.avg_mrr.toFixed(3), color: '#f9a8d4' },
-                { label: 'Novelty', value: pct(selected.backtest_result.summary.avg_novelty), color: '#a5b4fc' },
-                { label: 'Diversity', value: pct(selected.backtest_result.summary.avg_diversity), color: '#86efac' },
-                { label: 'Windows', value: String(selected.backtest_result.summary.windows), color: 'rgba(255,255,255,0.6)' },
+                { label: 'Hit@K', value: pct(selectedSummary.avg_hit_at_k), color: '#9c9ef8' },
+                { label: 'Recall@K', value: pct(selectedSummary.avg_recall_at_k), color: '#6ee7b7' },
+                { label: 'Precision@K', value: pct(selectedSummary.avg_precision_at_k), color: '#fbbf24' },
+                { label: 'MRR', value: selectedSummary.avg_mrr.toFixed(3), color: '#f9a8d4' },
+                { label: 'Novelty', value: pct(selectedSummary.avg_novelty), color: '#a5b4fc' },
+                { label: 'Diversity', value: pct(selectedSummary.avg_diversity), color: '#86efac' },
+                { label: 'Windows', value: String(selectedSummary.windows), color: 'rgba(255,255,255,0.6)' },
               ].map((item) => (
                 <div key={item.label} className="metric-card">
                   <div className="metric-card-value" style={{ color: item.color }}>
@@ -422,7 +546,13 @@ const Dashboard: React.FC<DashboardProps> = ({
 
           {detailTab === 'windows' && (
             <>
-              {!selected.backtest_result ? (
+              {selectedTopicRuns.length > 0 ? (
+                <div className="topic-sections">
+                  {selectedTopicRuns.map((topicRun) => (
+                    <TopicBacktestSection key={topicRun.topic_id} topicRun={topicRun} />
+                  ))}
+                </div>
+              ) : !selected.backtest_result ? (
                 <div className="empty-state">
                   {selected.backtest_status === 'running'
                     ? 'Backtest in progress...'
@@ -431,13 +561,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                     : 'No backtest results yet.'}
                 </div>
               ) : selected.backtest_result.windows.length === 0 ? (
-                <div className="empty-state">
-                  No valid windows found.
-                </div>
+                <div className="empty-state">No valid windows found.</div>
               ) : (
                 <div className="windows-list">
-                  {selected.backtest_result.windows.map((w, i) => (
-                    <WindowDetail key={i} window={w} index={i} />
+                  {selected.backtest_result.windows.map((window, index) => (
+                    <WindowDetail key={index} window={window} index={index} />
                   ))}
                 </div>
               )}
@@ -446,7 +574,13 @@ const Dashboard: React.FC<DashboardProps> = ({
 
           {detailTab === 'generation' && (
             <>
-              {!selected.generation ? (
+              {selectedTopicRuns.length > 0 ? (
+                <div className="topic-sections">
+                  {selectedTopicRuns.map((topicRun) => (
+                    <TopicGenerationSection key={topicRun.topic_id} topicRun={topicRun} />
+                  ))}
+                </div>
+              ) : !selected.generation ? (
                 <div className="empty-state">
                   {selected.generation_status === 'running'
                     ? 'Generation in progress...'

@@ -6,9 +6,80 @@ openai_api_key: ""
 
 embedding:
   model_name: "all-MiniLM-L6-v2"
-  max_context_chars: 50000
+  max_context_chars: 8000
   use_section_weights: true
   abstract_weight: 0.4
   introduction_weight: 0.2
   method_weight: 0.2
   conclusion_weight: 0.2
+  # Embedding endpoint (OpenAI-compatible):
+  #   "http://localhost:8000/v1" → local vllm/sglang
+  #   "https://some-provider.com/v1" → third-party
+  #   "" (empty) → official OpenAI API
+  # Leave unset to use local sentence-transformers (with a warning).
+  embedding_base_url: ""
+  api_model: "text-embedding-3-small"
+
+topics:
+  - id: "diffusion_language_model"
+    name: "Diffusion Language Model"
+    aliases:
+      - "diffusion language model"
+      - "diffusion lm"
+      - "diffusion llm"
+      - "text diffusion"
+    keywords:
+      - "discrete diffusion"
+      - "masked diffusion"
+      - "diffusion transformer"
+      - "language diffusion"
+  - id: "multimodal_visual_reasoning"
+    name: "Multimodal Visual Reasoning"
+    aliases:
+      - "multimodal visual reasoning"
+      - "visual reasoning"
+      - "vision language reasoning"
+      - "image reasoning"
+    keywords:
+      - "vision-language"
+      - "vqa"
+      - "chart reasoning"
+      - "document reasoning"
+      - "multimodal reasoning"
+  - id: "gui_computer_use_web_agent"
+    name: "GUI / Computer Use / Web Agent"
+    aliases:
+      - "gui agent"
+      - "computer use"
+      - "web agent"
+      - "browser agent"
+    keywords:
+      - "web navigation"
+      - "browser automation"
+      - "computer-use"
+      - "gui grounding"
+      - "agentic browsing"
+  - id: "optimizer"
+    name: "Optimizer"
+    aliases:
+      - "optimizer"
+      - "optimization"
+      - "optimization algorithm"
+    keywords:
+      - "gradient descent"
+      - "adam"
+      - "adamw"
+      - "sgd"
+      - "training dynamics"
+  - id: "time_series_forecasting"
+    name: "Time-series Forecasting"
+    aliases:
+      - "time-series forecasting"
+      - "time series forecasting"
+      - "time series"
+    keywords:
+      - "temporal forecasting"
+      - "multivariate forecasting"
+      - "long-term forecasting"
+      - "sequence forecasting"
+      - "timeseries"

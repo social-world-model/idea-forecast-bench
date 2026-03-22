@@ -43,6 +43,7 @@ def test_legacy_keyword_strategy_missing_prompt_model_keys_still_generates(
     monkeypatch, tmp_path: Path
 ) -> None:
     from backend import strategy_store
+    from live_idea_bench.config import TopicDefinition
     from live_idea_bench.models import PaperRecord
 
     strategies_dir = _isolate_strategy_store(monkeypatch, tmp_path)
@@ -69,12 +70,17 @@ def test_legacy_keyword_strategy_missing_prompt_model_keys_still_generates(
             title="T1",
             month="2024-06",
             summary="S1",
-            keywords=["attention", "transformer"],
+            keywords=["optimizer"],
             source_path="/fake/p1.md",
             published_date="2024-06-20",
         ),
     ]
     monkeypatch.setattr(strategy_store, "_load_papers", lambda _s: papers)
+    monkeypatch.setattr(
+        strategy_store,
+        "load_topics",
+        lambda: [TopicDefinition(id="optimizer", name="Optimizer", keywords=["optimizer"])],
+    )
 
     loaded = strategy_store.get_strategy(legacy_id)
     assert loaded is not None
@@ -89,9 +95,14 @@ def test_legacy_keyword_strategy_missing_prompt_model_keys_still_generates(
     refreshed = strategy_store.get_strategy(legacy_id)
     assert refreshed is not None
     assert refreshed["generation_status"] == "done"
-    assert refreshed["generation"]["cutoff_month"] == "2024-06"
-    assert refreshed["generation"]["cutoff_date"] == "2024-06-30"
-    assert isinstance(refreshed["generation"]["predictions"], list)
+    assert refreshed["generation"] is None
+    assert len(refreshed["topic_runs"]) == 1
+    topic_run = refreshed["topic_runs"][0]
+    assert topic_run["topic_id"] == "optimizer"
+    assert topic_run["generation_status"] == "done"
+    assert topic_run["generation"]["cutoff_month"] == "2024-06"
+    assert topic_run["generation"]["cutoff_date"] == "2024-06-30"
+    assert isinstance(topic_run["generation"]["predictions"], list)
 
 
 def test_make_strategy_obj_passes_predictor_params(monkeypatch, tmp_path: Path) -> None:

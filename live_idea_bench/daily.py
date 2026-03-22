@@ -58,6 +58,54 @@ def daily_cutoff_date(now_utc: datetime) -> str:
     return now_utc.astimezone(ZoneInfo("America/New_York")).date().isoformat()
 
 
+def _resolve_generation_cutoff(generation: Dict[str, Any]) -> str | None:
+    cutoff_date_raw = str(generation.get("cutoff_date") or "").strip()
+    cutoff_month_raw = str(generation.get("cutoff_month") or "").strip()
+    if cutoff_date_raw:
+        try:
+            return normalize_date(cutoff_date_raw)
+        except ValueError:
+            if not cutoff_month_raw:
+                return None
+    if cutoff_month_raw:
+        return month_start_date(cutoff_month_raw)
+    return None
+
+
+def _topic_generations(strategy: Dict[str, Any]) -> list[Dict[str, Any]]:
+    generation = strategy.get("generation") or {}
+    predictions_raw = generation.get("predictions")
+    if isinstance(predictions_raw, list) and predictions_raw:
+        return [generation]
+
+    topic_runs = strategy.get("topic_runs") or []
+    if not isinstance(topic_runs, list):
+        return []
+
+    generations: list[Dict[str, Any]] = []
+    for topic_run in topic_runs:
+        if not isinstance(topic_run, dict):
+            continue
+        topic_generation = topic_run.get("generation") or {}
+        if not isinstance(topic_generation, dict):
+            continue
+        topic_predictions = topic_generation.get("predictions")
+        if isinstance(topic_predictions, list) and topic_predictions:
+            generations.append(topic_generation)
+    if not generations:
+        return []
+
+    resolved = [
+        (_resolve_generation_cutoff(topic_generation), topic_generation)
+        for topic_generation in generations
+    ]
+    valid = [(cutoff, topic_generation) for cutoff, topic_generation in resolved if cutoff]
+    if not valid:
+        return []
+    latest_cutoff = max(cutoff for cutoff, _ in valid)
+    return [topic_generation for cutoff, topic_generation in valid if cutoff == latest_cutoff]
+
+
 def evaluate_previous_generation(
     strategy: Dict[str, Any],
     *,
@@ -65,23 +113,12 @@ def evaluate_previous_generation(
     new_paper_ids: Set[str],
     evaluated_at: datetime,
 ) -> Optional[Dict[str, Any]]:
-    generation = strategy.get("generation") or {}
-    cutoff_date_raw = str(generation.get("cutoff_date") or "").strip()
-    cutoff_month_raw = str(generation.get("cutoff_month") or "").strip()
-    predictions_raw = generation.get("predictions")
-    if not isinstance(predictions_raw, list) or not predictions_raw:
+    generations = _topic_generations(strategy)
+    if not generations:
         return None
 
-    if cutoff_date_raw:
-        try:
-            cutoff_date = normalize_date(cutoff_date_raw)
-        except ValueError:
-            if not cutoff_month_raw:
-                return None
-            cutoff_date = month_start_date(cutoff_month_raw)
-    elif cutoff_month_raw:
-        cutoff_date = month_start_date(cutoff_month_raw)
-    else:
+    cutoff_date = _resolve_generation_cutoff(generations[0])
+    if not cutoff_date:
         return None
 
     cutoff_month = normalize_month(cutoff_date)
@@ -97,16 +134,24 @@ def evaluate_previous_generation(
         if paper.paper_id in new_paper_ids and date_to_ordinal(get_paper_published_date(paper)) > cutoff_ord
     ]
 
-    predictions = [
-        coerce_prediction(raw, idx + 1)
-        for idx, raw in enumerate(predictions_raw)
-        if isinstance(raw, dict)
-    ]
+    predictions = []
+    for generation in generations:
+        predictions_raw = generation.get("predictions")
+        if not isinstance(predictions_raw, list):
+            continue
+        start_rank = len(predictions)
+        predictions.extend(
+            coerce_prediction(raw, start_rank + idx + 1)
+            for idx, raw in enumerate(predictions_raw)
+            if isinstance(raw, dict)
+        )
     if not predictions:
         return None
 
     params = strategy.get("params") or {}
     top_k_raw = (strategy.get("config") or {}).get("top_k", len(predictions))
+    if len(generations) > 1:
+        top_k_raw = len(predictions)
     try:
         top_k = max(1, int(top_k_raw))
     except (TypeError, ValueError):

@@ -46,6 +46,11 @@ hypothesis = "^6.98.0"
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
+[dependency-groups]
+dev = [
+    "matplotlib>=3.10.8",
+]
+
 [tool.mypy]
 ignore_missing_imports = true
 check_untyped_defs = true

@@ -1,4 +1,5 @@
-engine: hybrid
+engine: embedding
+embedding_threshold: 0.4
 semantic_threshold: 0.5
 keyword_threshold: 0.3
 llm_match_threshold: 0.7

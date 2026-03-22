@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import asdict
+
+logger = logging.getLogger(__name__)
 from difflib import SequenceMatcher
 from typing import Iterable, Optional
 
@@ -27,6 +30,10 @@ try:
     _EMBEDDING_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _EMBEDDING_AVAILABLE = False
+    logger.warning(
+        "sentence-transformers not installed; embedding engine will fall back to hybrid. "
+        "Run `pip install sentence-transformers` to enable real semantic similarity."
+    )
 
 
 def _tokenize(text: str) -> list[str]:
@@ -107,13 +114,66 @@ def _llm_similarity(
 _EMBEDDING_MODEL: SentenceTransformer | None = None
 
 
+def _sanitize(text: str) -> str:
+    """Remove null bytes and non-printable control characters that break JSON serialization."""
+    return "".join(ch for ch in text if ch == "\n" or ch == "\t" or (ord(ch) >= 32 and ord(ch) != 127))
+
+
+def _api_embed_pair(idea: str, context: str, runtime_config: Config) -> MatchResult | None:
+    """Try embedding via OpenAI-compatible API with retry + exponential backoff. Returns None on failure."""
+    import math
+    import os
+    import time
+    import openai
+
+    base_url = runtime_config.embedding.embedding_base_url or None
+    api_key = os.environ.get("OPENAI_API_KEY") or "no-key"
+    model = runtime_config.embedding.api_model
+    endpoint = "local" if base_url and ("localhost" in base_url or "127.0.0.1" in base_url) else ("third-party" if base_url else "openai")
+    client = openai.OpenAI(api_key=api_key, base_url=base_url)
+    truncated_context = _sanitize(context[: runtime_config.embedding.max_context_chars])
+    clean_idea = _sanitize(idea)
+
+    max_retries = 7
+    for attempt in range(max_retries):
+        try:
+            resp = client.embeddings.create(model=model, input=[clean_idea, truncated_context])
+            a, b = resp.data[0].embedding, resp.data[1].embedding
+            dot = sum(x * y for x, y in zip(a, b))
+            na = math.sqrt(sum(x * x for x in a))
+            nb = math.sqrt(sum(x * x for x in b))
+            score = max(0.0, min(1.0, dot / (na * nb))) if na and nb else 0.0
+            return MatchResult(score=score, engine_name=f"embedding-api:{endpoint}:{model}")
+        except Exception as e:
+            wait = 2 ** attempt  # 1, 2, 4, 8, 16, 32, 64 seconds
+            if attempt < max_retries - 1:
+                logger.warning(f"Embedding API call failed (attempt {attempt+1}/{max_retries}, {endpoint}), retrying in {wait}s. Error: {e}")
+                time.sleep(wait)
+            else:
+                logger.warning(f"Embedding API call failed after {max_retries} attempts ({endpoint}), falling back to local. Error: {e}")
+    return None
+
+
 def _embedding_similarity(
     idea: str,
     context: str,
     runtime_config: Config,
 ) -> MatchResult:
+    # If embedding_base_url is explicitly configured (even as ""), try the API first.
+    if runtime_config.embedding.embedding_base_url is not None:
+        result = _api_embed_pair(idea, context, runtime_config)
+        if result is not None:
+            return result
+        # API failed — fall through to local model below
+
+    # Local sentence-transformers fallback
     global _EMBEDDING_MODEL
     if not _EMBEDDING_AVAILABLE:
+        logger.warning(
+            "No embedding API configured and sentence-transformers not installed; "
+            "falling back to hybrid text similarity. "
+            "Configure embedding_base_url in config.yaml or install sentence-transformers."
+        )
         return MatchResult(score=_hybrid_similarity(idea, context), engine_name="hybrid-fallback")
 
     if _EMBEDDING_MODEL is None:
@@ -126,7 +186,7 @@ def _embedding_similarity(
         normalize_embeddings=True,
     )
     score = float(cosine_similarity(idea_vec.reshape(1, -1), context_vec.reshape(1, -1))[0, 0])
-    return MatchResult(score=max(0.0, min(1.0, score)), engine_name=f"embedding:{runtime_config.embedding.model_name}")
+    return MatchResult(score=max(0.0, min(1.0, score)), engine_name=f"embedding:local:{runtime_config.embedding.model_name}")
 
 
 def compute_similarity(
@@ -161,14 +221,17 @@ def is_match(
     context: str,
     similarity_config: SimilarityConfig,
 ) -> bool:
-    if similarity_config.engine.lower().strip() == "llm":
+    engine = similarity_config.engine.lower().strip()
+    if engine == "llm":
         return result.score >= similarity_config.llm_match_threshold
+    if engine == "embedding":
+        return result.score >= similarity_config.embedding_threshold
+    # hybrid (default)
     semantic = _hybrid_similarity(idea, context)
     keyword = _keyword_overlap(idea, context)
     return (
         semantic >= similarity_config.semantic_threshold
         or keyword >= similarity_config.keyword_threshold
-        or result.score >= similarity_config.llm_match_threshold
     )
 
 
