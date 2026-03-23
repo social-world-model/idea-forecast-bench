@@ -168,3 +168,4 @@ cython_debug/
 backend/strategies/*.json
 frontend/build/
 frontend/node_modules/
+.worktrees/
