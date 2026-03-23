@@ -81,7 +81,6 @@ def generate_proposal(
 def proposal_to_idea_prediction(
     proposal_text: str,
     innovation: Innovation,
-    evidence: list[PaperRecord],
     rank: int = 1,
 ) -> IdeaPrediction:
     """Convert a proposal text to an IdeaPrediction for benchmark evaluation.

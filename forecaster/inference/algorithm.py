@@ -81,8 +81,6 @@ def run_joint_inference(
                 realization_config,
             )
 
-            joint_score = compute_joint_score(prior_score, realization_score, inference_config)
-
             candidate = JointCandidate(
                 innovation=innovation,
                 prior_score=prior_score,

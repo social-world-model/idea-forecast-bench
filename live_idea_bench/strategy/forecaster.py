@@ -155,7 +155,6 @@ class ForecasterStrategy(IdeaStrategy):
             prediction = proposal_to_idea_prediction(
                 proposal_text=proposal.proposal_text,
                 innovation=proposal.innovation,
-                evidence=[],
                 rank=idx,
             )
             prediction = dataclasses.replace(

@@ -5,13 +5,37 @@ import logging
 import re
 from typing import Any
 
+from difflib import SequenceMatcher
+
 from live_idea_bench.models import PaperRecord
-from live_idea_bench.similarity import _keyword_overlap, _hybrid_similarity
 
 from forecaster.models import Innovation
 from forecaster.config import RealizationConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _tokenize_words(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", text.lower())
+
+
+def _keyword_overlap(a: str, b: str) -> float:
+    """Overlap coefficient: |A ∩ B| / min(|A|, |B|)."""
+    sa = set(_tokenize_words(a))
+    sb = set(_tokenize_words(b))
+    if not sa or not sb:
+        return 0.0
+    return len(sa & sb) / min(len(sa), len(sb))
+
+
+def _hybrid_similarity(a: str, b: str) -> float:
+    """Weighted blend of Jaccard and sequence similarity."""
+    sa = set(_tokenize_words(a))
+    sb = set(_tokenize_words(b))
+    jaccard = len(sa & sb) / len(sa | sb) if sa or sb else 0.0
+    seq = SequenceMatcher(None, a.lower(), b.lower()).ratio()
+    return (0.65 * jaccard) + (0.35 * seq)
+
 
 # Keywords associated with each operator type
 _OPERATOR_KEYWORDS: dict[str, list[str]] = {
@@ -34,10 +58,6 @@ _TECHNICAL_TOKENS = {
     "loss", "gradient", "layer", "attention", "transformer", "encoder", "decoder",
     "embedding", "token", "sequence", "benchmark", "metric", "objective",
 }
-
-
-def _tokenize_lower(text: str) -> list[str]:
-    return re.findall(r"[a-z0-9]+", text.lower())
 
 
 def compute_evidence_accuracy(
@@ -116,7 +136,7 @@ def compute_coherence_score(
     length_score = min(1.0, len(proposal_text.strip()) / _MIN_COHERENT_CHARS)
 
     # Technical vocabulary score: fraction of proposal tokens that are technical
-    tokens = set(_tokenize_lower(proposal_text))
+    tokens = set(_tokenize_words(proposal_text))
     if not tokens:
         return 0.0
     tech_count = len(tokens & _TECHNICAL_TOKENS)

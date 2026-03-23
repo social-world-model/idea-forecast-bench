@@ -112,25 +112,25 @@ class TestProposalToIdeaPrediction:
     def test_proposal_to_idea_prediction_extracts_title(self) -> None:
         proposal_text = "Efficient Sparse Attention for Long Documents\nThe body of the proposal follows here."
         innovation = _make_innovation()
-        result = proposal_to_idea_prediction(proposal_text, innovation, evidence=[])
+        result = proposal_to_idea_prediction(proposal_text, innovation)
         assert result.title == "Efficient Sparse Attention for Long Documents"
 
     def test_proposal_to_idea_prediction_rank(self) -> None:
         proposal_text = "Title\nBody."
         innovation = _make_innovation()
-        result = proposal_to_idea_prediction(proposal_text, innovation, evidence=[], rank=3)
+        result = proposal_to_idea_prediction(proposal_text, innovation, rank=3)
         assert result.rank == 3
 
     def test_proposal_to_idea_prediction_default_rank(self) -> None:
         proposal_text = "Title\nBody."
         innovation = _make_innovation()
-        result = proposal_to_idea_prediction(proposal_text, innovation, evidence=[])
+        result = proposal_to_idea_prediction(proposal_text, innovation)
         assert result.rank == 1
 
     def test_proposal_to_idea_prediction_returns_idea_prediction(self) -> None:
         proposal_text = "My Proposal Title\nDetailed proposal body goes here."
         innovation = _make_innovation()
-        result = proposal_to_idea_prediction(proposal_text, innovation, evidence=[])
+        result = proposal_to_idea_prediction(proposal_text, innovation)
         assert isinstance(result, IdeaPrediction)
 
     def test_proposal_to_idea_prediction_gap_in_rationale(self) -> None:
@@ -141,7 +141,7 @@ class TestProposalToIdeaPrediction:
             operator="extend",
             gap="handling very long documents",
         )
-        result = proposal_to_idea_prediction(proposal_text, innovation, evidence=[])
+        result = proposal_to_idea_prediction(proposal_text, innovation)
         assert "handling very long documents" in result.rationale
 
     def test_proposal_to_idea_prediction_operator_in_approach(self) -> None:
@@ -152,19 +152,19 @@ class TestProposalToIdeaPrediction:
             operator="compose",
             gap="some gap",
         )
-        result = proposal_to_idea_prediction(proposal_text, innovation, evidence=[])
+        result = proposal_to_idea_prediction(proposal_text, innovation)
         assert "compose" in result.approach
 
     def test_proposal_to_idea_prediction_empty_proposal(self) -> None:
         """Empty proposal should still return a valid IdeaPrediction."""
         innovation = _make_innovation()
-        result = proposal_to_idea_prediction("", innovation, evidence=[])
+        result = proposal_to_idea_prediction("", innovation)
         assert isinstance(result, IdeaPrediction)
 
     def test_proposal_to_idea_prediction_single_line(self) -> None:
         """Single-line proposal (no body) should still work."""
         proposal_text = "Only A Title Line"
         innovation = _make_innovation()
-        result = proposal_to_idea_prediction(proposal_text, innovation, evidence=[])
+        result = proposal_to_idea_prediction(proposal_text, innovation)
         assert result.title == "Only A Title Line"
         assert isinstance(result, IdeaPrediction)
