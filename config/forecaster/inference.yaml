@@ -1,0 +1,6 @@
+num_candidates: 16
+prior_weight: 0.4
+realization_weight: 0.6
+top_k: 5
+dedup_threshold: 0.8
+prior_temperature: 0.8

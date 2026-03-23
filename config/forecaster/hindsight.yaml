@@ -1,0 +1,4 @@
+llm_model: gpt-4o
+temperature: 0.2
+max_context_papers: 15
+max_retries: 2
