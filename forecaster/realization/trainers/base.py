@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from live_idea_bench.models import PaperRecord
-from live_idea_bench.rl.io import _write_json
+from forecaster.realization.io import _write_json
 
 
 @dataclass

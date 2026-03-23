@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-import live_idea_bench.rl.local_generation as local_generation
+import forecaster.realization.local_generation as local_generation
 import live_idea_bench.strategy.policy_rl as policy_rl_module
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.strategy.policy_rl import PolicyRLStrategy

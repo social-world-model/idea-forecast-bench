@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from live_idea_bench.rl.config import GRPOTrainConfig
-from live_idea_bench.rl.trainers.base import PreparedRLContext, RLTrainerRunner, TrainerPreparedArtifacts
-from live_idea_bench.rl.verl.runner import prepare_verl_artifacts, train_with_verl
+from forecaster.realization.config import GRPOTrainConfig
+from forecaster.realization.trainers.base import PreparedRLContext, RLTrainerRunner, TrainerPreparedArtifacts
+from forecaster.realization.verl.runner import prepare_verl_artifacts, train_with_verl
 
 
 class GRPOTrainerRunner(RLTrainerRunner):

@@ -6,16 +6,16 @@ from typing import Any
 
 from live_idea_bench.models import PaperRecord
 from live_idea_bench.predictor import _heuristic_predictions, generate_predictions
-from live_idea_bench.rl.candidates import CandidateListSample, EpisodeCandidateLists
-from live_idea_bench.rl.config import CandidateGenerationConfig, EpisodeBuildConfig, RewardConfig, SelectionConfig
-from live_idea_bench.rl.episodes import RLEpisode, build_rl_episodes, serialize_episodes
-from live_idea_bench.rl.grpo import compute_reward_alignment
-from live_idea_bench.rl.io import _read_json, _read_jsonl, _write_json, _write_jsonl
-from live_idea_bench.rl.local_generation import build_prediction_prompt, generate_local_predictions
-from live_idea_bench.rl.model_zoo import list_small_model_payloads
-from live_idea_bench.rl.reward import build_invalid_reward_evaluation, evaluate_rl_reward, serialize_reward_evaluation
-from live_idea_bench.rl.trainers import PreparedRLContext, TrainerPreparedArtifacts, create_trainer_runner
-from live_idea_bench.rl.trainers.base import build_config_fingerprint
+from forecaster.realization.candidates import CandidateListSample, EpisodeCandidateLists
+from forecaster.realization.config import CandidateGenerationConfig, EpisodeBuildConfig, RewardConfig, SelectionConfig
+from forecaster.realization.episodes import RLEpisode, build_rl_episodes, serialize_episodes
+from forecaster.realization.grpo import compute_reward_alignment
+from forecaster.realization.io import _read_json, _read_jsonl, _write_json, _write_jsonl
+from forecaster.realization.local_generation import build_prediction_prompt, generate_local_predictions
+from forecaster.realization.model_zoo import list_small_model_payloads
+from forecaster.realization.reward import build_invalid_reward_evaluation, evaluate_rl_reward, serialize_reward_evaluation
+from forecaster.realization.trainers import PreparedRLContext, TrainerPreparedArtifacts, create_trainer_runner
+from forecaster.realization.trainers.base import build_config_fingerprint
 
 
 def _paper_lookup(papers: list[PaperRecord]) -> dict[str, PaperRecord]:

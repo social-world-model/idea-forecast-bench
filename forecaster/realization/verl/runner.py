@@ -9,15 +9,15 @@ import subprocess
 import sys
 from typing import Any
 
-from live_idea_bench.rl.config import GRPOTrainConfig, PPOTrainConfig, RLOOTrainConfig, RewardConfig, SelectionConfig
-from live_idea_bench.rl.io import _write_json
-from live_idea_bench.rl.trainers.base import (
+from forecaster.realization.config import GRPOTrainConfig, PPOTrainConfig, RLOOTrainConfig, RewardConfig, SelectionConfig
+from forecaster.realization.io import _write_json
+from forecaster.realization.trainers.base import (
     PreparedRLContext,
     TrainerPreparedArtifacts,
     build_policy_manifest,
     write_policy_manifest,
 )
-from live_idea_bench.rl.verl.dataset import build_verl_dataset_rows, write_verl_dataset
+from forecaster.realization.verl.dataset import build_verl_dataset_rows, write_verl_dataset
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 REWARD_FN_PATH = (Path(__file__).resolve().parent / "reward_fn.py").resolve()

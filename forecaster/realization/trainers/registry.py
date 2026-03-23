@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from live_idea_bench.rl.trainers.base import RLTrainerRunner
-from live_idea_bench.rl.trainers.grpo import GRPOTrainerRunner
-from live_idea_bench.rl.trainers.ppo import PPOTrainerRunner
-from live_idea_bench.rl.trainers.rloo import RLOOTrainerRunner
+from forecaster.realization.trainers.base import RLTrainerRunner
+from forecaster.realization.trainers.grpo import GRPOTrainerRunner
+from forecaster.realization.trainers.ppo import PPOTrainerRunner
+from forecaster.realization.trainers.rloo import RLOOTrainerRunner
 
 
 def create_trainer_runner(trainer_name: str) -> RLTrainerRunner:

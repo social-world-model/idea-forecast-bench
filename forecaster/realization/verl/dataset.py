@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from live_idea_bench.rl.io import _write_jsonl
+from forecaster.realization.io import _write_jsonl
 
 
 @dataclass

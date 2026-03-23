@@ -7,10 +7,10 @@ import pandas as pd
 import pytest
 
 from live_idea_bench.models import IdeaPrediction, PaperRecord
-from live_idea_bench.rl import RewardConfig, evaluate_rl_reward, load_ppo_train_config
-from live_idea_bench.rl.verl import dataset as verl_dataset_module
-from live_idea_bench.rl.verl.dataset import build_verl_dataset_rows, write_verl_dataset
-from live_idea_bench.rl.verl.reward_fn import compute_score
+from forecaster.realization import RewardConfig, evaluate_rl_reward, load_ppo_train_config
+from forecaster.realization.verl import dataset as verl_dataset_module
+from forecaster.realization.verl.dataset import build_verl_dataset_rows, write_verl_dataset
+from forecaster.realization.verl.reward_fn import compute_score
 
 
 def _paper(paper_id: str, month: str, *, published_date: str, summary: str) -> PaperRecord:
@@ -116,7 +116,7 @@ def test_compute_score_matches_rule_reward_and_handles_invalid_completion() -> N
 
 
 def test_rl_runtime_no_longer_imports_trl() -> None:
-    rl_root = Path(__file__).resolve().parents[1] / "live_idea_bench" / "rl"
+    rl_root = Path(__file__).resolve().parents[1] / "forecaster" / "realization"
     banned_patterns = (
         'import_module("trl")',
         "import trl",

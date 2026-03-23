@@ -8,8 +8,8 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable, Sequence
 
 from live_idea_bench.models import EvaluationResult, IdeaPrediction, PaperRecord, PredictionMatchDetail
-from live_idea_bench.rl.config import RewardConfig
-from live_idea_bench.rl.local_generation import parse_single_completion_prediction
+from forecaster.realization.config import RewardConfig
+from forecaster.realization.local_generation import parse_single_completion_prediction
 from live_idea_bench.similarity import idea_text, paper_text, score_prediction_list
 
 logger = logging.getLogger(__name__)

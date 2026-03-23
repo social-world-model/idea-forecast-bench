@@ -11,9 +11,9 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 from live_idea_bench.models import PaperRecord
-from live_idea_bench.rl.config import load_reward_config
-from live_idea_bench.rl.local_generation import parse_single_completion_prediction
-from live_idea_bench.rl.reward import build_invalid_reward_evaluation, evaluate_rl_reward
+from forecaster.realization.config import load_reward_config
+from forecaster.realization.local_generation import parse_single_completion_prediction
+from forecaster.realization.reward import build_invalid_reward_evaluation, evaluate_rl_reward
 
 
 @lru_cache(maxsize=8)

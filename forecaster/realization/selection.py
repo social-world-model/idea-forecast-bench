@@ -6,7 +6,7 @@ import re
 
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.predictor import _base_score, _dedup_predictions, _jaccard, _prediction_text, _top_terms
-from live_idea_bench.rl.config import SelectionConfig
+from forecaster.realization.config import SelectionConfig
 
 logger = logging.getLogger(__name__)
 

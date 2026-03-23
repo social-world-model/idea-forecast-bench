@@ -7,7 +7,7 @@ from typing import Any
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_RL_CONFIG_DIR = PROJECT_ROOT / "config" / "rl"
+DEFAULT_RL_CONFIG_DIR = PROJECT_ROOT / "config" / "forecaster"
 
 
 @dataclass

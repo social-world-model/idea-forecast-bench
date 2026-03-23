@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from live_idea_bench.models import IdeaPrediction, PaperRecord
-from live_idea_bench.rl import (
+from forecaster.realization import (
     CandidateGenerationConfig,
     CandidateListSample,
     EpisodeBuildConfig,
@@ -32,8 +32,8 @@ from live_idea_bench.rl import (
     train_ppo_with_verl,
     train_rloo_with_verl,
 )
-from live_idea_bench.rl.reward import build_online_rl_reward_function
-from live_idea_bench.rl.verl import dataset as verl_dataset_module
+from forecaster.realization.reward import build_online_rl_reward_function
+from forecaster.realization.verl import dataset as verl_dataset_module
 
 
 def _paper(paper_id: str, month: str, *, published_date: str, summary: str) -> PaperRecord:

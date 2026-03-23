@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from live_idea_bench.models import IdeaPrediction
-from live_idea_bench.rl.episodes import RLEpisode
-from live_idea_bench.rl.reward import RLRewardEvaluation
+from forecaster.realization.episodes import RLEpisode
+from forecaster.realization.reward import RLRewardEvaluation
 
 
 @dataclass

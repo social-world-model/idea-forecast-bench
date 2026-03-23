@@ -7,7 +7,7 @@ from typing import Any
 from live_idea_bench.backtest import split_train_future_by_cutoff
 from live_idea_bench.models import PaperRecord
 from live_idea_bench.papers import add_months, month_start_date, month_to_index
-from live_idea_bench.rl.config import EpisodeBuildConfig
+from forecaster.realization.config import EpisodeBuildConfig
 
 
 @dataclass
