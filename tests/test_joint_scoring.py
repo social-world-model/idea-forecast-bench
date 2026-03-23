@@ -1,0 +1,201 @@
+"""Tests for forecaster/inference/scoring.py"""
+from __future__ import annotations
+
+import math
+
+import pytest
+
+from live_idea_bench.models import PaperRecord
+
+from forecaster.models import Innovation, MemoryEntry, MemoryInventory
+from forecaster.config import InferenceConfig, RealizationConfig
+from forecaster.prior.memory import MemoryStore
+from forecaster.inference.scoring import (
+    compute_prior_score,
+    compute_realization_score,
+    compute_joint_score,
+)
+
+
+def _make_innovation(
+    base_direction: str = "transformer attention",
+    operator: str = "extend",
+    gap: str = "long sequence efficiency",
+) -> Innovation:
+    return Innovation(base_direction=base_direction, operator=operator, gap=gap)
+
+
+def _make_paper(paper_id: str, summary: str) -> PaperRecord:
+    return PaperRecord(
+        paper_id=paper_id,
+        title=summary[:40],
+        month="2024-01",
+        summary=summary,
+        keywords=[],
+        source_path="",
+    )
+
+
+def _make_memory_store_with(innovation: Innovation, frequency: int = 3, recency_score: float = 0.8) -> MemoryStore:
+    entry = MemoryEntry(
+        innovation=innovation,
+        source_paper_id="paper_123",
+        timestamp_month="2024-01",
+        frequency=frequency,
+        recency_score=recency_score,
+    )
+    inventory = MemoryInventory(
+        entries=(entry,),
+        last_updated_month="2024-01",
+    )
+    return MemoryStore(inventory)
+
+
+class TestComputePriorScore:
+    def test_compute_prior_score_in_memory(self) -> None:
+        """Innovation found in memory returns positive score."""
+        innovation = _make_innovation()
+        store = _make_memory_store_with(innovation, frequency=3, recency_score=0.8)
+
+        score = compute_prior_score(innovation, store)
+
+        # log(3 * 0.8 + 1) = log(3.4) ≈ 1.2238
+        expected = math.log(3 * 0.8 + 1)
+        assert abs(score - expected) < 1e-6
+        assert score > 0.0
+
+    def test_compute_prior_score_not_in_memory(self) -> None:
+        """Innovation not found in memory returns base score of -2.0."""
+        innovation = _make_innovation()
+        store = MemoryStore.empty("2024-01")
+
+        score = compute_prior_score(innovation, store)
+
+        assert score == -2.0
+
+    def test_compute_prior_score_different_innovation_not_matched(self) -> None:
+        """Innovation with different fields does not match the entry in memory."""
+        stored_innovation = _make_innovation(gap="different gap")
+        query_innovation = _make_innovation(gap="long sequence efficiency")
+        store = _make_memory_store_with(stored_innovation)
+
+        score = compute_prior_score(query_innovation, store)
+
+        assert score == -2.0
+
+    def test_compute_prior_score_in_memory_frequency_one(self) -> None:
+        """Frequency=1, recency=1.0 → log(1*1.0 + 1) = log(2)."""
+        innovation = _make_innovation()
+        store = _make_memory_store_with(innovation, frequency=1, recency_score=1.0)
+
+        score = compute_prior_score(innovation, store)
+
+        expected = math.log(1 * 1.0 + 1)
+        assert abs(score - expected) < 1e-6
+
+
+class TestComputeRealizationScore:
+    def test_compute_realization_score_good_proposal(self) -> None:
+        """Good proposal returns higher score than empty proposal."""
+        innovation = _make_innovation(operator="extend")
+        evidence = [_make_paper("p1", "transformer attention extension for long sequences training evaluation")]
+        config = RealizationConfig()
+
+        good_text = (
+            "Extending Transformer Attention for Long Sequences\n"
+            "We extend the transformer model training architecture for evaluation of "
+            "sequence efficiency. The approach builds upon attention mechanism with "
+            "improvements for long document processing. Baseline experiments demonstrate "
+            "improved performance metrics and gradient efficiency."
+        )
+        good_score = compute_realization_score(good_text, innovation, evidence, config)
+        empty_score = compute_realization_score("", innovation, evidence, config)
+
+        assert good_score > empty_score
+
+    def test_compute_realization_score_empty_proposal(self) -> None:
+        """Empty proposal returns a low (very negative) score."""
+        innovation = _make_innovation()
+        evidence: list[PaperRecord] = []
+        config = RealizationConfig()
+
+        score = compute_realization_score("", innovation, evidence, config)
+
+        # reward ~0 → log(0 + 1e-6) ≈ -13.8
+        assert score < -10.0
+
+    def test_compute_realization_score_returns_float(self) -> None:
+        """Always returns a float."""
+        innovation = _make_innovation()
+        config = RealizationConfig()
+
+        score = compute_realization_score("Some proposal text here.", innovation, [], config)
+
+        assert isinstance(score, float)
+
+    def test_compute_realization_score_range(self) -> None:
+        """Score is always <= 0 (log of [0, 1] + epsilon)."""
+        innovation = _make_innovation(operator="extend")
+        evidence = [_make_paper("p1", "attention mechanism training")]
+        config = RealizationConfig()
+
+        proposal = "extend transformer model for evaluation benchmark"
+        score = compute_realization_score(proposal, innovation, evidence, config)
+
+        # log(reward + 1e-6) where reward in [0,1] → score in (-inf, ~0]
+        assert score <= 0.0
+
+
+class TestComputeJointScore:
+    def test_compute_joint_score_midpoint(self) -> None:
+        """Equal weights, equal normalized scores → 0.5."""
+        config = InferenceConfig(prior_weight=0.5, realization_weight=0.5)
+
+        # prior_score = 0 → sigmoid(0) = 0.5
+        # realization_score = 0 → sigmoid(0) = 0.5
+        score = compute_joint_score(0.0, 0.0, config)
+
+        assert abs(score - 0.5) < 1e-9
+
+    def test_compute_joint_score_bounds(self) -> None:
+        """Result always in [0, 1]."""
+        config = InferenceConfig(prior_weight=0.4, realization_weight=0.6)
+
+        for prior_s, real_s in [(-100.0, -100.0), (100.0, 100.0), (-2.0, -13.8), (3.0, 0.0)]:
+            score = compute_joint_score(prior_s, real_s, config)
+            assert 0.0 <= score <= 1.0, f"Score {score} out of bounds for inputs ({prior_s}, {real_s})"
+
+    def test_compute_joint_score_prior_weight(self) -> None:
+        """Higher prior_weight means prior score dominates."""
+        # prior_score very high (near 1 sigmoid), realization_score very low (near 0 sigmoid)
+        prior_score = 100.0   # sigmoid → ~1.0
+        real_score = -100.0   # sigmoid → ~0.0
+
+        config_high_prior = InferenceConfig(prior_weight=0.9, realization_weight=0.1)
+        config_low_prior = InferenceConfig(prior_weight=0.1, realization_weight=0.9)
+
+        score_high = compute_joint_score(prior_score, real_score, config_high_prior)
+        score_low = compute_joint_score(prior_score, real_score, config_low_prior)
+
+        assert score_high > score_low
+
+    def test_compute_joint_score_default_weights(self) -> None:
+        """Default config has prior=0.4, realization=0.6."""
+        config = InferenceConfig()
+        assert config.prior_weight == 0.4
+        assert config.realization_weight == 0.6
+
+        score = compute_joint_score(0.0, 0.0, config)
+        # 0.4 * sigmoid(0) + 0.6 * sigmoid(0) = 0.4*0.5 + 0.6*0.5 = 0.5
+        assert abs(score - 0.5) < 1e-9
+
+    def test_compute_joint_score_realization_dominates(self) -> None:
+        """High realization_weight makes realization_score dominate."""
+        prior_score = -100.0   # sigmoid → ~0.0
+        real_score = 100.0     # sigmoid → ~1.0
+
+        config = InferenceConfig(prior_weight=0.1, realization_weight=0.9)
+        score = compute_joint_score(prior_score, real_score, config)
+
+        # Should be close to 0.9 * 1.0 + 0.1 * 0.0 = 0.9
+        assert score > 0.8
