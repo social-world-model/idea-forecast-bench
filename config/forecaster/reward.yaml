@@ -1,5 +1,5 @@
 top_k: 1
-candidate_limit: 25
+candidate_limit:
 duplicate_similarity_threshold: 0.8
 invalid_completion_reward: -0.05
 specificity_title_weight: 0.2

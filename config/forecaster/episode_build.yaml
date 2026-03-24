@@ -1,12 +1,12 @@
 top_k: 5
 past_window_months: 24
-horizon_months: 6
+horizon_months: 3
 step_months: 3
 min_train_papers: 6
-start_month:
-end_month:
-validation_start_month: 2026-01
-test_start_month:
+start_month: 2023-03
+end_month: 2025-03
+validation_start_month: 2024-10
+test_start_month: 2024-10
 train_ratio: 0.7
 validation_ratio: 0.15
 similarity_config: similarity.yaml

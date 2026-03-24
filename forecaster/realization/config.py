@@ -23,7 +23,7 @@ class RewardWeights:
 @dataclass
 class RewardConfig:
     top_k: int = 1
-    candidate_limit: int = 25
+    candidate_limit: int | None = None
     duplicate_similarity_threshold: float = 0.8
     invalid_completion_reward: float = -0.05
     specificity_title_weight: float = 0.2
