@@ -127,9 +127,20 @@ def _api_embed_pair(idea: str, context: str, runtime_config: Config) -> MatchRes
     import openai
 
     base_url = runtime_config.embedding.embedding_base_url or None
-    api_key = os.environ.get("OPENAI_API_KEY") or "no-key"
+    _is_voyage = base_url and "voyageai.com" in base_url
+    if _is_voyage:
+        api_key = os.environ.get("VOYAGE_API_KEY") or os.environ.get("OPENAI_API_KEY") or "no-key"
+        endpoint = "voyage"
+    elif base_url and ("localhost" in base_url or "127.0.0.1" in base_url):
+        api_key = os.environ.get("OPENAI_API_KEY") or "no-key"
+        endpoint = "local"
+    elif base_url:
+        api_key = os.environ.get("OPENAI_API_KEY") or "no-key"
+        endpoint = "third-party"
+    else:
+        api_key = os.environ.get("OPENAI_API_KEY") or "no-key"
+        endpoint = "openai"
     model = runtime_config.embedding.api_model
-    endpoint = "local" if base_url and ("localhost" in base_url or "127.0.0.1" in base_url) else ("third-party" if base_url else "openai")
     client = openai.OpenAI(api_key=api_key, base_url=base_url)
     truncated_context = _sanitize(context[: runtime_config.embedding.max_context_chars])
     clean_idea = _sanitize(idea)
