@@ -114,25 +114,31 @@ def run_joint_inference(
                 exc,
             )
 
-    # Sort candidates by joint score descending
-    def _joint_score_of(c: JointCandidate) -> float:
-        return compute_joint_score(
-            c.prior_score, c.realization_score, inference_config,
-            popularity_bonus=c.popularity_bonus,
+    # Compute joint scores once, sort descending
+    scored: list[tuple[float, JointCandidate]] = [
+        (
+            compute_joint_score(
+                c.prior_score, c.realization_score, inference_config,
+                popularity_bonus=c.popularity_bonus,
+            ),
+            c,
         )
-
-    sorted_candidates = sorted(candidates, key=_joint_score_of, reverse=True)
+        for c in candidates
+    ]
+    sorted_scored = sorted(scored, key=lambda x: x[0], reverse=True)
+    sorted_candidates = [c for _, c in sorted_scored]
 
     # Deduplicate
     deduped = deduplicate_proposals(sorted_candidates, threshold=inference_config.dedup_threshold)
 
     # Take top-K
-    top_k = deduped[: inference_config.top_k]
+    top_k_candidates = deduped[: inference_config.top_k]
 
-    # Build ScoredProposal list with 1-indexed ranks
+    # Build ScoredProposal list with 1-indexed ranks (reuse precomputed scores)
+    score_by_candidate = {id(c): s for s, c in sorted_scored}
     proposals: list[ScoredProposal] = []
-    for rank, candidate in enumerate(top_k, start=1):
-        joint_score = _joint_score_of(candidate)
+    for rank, candidate in enumerate(top_k_candidates, start=1):
+        joint_score = score_by_candidate.get(id(candidate), 0.0)
         proposal = ScoredProposal(
             innovation=candidate.innovation,
             proposal_text=candidate.proposal_text,

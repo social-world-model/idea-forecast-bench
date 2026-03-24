@@ -166,6 +166,7 @@ def fetch_popularity_batch(
 
     if missing:
         # Process in batches of _S2_BATCH_SIZE
+        new_entries: dict[str, Any] = {}
         for batch_start in range(0, len(missing), _S2_BATCH_SIZE):
             batch = missing[batch_start : batch_start + _S2_BATCH_SIZE]
             arxiv_ids = _build_arxiv_ids(batch)
@@ -174,13 +175,13 @@ def fetch_popularity_batch(
             for pid in batch:
                 count = fetched.get(pid, 0)
                 result[pid] = count
-                cache[pid] = {"citation_count": count, "fetched_at": now_iso}
+                new_entries[pid] = {"citation_count": count, "fetched_at": now_iso}
 
             if batch_start + _S2_BATCH_SIZE < len(missing):
                 time.sleep(_S2_RATE_LIMIT_DELAY)
 
         if cache_path is not None:
-            save_popularity_cache(cache_path, cache)
+            save_popularity_cache(cache_path, {**cache, **new_entries})
 
     return result
 

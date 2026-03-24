@@ -4,7 +4,7 @@ import json
 import shlex
 import subprocess
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace as _dc_replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -169,6 +169,10 @@ def _summarize_windows(windows: list[BacktestWindowResult]) -> dict[str, float]:
             "avg_diversity": 0.0,
             "avg_lead_time": 0.0,
             "avg_duplicate_rate": 0.0,
+            "avg_weighted_hit_at_k": 0.0,
+            "avg_weighted_precision_at_k": 0.0,
+            "avg_weighted_mrr": 0.0,
+            "avg_popularity_recall_at_k": 0.0,
         }
 
     def _avg(name: str) -> float:
@@ -236,6 +240,10 @@ def run_backtest(
             popularity_weights = enrich_papers_with_popularity(
                 future, cache_path=Path(config.popularity_cache_path)
             )
+            future = [
+                _dc_replace(paper, popularity_score=popularity_weights.get(paper.paper_id, 0.0))
+                for paper in future
+            ]
         scored = score_prediction_list(
             predictions=predictions,
             train_papers=train,

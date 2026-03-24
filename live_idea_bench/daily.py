@@ -59,8 +59,10 @@ def compute_popularity_leaderboard_score(daily_eval: Dict[str, Any]) -> float:
 
     Falls back to regular hit_at_k/mrr when weighted metrics are not available.
     """
-    w_hit = float(daily_eval.get("weighted_hit_at_k") or daily_eval.get("hit_at_k", 0.0))
-    w_mrr = float(daily_eval.get("weighted_mrr") or daily_eval.get("mrr", 0.0))
+    w_hit_raw = daily_eval.get("weighted_hit_at_k")
+    w_mrr_raw = daily_eval.get("weighted_mrr")
+    w_hit = float(w_hit_raw if w_hit_raw is not None else daily_eval.get("hit_at_k", 0.0))
+    w_mrr = float(w_mrr_raw if w_mrr_raw is not None else daily_eval.get("mrr", 0.0))
     return round((0.7 * w_hit) + (0.3 * w_mrr), 4)
 
 

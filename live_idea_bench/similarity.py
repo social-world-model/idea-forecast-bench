@@ -313,7 +313,6 @@ def score_prediction_list(
                 runtime_config,
                 model_name=model_name,
             )
-            result.paper_id = paper.paper_id
             scored_candidates.append(
                 (
                     paper,
@@ -327,7 +326,7 @@ def score_prediction_list(
         duplicate_candidate_ids = [
             paper.paper_id
             for paper, result, matched in scored_candidates
-            if matched and paper.paper_id in used_paper_ids and result.paper_id
+            if matched and paper.paper_id in used_paper_ids
         ]
 
         selected: tuple[PaperRecord, MatchResult, bool] | None = None
@@ -452,9 +451,9 @@ def best_paper_match(
             resolved_runtime,
             model_name=model_name,
         )
-        result.paper_id = paper.paper_id
         if best is None or result.score > best.score:
-            best = result
+            from dataclasses import replace as _dc_replace
+            best = _dc_replace(result, paper_id=paper.paper_id)
     return best
 
 
