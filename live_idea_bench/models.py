@@ -14,6 +14,7 @@ class PaperRecord:
     source_path: str
     published_date: str = ""
     metadata: Dict[str, str] = field(default_factory=dict)
+    popularity_score: float = 0.0
 
 
 @dataclass

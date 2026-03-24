@@ -67,16 +67,34 @@ def compute_joint_score(
     prior_score: float,
     realization_score: float,
     config: InferenceConfig,
+    *,
+    popularity_bonus: float = 0.0,
 ) -> float:
     """Compute joint score as weighted combination.
 
-    score = prior_weight * sigmoid(prior_score) + realization_weight * sigmoid(realization_score)
+    score = (prior_weight * sigmoid(prior_score)
+             + realization_weight * sigmoid(realization_score)
+             + popularity_weight * popularity_bonus) / total_weight
 
-    NOTE: Each score is normalized to [0,1] via sigmoid before combining.
+    When config.popularity_weight == 0.0 (default), this reduces to the
+    original formula (prior + realization weights sum to 1.0).
+
+    Args:
+        popularity_bonus: A value in [0, 1] representing how popular/impactful
+            the predicted topic is expected to be. Only applied when
+            config.popularity_weight > 0.
 
     Returns:
         Float in [0, 1].
     """
     normalized_prior = _sigmoid(prior_score)
     normalized_realization = _sigmoid(realization_score)
-    return config.prior_weight * normalized_prior + config.realization_weight * normalized_realization
+    total_weight = config.prior_weight + config.realization_weight + config.popularity_weight
+    if total_weight <= 0:
+        return 0.0
+    numerator = (
+        config.prior_weight * normalized_prior
+        + config.realization_weight * normalized_realization
+        + config.popularity_weight * max(0.0, min(1.0, popularity_bonus))
+    )
+    return numerator / total_weight

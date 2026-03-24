@@ -199,3 +199,34 @@ class TestComputeJointScore:
 
         # Should be close to 0.9 * 1.0 + 0.1 * 0.0 = 0.9
         assert score > 0.8
+
+    def test_compute_joint_score_with_popularity_bonus_increases_score(self) -> None:
+        """A popularity_bonus > 0 with popularity_weight > 0 increases the score."""
+        config = InferenceConfig(prior_weight=0.4, realization_weight=0.6, popularity_weight=0.2)
+        base = compute_joint_score(0.0, 0.0, config, popularity_bonus=0.0)
+        boosted = compute_joint_score(0.0, 0.0, config, popularity_bonus=1.0)
+        assert boosted > base
+
+    def test_compute_joint_score_popularity_weight_zero_is_unchanged(self) -> None:
+        """When popularity_weight=0.0 (default), bonus has no effect."""
+        config_default = InferenceConfig(prior_weight=0.4, realization_weight=0.6)
+        config_explicit_zero = InferenceConfig(prior_weight=0.4, realization_weight=0.6, popularity_weight=0.0)
+
+        score_no_bonus = compute_joint_score(0.0, 0.0, config_default)
+        score_bonus_default = compute_joint_score(0.0, 0.0, config_default, popularity_bonus=1.0)
+        score_bonus_explicit_zero = compute_joint_score(0.0, 0.0, config_explicit_zero, popularity_bonus=1.0)
+
+        assert score_no_bonus == pytest.approx(score_bonus_default)
+        assert score_no_bonus == pytest.approx(score_bonus_explicit_zero)
+
+    def test_compute_joint_score_popularity_bonus_result_in_bounds(self) -> None:
+        """Result stays in [0, 1] even with popularity_bonus."""
+        config = InferenceConfig(prior_weight=0.4, realization_weight=0.6, popularity_weight=0.2)
+        for prior_s, real_s, bonus in [(-100, -100, 1.0), (100, 100, 1.0), (0, 0, 0.5)]:
+            score = compute_joint_score(prior_s, real_s, config, popularity_bonus=bonus)
+            assert 0.0 <= score <= 1.0, f"Score {score} out of bounds"
+
+    def test_inference_config_default_popularity_weight_is_zero(self) -> None:
+        """Default InferenceConfig has popularity_weight=0.0 (opt-in)."""
+        config = InferenceConfig()
+        assert config.popularity_weight == 0.0

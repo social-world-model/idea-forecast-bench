@@ -59,6 +59,7 @@ class JointCandidate:
     evidence_paper_ids: tuple[str, ...]
     proposal_text: str
     realization_score: float
+    popularity_bonus: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,7 @@ class ScoredProposal:
     joint_score: float
     evidence_paper_ids: tuple[str, ...]
     rank: int = 0
+    popularity_bonus: float = 0.0
     metadata: dict[str, Any] = field(default_factory=dict)
 
 

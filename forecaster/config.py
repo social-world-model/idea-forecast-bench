@@ -70,6 +70,7 @@ class InferenceConfig:
     top_k: int = 5
     dedup_threshold: float = 0.8
     prior_temperature: float = 0.8
+    popularity_weight: float = 0.0  # Opt-in: weight for popularity bonus in joint score
 
 
 # ---------------------------------------------------------------------------

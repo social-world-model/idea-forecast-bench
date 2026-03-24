@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from typing import Any
+from typing import Any, Callable
 
 from live_idea_bench.models import PaperRecord
 
@@ -30,6 +30,8 @@ def run_joint_inference(
     model: str,
     inference_config: InferenceConfig,
     realization_config: RealizationConfig,
+    *,
+    popularity_scorer: Callable[[Innovation, list[PaperRecord]], float] | None = None,
 ) -> list[ScoredProposal]:
     """Run Algorithm 1: joint inference for idea forecasting.
 
@@ -42,10 +44,16 @@ def run_joint_inference(
        b. Retrieve evidence from papers
        c. Generate proposal
        d. Compute realization score
-       e. Compute joint score
+       e. Optionally compute popularity_bonus via popularity_scorer
+       f. Compute joint score (includes popularity when configured)
     2. Sort by joint score (descending)
     3. Deduplicate
     4. Return top-K as ScoredProposal list with ranks
+
+    Args:
+        popularity_scorer: Optional callable(innovation, papers) → float in [0,1].
+            When provided AND inference_config.popularity_weight > 0, the returned
+            value is used as a popularity_bonus in compute_joint_score().
 
     Errors in individual proposals (LLM failures, etc.) are logged as warnings
     and skipped rather than failing the entire inference.
@@ -81,12 +89,20 @@ def run_joint_inference(
                 realization_config,
             )
 
+            popularity_bonus = 0.0
+            if popularity_scorer is not None and inference_config.popularity_weight > 0:
+                try:
+                    popularity_bonus = float(popularity_scorer(innovation, papers))
+                except Exception as exc:
+                    logger.warning("popularity_scorer failed for innovation %d: %s", i, exc)
+
             candidate = JointCandidate(
                 innovation=innovation,
                 prior_score=prior_score,
                 evidence_paper_ids=tuple(p.paper_id for p in evidence),
                 proposal_text=proposal_text,
                 realization_score=realization_score,
+                popularity_bonus=popularity_bonus,
             )
             candidates.append(candidate)
 
@@ -100,7 +116,10 @@ def run_joint_inference(
 
     # Sort candidates by joint score descending
     def _joint_score_of(c: JointCandidate) -> float:
-        return compute_joint_score(c.prior_score, c.realization_score, inference_config)
+        return compute_joint_score(
+            c.prior_score, c.realization_score, inference_config,
+            popularity_bonus=c.popularity_bonus,
+        )
 
     sorted_candidates = sorted(candidates, key=_joint_score_of, reverse=True)
 
@@ -122,6 +141,7 @@ def run_joint_inference(
             joint_score=joint_score,
             evidence_paper_ids=candidate.evidence_paper_ids,
             rank=rank,
+            popularity_bonus=candidate.popularity_bonus,
         )
         proposals.append(proposal)
 

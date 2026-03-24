@@ -17,6 +17,7 @@ class RewardWeights:
     specificity: float = 0.1
     lead_time: float = 0.15
     duplicate_penalty: float = 0.0
+    popularity: float = 0.0  # Opt-in: weight for matched paper popularity in RL reward
 
 
 @dataclass

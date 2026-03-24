@@ -200,11 +200,19 @@ def evaluate_rl_reward(
     novelty_value = _novelty_score(prediction, train_papers)
     specificity_value = _specificity_score(prediction, reward_config)
     lead_time_value = round(max(0.0, min(1.0, detail.lead_time if detail.is_match else 0.0)), 4)
+    # Popularity term: use popularity_score from the matched future paper (if any)
+    popularity_value = 0.0
+    if detail.is_match and detail.paper_id:
+        future_papers_by_id = {p.paper_id: p for p in future_papers}
+        matched_paper = future_papers_by_id.get(detail.paper_id)
+        if matched_paper is not None:
+            popularity_value = round(max(0.0, min(1.0, matched_paper.popularity_score)), 4)
     total = (
         (reward_config.weights.future_match * future_match_value)
         + (reward_config.weights.novelty * novelty_value)
         + (reward_config.weights.specificity * specificity_value)
         + (reward_config.weights.lead_time * lead_time_value)
+        + (reward_config.weights.popularity * popularity_value)
     )
     reward_items.append(
         PerIdeaReward(
@@ -235,6 +243,7 @@ def evaluate_rl_reward(
             "benchmark_score": bench_score,
             "lead_time": evaluation.lead_time,
             "duplicate_rate": evaluation.duplicate_rate,
+            "popularity": round(popularity_value, 4),
             "invalid_completion": 0.0,
             "parse_failure": 0.0,
             "invalid_completion_reward": round(reward_config.invalid_completion_reward, 4),
