@@ -54,6 +54,16 @@ def compute_leaderboard_score(daily_eval: Dict[str, Any]) -> float:
     return round((0.7 * hit) + (0.3 * mrr), 4)
 
 
+def compute_popularity_leaderboard_score(daily_eval: Dict[str, Any]) -> float:
+    """Leaderboard score weighted by paper popularity (opt-in).
+
+    Falls back to regular hit_at_k/mrr when weighted metrics are not available.
+    """
+    w_hit = float(daily_eval.get("weighted_hit_at_k") or daily_eval.get("hit_at_k", 0.0))
+    w_mrr = float(daily_eval.get("weighted_mrr") or daily_eval.get("mrr", 0.0))
+    return round((0.7 * w_hit) + (0.3 * w_mrr), 4)
+
+
 def daily_cutoff_date(now_utc: datetime) -> str:
     return now_utc.astimezone(ZoneInfo("America/New_York")).date().isoformat()
 
