@@ -27,6 +27,12 @@ def build_verl_dataset_rows(prompt_rows: list[dict[str, Any]], *, data_source: s
             "cutoff_date": row.get("cutoff_date", ""),
             "future_end_month": row.get("future_end_month", ""),
             "future_end_date": row.get("future_end_date", ""),
+            "prompt_mode": row.get("prompt_mode", ""),
+            "innovation": row.get("innovation", {}),
+            "realization_config": row.get("realization_config", {}),
+            "target_future_paper": row.get("target_future_paper", {}),
+            "target_future_paper_id": row.get("target_future_paper_id", ""),
+            "evidence_papers": row.get("evidence_papers", []),
             "train_papers": row.get("train_papers", []),
             "future_papers": row.get("future_papers", []),
         }

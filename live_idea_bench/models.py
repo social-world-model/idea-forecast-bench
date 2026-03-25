@@ -13,7 +13,9 @@ class PaperRecord:
     keywords: List[str]
     source_path: str
     published_date: str = ""
-    metadata: Dict[str, str] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    references: List[Dict[str, Any]] = field(default_factory=list)
+    citations: List[Dict[str, Any]] = field(default_factory=list)
     popularity_score: float = 0.0
 
 

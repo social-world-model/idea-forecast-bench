@@ -264,6 +264,48 @@ def _extract_keywords(metadata: Dict[str, object]) -> List[str]:
     return []
 
 
+def _normalize_metadata_value(value: object) -> Any:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {
+            str(key): _normalize_metadata_value(inner_value)
+            for key, inner_value in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_normalize_metadata_value(item) for item in value]
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def _normalize_reference_entries(raw: object) -> List[Dict[str, Any]]:
+    if raw is None:
+        return []
+
+    def _coerce_entry(entry: object) -> Dict[str, Any] | None:
+        normalized = _normalize_metadata_value(entry)
+        if isinstance(normalized, dict):
+            return {str(key): value for key, value in normalized.items()}
+        if isinstance(normalized, str):
+            text = normalized.strip()
+            if text:
+                return {"text": text}
+            return None
+        if normalized is None:
+            return None
+        return {"text": str(normalized)}
+
+    if isinstance(raw, list):
+        rows = [_coerce_entry(entry) for entry in raw]
+        return [row for row in rows if row]
+
+    single = _coerce_entry(raw)
+    return [single] if single else []
+
+
 _TITLE_STOP_WORDS = frozenset({
     "a", "an", "the", "of", "for", "in", "on", "with", "and", "or", "to",
     "is", "by", "from", "at", "its", "via", "are", "we", "our", "can",
@@ -328,7 +370,13 @@ def parse_markdown_paper(path: Path) -> Optional[PaperRecord]:
         keywords=keywords,
         source_path=str(path),
         published_date=published_date,
-        metadata={k: str(v) for k, v in metadata.items() if k not in {"keywords"}},
+        metadata={
+            str(k): _normalize_metadata_value(v)
+            for k, v in metadata.items()
+            if k not in {"keywords", "references", "citations"}
+        },
+        references=_normalize_reference_entries(metadata.get("references")),
+        citations=_normalize_reference_entries(metadata.get("citations")),
     )
 
 

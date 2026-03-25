@@ -8,8 +8,12 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable, Sequence
 
 from live_idea_bench.models import EvaluationResult, IdeaPrediction, PaperRecord, PredictionMatchDetail
+from forecaster.config import RealizationConfig
+from forecaster.models import Innovation, innovation_from_dict
 from forecaster.realization.config import RewardConfig
-from forecaster.realization.local_generation import parse_single_completion_prediction
+from forecaster.realization.local_generation import _completion_to_text, parse_single_completion_prediction
+from forecaster.realization.proposal_generator import proposal_to_idea_prediction
+from forecaster.realization.realization_reward import evaluate_realization_reward
 from live_idea_bench.similarity import idea_text, paper_text, score_prediction_list
 
 logger = logging.getLogger(__name__)
@@ -20,10 +24,10 @@ class PerIdeaReward:
     rank: int
     title: str
     matched_paper_id: str | None
-    future_match: float
-    novelty: float
-    specificity: float
-    lead_time: float
+    evidence_quality: float
+    operator_adherence: float
+    coherence: float
+    benchmark_match: float
     duplicate_penalty: float
     total: float
 
@@ -153,15 +157,79 @@ def build_invalid_reward_evaluation(
         invalid_completion=True,
         reward_breakdown={
             "dense_reward": invalid_reward,
+            "evidence_quality": 0.0,
+            "operator_adherence": 0.0,
+            "coherence": 0.0,
+            "benchmark_match": 0.0,
             "benchmark_score": 0.0,
             "lead_time": 0.0,
             "duplicate_rate": 0.0,
-            "invalid_completion": 1.0,
             "parse_failure": 1.0 if parse_failure else 0.0,
+            "invalid_completion": 1.0,
             "invalid_completion_reward": invalid_reward,
         },
         match_details=[],
     )
+
+
+def _innovation_from_prediction(prediction: IdeaPrediction) -> Innovation:
+    approach = str(prediction.approach or "").strip()
+    if ":" in approach:
+        operator, _, base_direction = approach.partition(":")
+        operator = operator.strip().lower() or "extend"
+        base_direction = base_direction.strip() or prediction.title.strip() or "emerging direction"
+    else:
+        operator = "extend"
+        base_direction = prediction.title.strip() or approach or "emerging direction"
+    gap = prediction.rationale.strip() or prediction.title.strip() or "research gap"
+    return Innovation(
+        base_direction=base_direction,
+        operator=operator,
+        gap=gap,
+    )
+
+
+def _proposal_text_from_prediction(
+    prediction: IdeaPrediction,
+    *,
+    proposal_text: str | None = None,
+) -> str:
+    explicit = str(proposal_text or "").strip()
+    if explicit:
+        return explicit
+    metadata_text = str(prediction.metadata.get("proposal_text", "") or "").strip()
+    if metadata_text:
+        return metadata_text
+    body_parts = [prediction.rationale.strip(), prediction.approach.strip()]
+    body = "\n".join(part for part in body_parts if part)
+    if body:
+        return f"{prediction.title.strip()}\n{body}".strip()
+    return prediction.title.strip()
+
+
+def coerce_reward_prediction(
+    raw_completion: Any,
+    *,
+    prompt_mode: str = "",
+    innovation: Innovation | None = None,
+) -> tuple[IdeaPrediction | None, str]:
+    """Parse a reward-model completion into the shared single-idea contract."""
+    raw_text = _completion_to_text(raw_completion).strip()
+    if not raw_text:
+        return None, ""
+
+    normalized_mode = str(prompt_mode or "").strip().lower()
+    if normalized_mode == "z_conditioned_realization" and innovation is not None:
+        prediction = proposal_to_idea_prediction(raw_text, innovation, rank=1)
+        prediction.metadata["proposal_text"] = raw_text
+        prediction.metadata["prompt_mode"] = normalized_mode
+        return prediction, raw_text
+
+    prediction = parse_single_completion_prediction(raw_completion)
+    if prediction is None:
+        return None, raw_text
+    prediction.metadata.setdefault("proposal_text", raw_text)
+    return prediction, raw_text
 
 
 def evaluate_rl_reward(
@@ -170,6 +238,10 @@ def evaluate_rl_reward(
     future_papers: list[PaperRecord],
     reward_config: RewardConfig,
     *,
+    innovation: Innovation | None = None,
+    evidence_papers: list[PaperRecord] | None = None,
+    proposal_text: str | None = None,
+    realization_config: RealizationConfig | None = None,
     similarity_config_path: str = "similarity.yaml",
     runtime_config_path: str | None = None,
     model_name: str | None = None,
@@ -196,33 +268,30 @@ def evaluate_rl_reward(
         prediction_rank=prediction.rank,
         prediction_title=prediction.title,
     )
-    future_match_value = detail.score if detail.is_match else 0.0
-    novelty_value = _novelty_score(prediction, train_papers)
-    specificity_value = _specificity_score(prediction, reward_config)
-    lead_time_value = round(max(0.0, min(1.0, detail.lead_time if detail.is_match else 0.0)), 4)
-    # Popularity term: use popularity_score from the matched future paper (if any)
-    popularity_value = 0.0
-    if detail.is_match and detail.paper_id:
-        future_papers_by_id = {p.paper_id: p for p in future_papers}
-        matched_paper = future_papers_by_id.get(detail.paper_id)
-        if matched_paper is not None:
-            popularity_value = round(max(0.0, min(1.0, matched_paper.popularity_score)), 4)
-    total = (
-        (reward_config.weights.future_match * future_match_value)
-        + (reward_config.weights.novelty * novelty_value)
-        + (reward_config.weights.specificity * specificity_value)
-        + (reward_config.weights.lead_time * lead_time_value)
-        + (reward_config.weights.popularity * popularity_value)
+    resolved_innovation = innovation or _innovation_from_prediction(prediction)
+    resolved_proposal_text = _proposal_text_from_prediction(
+        prediction,
+        proposal_text=proposal_text,
     )
+    resolved_realization_config = realization_config or RealizationConfig()
+    paper_reward = evaluate_realization_reward(
+        resolved_proposal_text,
+        resolved_innovation,
+        list(evidence_papers or []),
+        resolved_realization_config,
+    )
+    benchmark_match_value = detail.score if detail.is_match else 0.0
+    lead_time_value = round(max(0.0, min(1.0, detail.lead_time if detail.is_match else 0.0)), 4)
+    total = paper_reward.total_reward
     reward_items.append(
         PerIdeaReward(
             rank=prediction.rank,
             title=prediction.title,
             matched_paper_id=detail.paper_id,
-            future_match=round(future_match_value, 4),
-            novelty=novelty_value,
-            specificity=specificity_value,
-            lead_time=lead_time_value,
+            evidence_quality=paper_reward.evidence_quality,
+            operator_adherence=paper_reward.operator_adherence,
+            coherence=paper_reward.coherence,
+            benchmark_match=round(benchmark_match_value, 4),
             duplicate_penalty=0.0,
             total=round(total, 4),
         )
@@ -240,10 +309,13 @@ def evaluate_rl_reward(
         per_idea_rewards=reward_items,
         reward_breakdown={
             "dense_reward": round(dense_reward, 4),
+            "evidence_quality": paper_reward.evidence_quality,
+            "operator_adherence": paper_reward.operator_adherence,
+            "coherence": paper_reward.coherence,
+            "benchmark_match": round(benchmark_match_value, 4),
             "benchmark_score": bench_score,
             "lead_time": evaluation.lead_time,
             "duplicate_rate": evaluation.duplicate_rate,
-            "popularity": round(popularity_value, 4),
             "invalid_completion": 0.0,
             "parse_failure": 0.0,
             "invalid_completion_reward": round(reward_config.invalid_completion_reward, 4),
@@ -291,6 +363,7 @@ def spearman_correlation(xs: Sequence[float], ys: Sequence[float]) -> float:
 def build_online_rl_reward_function(
     reward_config: RewardConfig,
     *,
+    realization_config: RealizationConfig | None = None,
     similarity_config_path: str = "similarity.yaml",
     runtime_config_path: str | None = None,
     model_name: str | None = None,
@@ -299,6 +372,10 @@ def build_online_rl_reward_function(
         completions: Sequence[Any],
         train_papers: Sequence[list[dict[str, Any]]] | None = None,
         future_papers: Sequence[list[dict[str, Any]]] | None = None,
+        prompt_mode: Sequence[str] | None = None,
+        innovation: Sequence[dict[str, Any]] | None = None,
+        evidence_papers: Sequence[list[dict[str, Any]]] | None = None,
+        realization_config_payload: Sequence[dict[str, Any]] | None = None,
         cutoff_date: Sequence[str] | None = None,
         future_end_date: Sequence[str] | None = None,
         **_: Any,
@@ -306,9 +383,9 @@ def build_online_rl_reward_function(
         rewards: list[float] = []
         total = len(completions)
         for idx, completion in enumerate(completions):
-            prediction = parse_single_completion_prediction(completion)
             train_payload = _value_for_index(train_papers, idx, total) or []
             future_payload = _value_for_index(future_papers, idx, total) or []
+            prompt_mode_value = str(_value_for_index(prompt_mode, idx, total) or "")
             cutoff_value = _value_for_index(cutoff_date, idx, total)
             future_end_value = _value_for_index(future_end_date, idx, total)
             try:
@@ -318,6 +395,31 @@ def build_online_rl_reward_function(
                 logger.warning("Failed to reconstruct PaperRecord at index %d: %s", idx, exc)
                 rewards.append(round(reward_config.invalid_completion_reward, 4))
                 continue
+            innovation_payload = _value_for_index(innovation, idx, total)
+            evidence_payload = _value_for_index(evidence_papers, idx, total) or []
+            config_payload = _value_for_index(realization_config_payload, idx, total)
+            try:
+                innovation_value = (
+                    innovation_from_dict(innovation_payload)
+                    if isinstance(innovation_payload, dict) and innovation_payload
+                    else None
+                )
+                evidence_value = [PaperRecord(**paper) for paper in evidence_payload]
+                resolved_realization_config = (
+                    RealizationConfig(**config_payload)
+                    if isinstance(config_payload, dict) and config_payload
+                    else (realization_config or RealizationConfig())
+                )
+            except (TypeError, KeyError, ValueError) as exc:
+                logger.warning("Failed to reconstruct realization reward context at index %d: %s", idx, exc)
+                innovation_value = None
+                evidence_value = []
+                resolved_realization_config = realization_config or RealizationConfig()
+            prediction, proposal_text_value = coerce_reward_prediction(
+                completion,
+                prompt_mode=prompt_mode_value,
+                innovation=innovation_value,
+            )
             if prediction is None:
                 rewards.append(round(reward_config.invalid_completion_reward, 4))
                 continue
@@ -327,6 +429,10 @@ def build_online_rl_reward_function(
                     train_papers=reconstructed_train,
                     future_papers=reconstructed_future,
                     reward_config=reward_config,
+                    innovation=innovation_value,
+                    evidence_papers=evidence_value,
+                    proposal_text=proposal_text_value,
+                    realization_config=resolved_realization_config,
                     similarity_config_path=similarity_config_path,
                     runtime_config_path=runtime_config_path,
                     model_name=model_name,

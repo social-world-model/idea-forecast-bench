@@ -7,8 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from forecaster.models import Innovation, MemoryEntry, MemoryInventory
-from forecaster.prior.memory import MemoryStore
+from forecaster.models import HindsightSample, Innovation, MemoryEntry, MemoryInventory
+from forecaster.prior.memory import (
+    MemoryStore,
+    build_memory_store_from_hindsight_samples,
+    hindsight_sample_available_by_cutoff,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +96,33 @@ def test_query_ranking_higher_recency_ranked_higher():
     assert results[0].innovation.base_direction == "high recency"
 
 
+def test_query_utility_can_change_ranking():
+    """Delayed utility should influence later retrieval order."""
+    high_utility = MemoryEntry(
+        innovation=_make_innovation(base="high utility", gap="a"),
+        source_paper_id="high-utility",
+        timestamp_month="2024-01",
+        frequency=1,
+        recency_score=0.4,
+        utility_score=5.0,
+    )
+    high_recency = MemoryEntry(
+        innovation=_make_innovation(base="high recency", gap="b"),
+        source_paper_id="high-recency",
+        timestamp_month="2024-01",
+        frequency=1,
+        recency_score=0.6,
+        utility_score=0.0,
+    )
+    store = MemoryStore(
+        MemoryInventory(entries=(high_utility, high_recency), last_updated_month="2024-01")
+    )
+
+    results = store.query(2)
+
+    assert results[0].source_paper_id == "high-utility"
+
+
 def test_decay_recency_reduces_scores():
     """After decay, recency_score should be <= original score."""
     store = _make_store_with_entries(3, "2024-01")
@@ -166,6 +197,40 @@ def test_format_for_prompt_returns_string():
     assert "base_direction" in result
 
 
+def test_hindsight_sample_available_by_cutoff_respects_exact_published_date():
+    """A paper published later in the same month is not yet available at month-start cutoff."""
+    sample = HindsightSample(
+        context_paper_ids=("ctx",),
+        cutoff_month="2024-01",
+        future_paper_id="future-1",
+        future_paper_published_date="2024-02-15",
+        innovation=_make_innovation(),
+    )
+    assert not hindsight_sample_available_by_cutoff(sample, "2024-02")
+
+
+def test_build_memory_store_from_hindsight_samples_filters_future_sources():
+    """The cutoff snapshot should only include source papers already published by the cutoff."""
+    visible = HindsightSample(
+        context_paper_ids=("ctx-visible",),
+        cutoff_month="2024-01",
+        future_paper_id="visible-paper",
+        future_paper_published_date="2024-02-01",
+        innovation=_make_innovation(base="visible direction"),
+    )
+    hidden = HindsightSample(
+        context_paper_ids=("ctx-hidden",),
+        cutoff_month="2024-01",
+        future_paper_id="hidden-paper",
+        future_paper_published_date="2024-03-15",
+        innovation=_make_innovation(base="hidden direction"),
+    )
+
+    store = build_memory_store_from_hindsight_samples([visible, hidden], "2024-02")
+
+    assert [entry.source_paper_id for entry in store.inventory.entries] == ["visible-paper"]
+
+
 # ---------------------------------------------------------------------------
 # Phase 5: Chronology guard tests
 # ---------------------------------------------------------------------------
@@ -217,7 +282,7 @@ def test_load_without_cutoff_never_warns(tmp_path, caplog):  # type: ignore[no-u
 # ---------------------------------------------------------------------------
 
 def test_apply_delayed_utility_update_increases_utility_on_match():
-    """_apply_delayed_utility_update raises utility for matching evidence paper."""
+    """_apply_delayed_utility_update raises utility for actual future support."""
     from forecaster.orchestrator import _apply_delayed_utility_update
     from forecaster.models import Innovation, ScoredProposal
 
@@ -231,12 +296,22 @@ def test_apply_delayed_utility_update_increases_utility_on_match():
         prior_score=0.5,
         realization_score=0.5,
         joint_score=0.5,
-        evidence_paper_ids=("future-paper-1",),  # overlaps with future set
+        evidence_paper_ids=("historical-evidence",),
         rank=1,
     )
 
-    future_paper_ids = {"future-paper-1"}
-    updated = _apply_delayed_utility_update(store, [proposal], future_paper_ids)
+    updated = _apply_delayed_utility_update(
+        store,
+        [proposal],
+        [
+            {
+                "proposal_rank": 1,
+                "matched_future_paper_ids": ["future-paper-1"],
+                "future_support_confirmed": True,
+                "future_match_score": 0.91,
+            }
+        ],
+    )
 
     original_entry = store.inventory.entries[0]
     updated_entry = updated.inventory.entries[0]
@@ -265,8 +340,17 @@ def test_apply_delayed_utility_update_decreases_utility_on_no_match():
         rank=1,
     )
 
-    future_paper_ids = {"different-future-paper"}
-    updated = _apply_delayed_utility_update(store, [proposal], future_paper_ids)
+    updated = _apply_delayed_utility_update(
+        store,
+        [proposal],
+        [
+            {
+                "proposal_rank": 1,
+                "matched_future_paper_ids": [],
+                "future_support_confirmed": False,
+            }
+        ],
+    )
 
     original_entry = store.inventory.entries[0]
     updated_entry = updated.inventory.entries[0]
@@ -294,9 +378,44 @@ def test_apply_delayed_utility_update_preserves_immutability():
     )
 
     original_utility = store.inventory.entries[0].utility_score
-    updated = _apply_delayed_utility_update(store, [proposal], {"future-1"})
+    updated = _apply_delayed_utility_update(
+        store,
+        [proposal],
+        [{"proposal_rank": 1, "matched_future_paper_ids": ["future-1"]}],
+    )
 
     # Original is unchanged
     assert store.inventory.entries[0].utility_score == original_utility
     # Updated is different
     assert updated.inventory.entries[0].utility_score != original_utility
+
+
+def test_apply_delayed_utility_update_records_provenance():
+    """Delayed feedback should persist proposal/evidence provenance in memory metadata."""
+    from forecaster.orchestrator import _apply_delayed_utility_update
+    from forecaster.models import ScoredProposal
+
+    innovation = Innovation(base_direction="retrieval agent", operator="compose", gap="ground long-horizon planning")
+    store = MemoryStore.empty("2024-01").append(innovation, source_paper_id="src-1", month="2024-01")
+    proposal = ScoredProposal(
+        innovation=innovation,
+        proposal_text="Grounded Retrieval Agent\nUse retrieval evidence to plan better.",
+        prior_score=-0.4,
+        realization_score=-0.2,
+        joint_score=-0.28,
+        evidence_paper_ids=("future-1", "ctx-1"),
+        rank=1,
+    )
+
+    updated = _apply_delayed_utility_update(
+        store,
+        [proposal],
+        [{"proposal_rank": 1, "matched_future_paper_ids": ["future-1"]}],
+        cutoff_month="2024-02",
+    )
+
+    metadata = updated.inventory.entries[0].metadata
+    assert metadata["last_delayed_feedback"]["cutoff_month"] == "2024-02"
+    assert metadata["last_delayed_feedback"]["matched_future_paper_ids"] == ["future-1"]
+    assert metadata["delayed_feedback_history"][-1]["proposal_rank"] == 1
+    assert metadata["last_delayed_feedback"]["proposal_text"] == proposal.proposal_text

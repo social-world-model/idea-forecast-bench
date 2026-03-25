@@ -11,7 +11,10 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from live_idea_bench.papers import date_to_ordinal, month_start_date
+
 from forecaster.models import (
+    HindsightSample,
     Innovation,
     MemoryEntry,
     MemoryInventory,
@@ -23,6 +26,9 @@ from forecaster.models import (
 )
 
 _RECENCY_DECAY_PER_MONTH: float = 0.9
+_DEFAULT_QUERY_RECENCY_WEIGHT: float = 0.45
+_DEFAULT_QUERY_FREQUENCY_WEIGHT: float = 0.35
+_DEFAULT_QUERY_UTILITY_WEIGHT: float = 0.20
 
 
 def _months_between(earlier: str, later: str) -> int:
@@ -34,6 +40,60 @@ def _months_between(earlier: str, later: str) -> int:
 
 def _innovation_key(innovation: Innovation) -> tuple[str, str, str]:
     return (innovation.base_direction, innovation.operator, innovation.gap)
+
+
+def _clamp01(value: float) -> float:
+    return max(0.0, min(1.0, value))
+
+
+def _normalized_utility(value: float) -> float:
+    return _clamp01(0.5 + (0.5 * math.tanh(value)))
+
+
+def hindsight_sample_available_by_cutoff(
+    sample: HindsightSample,
+    cutoff_month: str,
+) -> bool:
+    """Return whether the hindsight source paper is available by this cutoff."""
+    published_date = str(sample.future_paper_published_date or "").strip()
+    if not published_date:
+        return sample.future_paper_month <= cutoff_month
+    return date_to_ordinal(published_date) <= date_to_ordinal(month_start_date(cutoff_month))
+
+
+def build_memory_store_from_hindsight_samples(
+    hindsight_samples: list[HindsightSample],
+    cutoff_month: str,
+    *,
+    exclude_future_paper_ids: set[str] | None = None,
+) -> MemoryStore:
+    """Materialize the legal memory snapshot for a given cutoff."""
+    excluded = exclude_future_paper_ids or set()
+    eligible_samples = sorted(
+        (
+            sample
+            for sample in hindsight_samples
+            if sample.future_paper_id not in excluded
+            and hindsight_sample_available_by_cutoff(sample, cutoff_month)
+        ),
+        key=lambda sample: (
+            sample.future_paper_published_date,
+            sample.future_paper_id,
+            sample.cutoff_month,
+        ),
+    )
+    store = MemoryStore.empty(cutoff_month)
+    for sample in eligible_samples:
+        store = store.append(
+            sample.innovation,
+            source_paper_id=sample.future_paper_id,
+            month=sample.future_paper_month,
+            metadata={
+                "source_cutoff_month": sample.cutoff_month,
+                "source_published_date": sample.future_paper_published_date,
+            },
+        )
+    return store
 
 
 class MemoryStore:
@@ -106,6 +166,8 @@ class MemoryStore:
         innovation: Innovation,
         source_paper_id: str,
         month: str,
+        *,
+        metadata: dict[str, Any] | None = None,
     ) -> MemoryStore:
         """Add a new entry or increment frequency for duplicate. Returns new MemoryStore."""
         key = _innovation_key(innovation)
@@ -113,6 +175,10 @@ class MemoryStore:
         found = False
         for entry in self._inventory.entries:
             if _innovation_key(entry.innovation) == key:
+                merged_metadata = dict(entry.metadata)
+                if metadata:
+                    for meta_key, meta_value in metadata.items():
+                        merged_metadata.setdefault(meta_key, meta_value)
                 updated = MemoryEntry(
                     innovation=entry.innovation,
                     source_paper_id=entry.source_paper_id,
@@ -120,7 +186,7 @@ class MemoryStore:
                     frequency=entry.frequency + 1,
                     recency_score=entry.recency_score,
                     utility_score=entry.utility_score,
-                    metadata=entry.metadata,
+                    metadata=merged_metadata,
                 )
                 new_entries.append(updated)
                 found = True
@@ -132,6 +198,7 @@ class MemoryStore:
                     innovation=innovation,
                     source_paper_id=source_paper_id,
                     timestamp_month=month,
+                    metadata=dict(metadata or {}),
                 )
             )
         new_inventory = MemoryInventory(
@@ -145,19 +212,36 @@ class MemoryStore:
         self,
         n: int,
         *,
-        recency_weight: float = 0.5,
+        recency_weight: float = _DEFAULT_QUERY_RECENCY_WEIGHT,
+        frequency_weight: float | None = None,
+        utility_weight: float | None = None,
     ) -> list[MemoryEntry]:
         """Return top-n entries ranked by weighted score.
 
-        Score = recency_weight * recency_score + (1 - recency_weight) * normalized_frequency
+        Score is a frozen blend of recency, frequency, and delayed utility.
         """
         entries = list(self._inventory.entries)
         if not entries:
             return []
         max_freq = max(e.frequency for e in entries) or 1
+        if frequency_weight is None and utility_weight is None:
+            remaining = max(0.0, 1.0 - recency_weight)
+            extra_total = _DEFAULT_QUERY_FREQUENCY_WEIGHT + _DEFAULT_QUERY_UTILITY_WEIGHT
+            frequency_weight = remaining * (_DEFAULT_QUERY_FREQUENCY_WEIGHT / extra_total)
+            utility_weight = remaining * (_DEFAULT_QUERY_UTILITY_WEIGHT / extra_total)
+        else:
+            frequency_weight = _DEFAULT_QUERY_FREQUENCY_WEIGHT if frequency_weight is None else frequency_weight
+            utility_weight = _DEFAULT_QUERY_UTILITY_WEIGHT if utility_weight is None else utility_weight
+        total_weight = recency_weight + frequency_weight + utility_weight
+        if total_weight <= 0:
+            total_weight = 1.0
         def score(entry: MemoryEntry) -> float:
             norm_freq = entry.frequency / max_freq
-            return recency_weight * entry.recency_score + (1.0 - recency_weight) * norm_freq
+            return (
+                (recency_weight * _clamp01(entry.recency_score))
+                + (frequency_weight * _clamp01(norm_freq))
+                + (utility_weight * _normalized_utility(entry.utility_score))
+            ) / total_weight
         ranked = sorted(entries, key=score, reverse=True)
         return ranked[:n]
 
@@ -190,12 +274,16 @@ class MemoryStore:
         utility_delta: float,
         *,
         ema_alpha: float = 0.3,
+        metadata: dict[str, Any] | None = None,
     ) -> MemoryStore:
         """Update utility score for entry with given source_paper_id using EMA."""
         new_entries: list[MemoryEntry] = []
         for entry in self._inventory.entries:
             if entry.source_paper_id == source_paper_id:
                 new_utility = ema_alpha * utility_delta + (1.0 - ema_alpha) * entry.utility_score
+                merged_metadata = dict(entry.metadata)
+                if metadata:
+                    merged_metadata.update(metadata)
                 updated = MemoryEntry(
                     innovation=entry.innovation,
                     source_paper_id=entry.source_paper_id,
@@ -203,7 +291,7 @@ class MemoryStore:
                     frequency=entry.frequency,
                     recency_score=entry.recency_score,
                     utility_score=new_utility,
-                    metadata=entry.metadata,
+                    metadata=merged_metadata,
                 )
                 new_entries.append(updated)
             else:

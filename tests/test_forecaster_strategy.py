@@ -178,7 +178,7 @@ class TestForecasterStrategyPriorWiring:
 
         fake_innovations = [
             Innovation(base_direction="novel A", operator="extend", gap="gap A"),
-            Innovation(base_direction="novel B", operator="combine", gap="gap B"),
+            Innovation(base_direction="novel B", operator="compose", gap="gap B"),
         ]
         proposals = [_make_scored_proposal(rank=1), _make_scored_proposal(rank=2)]
 
@@ -196,6 +196,25 @@ class TestForecasterStrategyPriorWiring:
             results = strategy.generate(train_papers, "2024-06", top_k=3)
 
         assert captured_innovations == fake_innovations
+
+    def test_generate_passes_prior_checkpoint_to_joint_inference(
+        self, tmp_path: Path
+    ) -> None:
+        """The serving path should pass the trained prior checkpoint for model-based scoring."""
+        train_papers = [_paper("p1", "2024-05")]
+        captured_kwargs: dict = {}
+
+        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
+            captured_kwargs.update(kwargs)
+            return [_make_scored_proposal(rank=1)]
+
+        with patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference), \
+             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")), \
+             patch("forecaster.prior.sampler.sample_innovations", return_value=[_make_scored_proposal().innovation]):
+            strategy = ForecasterStrategy(prior_checkpoint=str(tmp_path))
+            strategy.generate(train_papers, "2024-06", top_k=3)
+
+        assert captured_kwargs["prior_model_path"] == str(tmp_path)
 
     def test_generate_falls_back_to_heuristic_when_prior_sampling_raises(
         self, tmp_path: Path
@@ -333,3 +352,41 @@ class TestForecasterStrategyRealizationCheckpoint:
             strategy.generate(train_papers, "2024-06", top_k=3)
 
         assert captured_kwargs.get("realization_model_path") is None
+
+
+class TestForecasterStrategyRuntimeBoundary:
+    def test_generate_labels_demo_fallback_when_strict_artifacts_missing(self) -> None:
+        """The benchmark wrapper should mark demo fallback explicitly when strict artifacts are unavailable."""
+        train_papers = [_paper("p1", "2024-05")]
+        proposals = [_make_scored_proposal(rank=1)]
+
+        with patch(_PATCH_JOINT_INFERENCE, return_value=proposals), \
+             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")):
+            strategy = ForecasterStrategy()
+            results = strategy.generate(train_papers, "2024-06", top_k=3)
+
+        metadata = results[0].metadata
+        assert metadata["requested_runtime_mode"] == "strict_eval"
+        assert metadata["effective_runtime_mode"] == "demo"
+        assert metadata["fallback_events"]
+
+    def test_generate_strict_mode_does_not_swallow_prior_sampling_errors(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        """When all strict artifacts are present, prior failures should raise instead of silently falling back."""
+        from forecaster.prior.memory import MemoryStore
+
+        memory_path = tmp_path / "memory.json"
+        MemoryStore.empty("2024-05").persist(memory_path)
+        prior_dir = tmp_path / "prior"
+        realization_dir = tmp_path / "realization"
+        prior_dir.mkdir()
+        realization_dir.mkdir()
+
+        with patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")), \
+             patch("forecaster.prior.sampler.sample_innovations", side_effect=RuntimeError("broken prior")):
+            strategy = ForecasterStrategy(
+                memory_path=str(memory_path),
+                prior_checkpoint=str(prior_dir),
+                realization_checkpoint=str(realization_dir),
+            )
+            with pytest.raises(RuntimeError, match="broken prior"):
+                strategy.generate([_paper("p1", "2024-05")], "2024-06", top_k=3)

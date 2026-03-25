@@ -21,6 +21,7 @@ def _make_paper(
     title: str,
     month: str,
     published_date: str | None = None,
+    references: list[dict[str, object]] | None = None,
 ) -> PaperRecord:
     if published_date is None:
         published_date = f"{month}-15"
@@ -32,6 +33,7 @@ def _make_paper(
         keywords=["ml"],
         source_path="",
         published_date=published_date,
+        references=references or [],
     )
 
 
@@ -98,6 +100,7 @@ class TestBuildHindsightDataset:
             assert isinstance(sample.innovation, Innovation)
             # context_paper_ids must be a tuple (immutable)
             assert isinstance(sample.context_paper_ids, tuple)
+            assert sample.future_paper_published_date
 
     def test_build_hindsight_dataset_temporal_ordering(self):
         """Samples are in chronological order by cutoff_month."""
@@ -210,3 +213,42 @@ class TestBuildHindsightDataset:
         )
 
         assert samples == []
+
+    def test_build_hindsight_dataset_preserves_future_references(self):
+        """Future-paper reference payloads should reach the extractor intact."""
+        from forecaster.hindsight.dataset_builder import build_hindsight_dataset
+
+        config = HindsightConfig(max_retries=1)
+        client = MagicMock()
+        papers = TRAIN_PAPERS + [
+            _make_paper(
+                "fut-ref-001",
+                "Future Ref Paper",
+                month="2024-02",
+                references=[{"title": "Foundational Work", "year": 2023}],
+            )
+        ]
+        captured_titles: list[str] = []
+
+        def _capture_references(future_paper, context_papers, llm_client, model, config):  # type: ignore[no-untyped-def]
+            captured_titles.extend(
+                str(reference.get("title", ""))
+                for reference in future_paper.references
+            )
+            return _make_innovation(99)
+
+        with patch(
+            "forecaster.hindsight.dataset_builder.extract_innovation",
+            side_effect=_capture_references,
+        ):
+            build_hindsight_dataset(
+                papers=papers,
+                cutoff_months=["2024-01"],
+                horizon_months=1,
+                config=config,
+                llm_client=client,
+                model="gpt-4o",
+                max_future_papers_per_cutoff=10,
+            )
+
+        assert "Foundational Work" in captured_titles

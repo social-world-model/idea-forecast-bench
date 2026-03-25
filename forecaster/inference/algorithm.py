@@ -10,12 +10,14 @@ from live_idea_bench.models import PaperRecord
 from forecaster.models import Innovation, JointCandidate, ScoredProposal
 from forecaster.config import InferenceConfig, RealizationConfig
 from forecaster.inference.scoring import (
+    build_realization_scorer,
     compute_prior_score,
     compute_realization_score,
     compute_joint_score,
 )
 from forecaster.inference.deduplication import deduplicate_proposals
 from forecaster.prior.memory import MemoryStore
+from forecaster.prior.sampler import build_prior_scorer
 from forecaster.realization.evidence import retrieve_evidence
 from forecaster.realization.proposal_generator import generate_proposal
 
@@ -32,6 +34,7 @@ def run_joint_inference(
     realization_config: RealizationConfig,
     *,
     popularity_scorer: Callable[[Innovation, list[PaperRecord]], float] | None = None,
+    prior_model_path: str | None = None,
     realization_model_path: str | None = None,
 ) -> list[ScoredProposal]:
     """Run Algorithm 1: joint inference for idea forecasting.
@@ -68,10 +71,76 @@ def run_joint_inference(
         Top-K ScoredProposal objects, ranked and deduplicated.
     """
     candidates: list[JointCandidate] = []
+    strict_runtime = str(inference_config.runtime_mode).strip().lower() == "strict_eval"
+    prior_scorer: Callable[[Innovation], float] | None = None
+    realization_scorer: Callable[[str, Innovation, list[PaperRecord]], float] | None = None
+    if strict_runtime and inference_config.prior_score_method == "conditional_logprob" and not prior_model_path:
+        raise ValueError("Strict joint inference requires a prior_model_path for conditional prior scoring.")
+    if strict_runtime and inference_config.realization_score_method == "conditional_logprob" and not realization_model_path:
+        raise ValueError(
+            "Strict joint inference requires a realization_model_path for conditional realization scoring."
+        )
+    if (
+        prior_model_path
+        and inference_config.prior_score_method == "conditional_logprob"
+    ):
+        try:
+            prior_scorer = build_prior_scorer(
+                prior_model_path,
+                memory_store,
+                inference_config,
+            )
+        except Exception as exc:
+            if strict_runtime:
+                raise RuntimeError(
+                    f"Strict prior scorer initialization failed: {exc}"
+                ) from exc
+            logger.warning(
+                "Prior scorer unavailable (%s); falling back to heuristic memory scores.",
+                exc,
+            )
+    if (
+        realization_model_path
+        and inference_config.realization_score_method == "conditional_logprob"
+    ):
+        try:
+            realization_scorer = build_realization_scorer(
+                realization_model_path,
+                papers,
+                realization_config,
+                inference_config,
+            )
+        except Exception as exc:
+            if strict_runtime:
+                raise RuntimeError(
+                    f"Strict realization scorer initialization failed: {exc}"
+                ) from exc
+            logger.warning(
+                "Realization scorer unavailable (%s); falling back to paper reward scores.",
+                exc,
+            )
 
     for i, innovation in enumerate(innovations):
         try:
-            prior_score = compute_prior_score(innovation, memory_store)
+            prior_score_source = "heuristic_memory"
+            if prior_scorer is not None:
+                try:
+                    prior_score = float(prior_scorer(innovation))
+                    prior_score_source = "model_conditional_logprob"
+                except Exception as exc:
+                    if strict_runtime:
+                        raise RuntimeError(
+                            f"Strict prior scoring failed for innovation {i}: {exc}"
+                        ) from exc
+                    logger.warning(
+                        "Prior scorer failed for innovation %d (%s); using heuristic memory score.",
+                        i,
+                        exc,
+                    )
+                    prior_score = compute_prior_score(innovation, memory_store)
+                    prior_score_source = "heuristic_memory_fallback"
+            else:
+                prior_score = compute_prior_score(innovation, memory_store)
 
             evidence = retrieve_evidence(
                 innovation,
@@ -83,18 +152,44 @@ def run_joint_inference(
             proposal_text = generate_proposal(
                 innovation=innovation,
                 evidence=evidence,
+                context_papers=papers,
                 llm_client=llm_client,
                 model=model,
                 config=realization_config,
                 realization_model_path=realization_model_path,
             )
 
-            realization_score = compute_realization_score(
-                proposal_text,
-                innovation,
-                evidence,
-                realization_config,
-            )
+            realization_score_source = "paper_reward_log"
+            if realization_scorer is not None:
+                try:
+                    realization_score = float(
+                        realization_scorer(proposal_text, innovation, evidence)
+                    )
+                    realization_score_source = "model_conditional_logprob"
+                except Exception as exc:
+                    if strict_runtime:
+                        raise RuntimeError(
+                            f"Strict realization scoring failed for innovation {i}: {exc}"
+                        ) from exc
+                    logger.warning(
+                        "Realization scorer failed for innovation %d (%s); using paper reward score.",
+                        i,
+                        exc,
+                    )
+                    realization_score = compute_realization_score(
+                        proposal_text,
+                        innovation,
+                        evidence,
+                        realization_config,
+                    )
+                    realization_score_source = "paper_reward_log_fallback"
+            else:
+                realization_score = compute_realization_score(
+                    proposal_text,
+                    innovation,
+                    evidence,
+                    realization_config,
+                )
 
             popularity_bonus = 0.0
             if popularity_scorer is not None and inference_config.popularity_weight > 0:
@@ -110,10 +205,24 @@ def run_joint_inference(
                 proposal_text=proposal_text,
                 realization_score=realization_score,
                 popularity_bonus=popularity_bonus,
+                metadata={
+                    "innovation": dataclasses.asdict(innovation),
+                    "prior_score_source": prior_score_source,
+                    "prior_score_method": inference_config.prior_score_method,
+                    "realization_score_source": realization_score_source,
+                    "realization_score_method": inference_config.realization_score_method,
+                    "score_normalization": inference_config.score_normalization,
+                    "proposal_title": proposal_text.splitlines()[0].strip() if proposal_text.strip() else "",
+                    "evidence_paper_ids": list(tuple(p.paper_id for p in evidence)),
+                },
             )
             candidates.append(candidate)
 
         except Exception as exc:
+            if strict_runtime:
+                raise RuntimeError(
+                    f"Strict joint inference failed for innovation {i}: {exc}"
+                ) from exc
             logger.warning(
                 "Skipping innovation %d (%s) due to error: %s",
                 i,
@@ -155,6 +264,10 @@ def run_joint_inference(
             evidence_paper_ids=candidate.evidence_paper_ids,
             rank=rank,
             popularity_bonus=candidate.popularity_bonus,
+            metadata={
+                **candidate.metadata,
+                "joint_score_mode": inference_config.joint_score_mode,
+            },
         )
         proposals.append(proposal)
 

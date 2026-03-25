@@ -7,7 +7,14 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from live_idea_bench.models import IdeaPrediction, PaperRecord
+from live_idea_bench.models import (
+    EvaluationResult,
+    IdeaPrediction,
+    PaperRecord,
+    PredictionMatchDetail,
+    ScoredPredictionList,
+)
+from forecaster.models import HindsightSample, Innovation
 from forecaster.realization import (
     CandidateGenerationConfig,
     CandidateListSample,
@@ -19,6 +26,7 @@ from forecaster.realization import (
     RewardConfig,
     SelectionConfig,
     build_grpo_advantages,
+    build_grpo_prompt_rows,
     build_rl_episodes,
     compute_reward_alignment,
     create_trainer_runner,
@@ -50,6 +58,39 @@ def _paper(paper_id: str, month: str, *, published_date: str, summary: str) -> P
 
 def _prediction(rank: int, title: str, rationale: str) -> IdeaPrediction:
     return IdeaPrediction(rank=rank, title=title, rationale=rationale, approach=rationale)
+
+
+def _mock_scored_prediction_list(
+    *,
+    paper_id: str = "future-1",
+    score: float = 0.9,
+    is_match: bool = True,
+) -> ScoredPredictionList:
+    return ScoredPredictionList(
+        evaluation=EvaluationResult(
+            hit_at_k=1.0 if is_match else 0.0,
+            recall_at_k=1.0 if is_match else 0.0,
+            precision_at_k=1.0 if is_match else 0.0,
+            mrr=1.0 if is_match else 0.0,
+            novelty=0.0,
+            diversity=0.0,
+            matched_prediction_ranks=[1] if is_match else [],
+            matched_paper_ids=[paper_id] if is_match else [],
+            lead_time=0.5 if is_match else 0.0,
+            duplicate_rate=0.0,
+        ),
+        matches=[
+            PredictionMatchDetail(
+                prediction_rank=1,
+                prediction_title="idea",
+                paper_id=paper_id if is_match else None,
+                score=score if is_match else 0.0,
+                is_match=is_match,
+                lead_time=0.5 if is_match else 0.0,
+            )
+        ],
+        unmatched_future_paper_ids=[] if is_match else [paper_id],
+    )
 
 
 def _enable_fake_parquet(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -131,19 +172,31 @@ def test_build_rl_episodes_respects_past_window_and_step_size() -> None:
     assert episodes[2].train_paper_ids == ["p-05", "p-06", "p-07"]
 
 
-def test_evaluate_rl_reward_is_single_idea_and_no_duplicate_penalty() -> None:
+def test_evaluate_rl_reward_is_single_idea_and_no_duplicate_penalty(monkeypatch: pytest.MonkeyPatch) -> None:
     train = [_paper("train-1", "2024-01", published_date="2024-01-01", summary="old retrieval baseline")]
     future = [_paper("future-1", "2024-02", published_date="2024-02-15", summary="retrieval agent planning")]
     predictions = [
         _prediction(1, "retrieval agent planning", "retrieval agent planning"),
         _prediction(2, "retrieval agent planning v2", "retrieval agent planning"),
     ]
+    monkeypatch.setattr(
+        "forecaster.realization.reward.score_prediction_list",
+        lambda **_: _mock_scored_prediction_list(),
+    )
+    innovation = Innovation(
+        base_direction="retrieval planning",
+        operator="compose",
+        gap="ground long-horizon agents",
+    )
 
     reward = evaluate_rl_reward(
         predictions=predictions,
         train_papers=train,
         future_papers=future,
         reward_config=RewardConfig(top_k=1),
+        innovation=innovation,
+        evidence_papers=future,
+        proposal_text="Grounded Retrieval Planning\nWe compose retrieval and planning to ground long-horizon agents.",
         cutoff_date="2024-02-01",
         future_end_date="2024-03-31",
     )
@@ -151,6 +204,7 @@ def test_evaluate_rl_reward_is_single_idea_and_no_duplicate_penalty() -> None:
     assert reward.benchmark_evaluation.matched_paper_ids == ["future-1"]
     assert len(reward.per_idea_rewards) == 1
     assert reward.per_idea_rewards[0].duplicate_penalty == 0.0
+    assert set(reward.reward_breakdown) >= {"evidence_quality", "operator_adherence", "coherence"}
     assert reward.reward_breakdown["benchmark_score"] == reward.benchmark_score
     assert reward.invalid_completion is False
     assert reward.reward_breakdown["invalid_completion"] == 0.0
@@ -323,6 +377,67 @@ def test_prepare_common_rl_context_reuses_shared_artifacts(tmp_path: Path) -> No
     assert common.config_fingerprint == cached.config_fingerprint
     assert common.prompt_rows_path.exists()
     assert cached.shared_manifest_path.exists()
+
+
+def test_build_grpo_prompt_rows_are_z_conditioned() -> None:
+    papers = [
+        _paper("p-01", "2024-01", published_date="2024-01-01", summary="retrieval planning agents"),
+        _paper("p-02", "2024-02", published_date="2024-02-01", summary="grounded planning memory"),
+        _paper("p-03", "2024-03", published_date="2024-03-01", summary="benchmark dataset for planning agents"),
+    ]
+    episodes = build_rl_episodes(
+        papers,
+        EpisodeBuildConfig(horizon_months=1, min_train_papers=1, step_months=1),
+    )
+
+    rows = build_grpo_prompt_rows(
+        papers,
+        episodes,
+        candidate_config=CandidateGenerationConfig(backend="heuristic"),
+    )
+
+    assert rows
+    row = rows[0]
+    assert row["prompt_mode"] == "z_conditioned_realization"
+    assert set(row["innovation"]) == {"base_direction", "operator", "gap"}
+    assert "Innovation to realize" in row["prompt"]
+    assert "Historical context available before the cutoff" in row["prompt"]
+    assert "Supporting evidence from prior work" in row["prompt"]
+    assert "target_future_paper_id" in row
+
+
+def test_build_grpo_prompt_rows_use_matching_hindsight_innovation() -> None:
+    papers = [
+        _paper("p-01", "2024-01", published_date="2024-01-01", summary="retrieval planning agents"),
+        _paper("p-02", "2024-02", published_date="2024-02-01", summary="grounded planning memory"),
+    ]
+    episodes = build_rl_episodes(
+        papers,
+        EpisodeBuildConfig(horizon_months=1, min_train_papers=1, step_months=1),
+    )
+    hindsight_samples = [
+        HindsightSample(
+            context_paper_ids=("p-01",),
+            cutoff_month="2024-01",
+            future_paper_id="p-02",
+            future_paper_published_date="2024-02-01",
+            innovation=Innovation(
+                base_direction="custom latent idea",
+                operator="compose",
+                gap="connect planning and retrieval",
+            ),
+        )
+    ]
+
+    rows = build_grpo_prompt_rows(
+        papers,
+        episodes,
+        candidate_config=CandidateGenerationConfig(backend="heuristic"),
+        hindsight_samples=hindsight_samples,
+    )
+
+    assert rows[0]["innovation"]["base_direction"] == "custom latent idea"
+    assert rows[0]["innovation"]["operator"] == "compose"
 
 
 def test_run_policy_rl_pipeline_prepare_only_writes_expected_artifacts_for_ppo(

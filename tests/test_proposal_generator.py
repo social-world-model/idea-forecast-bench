@@ -1,6 +1,7 @@
 """Tests for forecaster/realization/proposal_generator.py"""
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -9,6 +10,7 @@ from live_idea_bench.models import IdeaPrediction, PaperRecord
 from forecaster.models import Innovation
 from forecaster.config import RealizationConfig
 from forecaster.realization.proposal_generator import (
+    build_realization_messages,
     generate_proposal,
     proposal_to_idea_prediction,
 )
@@ -34,6 +36,24 @@ def _make_innovation(
 
 
 class TestGenerateProposal:
+    def test_build_realization_messages_include_context_and_evidence(self) -> None:
+        innovation = _make_innovation()
+        context = [_make_paper("ctx1", "Historical Paper", "historical context for the idea")]
+        evidence = [_make_paper("p1", "Efficient Attention", "attention mechanism for long sequences")]
+
+        system_prompt, user_prompt = build_realization_messages(
+            innovation,
+            evidence,
+            context_papers=context,
+            config=RealizationConfig(),
+        )
+
+        assert "Historical context available before the cutoff" in user_prompt
+        assert "Historical Paper" in user_prompt
+        assert "Efficient Attention" in user_prompt
+        assert "transformer attention" in user_prompt
+        assert len(system_prompt) > 20
+
     def test_generate_proposal_returns_string(self) -> None:
         innovation = _make_innovation()
         evidence = [_make_paper("p1", "Efficient Attention", "attention mechanism for long sequences")]
@@ -205,8 +225,8 @@ class TestGenerateProposalLocalModel:
         mock_llm.assert_not_called()
         assert result == "Local Model Title\nLocal body text."
 
-    def test_generate_proposal_falls_back_to_llm_when_local_fails(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
-        """When local model generation fails, falls back to generic LLM client."""
+    def test_generate_proposal_raises_when_local_artifact_fails(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        """When an artifact is supplied, serving should fail explicitly instead of silently falling back."""
         from forecaster.config import RealizationConfig
 
         ckpt_dir = tmp_path / "realization_ckpt"
@@ -214,6 +234,35 @@ class TestGenerateProposalLocalModel:
 
         innovation = _make_innovation()
         config = RealizationConfig()
+        mock_client = MagicMock()
+
+        with patch(
+            "forecaster.realization.proposal_generator._generate_proposal_local",
+            side_effect=RuntimeError("GPU OOM"),
+        ), \
+        patch(
+            "forecaster.realization.proposal_generator.get_response_from_llm",
+            return_value=("LLM fallback response", []),
+        ) as mock_llm:
+            with pytest.raises(RuntimeError, match="artifact generation failed"):
+                generate_proposal(
+                    innovation=innovation,
+                    evidence=[],
+                    llm_client=mock_client,
+                    model="gpt-4o",
+                    config=config,
+                    realization_model_path=str(ckpt_dir),
+                )
+
+        mock_llm.assert_not_called()
+
+    def test_generate_proposal_can_fallback_when_config_explicitly_allows_it(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        """Legacy fallback remains opt-in only."""
+        ckpt_dir = tmp_path / "realization_ckpt"
+        ckpt_dir.mkdir()
+
+        innovation = _make_innovation()
+        config = RealizationConfig(allow_artifact_fallback_to_llm=True)
         mock_client = MagicMock()
 
         with patch(
@@ -261,3 +310,36 @@ class TestGenerateProposalLocalModel:
             )
 
         mock_local.assert_not_called()
+
+    def test_generate_proposal_output_changes_with_artifact(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        """Changing the realization artifact should change the served proposal under a deterministic stub."""
+        artifact_a = tmp_path / "artifact_a"
+        artifact_b = tmp_path / "artifact_b"
+        artifact_a.mkdir()
+        artifact_b.mkdir()
+
+        def _local_side_effect(*, realization_model_path, **kwargs):  # type: ignore[no-untyped-def]
+            return f"{Path(realization_model_path).name}\nBody"
+
+        with patch(
+            "forecaster.realization.proposal_generator._generate_proposal_local",
+            side_effect=_local_side_effect,
+        ):
+            proposal_a = generate_proposal(
+                innovation=_make_innovation(),
+                evidence=[],
+                llm_client=MagicMock(),
+                model="gpt-4o",
+                config=RealizationConfig(),
+                realization_model_path=str(artifact_a),
+            )
+            proposal_b = generate_proposal(
+                innovation=_make_innovation(),
+                evidence=[],
+                llm_client=MagicMock(),
+                model="gpt-4o",
+                config=RealizationConfig(),
+                realization_model_path=str(artifact_b),
+            )
+
+        assert proposal_a != proposal_b

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import requests
+import yaml
 
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
 ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
@@ -104,27 +105,29 @@ def _paper_path(base_dir: Path, paper_id: str, month: str) -> Path:
 
 
 def _build_markdown(entry: Dict[str, Any]) -> str:
-    title = json.dumps(entry["title"], ensure_ascii=False)
-    paper_id = json.dumps(entry["paper_id"], ensure_ascii=False)
-    source_url = json.dumps(entry["source_url"], ensure_ascii=False)
-    date = json.dumps(entry["published_at"].date().isoformat(), ensure_ascii=False)
-    keywords = entry.get("keywords") or []
-    if keywords:
-        keywords_yaml = "\n".join(f"  - {json.dumps(k, ensure_ascii=False)}" for k in keywords)
-    else:
-        keywords_yaml = "  - \"\""
+    front_matter: Dict[str, Any] = {
+        "paper_id": entry["paper_id"],
+        "title": entry["title"],
+        "date": entry["published_at"].date().isoformat(),
+        "keywords": entry.get("keywords") or [""],
+        "source_url": entry["source_url"],
+    }
+    if entry.get("references"):
+        front_matter["references"] = entry["references"]
+    if entry.get("citations"):
+        front_matter["citations"] = entry["citations"]
     summary = (entry.get("summary") or "").strip()
     if not summary:
         summary = "No abstract provided by arXiv."
+    front_matter_yaml = yaml.safe_dump(
+        front_matter,
+        allow_unicode=True,
+        sort_keys=False,
+    ).strip()
 
     return (
         "---\n"
-        f"paper_id: {paper_id}\n"
-        f"title: {title}\n"
-        f"date: {date}\n"
-        "keywords:\n"
-        f"{keywords_yaml}\n"
-        f"source_url: {source_url}\n"
+        f"{front_matter_yaml}\n"
         "---\n\n"
         "# Abstract\n\n"
         f"{summary}\n"

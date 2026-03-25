@@ -38,7 +38,7 @@ class RewardConfig:
 class EpisodeBuildConfig:
     top_k: int = 5
     past_window_months: int | None = 24
-    horizon_months: int = 6
+    horizon_months: int = 3
     step_months: int = 3
     min_train_papers: int = 6
     start_month: str | None = None

@@ -24,6 +24,8 @@ class PreparedRLContext:
     config_fingerprint: str
     selected_split: str
     model_name: str
+    realization_config: Any
+    hindsight_samples: list[Any]
     similarity_config_path: str
     runtime_config_path: str | None
     episode_cache_root: Path

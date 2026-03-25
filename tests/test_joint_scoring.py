@@ -53,25 +53,25 @@ def _make_memory_store_with(innovation: Innovation, frequency: int = 3, recency_
 
 class TestComputePriorScore:
     def test_compute_prior_score_in_memory(self) -> None:
-        """Innovation found in memory returns positive score."""
+        """Exact-match heuristic scores are calibrated into log-like space."""
         innovation = _make_innovation()
         store = _make_memory_store_with(innovation, frequency=3, recency_score=0.8)
 
         score = compute_prior_score(innovation, store)
 
-        # log(3 * 0.8 + 1) = log(3.4) ≈ 1.2238
-        expected = math.log(3 * 0.8 + 1)
+        # strength = 0.45*0.8 + 0.35*1.0 + 0.2*0.5 = 0.81
+        expected = math.log(0.81)
         assert abs(score - expected) < 1e-6
-        assert score > 0.0
+        assert score < 0.0
 
     def test_compute_prior_score_not_in_memory(self) -> None:
-        """Innovation not found in memory returns base score of -2.0."""
+        """Innovation not found in memory returns the calibrated base score."""
         innovation = _make_innovation()
         store = MemoryStore.empty("2024-01")
 
         score = compute_prior_score(innovation, store)
 
-        assert score == -2.0
+        assert score == pytest.approx(math.log(1e-6))
 
     def test_compute_prior_score_different_innovation_semantic_fallback(self) -> None:
         """Innovation with different fields may get a semantic score instead of -2.0.
@@ -89,7 +89,7 @@ class TestComputePriorScore:
         assert score >= -2.0
 
     def test_compute_prior_score_unrelated_innovation_returns_base(self) -> None:
-        """Completely unrelated innovation returns base score -2.0."""
+        """Completely unrelated innovation returns the calibrated base score."""
         stored_innovation = _make_innovation(
             base_direction="quantum physics",
             operator="apply",
@@ -104,16 +104,16 @@ class TestComputePriorScore:
 
         score = compute_prior_score(query_innovation, store)
 
-        assert score == -2.0
+        assert score == pytest.approx(math.log(1e-6))
 
     def test_compute_prior_score_in_memory_frequency_one(self) -> None:
-        """Frequency=1, recency=1.0 → log(1*1.0 + 1) = log(2)."""
+        """Frequency/recency/utility blend is normalized before log scaling."""
         innovation = _make_innovation()
         store = _make_memory_store_with(innovation, frequency=1, recency_score=1.0)
 
         score = compute_prior_score(innovation, store)
 
-        expected = math.log(1 * 1.0 + 1)
+        expected = math.log(0.9)
         assert abs(score - expected) < 1e-6
 
 
@@ -170,29 +170,16 @@ class TestComputeRealizationScore:
 
 
 class TestComputeJointScore:
-    def test_compute_joint_score_midpoint(self) -> None:
-        """Equal weights, equal normalized scores → 0.5."""
+    def test_compute_joint_score_linear_blend(self) -> None:
+        """Main path follows Algorithm 1's linear combination exactly."""
         config = InferenceConfig(prior_weight=0.5, realization_weight=0.5)
-
-        # prior_score = 0 → sigmoid(0) = 0.5
-        # realization_score = 0 → sigmoid(0) = 0.5
-        score = compute_joint_score(0.0, 0.0, config)
-
-        assert abs(score - 0.5) < 1e-9
-
-    def test_compute_joint_score_bounds(self) -> None:
-        """Result always in [0, 1]."""
-        config = InferenceConfig(prior_weight=0.4, realization_weight=0.6)
-
-        for prior_s, real_s in [(-100.0, -100.0), (100.0, 100.0), (-2.0, -13.8), (3.0, 0.0)]:
-            score = compute_joint_score(prior_s, real_s, config)
-            assert 0.0 <= score <= 1.0, f"Score {score} out of bounds for inputs ({prior_s}, {real_s})"
+        score = compute_joint_score(-1.2, -0.4, config)
+        assert score == pytest.approx((-1.2 * 0.5) + (-0.4 * 0.5))
 
     def test_compute_joint_score_prior_weight(self) -> None:
-        """Higher prior_weight means prior score dominates."""
-        # prior_score very high (near 1 sigmoid), realization_score very low (near 0 sigmoid)
-        prior_score = 100.0   # sigmoid → ~1.0
-        real_score = -100.0   # sigmoid → ~0.0
+        """Higher prior_weight means the joint score tracks prior_score more closely."""
+        prior_score = -0.2
+        real_score = -3.0
 
         config_high_prior = InferenceConfig(prior_weight=0.9, realization_weight=0.1)
         config_low_prior = InferenceConfig(prior_weight=0.1, realization_weight=0.9)
@@ -203,31 +190,30 @@ class TestComputeJointScore:
         assert score_high > score_low
 
     def test_compute_joint_score_default_weights(self) -> None:
-        """Default config has prior=0.4, realization=0.6."""
+        """Default config has prior=0.4, realization=0.6 and uses linear blend."""
         config = InferenceConfig()
         assert config.prior_weight == 0.4
         assert config.realization_weight == 0.6
 
-        score = compute_joint_score(0.0, 0.0, config)
-        # 0.4 * sigmoid(0) + 0.6 * sigmoid(0) = 0.4*0.5 + 0.6*0.5 = 0.5
-        assert abs(score - 0.5) < 1e-9
+        score = compute_joint_score(-1.0, -0.5, config)
+        assert score == pytest.approx((0.4 * -1.0) + (0.6 * -0.5))
 
     def test_compute_joint_score_realization_dominates(self) -> None:
         """High realization_weight makes realization_score dominate."""
-        prior_score = -100.0   # sigmoid → ~0.0
-        real_score = 100.0     # sigmoid → ~1.0
+        prior_score = -5.0
+        real_score = -0.1
 
         config = InferenceConfig(prior_weight=0.1, realization_weight=0.9)
         score = compute_joint_score(prior_score, real_score, config)
 
-        # Should be close to 0.9 * 1.0 + 0.1 * 0.0 = 0.9
-        assert score > 0.8
+        assert score == pytest.approx((0.1 * prior_score) + (0.9 * real_score))
+        assert score > -1.0
 
     def test_compute_joint_score_with_popularity_bonus_increases_score(self) -> None:
         """A popularity_bonus > 0 with popularity_weight > 0 increases the score."""
         config = InferenceConfig(prior_weight=0.4, realization_weight=0.6, popularity_weight=0.2)
-        base = compute_joint_score(0.0, 0.0, config, popularity_bonus=0.0)
-        boosted = compute_joint_score(0.0, 0.0, config, popularity_bonus=1.0)
+        base = compute_joint_score(-1.0, -1.0, config, popularity_bonus=0.0)
+        boosted = compute_joint_score(-1.0, -1.0, config, popularity_bonus=1.0)
         assert boosted > base
 
     def test_compute_joint_score_popularity_weight_zero_is_unchanged(self) -> None:
@@ -235,19 +221,12 @@ class TestComputeJointScore:
         config_default = InferenceConfig(prior_weight=0.4, realization_weight=0.6)
         config_explicit_zero = InferenceConfig(prior_weight=0.4, realization_weight=0.6, popularity_weight=0.0)
 
-        score_no_bonus = compute_joint_score(0.0, 0.0, config_default)
-        score_bonus_default = compute_joint_score(0.0, 0.0, config_default, popularity_bonus=1.0)
-        score_bonus_explicit_zero = compute_joint_score(0.0, 0.0, config_explicit_zero, popularity_bonus=1.0)
+        score_no_bonus = compute_joint_score(-0.7, -0.4, config_default)
+        score_bonus_default = compute_joint_score(-0.7, -0.4, config_default, popularity_bonus=1.0)
+        score_bonus_explicit_zero = compute_joint_score(-0.7, -0.4, config_explicit_zero, popularity_bonus=1.0)
 
         assert score_no_bonus == pytest.approx(score_bonus_default)
         assert score_no_bonus == pytest.approx(score_bonus_explicit_zero)
-
-    def test_compute_joint_score_popularity_bonus_result_in_bounds(self) -> None:
-        """Result stays in [0, 1] even with popularity_bonus."""
-        config = InferenceConfig(prior_weight=0.4, realization_weight=0.6, popularity_weight=0.2)
-        for prior_s, real_s, bonus in [(-100, -100, 1.0), (100, 100, 1.0), (0, 0, 0.5)]:
-            score = compute_joint_score(prior_s, real_s, config, popularity_bonus=bonus)
-            assert 0.0 <= score <= 1.0, f"Score {score} out of bounds"
 
     def test_inference_config_default_popularity_weight_is_zero(self) -> None:
         """Default InferenceConfig has popularity_weight=0.0 (opt-in)."""

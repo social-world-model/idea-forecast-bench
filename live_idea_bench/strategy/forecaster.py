@@ -13,16 +13,15 @@ logger = logging.getLogger(__name__)
 
 
 class ForecasterStrategy(IdeaStrategy):
-    """Strategy using the full forecaster pipeline (prior + realization + inference).
+    """Benchmark-facing wrapper around the forecaster runtime.
 
-    At inference time, uses:
-    1. A MemoryStore built from the training papers
-    2. Pre-sampled innovations (or heuristic fallback)
-    3. run_joint_inference to produce proposals
-    4. Converts ScoredProposals to IdeaPredictions
+    This strategy intentionally keeps heuristic fallbacks for benchmark
+    integration. The paper-faithful strict-eval entrypoint remains
+    ``forecaster.orchestrator.ForecasterPipeline``.
     """
 
     name = "forecaster"
+    runtime_surface = "benchmark_wrapper"
 
     def __init__(
         self,
@@ -57,7 +56,46 @@ class ForecasterStrategy(IdeaStrategy):
         except (FileNotFoundError, ValueError):
             return RealizationConfig()
 
-    def _load_memory_store(self, train_papers: Optional[List] = None, cutoff_month: Optional[str] = None) -> Any:
+    def _artifact_exists(self, raw_path: str | None) -> bool:
+        return bool(raw_path and Path(str(raw_path)).exists())
+
+    def _resolve_runtime_mode(self, inference_config: Any) -> dict[str, Any]:
+        requested_mode = str(getattr(inference_config, "runtime_mode", "demo") or "demo").strip().lower()
+        requested_mode = requested_mode or "demo"
+        missing_artifacts: list[str] = []
+        if not self._artifact_exists(self.memory_path):
+            missing_artifacts.append("memory_snapshot")
+        if not self._artifact_exists(self.prior_checkpoint):
+            missing_artifacts.append("prior_checkpoint")
+        if not self._artifact_exists(self.realization_checkpoint):
+            missing_artifacts.append("realization_checkpoint")
+
+        strict_ready = not missing_artifacts
+        effective_mode = "strict_eval" if requested_mode == "strict_eval" and strict_ready else "demo"
+        fallback_events: list[dict[str, Any]] = []
+        if requested_mode == "strict_eval" and not strict_ready:
+            fallback_events.append(
+                {
+                    "phase": "runtime_boundary",
+                    "fallback": "demo_wrapper",
+                    "reason": "missing_strict_artifacts",
+                    "missing_artifacts": list(missing_artifacts),
+                }
+            )
+        return {
+            "requested_mode": requested_mode,
+            "effective_mode": effective_mode,
+            "missing_artifacts": missing_artifacts,
+            "fallback_events": fallback_events,
+        }
+
+    def _load_memory_store(
+        self,
+        train_papers: Optional[List] = None,
+        cutoff_month: Optional[str] = None,
+        *,
+        strict_mode: bool = False,
+    ) -> Any:
         from forecaster.prior.memory import MemoryStore
 
         if self.memory_path:
@@ -72,7 +110,16 @@ class ForecasterStrategy(IdeaStrategy):
                     )
                 return store
             except Exception as exc:
+                if strict_mode:
+                    raise RuntimeError(
+                        f"Strict mode could not load memory store from {self.memory_path!r}: {exc}"
+                    ) from exc
                 logger.warning("Could not load memory store from %r: %s", self.memory_path, exc)
+
+        if strict_mode:
+            raise FileNotFoundError(
+                "Strict forecaster serving requires a memory snapshot artifact."
+            )
 
         # No explicit memory path: build a minimal memory from training papers
         # so p(z|M_t) has meaningful conditioning rather than returning -2.0 for all innovations.
@@ -157,11 +204,29 @@ class ForecasterStrategy(IdeaStrategy):
 
         inference_config = self._load_inference_config()
         realization_config = self._load_realization_config()
-        memory_store = self._load_memory_store(train_papers=train_papers, cutoff_month=cutoff_month)
+        runtime_contract = self._resolve_runtime_mode(inference_config)
+        strict_mode = runtime_contract["effective_mode"] == "strict_eval"
+        fallback_events = list(runtime_contract["fallback_events"])
+        memory_store = self._load_memory_store(
+            train_papers=train_papers,
+            cutoff_month=cutoff_month,
+            strict_mode=strict_mode,
+        )
 
-        # Build innovations: use trained prior if checkpoint is available, else heuristic fallback
+        # Build innovations: strict mode requires the prior artifact; demo mode keeps heuristic fallback.
         innovations: list
-        if self.prior_checkpoint and Path(self.prior_checkpoint).exists():
+        if strict_mode:
+            from forecaster.prior.sampler import sample_innovations
+
+            sampled = sample_innovations(
+                str(self.prior_checkpoint),
+                memory_store,
+                inference_config,
+            )
+            if not sampled:
+                raise RuntimeError("Strict forecaster serving requires non-empty prior samples.")
+            innovations = sampled
+        elif self.prior_checkpoint and Path(self.prior_checkpoint).exists():
             try:
                 from forecaster.prior.sampler import sample_innovations
 
@@ -175,20 +240,42 @@ class ForecasterStrategy(IdeaStrategy):
                     )
                 else:
                     logger.warning(
-                        "Prior sampling empty; falling back to heuristic."
+                        "Prior sampling empty; falling back to heuristic demo path."
                     )
                     innovations = self._build_heuristic_innovations(
                         train_papers, top_k=top_k
                     )
+                    fallback_events.append(
+                        {
+                            "phase": "prior",
+                            "fallback": "heuristic_innovations",
+                            "reason": "empty_prior_samples",
+                        }
+                    )
             except Exception as exc:
                 logger.warning(
-                    "Prior sampling failed (%s); falling back to heuristic.", exc
+                    "Prior sampling failed (%s); falling back to heuristic demo path.", exc
                 )
                 innovations = self._build_heuristic_innovations(
                     train_papers, top_k=top_k
                 )
+                fallback_events.append(
+                    {
+                        "phase": "prior",
+                        "fallback": "heuristic_innovations",
+                        "reason": "prior_sampling_error",
+                        "detail": str(exc),
+                    }
+                )
         else:
             innovations = self._build_heuristic_innovations(train_papers, top_k=top_k)
+            fallback_events.append(
+                {
+                    "phase": "prior",
+                    "fallback": "heuristic_innovations",
+                    "reason": "missing_prior_checkpoint",
+                }
+            )
 
         if not innovations:
             return []
@@ -212,6 +299,15 @@ class ForecasterStrategy(IdeaStrategy):
             if self.realization_checkpoint and Path(self.realization_checkpoint).exists()
             else None
         )
+        if strict_mode and not realization_model_path:
+            raise RuntimeError("Strict forecaster serving requires a realization artifact.")
+        prior_model_path = (
+            self.prior_checkpoint
+            if self.prior_checkpoint and Path(self.prior_checkpoint).exists()
+            else None
+        )
+        if strict_mode and not prior_model_path:
+            raise RuntimeError("Strict forecaster serving requires a prior artifact.")
 
         proposals = run_joint_inference(
             innovations=innovations,
@@ -221,6 +317,7 @@ class ForecasterStrategy(IdeaStrategy):
             model=model,
             inference_config=inference_config,
             realization_config=realization_config,
+            prior_model_path=prior_model_path,
             realization_model_path=realization_model_path,
         )
 
@@ -241,6 +338,11 @@ class ForecasterStrategy(IdeaStrategy):
                     "realization_score": proposal.realization_score,
                     "joint_score": proposal.joint_score,
                     "strategy": self.name,
+                    "runtime_surface": self.runtime_surface,
+                    "requested_runtime_mode": runtime_contract["requested_mode"],
+                    "effective_runtime_mode": runtime_contract["effective_mode"],
+                    "fallback_events": list(fallback_events),
+                    "paper_faithful_entrypoint": "forecaster.orchestrator.ForecasterPipeline",
                 },
             )
             predictions.append(prediction)

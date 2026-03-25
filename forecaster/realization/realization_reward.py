@@ -1,6 +1,7 @@
 """Extended reward function for the realization GRPO training."""
 from __future__ import annotations
 
+from dataclasses import asdict, dataclass
 import logging
 import re
 from typing import Any
@@ -13,6 +14,17 @@ from forecaster.models import Innovation
 from forecaster.config import RealizationConfig
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class RealizationRewardBreakdown:
+    evidence_quality: float
+    operator_adherence: float
+    coherence: float
+    total_reward: float
+
+    def to_dict(self) -> dict[str, float]:
+        return asdict(self)
 
 
 def _tokenize_words(text: str) -> list[str]:
@@ -164,13 +176,38 @@ def compute_realization_reward(
 
     Returns float in [0, 1].
     """
-    evidence_acc = compute_evidence_accuracy(evidence, innovation)
-    operator_adh = compute_operator_adherence(proposal_text, innovation)
+    return evaluate_realization_reward(
+        proposal_text,
+        innovation,
+        evidence,
+        config,
+    ).total_reward
+
+
+def evaluate_realization_reward(
+    proposal_text: str,
+    innovation: Innovation,
+    evidence: list[PaperRecord],
+    config: RealizationConfig,
+) -> RealizationRewardBreakdown:
+    """Return the paper-faithful realization reward breakdown.
+
+    This is the frozen reward contract used by both realization training and
+    inference-time reward fallback scoring.
+    """
+    evidence_quality = compute_evidence_accuracy(evidence, innovation)
+    operator_adherence = compute_operator_adherence(proposal_text, innovation)
     coherence = compute_coherence_score(proposal_text, innovation)
 
     reward = (
-        config.evidence_accuracy_weight * evidence_acc
-        + config.operator_adherence_weight * operator_adh
+        config.evidence_accuracy_weight * evidence_quality
+        + config.operator_adherence_weight * operator_adherence
         + config.coherence_weight * coherence
     )
-    return round(max(0.0, min(1.0, reward)), 4)
+    total_reward = round(max(0.0, min(1.0, reward)), 4)
+    return RealizationRewardBreakdown(
+        evidence_quality=round(evidence_quality, 4),
+        operator_adherence=round(operator_adherence, 4),
+        coherence=round(coherence, 4),
+        total_reward=total_reward,
+    )

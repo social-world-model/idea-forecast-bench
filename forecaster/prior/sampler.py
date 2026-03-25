@@ -4,11 +4,11 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
-from forecaster.models import Innovation
+from forecaster.models import Innovation, innovation_to_dict
 from forecaster.config import InferenceConfig
 
 logger = logging.getLogger(__name__)
@@ -64,38 +64,18 @@ def _detect_base_model(model_path_str: str) -> str | None:
     return None
 
 
-def sample_innovations(
-    model_path: str,
-    memory_store: Any,
-    config: InferenceConfig,
-) -> list[Innovation]:
-    """Sample C candidate innovations from the trained prior model.
-
-    Requires torch, transformers, peft. Raises ImportError if not available.
-    Generates config.num_candidates innovations at config.prior_temperature.
-    Returns list of Innovation objects (failed parses are skipped with warning).
-
-    If adapter_config.json is present in model_path, loads via PeftModel.from_pretrained
-    to handle LoRA adapter-only checkpoints saved by train_prior().
-    """
+def _load_prior_model_and_tokenizer(model_path_str: str) -> tuple[Any, Any]:
+    """Load the prior checkpoint and tokenizer, including LoRA adapter checkpoints."""
     try:
         import torch
         from transformers import AutoTokenizer, AutoModelForCausalLM
         import peft
     except ImportError as exc:
         raise ImportError(
-            "Sampling from the prior requires: torch, transformers, peft. "
+            "Sampling/scoring from the prior requires: torch, transformers, peft. "
             "Install with: pip install torch transformers peft"
         ) from exc
 
-    prompt_cfg = _load_prompt_config()
-    prompt = _build_prompt(
-        prompt_cfg["system_prompt"],
-        prompt_cfg["input_template"],
-        memory_store,
-    )
-
-    model_path_str = str(model_path)
     base_model_id = _detect_base_model(model_path_str)
 
     if base_model_id:
@@ -125,7 +105,103 @@ def sample_innovations(
             torch_dtype="auto",
             device_map="auto",
         )
+
     model.eval()
+    return model, tokenizer
+
+
+def build_prior_scorer(
+    model_path: str,
+    memory_store: Any,
+    config: InferenceConfig,
+) -> Callable[[Innovation], float]:
+    """Build a scorer for log p(z | M_t) under the trained prior.
+
+    Returns a callable that emits a normalized conditional log-probability for
+    one Innovation candidate. The default contract uses per-token normalization.
+    """
+    try:
+        import torch
+        import torch.nn.functional as F
+    except ImportError as exc:
+        raise ImportError(
+            "Prior scoring requires torch. Install with: pip install torch"
+        ) from exc
+
+    prompt_cfg = _load_prompt_config()
+    prompt = _build_prompt(
+        prompt_cfg["system_prompt"],
+        prompt_cfg["input_template"],
+        memory_store,
+    )
+
+    model, tokenizer = _load_prior_model_and_tokenizer(str(model_path))
+    prompt_encoded = tokenizer([prompt], return_tensors="pt")
+    prompt_ids = prompt_encoded["input_ids"]
+    prompt_len = prompt_ids.shape[1]
+    normalization = str(getattr(config, "score_normalization", "per_token")).strip().lower()
+    temperature = float(getattr(config, "score_temperature", 1.0) or 1.0)
+    if temperature <= 0:
+        temperature = 1.0
+
+    def score(innovation: Innovation) -> float:
+        target = json.dumps(innovation_to_dict(innovation), ensure_ascii=False)
+        full_text = f"{prompt}{target}"
+        encoded = tokenizer([full_text], return_tensors="pt")
+        encoded = {name: value.to(model.device) for name, value in encoded.items()}
+
+        with torch.no_grad():
+            outputs = model(**encoded)
+
+        logits = outputs.logits[:, :-1, :]
+        if temperature != 1.0:
+            logits = logits / temperature
+        target_ids = encoded["input_ids"][:, 1:]
+        target_log_probs = F.log_softmax(logits, dim=-1).gather(
+            dim=-1,
+            index=target_ids.unsqueeze(-1),
+        ).squeeze(-1)
+
+        target_start = max(0, prompt_len - 1)
+        conditioned_log_probs = target_log_probs[:, target_start:]
+        if conditioned_log_probs.numel() == 0:
+            return float("-inf")
+        if normalization == "sum":
+            return float(conditioned_log_probs.sum().item())
+        return float(conditioned_log_probs.mean().item())
+
+    return score
+
+
+def sample_innovations(
+    model_path: str,
+    memory_store: Any,
+    config: InferenceConfig,
+) -> list[Innovation]:
+    """Sample C candidate innovations from the trained prior model.
+
+    Requires torch, transformers, peft. Raises ImportError if not available.
+    Generates config.num_candidates innovations at config.prior_temperature.
+    Returns list of Innovation objects (failed parses are skipped with warning).
+
+    If adapter_config.json is present in model_path, loads via PeftModel.from_pretrained
+    to handle LoRA adapter-only checkpoints saved by train_prior().
+    """
+    try:
+        import torch
+    except ImportError as exc:
+        raise ImportError(
+            "Sampling from the prior requires torch. Install with: pip install torch"
+        ) from exc
+
+    prompt_cfg = _load_prompt_config()
+    prompt = _build_prompt(
+        prompt_cfg["system_prompt"],
+        prompt_cfg["input_template"],
+        memory_store,
+    )
+
+    model, tokenizer = _load_prior_model_and_tokenizer(str(model_path))
 
     encoded = tokenizer([prompt], return_tensors="pt")
     encoded = {k: v.to(model.device) for k, v in encoded.items()}

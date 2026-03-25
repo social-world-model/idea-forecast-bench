@@ -86,6 +86,7 @@ def build_hindsight_dataset(
                     context_paper_ids=context_paper_ids,
                     cutoff_month=cutoff_month,
                     future_paper_id=future_paper.paper_id,
+                    future_paper_published_date=future_paper.published_date,
                     innovation=innovation,
                 )
             )

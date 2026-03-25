@@ -1,6 +1,7 @@
 """Tests for forecaster/inference/algorithm.py"""
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -56,7 +57,7 @@ class TestRunJointInference:
         papers = [_make_paper("p1", "attention mechanism for long document sequences training")]
         memory_store = _make_memory_store()
         llm_client = MagicMock()
-        inference_config = InferenceConfig(top_k=5)
+        inference_config = InferenceConfig(runtime_mode="demo", top_k=5)
         realization_config = RealizationConfig()
 
         with patch(_PATCH_TARGET, return_value=_MOCK_LLM_RESPONSE):
@@ -80,7 +81,7 @@ class TestRunJointInference:
         papers = [_make_paper("p1", "some paper content about attention")]
         memory_store = MemoryStore.empty("2024-01")
         llm_client = MagicMock()
-        inference_config = InferenceConfig(top_k=3)
+        inference_config = InferenceConfig(runtime_mode="demo", top_k=3)
         realization_config = RealizationConfig()
 
         with patch(_PATCH_TARGET, return_value=_MOCK_LLM_RESPONSE):
@@ -102,7 +103,7 @@ class TestRunJointInference:
         papers = [_make_paper("p1", "attention model training")]
         memory_store = MemoryStore.empty("2024-01")
         llm_client = MagicMock()
-        inference_config = InferenceConfig(top_k=5)
+        inference_config = InferenceConfig(runtime_mode="demo", top_k=5)
         realization_config = RealizationConfig()
 
         with patch(_PATCH_TARGET, return_value=_MOCK_LLM_RESPONSE):
@@ -124,7 +125,7 @@ class TestRunJointInference:
         papers = [_make_paper("p1", "some paper")]
         memory_store = MemoryStore.empty("2024-01")
         llm_client = MagicMock()
-        inference_config = InferenceConfig(top_k=5)
+        inference_config = InferenceConfig(runtime_mode="demo", top_k=5)
         realization_config = RealizationConfig()
 
         with patch(_PATCH_TARGET, return_value=_MOCK_LLM_RESPONSE):
@@ -151,7 +152,7 @@ class TestRunJointInference:
         memory_store = MemoryStore.empty("2024-01")
         llm_client = MagicMock()
         # Use high dedup threshold so distinct proposals are not collapsed
-        inference_config = InferenceConfig(top_k=5, dedup_threshold=0.99)
+        inference_config = InferenceConfig(runtime_mode="demo", top_k=5, dedup_threshold=0.99)
         realization_config = RealizationConfig()
 
         call_count = 0
@@ -192,7 +193,7 @@ class TestRunJointInference:
         memory_store = MemoryStore.empty("2024-01")
         llm_client = MagicMock()
         # Use very low threshold to force deduplication
-        inference_config = InferenceConfig(top_k=10, dedup_threshold=0.5)
+        inference_config = InferenceConfig(runtime_mode="demo", top_k=10, dedup_threshold=0.5)
         realization_config = RealizationConfig()
 
         # All LLM calls return identical text
@@ -216,7 +217,7 @@ class TestRunJointInference:
         papers = [_make_paper("p1", "attention training model")]
         memory_store = MemoryStore.empty("2024-01")
         llm_client = MagicMock()
-        inference_config = InferenceConfig(top_k=10)
+        inference_config = InferenceConfig(runtime_mode="demo", top_k=10)
         realization_config = RealizationConfig()
 
         with patch(_PATCH_TARGET, return_value=_MOCK_LLM_RESPONSE):
@@ -232,3 +233,110 @@ class TestRunJointInference:
 
         joint_scores = [p.joint_score for p in result]
         assert joint_scores == sorted(joint_scores, reverse=True)
+
+    def test_run_joint_inference_uses_prior_model_scorer_when_available(self) -> None:
+        """With prior_model_path, the main path should use model-based prior scoring."""
+        innovations = [_make_innovation()]
+        papers = [_make_paper("p1", "attention mechanism for long document sequences training")]
+        memory_store = MemoryStore.empty("2024-01")
+        llm_client = MagicMock()
+        inference_config = InferenceConfig(runtime_mode="demo", top_k=5)
+        realization_config = RealizationConfig()
+
+        with patch(_PATCH_TARGET, return_value=_MOCK_LLM_RESPONSE), \
+             patch("forecaster.inference.algorithm.build_prior_scorer", return_value=lambda innovation: -0.25):
+            result = run_joint_inference(
+                innovations=innovations,
+                papers=papers,
+                memory_store=memory_store,
+                llm_client=llm_client,
+                model="gpt-4o",
+                inference_config=inference_config,
+                realization_config=realization_config,
+                prior_model_path="/fake/prior",
+            )
+
+        assert result[0].prior_score == pytest.approx(-0.25)
+        assert result[0].metadata["prior_score_source"] == "model_conditional_logprob"
+
+    def test_run_joint_inference_output_changes_with_realization_artifact(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        """Phase 4 should consume the provided realization artifact end to end."""
+        artifact_a = tmp_path / "artifact_a"
+        artifact_b = tmp_path / "artifact_b"
+        artifact_a.mkdir()
+        artifact_b.mkdir()
+
+        innovations = [_make_innovation()]
+        papers = [_make_paper("p1", "attention mechanism for long document sequences training")]
+        memory_store = MemoryStore.empty("2024-01")
+        llm_client = MagicMock()
+        inference_config = InferenceConfig(runtime_mode="demo", top_k=5, dedup_threshold=0.99)
+        realization_config = RealizationConfig()
+
+        def _local_side_effect(*, realization_model_path, **kwargs):  # type: ignore[no-untyped-def]
+            return f"{Path(realization_model_path).name}\nDeterministic body"
+
+        with patch("forecaster.realization.proposal_generator._generate_proposal_local", side_effect=_local_side_effect):
+            result_a = run_joint_inference(
+                innovations=innovations,
+                papers=papers,
+                memory_store=memory_store,
+                llm_client=llm_client,
+                model="gpt-4o",
+                inference_config=inference_config,
+                realization_config=realization_config,
+                realization_model_path=str(artifact_a),
+            )
+            result_b = run_joint_inference(
+                innovations=innovations,
+                papers=papers,
+                memory_store=memory_store,
+                llm_client=llm_client,
+                model="gpt-4o",
+                inference_config=inference_config,
+                realization_config=realization_config,
+                realization_model_path=str(artifact_b),
+            )
+
+        assert result_a[0].proposal_text != result_b[0].proposal_text
+
+    def test_run_joint_inference_strict_mode_requires_artifacts(self) -> None:
+        """Strict mode should fail closed instead of using demo-time fallbacks."""
+        innovations = [_make_innovation()]
+        papers = [_make_paper("p1", "attention mechanism for long document sequences training")]
+
+        with pytest.raises(ValueError, match="prior_model_path"):
+            run_joint_inference(
+                innovations=innovations,
+                papers=papers,
+                memory_store=MemoryStore.empty("2024-01"),
+                llm_client=MagicMock(),
+                model="gpt-4o",
+                inference_config=InferenceConfig(runtime_mode="strict_eval"),
+                realization_config=RealizationConfig(),
+            )
+
+    def test_run_joint_inference_strict_mode_raises_when_realization_scorer_fails(self, tmp_path: Path) -> None:
+        """Strict mode should not silently revert to proxy realization scoring."""
+        artifact_dir = tmp_path / "realization"
+        artifact_dir.mkdir()
+
+        with patch(
+            "forecaster.inference.algorithm.build_prior_scorer",
+            return_value=lambda innovation: -0.2,
+        ), patch(
+            "forecaster.inference.algorithm.build_realization_scorer",
+            side_effect=RuntimeError("broken scorer"),
+        ):
+            with pytest.raises(RuntimeError, match="Strict realization scorer initialization failed"):
+                run_joint_inference(
+                    innovations=[_make_innovation()],
+                    papers=[_make_paper("p1", "attention mechanism for long document sequences training")],
+                    memory_store=MemoryStore.empty("2024-01"),
+                    llm_client=MagicMock(),
+                    model="gpt-4o",
+                    inference_config=InferenceConfig(runtime_mode="strict_eval"),
+                    realization_config=RealizationConfig(),
+                    prior_model_path=str(tmp_path),
+                    realization_model_path=str(artifact_dir),
+                )

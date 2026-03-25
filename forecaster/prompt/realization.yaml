@@ -15,8 +15,11 @@ user_template: |
   - Operator: {operator}
   - Gap being addressed: {gap}
 
+  Historical context available before the cutoff:
+  {context_summary}
+
   Supporting evidence from prior work:
   {evidence_summary}
 
-  Write a research proposal for this innovation. Be specific and technically grounded.
+  Write a research proposal for this innovation using only the historical context and evidence above. Be specific and technically grounded.
   Return as plain text (title on first line, then the proposal body).

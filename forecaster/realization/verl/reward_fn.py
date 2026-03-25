@@ -11,9 +11,14 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 from live_idea_bench.models import PaperRecord
+from forecaster.config import RealizationConfig, load_realization_config
+from forecaster.models import innovation_from_dict
 from forecaster.realization.config import load_reward_config
-from forecaster.realization.local_generation import parse_single_completion_prediction
-from forecaster.realization.reward import build_invalid_reward_evaluation, evaluate_rl_reward
+from forecaster.realization.reward import (
+    build_invalid_reward_evaluation,
+    coerce_reward_prediction,
+    evaluate_rl_reward,
+)
 
 
 @lru_cache(maxsize=8)
@@ -40,6 +45,7 @@ def compute_score(
     ground_truth: str,
     extra_info: dict[str, Any] | str | None = None,
     reward_config_path: str = "reward.yaml",
+    realization_config_path: str = "realization.yaml",
     similarity_config_path: str = "similarity.yaml",
     runtime_config_path: str | None = None,
     model_name: str | None = None,
@@ -47,20 +53,45 @@ def compute_score(
     del data_source, ground_truth
     reward_config = _cached_reward_config(reward_config_path)
     payload = _coerce_extra_info(extra_info)
-    prediction = parse_single_completion_prediction(solution_str)
-    if prediction is None:
-        return build_invalid_reward_evaluation(reward_config).list_reward
-
     try:
         train_papers = [PaperRecord(**row) for row in payload.get("train_papers", [])]
         future_papers = [PaperRecord(**row) for row in payload.get("future_papers", [])]
+        evidence_papers = [PaperRecord(**row) for row in payload.get("evidence_papers", [])]
     except (TypeError, KeyError):
+        return build_invalid_reward_evaluation(reward_config).list_reward
+    try:
+        innovation = (
+            innovation_from_dict(payload.get("innovation", {}))
+            if isinstance(payload.get("innovation", {}), dict) and payload.get("innovation")
+            else None
+        )
+    except (TypeError, KeyError, ValueError):
+        innovation = None
+    try:
+        realization_config_payload = payload.get("realization_config", {})
+        realization_config = (
+            RealizationConfig(**realization_config_payload)
+            if isinstance(realization_config_payload, dict) and realization_config_payload
+            else load_realization_config(realization_config_path)
+        )
+    except (TypeError, ValueError):
+        realization_config = load_realization_config(realization_config_path)
+    prediction, proposal_text = coerce_reward_prediction(
+        solution_str,
+        prompt_mode=str(payload.get("prompt_mode", "") or ""),
+        innovation=innovation,
+    )
+    if prediction is None:
         return build_invalid_reward_evaluation(reward_config).list_reward
     evaluation = evaluate_rl_reward(
         predictions=[prediction],
         train_papers=train_papers,
         future_papers=future_papers,
         reward_config=reward_config,
+        innovation=innovation,
+        evidence_papers=evidence_papers,
+        proposal_text=proposal_text,
+        realization_config=realization_config,
         similarity_config_path=similarity_config_path,
         runtime_config_path=runtime_config_path,
         model_name=model_name,

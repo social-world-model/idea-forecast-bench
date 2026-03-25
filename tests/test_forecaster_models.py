@@ -4,12 +4,14 @@ from __future__ import annotations
 import pytest
 
 from forecaster.models import (
+    ALLOWED_INNOVATION_OPERATORS,
     HindsightSample,
     Innovation,
     JointCandidate,
     MemoryEntry,
     MemoryInventory,
     ScoredProposal,
+    innovation_schema_contract,
     innovation_from_dict,
     innovation_to_dict,
     memory_entry_from_dict,
@@ -99,6 +101,7 @@ class TestHindsightSampleImmutability:
             context_paper_ids=("arxiv:2401.00001",),
             cutoff_month="2024-01",
             future_paper_id="arxiv:2402.00001",
+            future_paper_published_date="2024-02-01",
             innovation=sample_innovation,
         )
         with pytest.raises((AttributeError, TypeError)):
@@ -109,9 +112,20 @@ class TestHindsightSampleImmutability:
             context_paper_ids=("a", "b"),
             cutoff_month="2024-01",
             future_paper_id="arxiv:2402.00001",
+            future_paper_published_date="2024-02-01",
             innovation=sample_innovation,
         )
         assert isinstance(sample.context_paper_ids, tuple)
+
+    def test_future_paper_month(self, sample_innovation: Innovation) -> None:
+        sample = HindsightSample(
+            context_paper_ids=("a",),
+            cutoff_month="2024-01",
+            future_paper_id="arxiv:2402.00001",
+            future_paper_published_date="2024-02-15",
+            innovation=sample_innovation,
+        )
+        assert sample.future_paper_month == "2024-02"
 
 
 class TestJointCandidateImmutability:
@@ -169,6 +183,11 @@ class TestScoredProposalImmutability:
 
 
 class TestInnovationSerialization:
+    def test_schema_contract(self) -> None:
+        contract = innovation_schema_contract()
+        assert contract["schema_version"] == 1
+        assert tuple(contract["allowed_operators"]) == ALLOWED_INNOVATION_OPERATORS
+
     def test_to_dict(self, sample_innovation: Innovation) -> None:
         d = innovation_to_dict(sample_innovation)
         assert d["base_direction"] == "transformer-based NLP"

@@ -31,11 +31,68 @@ def _build_context_summary(
     context_papers: list[PaperRecord],
     max_context_papers: int,
 ) -> str:
-    """Return a numbered list of paper titles, limited to max_context_papers."""
+    """Return a compact numbered list of historical context snippets."""
     truncated = context_papers[:max_context_papers]
     if not truncated:
         return "(no historical context available)"
-    lines = [f"{i + 1}. {paper.title}" for i, paper in enumerate(truncated)]
+    lines: list[str] = []
+    for i, paper in enumerate(truncated, start=1):
+        keywords = ", ".join((paper.keywords or [])[:5]) or "n/a"
+        summary = " ".join((paper.summary or "").split())[:240] or "(no summary available)"
+        lines.append(
+            f"{i}. {paper.title} ({paper.month})\n"
+            f"   Keywords: {keywords}\n"
+            f"   Summary: {summary}"
+        )
+    return "\n".join(lines)
+
+
+def _format_reference_entry(entry: dict[str, Any]) -> str:
+    title = str(
+        entry.get("title")
+        or entry.get("paper_title")
+        or entry.get("name")
+        or entry.get("text")
+        or ""
+    ).strip()
+    authors_raw = entry.get("authors")
+    authors = ""
+    if isinstance(authors_raw, list):
+        authors = ", ".join(str(author).strip() for author in authors_raw if str(author).strip())
+    elif authors_raw is not None:
+        authors = str(authors_raw).strip()
+    year = str(entry.get("year") or entry.get("date") or "").strip()
+    note = str(entry.get("context") or entry.get("note") or entry.get("reason") or "").strip()
+
+    parts = [title or "(untitled reference)"]
+    if authors:
+        parts.append(f"authors={authors}")
+    if year:
+        parts.append(f"year={year}")
+    if note:
+        parts.append(f"note={note}")
+    return "; ".join(parts)
+
+
+def _build_future_grounding(
+    future_paper: PaperRecord,
+    *,
+    max_reference_items: int = 12,
+) -> str:
+    """Render references/citations for richer hindsight grounding."""
+    entries: list[tuple[str, dict[str, Any]]] = []
+    for reference in future_paper.references:
+        entries.append(("reference", reference))
+    for citation in future_paper.citations:
+        entries.append(("citation", citation))
+
+    if not entries:
+        return "(no citation/reference metadata available)"
+
+    lines = [
+        f"{idx}. [{label}] {_format_reference_entry(entry)}"
+        for idx, (label, entry) in enumerate(entries[:max_reference_items], start=1)
+    ]
     return "\n".join(lines)
 
 
@@ -66,6 +123,7 @@ def build_hindsight_prompt(
         context_summary=context_summary,
         future_title=future_paper.title,
         future_abstract=future_paper.summary,
+        future_grounding=_build_future_grounding(future_paper),
     )
 
     return system_prompt, user_message

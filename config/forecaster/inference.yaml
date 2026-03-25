@@ -1,6 +1,12 @@
+runtime_mode: strict_eval
 num_candidates: 16
 prior_weight: 0.4
 realization_weight: 0.6
 top_k: 5
 dedup_threshold: 0.8
 prior_temperature: 0.8
+prior_score_method: conditional_logprob
+realization_score_method: conditional_logprob
+score_normalization: per_token
+score_temperature: 1.0
+joint_score_mode: linear_blend

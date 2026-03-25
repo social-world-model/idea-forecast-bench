@@ -8,6 +8,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+INNOVATION_SCHEMA_VERSION = 1
+ALLOWED_INNOVATION_OPERATORS: tuple[str, ...] = (
+    "extend",
+    "transfer",
+    "compose",
+    "benchmark",
+    "analyze",
+    "simplify",
+    "scale",
+    "adapt",
+)
+
 
 @dataclass(frozen=True)
 class Innovation:
@@ -47,7 +59,13 @@ class HindsightSample:
     context_paper_ids: tuple[str, ...]
     cutoff_month: str
     future_paper_id: str
+    future_paper_published_date: str
     innovation: Innovation
+
+    @property
+    def future_paper_month(self) -> str:
+        """Month bucket for the future paper that produced this hindsight label."""
+        return self.future_paper_published_date[:7]
 
 
 @dataclass(frozen=True)
@@ -60,6 +78,7 @@ class JointCandidate:
     proposal_text: str
     realization_score: float
     popularity_bonus: float = 0.0
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -88,6 +107,15 @@ def innovation_to_dict(innovation: Innovation) -> dict[str, str]:
         "base_direction": innovation.base_direction,
         "operator": innovation.operator,
         "gap": innovation.gap,
+    }
+
+
+def innovation_schema_contract() -> dict[str, Any]:
+    """Return the frozen Innovation runtime contract."""
+    return {
+        "schema_version": INNOVATION_SCHEMA_VERSION,
+        "fields": ("base_direction", "operator", "gap"),
+        "allowed_operators": list(ALLOWED_INNOVATION_OPERATORS),
     }
 
 

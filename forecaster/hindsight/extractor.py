@@ -11,7 +11,7 @@ from live_idea_bench.models import PaperRecord
 
 from forecaster.config import HindsightConfig
 from forecaster.hindsight.prompt import build_hindsight_prompt
-from forecaster.models import Innovation
+from forecaster.models import Innovation, ALLOWED_INNOVATION_OPERATORS
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +48,16 @@ def _parse_innovation(text: str) -> Innovation:
             f"Innovation JSON is missing required fields {missing}. Got keys: {list(data.keys())}"
         )
 
+    operator = str(data["operator"]).strip().lower()
+    if operator not in ALLOWED_INNOVATION_OPERATORS:
+        raise ValueError(
+            f"Unsupported operator {operator!r}. "
+            f"Allowed values: {', '.join(ALLOWED_INNOVATION_OPERATORS)}"
+        )
+
     return Innovation(
         base_direction=str(data["base_direction"]),
-        operator=str(data["operator"]),
+        operator=operator,
         gap=str(data["gap"]),
     )
 

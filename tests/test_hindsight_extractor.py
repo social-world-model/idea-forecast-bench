@@ -20,6 +20,8 @@ def _make_paper(
     title: str,
     month: str = "2024-01",
     summary: str = "Test abstract.",
+    references: list[dict[str, object]] | None = None,
+    citations: list[dict[str, object]] | None = None,
 ) -> PaperRecord:
     return PaperRecord(
         paper_id=paper_id,
@@ -29,6 +31,8 @@ def _make_paper(
         keywords=["ml"],
         source_path="",
         published_date=f"{month}-15",
+        references=references or [],
+        citations=citations or [],
     )
 
 
@@ -37,6 +41,19 @@ FUTURE_PAPER = _make_paper(
     "Scaling Diffusion Language Models with Chain-of-Thought",
     month="2024-03",
     summary="We extend diffusion language models to support chain-of-thought reasoning.",
+    references=[
+        {
+            "title": "Diffusion Language Modeling",
+            "authors": ["Ada Lovelace", "Alan Turing"],
+            "year": 2023,
+        }
+    ],
+    citations=[
+        {
+            "title": "Reasoning with External Memory",
+            "context": "Compared against prior chain-of-thought approaches.",
+        }
+    ],
 )
 
 CONTEXT_PAPERS = [
@@ -178,6 +195,10 @@ class TestBuildHindsightPrompt:
 
         # User message should contain future abstract
         assert FUTURE_PAPER.summary in user_message
+
+        # User message should include citation/reference grounding when available
+        assert "Diffusion Language Modeling" in user_message
+        assert "Reasoning with External Memory" in user_message
 
     def test_build_hindsight_prompt_truncates_context(self):
         """Context is limited to max_context_papers."""

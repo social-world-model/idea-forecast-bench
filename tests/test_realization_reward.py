@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from live_idea_bench.models import PaperRecord
+from live_idea_bench.models import EvaluationResult, PaperRecord, PredictionMatchDetail, ScoredPredictionList
 from forecaster.models import Innovation
 from forecaster.config import RealizationConfig
 from forecaster.realization.realization_reward import (
@@ -228,114 +228,152 @@ class TestComputeRealizationReward:
         total = config.evidence_accuracy_weight + config.operator_adherence_weight + config.coherence_weight
         assert abs(total - 1.0) < 1e-6, f"Weights should sum to 1.0, got {total}"
 
+def _mock_scored_prediction_list() -> ScoredPredictionList:
+    return ScoredPredictionList(
+        evaluation=EvaluationResult(
+            hit_at_k=0.0,
+            recall_at_k=0.0,
+            precision_at_k=0.0,
+            mrr=0.0,
+            novelty=0.0,
+            diversity=0.0,
+            matched_prediction_ranks=[],
+            matched_paper_ids=[],
+            lead_time=0.0,
+            duplicate_rate=0.0,
+        ),
+        matches=[
+            PredictionMatchDetail(
+                prediction_rank=1,
+                prediction_title="proposal",
+                score=0.0,
+                is_match=False,
+            )
+        ],
+    )
 
-class TestRLRewardPopularity:
-    """Test popularity term in RL reward (forecaster/realization/reward.py)."""
 
-    def _make_paper(self, paper_id: str, title: str = "Test paper") -> PaperRecord:
-        return PaperRecord(
-            paper_id=paper_id,
-            title=title,
-            month="2024-02",
-            summary=title + " methods and evaluation",
-            keywords=["cs.AI"],
-            source_path=f"/fake/{paper_id}.md",
-            published_date="2024-02-15",
-        )
-
-    def _make_prediction(self, title: str) -> "IdeaPrediction":
+class TestRLRewardAlignment:
+    def test_evaluate_rl_reward_changes_with_evidence_quality(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from live_idea_bench.models import IdeaPrediction
-        return IdeaPrediction(rank=1, title=title, rationale=title, approach=title)
-
-    def test_reward_weights_default_popularity_is_zero(self) -> None:
-        """Default RewardWeights has popularity=0.0 (opt-in)."""
-        from forecaster.realization.config import RewardWeights
-        weights = RewardWeights()
-        assert weights.popularity == 0.0
-
-    def test_reward_weights_popularity_configurable(self) -> None:
-        """RewardWeights.popularity can be set."""
-        from forecaster.realization.config import RewardWeights
-        weights = RewardWeights(popularity=0.15)
-        assert weights.popularity == 0.15
-
-    def test_evaluate_rl_reward_popular_matched_paper_raises_reward(self) -> None:
-        """When matched paper has high popularity_score, reward is higher than with low popularity."""
+        from forecaster.realization.config import RewardConfig
         from forecaster.realization.reward import evaluate_rl_reward
-        from forecaster.realization.config import RewardConfig, RewardWeights
 
-        title = "Neural scaling laws for language models"
-        train = [self._make_paper("t1", "old baseline")]
-        future_popular = [self._make_paper("f1", title)]
-        future_popular[0] = PaperRecord(
-            paper_id="f1",
-            title=title,
-            month="2024-02",
-            summary=title,
-            keywords=["cs.AI"],
-            source_path="/fake/f1.md",
-            published_date="2024-02-15",
-            popularity_score=1.0,
+        monkeypatch.setattr(
+            "forecaster.realization.reward.score_prediction_list",
+            lambda **_: _mock_scored_prediction_list(),
         )
-        future_obscure = [PaperRecord(
-            paper_id="f1",
-            title=title,
-            month="2024-02",
-            summary=title,
-            keywords=["cs.AI"],
-            source_path="/fake/f1.md",
-            published_date="2024-02-15",
-            popularity_score=0.0,
-        )]
 
+        innovation = _make_innovation(
+            base_direction="retrieval planning",
+            operator="compose",
+            gap="ground long-horizon agents",
+        )
+        prediction = IdeaPrediction(rank=1, title="proposal", rationale="rationale", approach="compose: retrieval planning")
+        good_evidence = [_make_paper("p1", "retrieval planning grounded long-horizon agents compose memory")]
+        weak_evidence = [_make_paper("p2", "cooking recipes and travel guides")]
+
+        good = evaluate_rl_reward(
+            predictions=[prediction],
+            train_papers=[],
+            future_papers=[],
+            reward_config=RewardConfig(top_k=1),
+            innovation=innovation,
+            evidence_papers=good_evidence,
+            proposal_text="Grounded Retrieval Planning\nWe compose retrieval and planning to ground long-horizon agents with memory and evaluation.",
+        )
+        weak = evaluate_rl_reward(
+            predictions=[prediction],
+            train_papers=[],
+            future_papers=[],
+            reward_config=RewardConfig(top_k=1),
+            innovation=innovation,
+            evidence_papers=weak_evidence,
+            proposal_text="Grounded Retrieval Planning\nWe compose retrieval and planning to ground long-horizon agents with memory and evaluation.",
+        )
+
+        assert good.list_reward > weak.list_reward
+
+    def test_evaluate_rl_reward_changes_with_operator_adherence(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from live_idea_bench.models import IdeaPrediction
-        prediction = IdeaPrediction(rank=1, title=title, rationale=title, approach=title)
-
-        config = RewardConfig(weights=RewardWeights(
-            future_match=0.7, novelty=0.05, specificity=0.1, lead_time=0.1, popularity=0.05
-        ))
-
-        result_popular = evaluate_rl_reward(
-            predictions=[prediction],
-            train_papers=train,
-            future_papers=future_popular,
-            reward_config=config,
-        )
-        result_obscure = evaluate_rl_reward(
-            predictions=[prediction],
-            train_papers=train,
-            future_papers=future_obscure,
-            reward_config=config,
-        )
-
-        assert result_popular.list_reward >= result_obscure.list_reward
-
-    def test_evaluate_rl_reward_popularity_zero_weight_unchanged(self) -> None:
-        """With weights.popularity=0.0, popularity_score on paper has no effect on reward."""
+        from forecaster.realization.config import RewardConfig
         from forecaster.realization.reward import evaluate_rl_reward
-        from forecaster.realization.config import RewardConfig, RewardWeights
+
+        monkeypatch.setattr(
+            "forecaster.realization.reward.score_prediction_list",
+            lambda **_: _mock_scored_prediction_list(),
+        )
+
+        innovation = _make_innovation(
+            base_direction="model compression",
+            operator="simplify",
+            gap="retain accuracy under memory constraints",
+        )
+        prediction = IdeaPrediction(rank=1, title="proposal", rationale="rationale", approach="simplify: model compression")
+        evidence = [_make_paper("p1", "model compression efficient lightweight memory reduction")]
+
+        aligned = evaluate_rl_reward(
+            predictions=[prediction],
+            train_papers=[],
+            future_papers=[],
+            reward_config=RewardConfig(top_k=1),
+            innovation=innovation,
+            evidence_papers=evidence,
+            proposal_text="Lightweight Compression\nWe simplify the model with a lightweight efficient compression recipe to reduce memory while retaining accuracy.",
+        )
+        misaligned = evaluate_rl_reward(
+            predictions=[prediction],
+            train_papers=[],
+            future_papers=[],
+            reward_config=RewardConfig(top_k=1),
+            innovation=innovation,
+            evidence_papers=evidence,
+            proposal_text="Failure Analysis\nWe analyze large models and study scaling trends without simplifying the architecture.",
+        )
+
+        assert aligned.reward_breakdown["operator_adherence"] > misaligned.reward_breakdown["operator_adherence"]
+        assert aligned.list_reward > misaligned.list_reward
+
+    def test_evaluate_rl_reward_changes_with_coherence(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from live_idea_bench.models import IdeaPrediction
+        from forecaster.realization.config import RewardConfig
+        from forecaster.realization.reward import evaluate_rl_reward
 
-        title = "Neural scaling laws for language models"
-        train = [self._make_paper("t1", "old baseline")]
-
-        def _make_future(pop_score: float) -> list[PaperRecord]:
-            return [PaperRecord(
-                paper_id="f1", title=title, month="2024-02", summary=title,
-                keywords=["cs.AI"], source_path="/fake/f1.md",
-                published_date="2024-02-15", popularity_score=pop_score,
-            )]
-
-        prediction = IdeaPrediction(rank=1, title=title, rationale=title, approach=title)
-        config = RewardConfig(weights=RewardWeights(popularity=0.0))
-
-        result_high = evaluate_rl_reward(
-            predictions=[prediction], train_papers=train,
-            future_papers=_make_future(1.0), reward_config=config,
-        )
-        result_low = evaluate_rl_reward(
-            predictions=[prediction], train_papers=train,
-            future_papers=_make_future(0.0), reward_config=config,
+        monkeypatch.setattr(
+            "forecaster.realization.reward.score_prediction_list",
+            lambda **_: _mock_scored_prediction_list(),
         )
 
-        assert result_high.list_reward == pytest.approx(result_low.list_reward, abs=1e-4)
+        innovation = _make_innovation(
+            base_direction="transformer attention",
+            operator="extend",
+            gap="long sequence efficiency",
+        )
+        prediction = IdeaPrediction(rank=1, title="proposal", rationale="rationale", approach="extend: transformer attention")
+        evidence = [_make_paper("p1", "transformer attention long sequence efficiency")]
+
+        coherent = evaluate_rl_reward(
+            predictions=[prediction],
+            train_papers=[],
+            future_papers=[],
+            reward_config=RewardConfig(top_k=1),
+            innovation=innovation,
+            evidence_papers=evidence,
+            proposal_text=(
+                "Efficient Long-Context Attention\n"
+                "We extend transformer attention with sparse routing, hierarchical memory, and benchmarked evaluation. "
+                "The method targets long sequence efficiency while preserving model quality across standard tasks."
+            ),
+        )
+        incoherent = evaluate_rl_reward(
+            predictions=[prediction],
+            train_papers=[],
+            future_papers=[],
+            reward_config=RewardConfig(top_k=1),
+            innovation=innovation,
+            evidence_papers=evidence,
+            proposal_text="short",
+        )
+
+        assert coherent.reward_breakdown["coherence"] > incoherent.reward_breakdown["coherence"]
+        assert coherent.list_reward > incoherent.list_reward

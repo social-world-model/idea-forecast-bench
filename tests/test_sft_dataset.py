@@ -20,6 +20,7 @@ def _make_hindsight_sample(i: int, month: str = "2024-01") -> HindsightSample:
         context_paper_ids=(f"ctx-{i}-a", f"ctx-{i}-b"),
         cutoff_month=month,
         future_paper_id=f"future-{i}",
+        future_paper_published_date=f"{month}-15",
         innovation=Innovation(
             base_direction=f"direction {i}",
             operator="extend",
@@ -79,6 +80,37 @@ def test_build_sft_samples_target_is_valid_json():
         assert "base_direction" in obj
         assert "operator" in obj
         assert "gap" in obj
+
+
+def test_build_sft_samples_excludes_future_unavailable_at_cutoff():
+    """Memory for cutoff t must exclude hindsight labels from papers published after t."""
+    early_future = HindsightSample(
+        context_paper_ids=("ctx-a",),
+        cutoff_month="2024-01",
+        future_paper_id="future-late",
+        future_paper_published_date="2024-03-15",
+        innovation=Innovation(
+            base_direction="late direction",
+            operator="extend",
+            gap="late gap",
+        ),
+    )
+    target = HindsightSample(
+        context_paper_ids=("ctx-b",),
+        cutoff_month="2024-02",
+        future_paper_id="future-target",
+        future_paper_published_date="2024-04-15",
+        innovation=Innovation(
+            base_direction="target direction",
+            operator="extend",
+            gap="target gap",
+        ),
+    )
+
+    samples = build_sft_samples([early_future, target])
+
+    target_sample = next(sample for sample in samples if sample["future_paper_id"] == "future-target")
+    assert "late direction" not in target_sample["input"]
 
 
 def test_save_and_load_sft_dataset_roundtrip():

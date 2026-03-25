@@ -54,9 +54,11 @@ class SFTTrainConfig:
 
 @dataclass
 class RealizationConfig:
+    context_top_k: int = 5
     evidence_top_k: int = 5
     evidence_similarity_threshold: float = 0.3
     proposal_max_tokens: int = 1024
+    allow_artifact_fallback_to_llm: bool = False
     evidence_accuracy_weight: float = 0.2
     operator_adherence_weight: float = 0.3
     coherence_weight: float = 0.5
@@ -64,12 +66,18 @@ class RealizationConfig:
 
 @dataclass
 class InferenceConfig:
+    runtime_mode: str = "strict_eval"
     num_candidates: int = 16
     prior_weight: float = 0.4
     realization_weight: float = 0.6
     top_k: int = 5
     dedup_threshold: float = 0.8
     prior_temperature: float = 0.8
+    prior_score_method: str = "conditional_logprob"
+    realization_score_method: str = "conditional_logprob"
+    score_normalization: str = "per_token"
+    score_temperature: float = 1.0
+    joint_score_mode: str = "linear_blend"
     popularity_weight: float = 0.0  # Opt-in: weight for popularity bonus in joint score
 
 

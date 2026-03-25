@@ -15,6 +15,7 @@ from forecaster.config import (
     load_realization_config,
     load_sft_train_config,
 )
+from forecaster.realization.config import EpisodeBuildConfig, load_episode_build_config
 
 
 # ---------------------------------------------------------------------------
@@ -67,9 +68,11 @@ class TestSFTTrainConfigDefaults:
 class TestRealizationConfigDefaults:
     def test_defaults(self) -> None:
         cfg = RealizationConfig()
+        assert cfg.context_top_k == 5
         assert cfg.evidence_top_k == 5
         assert cfg.evidence_similarity_threshold == pytest.approx(0.3)
         assert cfg.proposal_max_tokens == 1024
+        assert cfg.allow_artifact_fallback_to_llm is False
         assert cfg.evidence_accuracy_weight == pytest.approx(0.2)
         assert cfg.operator_adherence_weight == pytest.approx(0.3)
         assert cfg.coherence_weight == pytest.approx(0.5)
@@ -83,17 +86,33 @@ class TestRealizationConfigDefaults:
 class TestInferenceConfigDefaults:
     def test_defaults(self) -> None:
         cfg = InferenceConfig()
+        assert cfg.runtime_mode == "strict_eval"
         assert cfg.num_candidates == 16
         assert cfg.prior_weight == pytest.approx(0.4)
         assert cfg.realization_weight == pytest.approx(0.6)
         assert cfg.top_k == 5
         assert cfg.dedup_threshold == pytest.approx(0.8)
         assert cfg.prior_temperature == pytest.approx(0.8)
+        assert cfg.prior_score_method == "conditional_logprob"
+        assert cfg.realization_score_method == "conditional_logprob"
+        assert cfg.score_normalization == "per_token"
+        assert cfg.score_temperature == pytest.approx(1.0)
+        assert cfg.joint_score_mode == "linear_blend"
 
     def test_weights_sum_to_one(self) -> None:
         cfg = InferenceConfig()
         total = cfg.prior_weight + cfg.realization_weight
         assert total == pytest.approx(1.0)
+
+
+class TestEpisodeBuildConfigDefaults:
+    def test_defaults(self) -> None:
+        cfg = EpisodeBuildConfig()
+        assert cfg.horizon_months == 3
+
+    def test_load_from_yaml(self) -> None:
+        cfg = load_episode_build_config("episode_build.yaml")
+        assert cfg.horizon_months == 3
 
 
 # ---------------------------------------------------------------------------
@@ -149,8 +168,10 @@ class TestLoadInferenceConfig:
     def test_load_from_yaml(self) -> None:
         cfg = load_inference_config("inference.yaml")
         assert isinstance(cfg, InferenceConfig)
+        assert cfg.runtime_mode == "strict_eval"
         assert cfg.num_candidates == 16
         assert cfg.top_k == 5
+        assert cfg.prior_score_method == "conditional_logprob"
 
     def test_weights_sum_to_one_from_yaml(self) -> None:
         cfg = load_inference_config("inference.yaml")
