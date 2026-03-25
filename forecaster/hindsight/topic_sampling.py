@@ -15,7 +15,6 @@ from live_idea_bench.config import TopicDefinition, load_topics
 from live_idea_bench.models import PaperRecord
 from live_idea_bench.papers import (
     date_to_ordinal,
-    find_markdown_files,
     get_paper_published_date,
     month_to_index,
     parse_markdown_paper,
@@ -122,6 +121,14 @@ def _resolve_progress_every() -> int:
     return TOPIC_HINDSIGHT_DEFAULT_PROGRESS_EVERY
 
 
+def _resolve_max_files() -> int | None:
+    raw = str(os.environ.get("TOPIC_HINDSIGHT_MAX_FILES", "") or "").strip()
+    if not raw:
+        return None
+    limit = int(raw)
+    return max(1, limit)
+
+
 def _parse_markdown_path(path: Path) -> PaperRecord | None:
     if path.name.lower() == "readme.md":
         return None
@@ -142,13 +149,73 @@ def _print_progress(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
 
 
+def _sample_paths_deterministically(paths: list[Path], limit: int) -> list[Path]:
+    if limit <= 0:
+        raise ValueError("limit must be positive")
+    if len(paths) <= limit:
+        return list(paths)
+
+    sampled: list[Path] = []
+    seen_indices: set[int] = set()
+    for slot in range(limit):
+        quantile = (slot + 0.5) / limit
+        index = min(len(paths) - 1, int(quantile * len(paths)))
+        if index in seen_indices:
+            continue
+        seen_indices.add(index)
+        sampled.append(paths[index])
+    return sampled
+
+
+def _discover_markdown_files_with_progress(input_dir: Path) -> list[Path]:
+    progress_every = _resolve_progress_every()
+    _print_progress(f"[topic-hindsight] discovering markdown files under {input_dir}")
+
+    files: list[Path] = []
+    discovered_count = 0
+    scanned_dirs = 0
+    for dirpath, _dirnames, filenames in os.walk(input_dir):
+        scanned_dirs += 1
+        for filename in filenames:
+            if not filename.lower().endswith(".md"):
+                continue
+            if filename.lower() == "readme.md":
+                continue
+            discovered_count += 1
+            files.append(Path(dirpath) / filename)
+            if discovered_count % progress_every == 0:
+                _print_progress(
+                    f"[topic-hindsight] discovered {discovered_count} markdown files "
+                    f"after scanning {scanned_dirs} directories"
+                )
+        if scanned_dirs % progress_every == 0 and discovered_count == 0:
+            _print_progress(
+                f"[topic-hindsight] scanned {scanned_dirs} directories, "
+                "no markdown files discovered yet"
+            )
+
+    files.sort()
+    max_files = _resolve_max_files()
+    if max_files is not None and len(files) > max_files:
+        files = _sample_paths_deterministically(files, max_files)
+        _print_progress(
+            f"[topic-hindsight] deterministic smoke-test sample enabled: "
+            f"keeping {len(files)} of {discovered_count} discovered markdown files"
+        )
+    _print_progress(
+        f"[topic-hindsight] discovery complete: found {len(files)} markdown files "
+        f"across {scanned_dirs} directories"
+    )
+    return files
+
+
 def _load_papers_with_progress(
     input_dir: Path,
     *,
     start_month: str,
     end_month: str,
 ) -> tuple[PaperRecord, ...]:
-    files = [path for path in find_markdown_files(input_dir) if path.name.lower() != "readme.md"]
+    files = _discover_markdown_files_with_progress(input_dir)
     total_files = len(files)
     if total_files == 0:
         _print_progress(f"[topic-hindsight] no markdown files found under {input_dir}")

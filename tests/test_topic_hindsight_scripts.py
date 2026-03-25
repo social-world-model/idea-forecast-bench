@@ -146,6 +146,23 @@ def test_prepare_topic_hindsight_manifest_enforces_fixed_windows_and_sampling(
     assert manifest["topic_episode_rows"] == manifest_again["topic_episode_rows"]
 
 
+def test_load_topic_hindsight_context_supports_deterministic_smoke_sample(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data_dir = _build_sample_corpus(tmp_path)
+    monkeypatch.setenv("TOPIC_HINDSIGHT_MAX_FILES", "5")
+    monkeypatch.setenv("TOPIC_HINDSIGHT_LOAD_WORKERS", "1")
+
+    context_one = load_topic_hindsight_context(data_dir)
+    context_two = load_topic_hindsight_context(data_dir)
+
+    assert 1 <= len(context_one.papers) <= 5
+    assert [paper.paper_id for paper in context_one.papers] == [
+        paper.paper_id for paper in context_two.papers
+    ]
+
+
 def test_run_topic_hindsight_preview_generates_10_rows_with_valid_innovations(
     tmp_path: Path,
     monkeypatch,
