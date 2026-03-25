@@ -95,6 +95,7 @@ def test_prepare_topic_hindsight_manifest_enforces_fixed_windows_and_sampling(
 
     data_dir = _build_sample_corpus(tmp_path)
     output_dir = tmp_path / "manifest_out"
+    context = load_topic_hindsight_context(data_dir)
 
     manifest, summary = prepare_topic_hindsight_manifest(
         input_dir=data_dir,
@@ -111,6 +112,7 @@ def test_prepare_topic_hindsight_manifest_enforces_fixed_windows_and_sampling(
     assert summary["episode_count"] == 6
     assert summary["topic_count"] == 52
     assert len(manifest["topic_episode_rows"]) == 52 * 6
+    assert "bench-2024-10" not in [paper.paper_id for paper in context.papers]
 
     non_empty_rows = [
         row
