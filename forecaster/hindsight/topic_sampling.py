@@ -186,9 +186,23 @@ def _discover_markdown_files_with_progress(input_dir: Path) -> list[Path]:
 
     files: list[Path] = []
     discovered_count = 0
+    pruned_dir_count = 0
     filtered_by_month_count = 0
     scanned_dirs = 0
     for dirpath, _dirnames, filenames in os.walk(input_dir):
+        current_dir = Path(dirpath)
+        kept_dirnames: list[str] = []
+        for dirname in sorted(_dirnames):
+            child_path = current_dir / dirname
+            if _path_in_month_range_or_unknown(
+                child_path,
+                start_month=TOPIC_HINDSIGHT_START_MONTH,
+                end_month=TOPIC_HINDSIGHT_END_MONTH,
+            ):
+                kept_dirnames.append(dirname)
+            else:
+                pruned_dir_count += 1
+        _dirnames[:] = kept_dirnames
         _dirnames.sort()
         filenames.sort()
         scanned_dirs += 1
@@ -211,7 +225,7 @@ def _discover_markdown_files_with_progress(input_dir: Path) -> list[Path]:
                 _print_progress(
                     f"[topic-hindsight] discovered {discovered_count} markdown files "
                     f"after scanning {scanned_dirs} directories "
-                    f"(prefiltered_out={filtered_by_month_count})"
+                    f"(prefiltered_out={filtered_by_month_count}, pruned_dirs={pruned_dir_count})"
                 )
             if max_files is not None and discovered_count >= max_files:
                 _print_progress(
@@ -222,7 +236,7 @@ def _discover_markdown_files_with_progress(input_dir: Path) -> list[Path]:
         if scanned_dirs % progress_every == 0 and discovered_count == 0:
             _print_progress(
                 f"[topic-hindsight] scanned {scanned_dirs} directories, "
-                "no markdown files discovered yet"
+                f"no markdown files discovered yet (pruned_dirs={pruned_dir_count})"
             )
         if max_files is not None and discovered_count >= max_files:
             break
@@ -231,7 +245,7 @@ def _discover_markdown_files_with_progress(input_dir: Path) -> list[Path]:
     _print_progress(
         f"[topic-hindsight] discovery complete: found {len(files)} markdown files "
         f"across {scanned_dirs} directories "
-        f"(prefiltered_out={filtered_by_month_count})"
+        f"(prefiltered_out={filtered_by_month_count}, pruned_dirs={pruned_dir_count})"
     )
     return files
 
