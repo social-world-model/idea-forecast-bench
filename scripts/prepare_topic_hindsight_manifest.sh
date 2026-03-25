@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-INPUT_DIR="${INPUT_DIR:-data/mineru}"
+INPUT_DIR="${INPUT_DIR:-md_mineru}"
 OUTPUT_DIR="${OUTPUT_DIR:-data/topic_hindsight}"
 TOPICS_CONFIG="${TOPICS_CONFIG:-config/topics_v2.yaml}"
 PER_TOPIC_PER_EPISODE="${PER_TOPIC_PER_EPISODE:-2}"
