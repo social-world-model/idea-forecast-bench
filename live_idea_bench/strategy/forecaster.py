@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+from pathlib import Path
 from typing import Any, List
 
 from live_idea_bench.models import IdeaPrediction, PaperRecord
@@ -119,8 +120,36 @@ class ForecasterStrategy(IdeaStrategy):
         realization_config = self._load_realization_config()
         memory_store = self._load_memory_store()
 
-        # Build innovations: heuristic fallback (no trained prior yet)
-        innovations = self._build_heuristic_innovations(train_papers, top_k=top_k)
+        # Build innovations: use trained prior if checkpoint is available, else heuristic fallback
+        innovations: list
+        if self.prior_checkpoint and Path(self.prior_checkpoint).exists():
+            try:
+                from forecaster.prior.sampler import sample_innovations
+
+                sampled = sample_innovations(
+                    self.prior_checkpoint, memory_store, inference_config
+                )
+                if sampled:
+                    innovations = sampled
+                    logger.info(
+                        "Using %d innovations from trained prior.", len(innovations)
+                    )
+                else:
+                    logger.warning(
+                        "Prior sampling empty; falling back to heuristic."
+                    )
+                    innovations = self._build_heuristic_innovations(
+                        train_papers, top_k=top_k
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "Prior sampling failed (%s); falling back to heuristic.", exc
+                )
+                innovations = self._build_heuristic_innovations(
+                    train_papers, top_k=top_k
+                )
+        else:
+            innovations = self._build_heuristic_innovations(train_papers, top_k=top_k)
 
         if not innovations:
             return []

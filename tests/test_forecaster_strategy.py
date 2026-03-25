@@ -159,3 +159,83 @@ class TestForecasterStrategyInit:
         """Should accept model_name kwarg."""
         strategy = ForecasterStrategy(model_name="gpt-4o")
         assert strategy.model_name == "gpt-4o"
+
+
+class TestForecasterStrategyPriorWiring:
+    """generate() must use trained prior when prior_checkpoint is set and path exists."""
+
+    def test_generate_uses_sample_innovations_when_checkpoint_exists(
+        self, tmp_path: Path
+    ) -> None:
+        """When prior_checkpoint is set and path exists, sample_innovations should be called.
+
+        The import happens lazily inside forecaster.py via
+        ``from forecaster.prior.sampler import sample_innovations``.
+        We patch at the source module so the lazy import picks up the mock.
+        """
+        train_papers = [_paper("p1", "2024-05")]
+        from forecaster.models import Innovation
+
+        fake_innovations = [
+            Innovation(base_direction="novel A", operator="extend", gap="gap A"),
+            Innovation(base_direction="novel B", operator="combine", gap="gap B"),
+        ]
+        proposals = [_make_scored_proposal(rank=1), _make_scored_proposal(rank=2)]
+
+        captured_innovations: list = []
+
+        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config):  # type: ignore[no-untyped-def]
+            captured_innovations.extend(innovations)
+            return proposals
+
+        # Patch at the source so the ``from forecaster.prior.sampler import`` picks it up
+        with patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference), \
+             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")), \
+             patch("forecaster.prior.sampler.sample_innovations", return_value=fake_innovations):
+            strategy = ForecasterStrategy(prior_checkpoint=str(tmp_path))
+            results = strategy.generate(train_papers, "2024-06", top_k=3)
+
+        assert captured_innovations == fake_innovations
+
+    def test_generate_falls_back_to_heuristic_when_prior_sampling_raises(
+        self, tmp_path: Path
+    ) -> None:
+        """When sample_innovations raises, generate() should fall back to heuristic."""
+        train_papers = [_paper("p1", "2024-05")]
+        proposals = [_make_scored_proposal(rank=1)]
+
+        captured_innovations: list = []
+
+        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config):  # type: ignore[no-untyped-def]
+            captured_innovations.extend(innovations)
+            return proposals
+
+        with patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference), \
+             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")), \
+             patch("forecaster.prior.sampler.sample_innovations", side_effect=RuntimeError("model load failed")):
+            strategy = ForecasterStrategy(prior_checkpoint=str(tmp_path))
+            results = strategy.generate(train_papers, "2024-06", top_k=3)
+
+        # Should still have produced heuristic innovations (no crash)
+        assert len(captured_innovations) >= 1
+        from forecaster.models import Innovation
+        for inn in captured_innovations:
+            assert isinstance(inn, Innovation)
+
+    def test_generate_uses_heuristic_when_no_checkpoint(self) -> None:
+        """When prior_checkpoint is None, heuristic innovations should be used."""
+        train_papers = [_paper("p1", "2024-05", keywords=["attention", "transformers", "nlp"])]
+        proposals = [_make_scored_proposal(rank=1)]
+
+        captured_innovations: list = []
+
+        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config):  # type: ignore[no-untyped-def]
+            captured_innovations.extend(innovations)
+            return proposals
+
+        with patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference), \
+             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")):
+            strategy = ForecasterStrategy(prior_checkpoint=None)
+            strategy.generate(train_papers, "2024-06", top_k=3)
+
+        assert len(captured_innovations) >= 1

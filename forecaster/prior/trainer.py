@@ -1,6 +1,7 @@
 """SFT trainer for the innovation prior using HuggingFace Trainer + LoRA."""
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
@@ -128,7 +129,21 @@ def train_prior(
     trainer.train()
 
     checkpoint_path = Path(save_dir) / "final_checkpoint"
+    checkpoint_path.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(str(checkpoint_path))
     tokenizer.save_pretrained(str(checkpoint_path))
+
+    # Write metadata so sampler.py can identify the base model without
+    # relying solely on adapter_config.json (which is written by PEFT).
+    prior_metadata = {
+        "base_model_id": model_spec.model_id,
+        "model_alias": config.model_alias,
+        "checkpoint_type": "lora_adapter",
+    }
+    metadata_path = checkpoint_path / "prior_metadata.json"
+    metadata_path.write_text(
+        json.dumps(prior_metadata, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
     logger.info("Saved checkpoint to %s", checkpoint_path)
     return str(checkpoint_path)

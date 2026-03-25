@@ -49,6 +49,21 @@ def _build_prompt(system_prompt: str, input_template: str, memory_store: Any) ->
     return f"<system>\n{system_prompt}\n</system>\n<user>\n{user_content}\n</user>\n<assistant>"
 
 
+def _detect_base_model(model_path_str: str) -> str | None:
+    """Read adapter_config.json written by PEFT's save_pretrained and extract base model ID."""
+    adapter_config_path = Path(model_path_str) / "adapter_config.json"
+    if not adapter_config_path.exists():
+        return None
+    try:
+        adapter_cfg = json.loads(adapter_config_path.read_text(encoding="utf-8"))
+        base_model_id = adapter_cfg.get("base_model_name_or_path")
+        if base_model_id:
+            return str(base_model_id)
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.warning("Could not read adapter_config.json: %s", exc)
+    return None
+
+
 def sample_innovations(
     model_path: str,
     memory_store: Any,
@@ -59,13 +74,17 @@ def sample_innovations(
     Requires torch, transformers, peft. Raises ImportError if not available.
     Generates config.num_candidates innovations at config.prior_temperature.
     Returns list of Innovation objects (failed parses are skipped with warning).
+
+    If adapter_config.json is present in model_path, loads via PeftModel.from_pretrained
+    to handle LoRA adapter-only checkpoints saved by train_prior().
     """
     try:
         import torch
         from transformers import AutoTokenizer, AutoModelForCausalLM
+        import peft
     except ImportError as exc:
         raise ImportError(
-            "Sampling from the prior requires: torch, transformers. "
+            "Sampling from the prior requires: torch, transformers, peft. "
             "Install with: pip install torch transformers peft"
         ) from exc
 
@@ -77,15 +96,35 @@ def sample_innovations(
     )
 
     model_path_str = str(model_path)
-    tokenizer = AutoTokenizer.from_pretrained(model_path_str)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    base_model_id = _detect_base_model(model_path_str)
 
-    model = AutoModelForCausalLM.from_pretrained(
-        model_path_str,
-        torch_dtype="auto",
-        device_map="auto",
-    )
+    if base_model_id:
+        logger.info(
+            "Detected LoRA adapter checkpoint. Loading base model %r then adapter from %r.",
+            base_model_id,
+            model_path_str,
+        )
+        tokenizer = AutoTokenizer.from_pretrained(base_model_id)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+        base_model = AutoModelForCausalLM.from_pretrained(
+            base_model_id,
+            torch_dtype="auto",
+            device_map="auto",
+        )
+        model = peft.PeftModel.from_pretrained(base_model, model_path_str)
+    else:
+        logger.info("No adapter_config.json found; loading model directly from %r.", model_path_str)
+        tokenizer = AutoTokenizer.from_pretrained(model_path_str)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path_str,
+            torch_dtype="auto",
+            device_map="auto",
+        )
     model.eval()
 
     encoded = tokenizer([prompt], return_tensors="pt")

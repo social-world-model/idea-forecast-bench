@@ -10,6 +10,7 @@ from live_idea_bench.models import PaperRecord
 from live_idea_bench.llm import create_client
 
 from forecaster.models import HindsightSample, Innovation, ScoredProposal
+from forecaster.prior.sampler import sample_innovations
 from forecaster.config import (
     HindsightConfig,
     PriorConfig,
@@ -263,6 +264,15 @@ class ForecasterPipeline:
             horizon_months=horizon_months,
         )
 
+        # Populate memory store chronologically from hindsight samples (Gap 3 fix)
+        sorted_samples = sorted(hindsight_samples, key=lambda s: s.cutoff_month)
+        for sample in sorted_samples:
+            self._memory_store = self._memory_store.append(
+                sample.innovation,
+                sample.future_paper_id,
+                sample.cutoff_month,
+            )
+
         # Phase 2: Prior SFT
         prior_checkpoint: str = ""
         if not skip_training:
@@ -285,12 +295,39 @@ class ForecasterPipeline:
         last_cutoff = sorted(cutoff_months)[-1] if cutoff_months else ""
         proposals: list[ScoredProposal] = []
         if last_cutoff:
+            # Apply recency decay and persist memory before inference
+            self._memory_store = self._memory_store.decay_recency(last_cutoff)
+            self._memory_store.persist(self.output_dir / "memory_inventory.json")
+
             logger.info("Phase 4: Joint inference at cutoff %s.", last_cutoff)
-            # Build heuristic innovations from training papers when no prior model
             training_papers = [p for p in self.papers if p.month <= last_cutoff]
-            innovations = _heuristic_innovations(
-                training_papers, n=self.inference_config.num_candidates
-            )
+
+            # Use trained prior if checkpoint available; otherwise fall back to heuristic (Gap 1 fix)
+            if prior_checkpoint and Path(prior_checkpoint).exists():
+                try:
+                    innovations = sample_innovations(
+                        prior_checkpoint, self._memory_store, self.inference_config
+                    )
+                    if not innovations:
+                        logger.warning(
+                            "Prior sampling returned no innovations; falling back to heuristic."
+                        )
+                        innovations = _heuristic_innovations(
+                            training_papers, n=self.inference_config.num_candidates
+                        )
+                except Exception as exc:
+                    logger.warning(
+                        "Prior sampling failed (%s); falling back to heuristic.", exc
+                    )
+                    innovations = _heuristic_innovations(
+                        training_papers, n=self.inference_config.num_candidates
+                    )
+            else:
+                logger.info("No prior checkpoint available; using heuristic innovations.")
+                innovations = _heuristic_innovations(
+                    training_papers, n=self.inference_config.num_candidates
+                )
+
             proposals = self.run_joint_inference(
                 cutoff_month=last_cutoff,
                 innovations=innovations,

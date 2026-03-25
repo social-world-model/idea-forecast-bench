@@ -198,3 +198,147 @@ class TestForecasterPipelineRunPriorTraining:
             result = pipeline.run_prior_training(hindsight_samples=samples)
 
         assert result == fake_checkpoint
+
+
+class TestRunFullPipelineMemoryPopulation:
+    """run_full_pipeline must populate _memory_store from hindsight_samples after Phase 1."""
+
+    def test_memory_populated_after_hindsight_extraction(self, tmp_path: Path) -> None:
+        """After run_full_pipeline, _memory_store should have entries from hindsight samples."""
+        papers = [_paper("p1", "2024-01"), _paper("p2", "2024-02")]
+        pipeline = ForecasterPipeline(papers=papers, output_dir=tmp_path / "out")
+
+        # Two hindsight samples with distinct innovations
+        sample1 = _make_hindsight_sample("p1", "2024-01")
+        sample2 = HindsightSample(
+            context_paper_ids=("ctx2",),
+            cutoff_month="2024-02",
+            future_paper_id="p2",
+            innovation=Innovation(
+                base_direction="reinforcement learning",
+                operator="combine",
+                gap="sample efficiency",
+            ),
+        )
+
+        mock_client = MagicMock()
+        with patch("forecaster.orchestrator.create_client", return_value=(mock_client, "gpt-4o")), \
+             patch("forecaster.orchestrator.build_hindsight_dataset", return_value=[sample1, sample2]), \
+             patch("forecaster.orchestrator.train_prior", return_value=""), \
+             patch("forecaster.orchestrator.build_sft_samples", return_value=[]), \
+             patch("forecaster.orchestrator.run_joint_inference_fn", return_value=[]):
+            pipeline.run_full_pipeline(
+                cutoff_months=["2024-01", "2024-02"],
+                skip_training=True,
+            )
+
+        assert pipeline._memory_store.size == 2
+
+    def test_memory_persisted_to_disk(self, tmp_path: Path) -> None:
+        """run_full_pipeline should persist memory_inventory.json to output_dir."""
+        papers = [_paper("p1", "2024-01")]
+        pipeline = ForecasterPipeline(papers=papers, output_dir=tmp_path / "out")
+
+        sample1 = _make_hindsight_sample("p1", "2024-01")
+
+        mock_client = MagicMock()
+        with patch("forecaster.orchestrator.create_client", return_value=(mock_client, "gpt-4o")), \
+             patch("forecaster.orchestrator.build_hindsight_dataset", return_value=[sample1]), \
+             patch("forecaster.orchestrator.train_prior", return_value=""), \
+             patch("forecaster.orchestrator.build_sft_samples", return_value=[]), \
+             patch("forecaster.orchestrator.run_joint_inference_fn", return_value=[]):
+            pipeline.run_full_pipeline(
+                cutoff_months=["2024-01"],
+                skip_training=True,
+            )
+
+        assert (tmp_path / "out" / "memory_inventory.json").exists()
+
+
+class TestRunFullPipelinePriorWiring:
+    """run_full_pipeline must call sample_innovations when a checkpoint is available."""
+
+    def test_calls_sample_innovations_when_checkpoint_exists(self, tmp_path: Path) -> None:
+        """When prior_checkpoint exists, run_full_pipeline should call sample_innovations."""
+        papers = [_paper("p1", "2024-01")]
+        pipeline = ForecasterPipeline(papers=papers, output_dir=tmp_path / "out")
+
+        fake_checkpoint = str(tmp_path / "ckpt")
+        Path(fake_checkpoint).mkdir(parents=True)
+
+        fake_innovations = [_make_innovation("novel direction A"), _make_innovation("novel direction B")]
+
+        mock_client = MagicMock()
+        captured_innovations: list = []
+
+        def _capture_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config):  # type: ignore[no-untyped-def]
+            captured_innovations.extend(innovations)
+            return []
+
+        with patch("forecaster.orchestrator.create_client", return_value=(mock_client, "gpt-4o")), \
+             patch("forecaster.orchestrator.build_hindsight_dataset", return_value=[]), \
+             patch("forecaster.orchestrator.build_sft_samples", return_value=[]), \
+             patch("forecaster.orchestrator.train_prior", return_value=fake_checkpoint), \
+             patch("forecaster.orchestrator.sample_innovations", return_value=fake_innovations) as mock_sample, \
+             patch("forecaster.orchestrator.run_joint_inference_fn", side_effect=_capture_inference):
+            pipeline.run_full_pipeline(
+                cutoff_months=["2024-01"],
+                skip_training=False,
+            )
+
+        mock_sample.assert_called_once()
+        assert captured_innovations == fake_innovations
+
+    def test_falls_back_to_heuristic_when_no_checkpoint(self, tmp_path: Path) -> None:
+        """When skip_training=True and no prior_checkpoint, heuristic innovations are used."""
+        papers = [_paper("p1", "2024-01")]
+        pipeline = ForecasterPipeline(papers=papers, output_dir=tmp_path / "out")
+
+        mock_client = MagicMock()
+        captured_innovations: list = []
+
+        def _capture_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config):  # type: ignore[no-untyped-def]
+            captured_innovations.extend(innovations)
+            return []
+
+        with patch("forecaster.orchestrator.create_client", return_value=(mock_client, "gpt-4o")), \
+             patch("forecaster.orchestrator.build_hindsight_dataset", return_value=[]), \
+             patch("forecaster.orchestrator.sample_innovations") as mock_sample, \
+             patch("forecaster.orchestrator.run_joint_inference_fn", side_effect=_capture_inference):
+            pipeline.run_full_pipeline(
+                cutoff_months=["2024-01"],
+                skip_training=True,
+            )
+
+        mock_sample.assert_not_called()
+        # Heuristic from a single paper that falls in the training window
+        assert len(captured_innovations) >= 1
+
+    def test_falls_back_to_heuristic_when_sample_innovations_raises(self, tmp_path: Path) -> None:
+        """When sample_innovations raises, heuristic innovations are used as fallback."""
+        papers = [_paper("p1", "2024-01")]
+        pipeline = ForecasterPipeline(papers=papers, output_dir=tmp_path / "out")
+
+        fake_checkpoint = str(tmp_path / "ckpt")
+        Path(fake_checkpoint).mkdir(parents=True)
+
+        mock_client = MagicMock()
+        captured_innovations: list = []
+
+        def _capture_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config):  # type: ignore[no-untyped-def]
+            captured_innovations.extend(innovations)
+            return []
+
+        with patch("forecaster.orchestrator.create_client", return_value=(mock_client, "gpt-4o")), \
+             patch("forecaster.orchestrator.build_hindsight_dataset", return_value=[]), \
+             patch("forecaster.orchestrator.build_sft_samples", return_value=[]), \
+             patch("forecaster.orchestrator.train_prior", return_value=fake_checkpoint), \
+             patch("forecaster.orchestrator.sample_innovations", side_effect=RuntimeError("GPU OOM")), \
+             patch("forecaster.orchestrator.run_joint_inference_fn", side_effect=_capture_inference):
+            pipeline.run_full_pipeline(
+                cutoff_months=["2024-01"],
+                skip_training=False,
+            )
+
+        # Should have fallen back to heuristic (paper p1 has month 2024-01 <= cutoff)
+        assert len(captured_innovations) >= 1
