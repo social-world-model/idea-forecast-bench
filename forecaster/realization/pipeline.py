@@ -11,6 +11,7 @@ from forecaster.models import (
     HindsightSample,
     Innovation,
     innovation_to_dict,
+    realization_trajectory_to_dict,
     strict_search_contract,
     strict_runtime_manifest_contract,
 )
@@ -35,8 +36,9 @@ from forecaster.realization.reward import (
 )
 from forecaster.realization.strict_runtime import (
     build_strict_interactive_messages,
-    generate_strict_policy_completion,
+    parse_strict_rollout_completion,
     run_strict_realization_rollout,
+    serialize_strict_rollout_completion,
 )
 from forecaster.realization.trainers import PreparedRLContext, TrainerPreparedArtifacts, create_trainer_runner
 from forecaster.realization.trainers.base import build_config_fingerprint
@@ -438,49 +440,52 @@ def _generate_strict_realization_completion(
     search_env = row.get("search_env", {})
     top_p_value = top_p if top_p is not None else config.top_p
     if backend == "heuristic":
+        trajectory, _ = run_strict_realization_rollout(
+            innovation,
+            train_papers,
+            llm_client=None,
+            model=None,
+            realization_config=realization_config,
+            search_env_payload=search_env if isinstance(search_env, dict) else None,
+            backend="heuristic",
+        )
         return (
-            generate_strict_policy_completion(
-                innovation,
-                train_papers,
-                llm_client=None,
-                model=None,
-                realization_config=realization_config,
-                search_env_payload=search_env if isinstance(search_env, dict) else None,
-                backend="heuristic",
-            ),
+            serialize_strict_rollout_completion(trajectory),
             backend,
         )
     if backend == "api":
         client, resolved_model = create_client(model_name)
+        trajectory, _ = run_strict_realization_rollout(
+            innovation,
+            train_papers,
+            llm_client=client,
+            model=resolved_model,
+            realization_config=realization_config,
+            search_env_payload=search_env if isinstance(search_env, dict) else None,
+            temperature=temperature,
+            top_p=top_p_value,
+            seed=seed,
+        )
         return (
-            generate_strict_policy_completion(
-                innovation,
-                train_papers,
-                llm_client=client,
-                model=resolved_model,
-                realization_config=realization_config,
-                search_env_payload=search_env if isinstance(search_env, dict) else None,
-                temperature=temperature,
-                top_p=top_p_value,
-                seed=seed,
-            ),
+            serialize_strict_rollout_completion(trajectory),
             backend,
         )
     if backend == "local_hf":
+        trajectory, _ = run_strict_realization_rollout(
+            innovation,
+            train_papers,
+            llm_client=None,
+            model=None,
+            realization_config=realization_config,
+            realization_model_path=model_name,
+            search_env_payload=search_env if isinstance(search_env, dict) else None,
+            temperature=temperature,
+            top_p=top_p_value,
+            seed=seed,
+            base_model_name=base_model_name,
+        )
         return (
-            generate_strict_policy_completion(
-                innovation,
-                train_papers,
-                llm_client=None,
-                model=None,
-                realization_config=realization_config,
-                realization_model_path=model_name,
-                search_env_payload=search_env if isinstance(search_env, dict) else None,
-                temperature=temperature,
-                top_p=top_p_value,
-                seed=seed,
-                base_model_name=base_model_name,
-            ),
+            serialize_strict_rollout_completion(trajectory),
             backend,
         )
     raise ValueError(f"Unsupported strict generation backend: {backend}")
@@ -497,17 +502,15 @@ def _strict_prediction_from_completion(
 ) -> list[Any]:
     innovation = Innovation(**dict(row.get("innovation", {})))
     train_papers = [PaperRecord(**paper) for paper in row.get("train_papers", [])]
-    trajectory, evidence_papers = run_strict_realization_rollout(
-        innovation,
-        train_papers,
-        llm_client=None,
-        model=None,
-        realization_config=realization_config,
-        completion_text=completion_text,
-        search_env_payload=row.get("search_env") if isinstance(row.get("search_env"), dict) else None,
-    )
-    if trajectory.invalid_reason or trajectory.result is None:
+    trajectory = parse_strict_rollout_completion(completion_text)
+    if trajectory is None or trajectory.invalid_reason or trajectory.result is None:
         return []
+    paper_lookup = {paper.paper_id: paper for paper in train_papers}
+    evidence_papers = [
+        paper_lookup[paper_id]
+        for paper_id in trajectory.result.selected_evidence_ids
+        if paper_id in paper_lookup
+    ]
     prediction = proposal_to_idea_prediction(
         trajectory.result.proposal_text,
         innovation,
@@ -519,9 +522,15 @@ def _strict_prediction_from_completion(
         metadata={
             **prediction.metadata,
             "proposal_text": trajectory.result.proposal_text,
-            "policy_completion": completion_text,
+            "policy_rollout": completion_text,
+            "strict_trajectory": realization_trajectory_to_dict(trajectory),
             "selected_evidence_ids": list(trajectory.result.selected_evidence_ids),
             "search_queries": list(trajectory.result.search_queries),
+            "surfaced_paper_ids_by_step": [
+                [observation.paper_id for observation in step.observation]
+                for step in trajectory.steps
+                if step.action.action_type == "search"
+            ],
             "sampling_temperature": temperature,
             "sampling_top_p": top_p,
             "generation_backend": backend,
@@ -662,9 +671,9 @@ def generate_episode_candidate_lists(
                 for idx, prediction in enumerate(predictions, start=1)
             ]
             if prompt_mode == "strict_interactive_realization":
-                policy_completion = str(predictions[0].metadata.get("policy_completion", "") or "") if predictions else ""
+                policy_rollout = str(completion_text or "")
                 reward = evaluate_strict_rl_reward(
-                    policy_completion,
+                    policy_rollout,
                     innovation=innovation,
                     train_papers=train_papers,
                     future_papers=future_papers,
@@ -676,7 +685,7 @@ def generate_episode_candidate_lists(
                     model_name=model_name,
                     cutoff_date=episode.cutoff_date,
                     future_end_date=episode.future_end_date,
-                ) if len(predictions) == 1 and policy_completion else build_invalid_reward_evaluation(reward_config)
+                ) if policy_rollout else build_invalid_reward_evaluation(reward_config)
             elif len(predictions) != 1:
                 reward = build_invalid_reward_evaluation(reward_config)
             else:

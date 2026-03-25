@@ -47,8 +47,15 @@ def _extend_unique(existing: tuple[str, ...], values: tuple[str, ...]) -> tuple[
     return tuple(ordered)
 
 
-def _invalid_state(state: SearchState, reason: str) -> SearchState:
-    return replace(state, done=True, invalid_reason=reason)
+def _invalid_state(state: SearchState, reason: str, *, action: SearchAction | None = None) -> SearchState:
+    history = state.action_history + ((action,) if action is not None else ())
+    return replace(
+        state,
+        action_history=history,
+        last_observation=(),
+        done=True,
+        invalid_reason=reason,
+    )
 
 
 def search_corpus(
@@ -94,11 +101,11 @@ def apply_search_action(
     if state.invalid_reason:
         return state, ()
     if state.done:
-        return _invalid_state(state, "trajectory_already_finished"), ()
+        return _invalid_state(state, "trajectory_already_finished", action=action), ()
 
     if action.action_type == "search":
         if state.step_index >= max_search_steps:
-            return _invalid_state(state, "max_search_steps_exceeded"), ()
+            return _invalid_state(state, "max_search_steps_exceeded", action=action), ()
         observation = search_corpus(
             action.query,
             papers,
@@ -112,6 +119,7 @@ def apply_search_action(
         next_state = replace(
             state,
             step_index=state.step_index + 1,
+            action_history=state.action_history + (action,),
             last_observation=observation,
             observation_history=state.observation_history + (observation,),
             surfaced_paper_ids=surfaced_ids,
@@ -121,24 +129,32 @@ def apply_search_action(
 
     if action.action_type == "select":
         if action.paper_id not in state.surfaced_paper_ids:
-            return _invalid_state(state, "paper_id_not_surfaced"), ()
+            return _invalid_state(state, "paper_id_not_surfaced", action=action), ()
         if action.paper_id in state.selected_evidence_ids:
-            return state, ()
+            return replace(
+                state,
+                action_history=state.action_history + (action,),
+                last_observation=(),
+            ), ()
         if len(state.selected_evidence_ids) >= max_selected_evidence:
-            return _invalid_state(state, "max_selected_evidence_exceeded"), ()
+            return _invalid_state(state, "max_selected_evidence_exceeded", action=action), ()
         return replace(
             state,
+            action_history=state.action_history + (action,),
+            last_observation=(),
             selected_evidence_ids=state.selected_evidence_ids + (action.paper_id,),
         ), ()
 
     if action.action_type == "finish":
         return replace(
             state,
+            action_history=state.action_history + (action,),
+            last_observation=(),
             proposal_text=action.proposal_text.strip(),
             done=True,
         ), ()
 
-    return _invalid_state(state, f"unsupported_action_type:{action.action_type}"), ()
+    return _invalid_state(state, f"unsupported_action_type:{action.action_type}", action=action), ()
 
 
 def strict_result_from_state(state: SearchState) -> StrictRealizationResult | None:
@@ -166,6 +182,7 @@ def rollout_search_trajectory(
     state = initialize_search_state(innovation)
     steps: list[RealizationTrajectoryStep] = []
     for action in actions:
+        prior_observation = state.last_observation
         state, observation = apply_search_action(
             state,
             action,
@@ -178,7 +195,10 @@ def rollout_search_trajectory(
         steps.append(
             RealizationTrajectoryStep(
                 action=action,
+                step_index=len(steps),
+                prior_observation=prior_observation,
                 observation=observation,
+                surfaced_paper_ids=state.surfaced_paper_ids,
                 selected_evidence_ids=state.selected_evidence_ids,
             )
         )

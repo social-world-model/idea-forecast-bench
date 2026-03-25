@@ -20,16 +20,12 @@ def _isolate_strategy_store(monkeypatch, tmp_path: Path) -> None:
 
 def _write_markdown(path: Path, *, paper_id: str, title: str, date: str, keywords: list[str], summary: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    keywords_yaml = "\n".join(f"  - \"{kw}\"" for kw in keywords) if keywords else "  - \"\""
     content = (
-        "---\n"
-        f"paper_id: \"{paper_id}\"\n"
-        f"title: \"{title}\"\n"
-        f"date: \"{date}\"\n"
-        "keywords:\n"
-        f"{keywords_yaml}\n"
-        f"source_url: \"https://arxiv.org/abs/{paper_id}\"\n"
-        "---\n\n"
+        f"# {title}\n\n"
+        f"Paper ID: {paper_id}\n"
+        f"Date: {date}\n"
+        f"Keywords: {', '.join(keywords)}\n"
+        f"Source URL: https://arxiv.org/abs/{paper_id}\n\n"
         "# Abstract\n\n"
         f"{summary}\n"
     )

@@ -16,7 +16,7 @@ user_template: |
   Future paper to analyze:
   Title: {future_title}
   Abstract: {future_abstract}
-  References and citation grounding:
+  Reference grounding:
   {future_grounding}
 
   Extract the innovation triple for this future paper given the historical context.

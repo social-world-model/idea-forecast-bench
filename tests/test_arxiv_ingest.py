@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from backend.services import arxiv_ingest
+from live_idea_bench.papers import load_papers_from_markdown
 
 
 SAMPLE_FEED = """<?xml version="1.0" encoding="UTF-8"?>
@@ -60,9 +61,22 @@ def test_ingest_latest_arxiv_papers_writes_markdown_and_is_idempotent(monkeypatc
     paper_path = tmp_path / "2026-03" / "2603.00001v1.md"
     assert paper_path.exists()
     text = paper_path.read_text(encoding="utf-8")
-    assert "paper_id:" in text
-    assert "source_url:" in text
+    assert not text.startswith("---")
+    assert "# Test Paper One" in text
+    assert "Paper ID: 2603.00001v1" in text
+    assert "Date: 2026-03-01" in text
+    assert "Source URL: http://arxiv.org/abs/2603.00001v1" in text
     assert "# Abstract" in text
+    assert "Abstract one." in text
+
+    loaded = load_papers_from_markdown(tmp_path)
+    assert len(loaded) == 1
+    assert loaded[0].paper_id == "2603.00001v1"
+    assert loaded[0].month == "2026-03"
+    assert loaded[0].published_date == "2026-03-01"
+    assert loaded[0].summary == "Abstract one."
+    assert loaded[0].metadata["source_url"] == "http://arxiv.org/abs/2603.00001v1"
+    assert loaded[0].keywords == ["cs.ai", "cs.lg"]
 
     second = arxiv_ingest.ingest_latest_arxiv_papers(
         data_dir=tmp_path,

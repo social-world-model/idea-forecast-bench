@@ -7,8 +7,16 @@ import pandas as pd
 import pytest
 
 from live_idea_bench.models import EvaluationResult, IdeaPrediction, PaperRecord, PredictionMatchDetail, ScoredPredictionList
-from forecaster.models import Innovation
+from forecaster.models import (
+    Innovation,
+    RealizationTrajectory,
+    RealizationTrajectoryStep,
+    SearchAction,
+    SearchObservation,
+    StrictRealizationResult,
+)
 from forecaster.realization import RewardConfig, evaluate_rl_reward, load_ppo_train_config
+from forecaster.realization.strict_runtime import serialize_strict_rollout_completion
 from forecaster.realization.verl import dataset as verl_dataset_module
 from forecaster.realization.verl.dataset import build_verl_dataset_rows, write_verl_dataset
 from forecaster.realization.verl.reward_fn import compute_score
@@ -193,17 +201,49 @@ def test_compute_score_supports_strict_interactive_completion() -> None:
             "future_papers": [],
         }
     )
-    completion = json.dumps(
-        {
-            "actions": [
-                {"action_type": "search", "query": "retrieval planning grounded agents"},
-                {"action_type": "select", "paper_id": "train-1"},
-                {
-                    "action_type": "finish",
-                    "proposal_text": "Grounded Retrieval Planning\nWe compose retrieval and planning with memory.",
-                },
-            ]
-        }
+    completion = serialize_strict_rollout_completion(
+        RealizationTrajectory(
+            innovation=Innovation(
+                base_direction="retrieval planning",
+                operator="compose",
+                gap="ground long-horizon agents",
+            ),
+            steps=(
+                RealizationTrajectoryStep(
+                    action=SearchAction(action_type="search", query="retrieval planning grounded agents"),
+                    observation=(
+                        SearchObservation(
+                            paper_id="train-1",
+                            title="Paper train-1",
+                            month="2024-01",
+                            summary="retrieval planning grounded long-horizon agents compose memory",
+                        ),
+                    ),
+                    surfaced_paper_ids=("train-1",),
+                    selected_evidence_ids=(),
+                ),
+                RealizationTrajectoryStep(
+                    action=SearchAction(action_type="select", paper_id="train-1"),
+                    observation=(),
+                    surfaced_paper_ids=("train-1",),
+                    selected_evidence_ids=("train-1",),
+                ),
+                RealizationTrajectoryStep(
+                    action=SearchAction(
+                        action_type="finish",
+                        proposal_text="Grounded Retrieval Planning\nWe compose retrieval and planning with memory.",
+                    ),
+                    observation=(),
+                    surfaced_paper_ids=("train-1",),
+                    selected_evidence_ids=("train-1",),
+                ),
+            ),
+            result=StrictRealizationResult(
+                selected_evidence_ids=("train-1",),
+                proposal_text="Grounded Retrieval Planning\nWe compose retrieval and planning with memory.",
+                search_queries=("retrieval planning grounded agents",),
+            ),
+        )
     )
 
     score = compute_score("live_idea_bench", completion, "", extra_info=extra_info)

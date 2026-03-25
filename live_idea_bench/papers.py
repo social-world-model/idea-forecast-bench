@@ -7,8 +7,6 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
-import yaml
-
 from live_idea_bench.models import PaperRecord
 
 PathLike = Union[str, Path]
@@ -192,31 +190,6 @@ def date_to_ordinal(raw: str) -> int:
     return date.fromisoformat(normalize_date(raw)).toordinal()
 
 
-def _extract_front_matter_and_body(text: str) -> Tuple[Dict[str, object], str]:
-    if not text.startswith("---\n"):
-        return {}, text
-
-    lines = text.splitlines()
-    end_idx = -1
-    for idx in range(1, len(lines)):
-        if lines[idx].strip() == "---":
-            end_idx = idx
-            break
-
-    if end_idx == -1:
-        return {}, text
-
-    header_text = "\n".join(lines[1:end_idx])
-    body_text = "\n".join(lines[end_idx + 1 :])
-    try:
-        metadata = yaml.safe_load(header_text) or {}
-        if not isinstance(metadata, dict):
-            metadata = {}
-    except Exception:
-        metadata = {}
-    return metadata, body_text
-
-
 def _extract_section(body: str, section_name: str) -> str:
     pattern = re.compile(
         rf"^#{{1,6}}\s*{re.escape(section_name)}\s*$",
@@ -241,16 +214,61 @@ def _to_date_text(raw: object) -> str:
     return str(raw or "").strip()
 
 
+def _extract_title_and_body(text: str, path: Path) -> Tuple[str, str]:
+    match = re.search(r"^#\s+(.+?)\s*$", text, flags=re.MULTILINE)
+    if not match:
+        return path.stem, text
+    title = match.group(1).strip()
+    return title, text[match.end() :].lstrip()
+
+
+def _normalize_metadata_key(raw: str) -> str:
+    key = re.sub(r"[^a-z0-9]+", "_", raw.strip().lower()).strip("_")
+    if key == "paperid":
+        return "paper_id"
+    return key
+
+
+def _extract_preamble_metadata(body: str) -> Tuple[Dict[str, object], str]:
+    lines = body.splitlines()
+    metadata: Dict[str, object] = {}
+    consumed = 0
+
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            consumed = idx + 1
+            continue
+        if re.match(r"^#{1,6}\s+\S", stripped):
+            break
+        match = re.match(r"^([A-Za-z][A-Za-z0-9 _/-]{0,60}):\s*(.+?)\s*$", stripped)
+        if not match:
+            break
+        metadata[_normalize_metadata_key(match.group(1))] = match.group(2).strip()
+        consumed = idx + 1
+
+    return metadata, "\n".join(lines[consumed:]).lstrip()
+
+
+def _infer_month_from_parent_dirs(path: Path) -> str:
+    for parent in path.parents:
+        name = parent.name.strip()
+        if re.match(r"^\d{4}-\d{2}$", name):
+            return normalize_month(name)
+    raise ValueError(f"Cannot determine month for {path}")
+
+
 def _extract_published_date(metadata: Dict[str, object], path: Path) -> str:
     raw_date = metadata.get("date")
     date_text = _to_date_text(raw_date)
     if date_text:
         return normalize_date(date_text)
 
-    name = path.name
-    if len(name) >= 4 and name[:4].isdigit():
-        return month_end_date(normalize_month(name[:4]))
-    raise ValueError(f"Cannot determine month for {path}")
+    stem = path.stem
+    if len(stem) >= 4 and stem[:4].isdigit():
+        return month_end_date(normalize_month(stem[:4]))
+
+    return month_end_date(_infer_month_from_parent_dirs(path))
 
 
 def _extract_keywords(metadata: Dict[str, object]) -> List[str]:
@@ -281,31 +299,6 @@ def _normalize_metadata_value(value: object) -> Any:
     return str(value)
 
 
-def _normalize_reference_entries(raw: object) -> List[Dict[str, Any]]:
-    if raw is None:
-        return []
-
-    def _coerce_entry(entry: object) -> Dict[str, Any] | None:
-        normalized = _normalize_metadata_value(entry)
-        if isinstance(normalized, dict):
-            return {str(key): value for key, value in normalized.items()}
-        if isinstance(normalized, str):
-            text = normalized.strip()
-            if text:
-                return {"text": text}
-            return None
-        if normalized is None:
-            return None
-        return {"text": str(normalized)}
-
-    if isinstance(raw, list):
-        rows = [_coerce_entry(entry) for entry in raw]
-        return [row for row in rows if row]
-
-    single = _coerce_entry(raw)
-    return [single] if single else []
-
-
 _TITLE_STOP_WORDS = frozenset({
     "a", "an", "the", "of", "for", "in", "on", "with", "and", "or", "to",
     "is", "by", "from", "at", "its", "via", "are", "we", "our", "can",
@@ -327,15 +320,83 @@ def _keywords_from_title(title: str) -> List[str]:
     return keywords
 
 
-def _extract_title(metadata: Dict[str, object], body: str, path: Path) -> str:
-    title = metadata.get("title")
-    if isinstance(title, str) and title.strip():
-        return title.strip()
+def _split_preface_and_sections(body: str) -> Tuple[str, str]:
+    match = re.search(r"^#{1,6}\s+\S.+$", body, flags=re.MULTILINE)
+    if not match:
+        return body.strip(), ""
+    return body[: match.start()].strip(), body[match.start() :].strip()
 
-    first_heading = re.search(r"^#\s+(.+)$", body, flags=re.MULTILINE)
-    if first_heading:
-        return first_heading.group(1).strip()
-    return path.stem
+
+def _clean_summary_text(text: str, *, max_chars: int = 1500) -> str:
+    normalized = re.sub(r"[ \t]+", " ", text).strip()
+    return normalized[:max_chars].strip()
+
+
+def _extract_summary(body: str) -> str:
+    summary = _extract_section(body, "Summary")
+    if summary:
+        return _clean_summary_text(summary)
+
+    abstract = _extract_section(body, "Abstract")
+    if abstract:
+        return _clean_summary_text(abstract)
+
+    preface, _sections = _split_preface_and_sections(body)
+    if preface:
+        paragraphs = [part.strip() for part in re.split(r"\n\s*\n", preface) if part.strip()]
+        for index, paragraph in enumerate(paragraphs):
+            match = re.match(r"^Abstract\s*[—–:-]\s*(.*)$", paragraph, flags=re.IGNORECASE | re.DOTALL)
+            if not match:
+                continue
+            abstract_parts = [match.group(1).strip()] + paragraphs[index + 1 :]
+            return _clean_summary_text("\n\n".join(part for part in abstract_parts if part))
+        return _clean_summary_text(preface)
+
+    return _clean_summary_text(clean_paper_content(body))
+
+
+def _is_reference_entry_start(line: str) -> bool:
+    return bool(re.match(r"^(?:\[\d+\]|\d+[.)])\s+", line))
+
+
+def _strip_reference_prefix(line: str) -> str:
+    return re.sub(r"^(?:\[\d+\]|\d+[.)])\s+", "", line).strip()
+
+
+def _extract_bibliography(body: str) -> List[Dict[str, Any]]:
+    references_text = _extract_section(body, "References")
+    if not references_text:
+        return []
+
+    entries: List[str] = []
+    current_parts: List[str] = []
+    saw_blank = False
+    for raw_line in references_text.splitlines():
+        line = " ".join(raw_line.split()).strip()
+        if not line:
+            saw_blank = True
+            continue
+        if _is_reference_entry_start(line):
+            if current_parts:
+                entries.append(" ".join(current_parts).strip())
+            current_parts = [_strip_reference_prefix(line)]
+            saw_blank = False
+            continue
+        if saw_blank and current_parts:
+            entries.append(" ".join(current_parts).strip())
+            current_parts = [line]
+            saw_blank = False
+            continue
+        if current_parts:
+            current_parts.append(line)
+        else:
+            current_parts = [line]
+        saw_blank = False
+
+    if current_parts:
+        entries.append(" ".join(current_parts).strip())
+
+    return [{"text": entry} for entry in entries if entry]
 
 
 def parse_markdown_paper(path: Path) -> Optional[PaperRecord]:
@@ -343,21 +404,17 @@ def parse_markdown_paper(path: Path) -> Optional[PaperRecord]:
     if not text.strip():
         return None
 
-    metadata, body = _extract_front_matter_and_body(text)
+    title, body = _extract_title_and_body(text, path)
+    metadata, body = _extract_preamble_metadata(body)
     try:
         published_date = _extract_published_date(metadata, path)
     except ValueError:
         return None
     month = normalize_month(published_date)
 
-    summary = _extract_section(body, "Summary")
-    if not summary:
-        summary = _extract_section(body, "Abstract")
-    if not summary:
-        summary = clean_paper_content(body)[:1500].strip()
+    summary = _extract_summary(body)
 
     paper_id = str(metadata.get("paper_id") or path.stem)
-    title = _extract_title(metadata, body, path)
     keywords = _extract_keywords(metadata)
     if not keywords:
         keywords = _keywords_from_title(title)
@@ -373,10 +430,10 @@ def parse_markdown_paper(path: Path) -> Optional[PaperRecord]:
         metadata={
             str(k): _normalize_metadata_value(v)
             for k, v in metadata.items()
-            if k not in {"keywords", "references", "citations"}
+            if k not in {"paper_id", "date", "keywords"}
         },
-        references=_normalize_reference_entries(metadata.get("references")),
-        citations=_normalize_reference_entries(metadata.get("citations")),
+        references=_extract_bibliography(body),
+        citations=[],
     )
 
 

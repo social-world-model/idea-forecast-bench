@@ -18,8 +18,7 @@ from forecaster.realization.realization_reward import (
     evaluate_realization_reward,
     evaluate_strict_trajectory_reward,
 )
-from forecaster.realization.search_env import rollout_search_trajectory
-from forecaster.realization.strict_runtime import parse_search_actions_completion
+from forecaster.realization.strict_runtime import parse_strict_rollout_completion
 from live_idea_bench.similarity import idea_text, paper_text, score_prediction_list
 
 logger = logging.getLogger(__name__)
@@ -247,7 +246,7 @@ def evaluate_strict_completion_reward(
     realization_config: RealizationConfig,
     search_env_payload: dict[str, Any] | None = None,
 ) -> StrictTrajectoryRewardBreakdown:
-    """Replay a strict interactive completion and score its trajectory reward."""
+    """Score a strict stepwise rollout artifact with the shared trajectory reward."""
     if innovation is None:
         return StrictTrajectoryRewardBreakdown(
             evidence_quality=0.0,
@@ -257,25 +256,25 @@ def evaluate_strict_completion_reward(
             invalid_completion=True,
             invalid_reason="missing_innovation",
         )
-    actions = parse_search_actions_completion(_completion_to_text(raw_completion))
-    if not actions:
+    trajectory = parse_strict_rollout_completion(_completion_to_text(raw_completion))
+    if trajectory is None:
         return StrictTrajectoryRewardBreakdown(
             evidence_quality=0.0,
             operator_adherence=0.0,
             proposal_coherence=0.0,
             total_reward=round(reward_config.invalid_completion_reward, 4),
             invalid_completion=True,
-            invalid_reason="invalid_action_sequence",
+            invalid_reason="stepwise_rollout_required",
         )
-    env = dict(search_env_payload or {})
-    trajectory = rollout_search_trajectory(
-        innovation,
-        actions,
-        train_papers,
-        top_k=int(env.get("top_k", 5) or 5),
-        max_search_steps=int(env.get("max_search_steps", 3) or 3),
-        max_selected_evidence=int(env.get("max_selected_evidence", 5) or 5),
-    )
+    if trajectory.innovation != innovation:
+        return StrictTrajectoryRewardBreakdown(
+            evidence_quality=0.0,
+            operator_adherence=0.0,
+            proposal_coherence=0.0,
+            total_reward=round(reward_config.invalid_completion_reward, 4),
+            invalid_completion=True,
+            invalid_reason="innovation_mismatch",
+        )
     strict_reward = evaluate_strict_trajectory_reward(
         trajectory,
         train_papers,
@@ -310,19 +309,11 @@ def evaluate_strict_rl_reward(
 ) -> RLRewardEvaluation:
     if innovation is None:
         return build_invalid_reward_evaluation(reward_config)
-    raw_text = _completion_to_text(raw_completion)
-    actions = parse_search_actions_completion(raw_text)
-    if not actions:
+    trajectory = parse_strict_rollout_completion(_completion_to_text(raw_completion))
+    if trajectory is None:
         return build_invalid_reward_evaluation(reward_config)
-    env = dict(search_env_payload or {})
-    trajectory = rollout_search_trajectory(
-        innovation,
-        actions,
-        train_papers,
-        top_k=int(env.get("top_k", 5) or 5),
-        max_search_steps=int(env.get("max_search_steps", 3) or 3),
-        max_selected_evidence=int(env.get("max_selected_evidence", 5) or 5),
-    )
+    if trajectory.innovation != innovation:
+        return build_invalid_reward_evaluation(reward_config)
     strict_reward = evaluate_strict_trajectory_reward(
         trajectory,
         train_papers,

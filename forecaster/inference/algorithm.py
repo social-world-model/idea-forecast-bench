@@ -8,7 +8,13 @@ from typing import Any, Callable
 
 from live_idea_bench.models import PaperRecord
 
-from forecaster.models import Innovation, JointCandidate, ScoredProposal
+from forecaster.models import (
+    Innovation,
+    JointCandidate,
+    RealizationTrajectory,
+    ScoredProposal,
+    realization_trajectory_to_dict,
+)
 from forecaster.config import InferenceConfig, RealizationConfig
 from forecaster.config import strict_inference_score_contract, validate_inference_config
 from forecaster.inference.scoring import (
@@ -23,8 +29,8 @@ from forecaster.inference.deduplication import deduplicate_proposals
 from forecaster.prior.memory import MemoryStore
 from forecaster.prior.sampler import build_prior_scorer
 from forecaster.realization.strict_runtime import (
-    generate_strict_policy_completion,
     run_strict_realization_rollout,
+    serialize_strict_rollout_completion,
 )
 from forecaster.realization.evidence import retrieve_evidence
 from forecaster.realization.proposal_generator import generate_proposal
@@ -88,7 +94,7 @@ def run_joint_inference(
             raise ValueError("Strict joint inference does not allow popularity_scorer.")
     prior_scorer: Callable[[Innovation], float] | None = None
     realization_scorer: Callable[[str, Innovation, list[PaperRecord]], float] | None = None
-    strict_realization_scorer: Callable[[Innovation, str], float] | None = None
+    strict_realization_scorer: Callable[[RealizationTrajectory], float] | None = None
     if strict_runtime and inference_config.prior_score_method == "conditional_logprob" and not prior_model_path:
         raise ValueError("Strict joint inference requires a prior_model_path for conditional prior scoring.")
     if strict_runtime and inference_config.realization_score_method == "conditional_logprob" and not realization_model_path:
@@ -166,16 +172,9 @@ def run_joint_inference(
             search_queries: list[str] = []
             surfaced_paper_ids_by_step: list[list[str]] = []
             selected_evidence_ids: list[str] = []
-            policy_completion = ""
+            strict_rollout_payload = ""
+            strict_trajectory_payload: dict[str, Any] = {}
             if strict_runtime:
-                policy_completion = generate_strict_policy_completion(
-                    innovation,
-                    papers,
-                    llm_client=llm_client,
-                    model=model,
-                    realization_config=realization_config,
-                    realization_model_path=realization_model_path,
-                )
                 trajectory, evidence = run_strict_realization_rollout(
                     innovation,
                     papers,
@@ -183,7 +182,6 @@ def run_joint_inference(
                     model=model,
                     realization_config=realization_config,
                     realization_model_path=realization_model_path,
-                    completion_text=policy_completion,
                 )
                 if trajectory.invalid_reason:
                     raise RuntimeError(
@@ -191,6 +189,8 @@ def run_joint_inference(
                     )
                 if trajectory.result is None:
                     raise RuntimeError("Strict realization rollout did not finish with a proposal.")
+                strict_rollout_payload = serialize_strict_rollout_completion(trajectory)
+                strict_trajectory_payload = realization_trajectory_to_dict(trajectory)
                 proposal_text = trajectory.result.proposal_text
                 search_queries = list(trajectory.result.search_queries)
                 surfaced_paper_ids_by_step = [
@@ -220,9 +220,7 @@ def run_joint_inference(
             realization_score_source = "paper_reward_log"
             if strict_runtime and strict_realization_scorer is not None:
                 try:
-                    realization_score = float(
-                        strict_realization_scorer(innovation, policy_completion)
-                    )
+                    realization_score = float(strict_realization_scorer(trajectory))
                     realization_score_source = "model_conditional_logprob"
                 except Exception as exc:
                     if strict_runtime:
@@ -311,7 +309,8 @@ def run_joint_inference(
                     "search_queries": search_queries,
                     "surfaced_paper_ids_by_step": surfaced_paper_ids_by_step,
                     "selected_evidence_ids": selected_evidence_ids,
-                    "policy_completion": policy_completion,
+                    "policy_rollout": strict_rollout_payload,
+                    "strict_trajectory": strict_trajectory_payload,
                 },
             )
             candidates.append(candidate)

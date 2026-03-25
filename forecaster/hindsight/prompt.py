@@ -79,7 +79,7 @@ def _build_future_grounding(
     *,
     max_reference_items: int = 12,
 ) -> str:
-    """Render references/citations for richer hindsight grounding."""
+    """Render reference metadata for hindsight grounding."""
     entries: list[tuple[str, dict[str, Any]]] = []
     for reference in future_paper.references:
         entries.append(("reference", reference))
@@ -87,7 +87,7 @@ def _build_future_grounding(
         entries.append(("citation", citation))
 
     if not entries:
-        return "(no citation/reference metadata available)"
+        return "(no reference metadata available)"
 
     lines = [
         f"{idx}. [{label}] {_format_reference_entry(entry)}"

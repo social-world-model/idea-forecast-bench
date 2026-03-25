@@ -14,20 +14,21 @@ def _setup_mock_data(tmp_path: Path) -> Path:
     for year in [2024, 2025]:
         for month in range(1, 13):
             month_str = f"{year}-{month:02d}"
-            p = data_dir / f"paper_{month_str}.md"
+            p = data_dir / month_str / f"paper_{month_str}.md"
+            p.parent.mkdir(parents=True, exist_ok=True)
             # Add stop terms and 5 repeating terms to ensure 5 predictions
             keywords = ["cs.ml", "deep learning"]
             for i in range(5):
                 keywords.append(f"trend_term_{i}")
-            
-            content = f"""---
-paper_id: paper_{month_str}
-date: {month_str}
-keywords: {keywords}
----
-# Summary
-This is a summary for {month_str}.
-"""
+
+            content = (
+                f"# Paper {month_str}\n\n"
+                f"Paper ID: paper_{month_str}\n"
+                f"Date: {month_str}\n"
+                f"Keywords: {', '.join(keywords)}\n\n"
+                "# Summary\n\n"
+                f"This is a summary for {month_str}.\n"
+            )
             p.write_text(content, encoding="utf-8")
     return data_dir
 

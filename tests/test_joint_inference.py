@@ -403,10 +403,7 @@ class TestRunJointInference:
             return_value=lambda innovation: -0.2,
         ), patch(
             "forecaster.inference.algorithm.build_strict_realization_scorer",
-            return_value=lambda innovation, completion_text: -0.3,
-        ), patch(
-            "forecaster.inference.algorithm.generate_strict_policy_completion",
-            return_value='{"actions":[{"action_type":"search","query":"attention efficiency"},{"action_type":"finish","proposal_text":"Strict Proposal\\nBody"}]}',
+            return_value=lambda trajectory: -0.3,
         ), patch(
             "forecaster.inference.algorithm.run_strict_realization_rollout",
             return_value=(trajectory, [_make_paper("p1", "attention mechanism for long document sequences training")]),
@@ -427,6 +424,8 @@ class TestRunJointInference:
         assert result[0].metadata["surfaced_paper_ids_by_step"] == [["p1"]]
         assert result[0].metadata["selected_evidence_ids"] == ["p1"]
         assert result[0].metadata["evidence_paper_ids"] == ["p1"]
+        assert result[0].metadata["policy_rollout"]
+        assert result[0].metadata["strict_trajectory"]["steps"][0]["action"]["action_type"] == "search"
         assert result[0].joint_score == pytest.approx((0.4 * -0.2) + (0.6 * -0.3))
         assert result[0].metadata["strict_score_contract"]["joint_score_components"] == (
             "prior_score",

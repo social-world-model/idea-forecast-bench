@@ -1,11 +1,13 @@
 """Tests for hindsight extraction — extractor and prompt."""
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from live_idea_bench.models import PaperRecord
+from live_idea_bench.papers import parse_markdown_paper
 from forecaster.models import Innovation
 from forecaster.config import HindsightConfig
 
@@ -240,3 +242,35 @@ class TestBuildHindsightPrompt:
             context_papers=[],
         )
         assert FUTURE_PAPER.title in user_message
+
+    def test_build_hindsight_prompt_uses_body_style_bibliography(self, tmp_path: Path):
+        """Body-style REFERENCES should become non-empty reference grounding."""
+        from forecaster.hindsight.prompt import build_hindsight_prompt
+
+        paper_path = tmp_path / "2024-03" / "2403.12345.md"
+        paper_path.parent.mkdir(parents=True, exist_ok=True)
+        paper_path.write_text(
+            (
+                "# Retrieval-Augmented Forecasting\n\n"
+                "Abstract— We ground forecasting models with bibliography evidence.\n\n"
+                "# INTRODUCTION\n\n"
+                "Intro.\n\n"
+                "# REFERENCES\n\n"
+                "[1] Foundational Work on Retrieval.\n"
+                "[2] Evidence Selection for Forecasting.\n"
+            ),
+            encoding="utf-8",
+        )
+
+        future_paper = parse_markdown_paper(paper_path)
+        assert future_paper is not None
+        assert future_paper.references
+
+        _system_prompt, user_message = build_hindsight_prompt(
+            future_paper=future_paper,
+            context_papers=CONTEXT_PAPERS[:2],
+        )
+
+        assert "Reference grounding:" in user_message
+        assert "Foundational Work on Retrieval." in user_message
+        assert "Evidence Selection for Forecasting." in user_message

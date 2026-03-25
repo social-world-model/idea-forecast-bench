@@ -14,7 +14,15 @@ from live_idea_bench.models import (
     PredictionMatchDetail,
     ScoredPredictionList,
 )
-from forecaster.models import HindsightSample, Innovation
+from forecaster.models import (
+    HindsightSample,
+    Innovation,
+    RealizationTrajectory,
+    RealizationTrajectoryStep,
+    SearchAction,
+    SearchObservation,
+    StrictRealizationResult,
+)
 from forecaster.realization import (
     CandidateGenerationConfig,
     CandidateListSample,
@@ -43,6 +51,7 @@ from forecaster.realization import (
     train_rloo_with_verl,
 )
 from forecaster.realization.reward import build_online_rl_reward_function
+from forecaster.realization.strict_runtime import serialize_strict_rollout_completion
 from forecaster.realization.verl import dataset as verl_dataset_module
 
 
@@ -231,15 +240,77 @@ def test_build_online_reward_function_supports_strict_interactive_completion() -
 
     rewards = reward_func(
         completions=[
+            serialize_strict_rollout_completion(
+                RealizationTrajectory(
+                    innovation=Innovation(
+                        base_direction="retrieval planning",
+                        operator="compose",
+                        gap="ground long-horizon agents",
+                    ),
+                    steps=(
+                        RealizationTrajectoryStep(
+                            action=SearchAction(action_type="search", query="retrieval planning grounded agents"),
+                            observation=(
+                                SearchObservation(
+                                    paper_id="train-1",
+                                    title="Paper train-1",
+                                    month="2024-01",
+                                    summary="retrieval planning grounded long-horizon agents compose memory",
+                                ),
+                            ),
+                            surfaced_paper_ids=("train-1",),
+                            selected_evidence_ids=(),
+                        ),
+                        RealizationTrajectoryStep(
+                            action=SearchAction(action_type="select", paper_id="train-1"),
+                            observation=(),
+                            surfaced_paper_ids=("train-1",),
+                            selected_evidence_ids=("train-1",),
+                        ),
+                        RealizationTrajectoryStep(
+                            action=SearchAction(
+                                action_type="finish",
+                                proposal_text="Grounded Retrieval Planning\nWe compose retrieval and planning with memory.",
+                            ),
+                            observation=(),
+                            surfaced_paper_ids=("train-1",),
+                            selected_evidence_ids=("train-1",),
+                        ),
+                    ),
+                    result=StrictRealizationResult(
+                        selected_evidence_ids=("train-1",),
+                        proposal_text="Grounded Retrieval Planning\nWe compose retrieval and planning with memory.",
+                        search_queries=("retrieval planning grounded agents",),
+                    ),
+                )
+            )
+        ],
+        train_papers=[[asdict(_paper("train-1", "2024-01", published_date="2024-01-01", summary="retrieval planning grounded long-horizon agents compose memory"))]],
+        future_papers=[[]],
+        prompt_mode=["strict_interactive_realization"],
+        innovation=[
+            {
+                "base_direction": "retrieval planning",
+                "operator": "compose",
+                "gap": "ground long-horizon agents",
+            }
+        ],
+        search_env_payload=[{"max_search_steps": 3, "top_k": 5, "max_selected_evidence": 5}],
+    )
+
+    assert rewards[0] > 0.0
+
+
+def test_build_online_reward_function_rejects_strict_action_list_shortcut() -> None:
+    reward_func = build_online_rl_reward_function(RewardConfig(top_k=1, invalid_completion_reward=-0.05))
+
+    rewards = reward_func(
+        completions=[
             json.dumps(
                 {
                     "actions": [
                         {"action_type": "search", "query": "retrieval planning grounded agents"},
-                        {"action_type": "select", "paper_id": "train-1"},
-                        {
-                            "action_type": "finish",
-                            "proposal_text": "Grounded Retrieval Planning\nWe compose retrieval and planning with memory.",
-                        },
+                        {"action_type": "finish", "proposal_text": "Shortcut proposal"},
                     ]
                 }
             )
@@ -257,7 +328,7 @@ def test_build_online_reward_function_supports_strict_interactive_completion() -
         search_env_payload=[{"max_search_steps": 3, "top_k": 5, "max_selected_evidence": 5}],
     )
 
-    assert rewards[0] > 0.0
+    assert rewards == [-0.05]
 
 
 def test_build_grpo_advantages_from_episode_candidates() -> None:
@@ -498,7 +569,7 @@ def test_build_strict_rl_prompt_rows_expose_env_without_evidence() -> None:
     assert row["evidence_papers"] == []
     assert row["search_env"]["max_search_steps"] == 3
     assert row["strict_contract"]["trajectory_schema_version"] >= 1
-    assert "Return ONLY JSON" in row["prompt"]
+    assert "Return ONLY one JSON object" in row["prompt"]
 
 
 def test_generate_episode_candidate_lists_supports_strict_interactive_rows(

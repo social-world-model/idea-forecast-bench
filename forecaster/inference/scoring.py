@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Callable
 
 from live_idea_bench.models import PaperRecord
 
-from forecaster.models import Innovation
+from forecaster.models import Innovation, RealizationTrajectory
 from forecaster.config import (
     InferenceConfig,
     RealizationConfig,
@@ -14,7 +14,7 @@ from forecaster.config import (
 )
 from forecaster.realization.realization_reward import compute_realization_reward
 from forecaster.realization.proposal_generator import score_local_proposal
-from forecaster.realization.strict_runtime import score_strict_policy_completion
+from forecaster.realization.strict_runtime import score_strict_realization_trajectory
 
 if TYPE_CHECKING:
     from forecaster.prior.memory import MemoryStore
@@ -141,18 +141,16 @@ def build_realization_scorer(
 def build_strict_realization_scorer(
     realization_model_path: str,
     inference_config: InferenceConfig,
-) -> Callable[[Innovation, str], float]:
-    """Build a scorer for strict policy completions under the shared strict prompt."""
+) -> Callable[[RealizationTrajectory], float]:
+    """Build a scorer for strict stepwise rollouts under the shared strict prompt."""
     normalization = str(getattr(inference_config, "score_normalization", "per_token")).strip().lower()
     score_temperature = float(getattr(inference_config, "score_temperature", 1.0) or 1.0)
 
     def score(
-        innovation: Innovation,
-        completion_text: str,
+        trajectory: RealizationTrajectory,
     ) -> float:
-        return score_strict_policy_completion(
-            innovation,
-            completion_text,
+        return score_strict_realization_trajectory(
+            trajectory,
             model_name_or_path=realization_model_path,
             score_normalization=normalization,
             score_temperature=score_temperature,

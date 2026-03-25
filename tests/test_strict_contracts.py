@@ -40,6 +40,12 @@ def test_strict_runtime_manifest_contract_freezes_versions() -> None:
     assert manifest["joint_score_formula"] == "linear_blend(prior_score, realization_score)"
     assert tuple(manifest["joint_score_components"]) == ("prior_score", "realization_score")
     assert manifest["allows_extra_bonus_terms"] is False
+    assert manifest["policy_emits_one_action_per_turn"] is True
+    assert manifest["interactive_rollout_required"] is True
+    assert manifest["full_action_list_completion_valid"] is False
+    assert manifest["strict_realization_loop_mode"] == "step_interactive"
+    assert manifest["strict_realization_action_schema"] == "single_action_json"
+    assert manifest["strict_realization_score_factorization"] == "per_step_conditional"
 
 
 def test_strict_search_contract_exposes_action_types_and_defaults() -> None:
@@ -47,6 +53,9 @@ def test_strict_search_contract_exposes_action_types_and_defaults() -> None:
 
     assert contract["action_schema_version"] == STRICT_SEARCH_ACTION_SCHEMA_VERSION
     assert tuple(contract["allowed_action_types"]) == ("search", "select", "finish")
+    assert contract["policy_emits_one_action_per_turn"] is True
+    assert contract["interactive_rollout_required"] is True
+    assert contract["full_action_list_completion_valid"] is False
     assert contract["search_env_defaults"]["max_search_steps"] == 3
 
 
