@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from forecaster.models import Innovation, HindsightSample
+from forecaster.models import Innovation, HindsightSample, MemoryEntry, MemoryInventory
+from forecaster.prior.memory import MemoryStore
 from forecaster.prior.sft_dataset import build_sft_samples, save_sft_dataset, load_sft_dataset
 
 
@@ -80,6 +81,45 @@ def test_build_sft_samples_target_is_valid_json():
         assert "base_direction" in obj
         assert "operator" in obj
         assert "gap" in obj
+
+
+def test_build_sft_samples_uses_shared_prompt_contract():
+    """Training rows should already contain the shared user prompt wrapper."""
+    samples = build_sft_samples(_make_samples(1))
+    assert "Current research memory" in samples[0]["input"]
+    assert "predict the most likely next innovation" in samples[0]["input"]
+    assert "memory_prompt" in samples[0]
+
+
+def test_build_sft_samples_supports_replayed_memory_snapshots() -> None:
+    hindsight = [_make_hindsight_sample(1, "2024-01")]
+    replay_memory = MemoryStore(
+        MemoryInventory(
+            entries=(
+                MemoryEntry(
+                    innovation=Innovation(
+                        base_direction="replayed direction",
+                        operator="compose",
+                        gap="utility-shaped gap",
+                    ),
+                    source_paper_id="replay-paper",
+                    timestamp_month="2023-12",
+                    frequency=3,
+                    recency_score=0.8,
+                    utility_score=0.9,
+                ),
+            ),
+            last_updated_month="2024-01",
+        )
+    )
+
+    samples = build_sft_samples(
+        hindsight,
+        memory_snapshots_by_cutoff={"2024-01": replay_memory},
+    )
+
+    assert "replayed direction" in samples[0]["memory_prompt"]
+    assert '"utility":0.9' in samples[0]["memory_prompt"]
 
 
 def test_build_sft_samples_excludes_future_unavailable_at_cutoff():

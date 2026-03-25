@@ -1,6 +1,7 @@
 """Tests for ForecasterPipeline orchestrator (Phase 6)."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -342,8 +343,9 @@ class TestRunFullPipelinePriorWiring:
 
         captured_future_ids: list[str] = []
 
-        def _capture_build_sft(samples):  # type: ignore[no-untyped-def]
-            captured_future_ids.extend(sample.future_paper_id for sample in samples)
+        def _capture_build_sft(samples, **kwargs):  # type: ignore[no-untyped-def]
+            if "memory_snapshots_by_cutoff" not in kwargs:
+                captured_future_ids.extend(sample.future_paper_id for sample in samples)
             return []
 
         mock_client = MagicMock()
@@ -532,3 +534,46 @@ class TestForecasterPipelineStrictMode:
 
         assert captured_kwargs["skip_alignment_check"] is True
         assert result is not None
+
+    def test_strict_mode_runs_prior_refresh_and_persists_refresh_artifacts(self, tmp_path: Path) -> None:
+        pipeline = ForecasterPipeline(
+            papers=[_paper("p1", "2024-01"), _paper("p2", "2024-02")],
+            output_dir=tmp_path / "out",
+        )
+        mock_client = MagicMock()
+        bootstrap_checkpoint = str(tmp_path / "bootstrap")
+        refresh_checkpoint = str(tmp_path / "refresh")
+        fake_realization = tmp_path / "realization"
+        Path(bootstrap_checkpoint).mkdir(parents=True)
+        Path(refresh_checkpoint).mkdir(parents=True)
+        fake_realization.mkdir(parents=True)
+
+        with patch("forecaster.orchestrator.create_client", return_value=(mock_client, "gpt-4o")), \
+             patch("forecaster.orchestrator.build_hindsight_dataset", return_value=[_make_hindsight_sample("p2", "2024-01")]), \
+             patch("forecaster.orchestrator.build_sft_samples", return_value=[]), \
+             patch("forecaster.orchestrator.train_prior", side_effect=[bootstrap_checkpoint, refresh_checkpoint]), \
+             patch("forecaster.orchestrator.sample_innovations", return_value=[_make_innovation("strict")]), \
+             patch("forecaster.orchestrator.ForecasterPipeline.run_realization_training", return_value="manifest.json"), \
+             patch("forecaster.orchestrator._extract_realization_model_path", return_value=str(fake_realization)), \
+             patch("forecaster.orchestrator.run_joint_inference_fn", return_value=[_make_scored_proposal()]), \
+             patch("forecaster.orchestrator._score_proposals_for_delayed_feedback", return_value=[]):
+            result = pipeline.run_full_pipeline(
+                cutoff_months=["2024-01", "2024-02"],
+                skip_training=False,
+                strict_eval=True,
+            )
+
+        runtime_contract = json.loads((tmp_path / "out" / "runtime_contract.json").read_text(encoding="utf-8"))
+        assert result["bootstrap_prior_checkpoint"] == bootstrap_checkpoint
+        assert result["refresh_prior_checkpoint"] == refresh_checkpoint
+        assert result["prior_checkpoint"] == refresh_checkpoint
+        assert (tmp_path / "out" / "prior_refresh" / "refresh_manifest.json").exists()
+        assert runtime_contract["artifacts"]["bootstrap_prior_checkpoint"] == bootstrap_checkpoint
+        assert runtime_contract["artifacts"]["refresh_prior_checkpoint"] == refresh_checkpoint
+        assert runtime_contract["artifacts"]["final_prior_checkpoint"] == refresh_checkpoint
+        assert runtime_contract["score_contract"]["prior_score_method"] == "conditional_logprob"
+        assert runtime_contract["score_contract"]["realization_score_method"] == "conditional_logprob"
+        assert runtime_contract["score_contract"]["joint_score_mode"] == "linear_blend"
+        assert runtime_contract["score_contract"]["joint_score_formula"] == "linear_blend(prior_score, realization_score)"
+        assert runtime_contract["score_contract"]["joint_score_components"] == ["prior_score", "realization_score"]
+        assert runtime_contract["score_contract"]["popularity_weight"] == 0.0

@@ -17,6 +17,7 @@ from forecaster.realization.config import load_reward_config
 from forecaster.realization.reward import (
     build_invalid_reward_evaluation,
     coerce_reward_prediction,
+    evaluate_strict_completion_reward,
     evaluate_rl_reward,
 )
 
@@ -76,9 +77,20 @@ def compute_score(
         )
     except (TypeError, ValueError):
         realization_config = load_realization_config(realization_config_path)
+    prompt_mode = str(payload.get("prompt_mode", "") or "")
+    if prompt_mode == "strict_interactive_realization":
+        strict_reward = evaluate_strict_completion_reward(
+            solution_str,
+            innovation=innovation,
+            train_papers=train_papers,
+            reward_config=reward_config,
+            realization_config=realization_config,
+            search_env_payload=payload.get("search_env") if isinstance(payload.get("search_env"), dict) else None,
+        )
+        return strict_reward.total_reward
     prediction, proposal_text = coerce_reward_prediction(
         solution_str,
-        prompt_mode=str(payload.get("prompt_mode", "") or ""),
+        prompt_mode=prompt_mode,
         innovation=innovation,
     )
     if prediction is None:

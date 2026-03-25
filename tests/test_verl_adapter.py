@@ -85,6 +85,24 @@ def test_build_verl_dataset_rows_serializes_reward_context() -> None:
     assert payload["future_papers"] == [{"paper_id": "future-1"}]
 
 
+def test_build_verl_dataset_rows_serializes_strict_env_context() -> None:
+    rows = build_verl_dataset_rows(
+        [
+            {
+                "prompt": "prompt",
+                "prompt_mode": "strict_interactive_realization",
+                "search_env": {"max_search_steps": 3, "top_k": 5, "max_selected_evidence": 5},
+                "strict_contract": {"trajectory_schema_version": 1},
+            }
+        ]
+    )
+
+    payload = json.loads(rows[0]["extra_info"])
+    assert payload["prompt_mode"] == "strict_interactive_realization"
+    assert payload["search_env"]["max_search_steps"] == 3
+    assert payload["strict_contract"]["trajectory_schema_version"] == 1
+
+
 def test_write_verl_dataset_writes_parquet_and_preview(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(verl_dataset_module, "_detect_parquet_engine", lambda: "pyarrow")
 
@@ -158,6 +176,39 @@ def test_compute_score_matches_rule_reward_and_handles_invalid_completion(monkey
     )
     assert score == expected.list_reward
     assert compute_score("live_idea_bench", "", "", extra_info=extra_info) == RewardConfig().invalid_completion_reward
+
+
+def test_compute_score_supports_strict_interactive_completion() -> None:
+    train = [_paper("train-1", "2024-01", published_date="2024-01-01", summary="retrieval planning grounded long-horizon agents compose memory")]
+    extra_info = json.dumps(
+        {
+            "prompt_mode": "strict_interactive_realization",
+            "innovation": {
+                "base_direction": "retrieval planning",
+                "operator": "compose",
+                "gap": "ground long-horizon agents",
+            },
+            "search_env": {"max_search_steps": 3, "top_k": 5, "max_selected_evidence": 5},
+            "train_papers": [train[0].__dict__],
+            "future_papers": [],
+        }
+    )
+    completion = json.dumps(
+        {
+            "actions": [
+                {"action_type": "search", "query": "retrieval planning grounded agents"},
+                {"action_type": "select", "paper_id": "train-1"},
+                {
+                    "action_type": "finish",
+                    "proposal_text": "Grounded Retrieval Planning\nWe compose retrieval and planning with memory.",
+                },
+            ]
+        }
+    )
+
+    score = compute_score("live_idea_bench", completion, "", extra_info=extra_info)
+
+    assert score > 0.0
 
 
 def test_rl_runtime_no_longer_imports_trl() -> None:

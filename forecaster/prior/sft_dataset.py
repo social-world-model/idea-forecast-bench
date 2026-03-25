@@ -4,14 +4,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from forecaster.models import HindsightSample, innovation_to_dict, memory_inventory_to_dict
+from forecaster.models import HindsightSample, innovation_to_json, memory_inventory_to_dict
 from forecaster.prior.memory import build_memory_store_from_hindsight_samples
+from forecaster.prior.prompting import render_prior_user_prompt
 
 
 def build_sft_samples(
     hindsight_samples: list[HindsightSample],
     *,
     max_memory_entries: int = 20,
+    memory_snapshots_by_cutoff: dict[str, object] | None = None,
 ) -> list[dict[str, str]]:
     """Build SFT training samples from hindsight dataset.
 
@@ -38,20 +40,27 @@ def build_sft_samples(
     )
     results: list[dict[str, str]] = []
     for sample in sorted_samples:
-        memory = build_memory_store_from_hindsight_samples(
-            sorted_samples,
-            sample.cutoff_month,
-            exclude_future_paper_ids={sample.future_paper_id},
-        )
+        snapshot = (memory_snapshots_by_cutoff or {}).get(sample.cutoff_month)
+        if snapshot is not None:
+            if not hasattr(snapshot, "exclude_source_paper_ids"):
+                raise TypeError("memory_snapshots_by_cutoff values must provide exclude_source_paper_ids().")
+            memory = snapshot.exclude_source_paper_ids({sample.future_paper_id})
+        else:
+            memory = build_memory_store_from_hindsight_samples(
+                sorted_samples,
+                sample.cutoff_month,
+                exclude_future_paper_ids={sample.future_paper_id},
+            )
         memory_summary = memory.format_for_prompt(top_n=max_memory_entries)
-        target = json.dumps(innovation_to_dict(sample.innovation), ensure_ascii=False)
+        target = innovation_to_json(sample.innovation)
         results.append(
             {
-                "input": memory_summary,
+                "input": render_prior_user_prompt(memory_summary),
                 "target": target,
                 "cutoff_month": sample.cutoff_month,
                 "future_paper_id": sample.future_paper_id,
                 "future_paper_published_date": sample.future_paper_published_date,
+                "memory_prompt": memory_summary,
                 "memory_inventory": json.dumps(
                     memory_inventory_to_dict(memory.inventory),
                     ensure_ascii=False,

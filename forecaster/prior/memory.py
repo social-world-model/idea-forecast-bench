@@ -303,6 +303,55 @@ class MemoryStore:
         )
         return MemoryStore(new_inventory)
 
+    def exclude_source_paper_ids(self, source_paper_ids: set[str]) -> MemoryStore:
+        """Return a snapshot with selected source paper ids removed."""
+        excluded = {paper_id for paper_id in source_paper_ids if str(paper_id).strip()}
+        if not excluded:
+            return self
+        new_inventory = MemoryInventory(
+            entries=tuple(
+                entry for entry in self._inventory.entries if entry.source_paper_id not in excluded
+            ),
+            last_updated_month=self._inventory.last_updated_month,
+            version=self._inventory.version,
+        )
+        return MemoryStore(new_inventory)
+
+    def apply_utility_overrides(
+        self,
+        overrides: dict[str, tuple[float, dict[str, Any] | None]],
+    ) -> MemoryStore:
+        """Return a snapshot with explicit utility scores/metadata merged in."""
+        if not overrides:
+            return self
+        new_entries: list[MemoryEntry] = []
+        for entry in self._inventory.entries:
+            override = overrides.get(entry.source_paper_id)
+            if override is None:
+                new_entries.append(entry)
+                continue
+            utility_score, metadata = override
+            merged_metadata = dict(entry.metadata)
+            if metadata:
+                merged_metadata.update(metadata)
+            new_entries.append(
+                MemoryEntry(
+                    innovation=entry.innovation,
+                    source_paper_id=entry.source_paper_id,
+                    timestamp_month=entry.timestamp_month,
+                    frequency=entry.frequency,
+                    recency_score=entry.recency_score,
+                    utility_score=float(utility_score),
+                    metadata=merged_metadata,
+                )
+            )
+        new_inventory = MemoryInventory(
+            entries=tuple(new_entries),
+            last_updated_month=self._inventory.last_updated_month,
+            version=self._inventory.version,
+        )
+        return MemoryStore(new_inventory)
+
     def format_for_prompt(self, top_n: int = 20) -> str:
         """Format top-n entries as a numbered list for LLM prompts."""
         entries = self.query(top_n)
@@ -311,10 +360,18 @@ class MemoryStore:
         lines: list[str] = []
         for i, entry in enumerate(entries, start=1):
             inn = entry.innovation
+            payload = {
+                "base_direction": inn.base_direction,
+                "operator": inn.operator,
+                "gap": inn.gap,
+                "timestamp_month": entry.timestamp_month,
+                "frequency": entry.frequency,
+                "recency": round(float(entry.recency_score), 4),
+                "utility": round(float(entry.utility_score), 4),
+            }
             line = (
-                f'{i}. base_direction="{inn.base_direction}", '
-                f'operator="{inn.operator}", '
-                f'gap="{inn.gap}"'
+                f"{i}. "
+                f"{json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}"
             )
             lines.append(line)
         return "\n".join(lines)

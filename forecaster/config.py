@@ -6,6 +6,7 @@ live_idea_bench/config.py and forecaster/realization/config.py.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,12 @@ import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FORECASTER_CONFIG_DIR = PROJECT_ROOT / "config" / "forecaster"
+STRICT_RUNTIME_MODE = "strict_eval"
+STRICT_PRIOR_SCORE_METHOD = "conditional_logprob"
+STRICT_REALIZATION_SCORE_METHOD = "conditional_logprob"
+STRICT_JOINT_SCORE_MODE = "linear_blend"
+STRICT_POPULARITY_WEIGHT = 0.0
+STRICT_JOINT_SCORE_COMPONENTS: tuple[str, str] = ("prior_score", "realization_score")
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +87,9 @@ class InferenceConfig:
     joint_score_mode: str = "linear_blend"
     popularity_weight: float = 0.0  # Opt-in: weight for popularity bonus in joint score
 
+    def __post_init__(self) -> None:
+        validate_inference_config(self)
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -131,6 +141,51 @@ def _load_config(name_or_path: str, model_class: type[Any]) -> Any:
             f"Invalid config for {model_class.__name__}: {exc}. "
             f"Check the YAML file at {name_or_path!r} for unknown or missing keys."
         ) from exc
+
+
+def strict_inference_score_contract(
+    *,
+    score_normalization: str = "per_token",
+    score_temperature: float = 1.0,
+) -> dict[str, Any]:
+    """Return the frozen strict inference score contract."""
+    return {
+        "prior_score_method": STRICT_PRIOR_SCORE_METHOD,
+        "realization_score_method": STRICT_REALIZATION_SCORE_METHOD,
+        "joint_score_mode": STRICT_JOINT_SCORE_MODE,
+        "joint_score_formula": "linear_blend(prior_score, realization_score)",
+        "score_normalization": str(score_normalization).strip().lower() or "per_token",
+        "score_temperature": float(score_temperature),
+        "popularity_weight": STRICT_POPULARITY_WEIGHT,
+        "joint_score_components": STRICT_JOINT_SCORE_COMPONENTS,
+        "allows_extra_bonus_terms": False,
+    }
+
+
+def validate_inference_config(config: InferenceConfig) -> None:
+    """Validate strict runtime invariants for inference scoring."""
+    runtime_mode = str(getattr(config, "runtime_mode", "") or "").strip().lower()
+    if runtime_mode != STRICT_RUNTIME_MODE:
+        return
+
+    errors: list[str] = []
+    if str(getattr(config, "prior_score_method", "") or "").strip().lower() != STRICT_PRIOR_SCORE_METHOD:
+        errors.append(f"prior_score_method must be {STRICT_PRIOR_SCORE_METHOD!r}")
+    if (
+        str(getattr(config, "realization_score_method", "") or "").strip().lower()
+        != STRICT_REALIZATION_SCORE_METHOD
+    ):
+        errors.append(f"realization_score_method must be {STRICT_REALIZATION_SCORE_METHOD!r}")
+    if str(getattr(config, "joint_score_mode", "") or "").strip().lower() != STRICT_JOINT_SCORE_MODE:
+        errors.append(f"joint_score_mode must be {STRICT_JOINT_SCORE_MODE!r}")
+    popularity_weight = float(getattr(config, "popularity_weight", STRICT_POPULARITY_WEIGHT) or 0.0)
+    if not math.isclose(popularity_weight, STRICT_POPULARITY_WEIGHT, abs_tol=1e-12):
+        errors.append("popularity_weight must be 0.0")
+
+    if errors:
+        raise ValueError(
+            "Strict inference config requires: " + "; ".join(errors) + "."
+        )
 
 
 # ---------------------------------------------------------------------------

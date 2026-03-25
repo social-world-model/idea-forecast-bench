@@ -1,6 +1,7 @@
 """ForecasterPipeline: orchestrates all 4 phases of the forecasting method."""
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 import logging
 from pathlib import Path
@@ -26,6 +27,7 @@ from forecaster.config import (
     SFTTrainConfig,
     RealizationConfig,
     InferenceConfig,
+    strict_inference_score_contract,
     load_hindsight_config,
     load_prior_config,
     load_sft_train_config,
@@ -38,7 +40,7 @@ from forecaster.prior.memory import (
     hindsight_sample_available_by_cutoff,
 )
 from forecaster.hindsight.dataset_builder import build_hindsight_dataset
-from forecaster.prior.sft_dataset import build_sft_samples
+from forecaster.prior.sft_dataset import build_sft_samples, save_sft_dataset
 from forecaster.prior.trainer import train_prior
 from forecaster.inference.algorithm import run_joint_inference as run_joint_inference_fn
 
@@ -133,6 +135,10 @@ class ForecasterPipeline:
     def run_prior_training(
         self,
         hindsight_samples: list[HindsightSample],
+        *,
+        output_subdir: str = "prior_sft",
+        memory_snapshots_by_cutoff: dict[str, MemoryStore] | None = None,
+        config_override: SFTTrainConfig | None = None,
     ) -> str:
         """Phase 2: train the innovation prior via SFT.
 
@@ -141,18 +147,136 @@ class ForecasterPipeline:
         logger.info(
             "Building SFT dataset from %d hindsight samples.", len(hindsight_samples)
         )
-        sft_samples = build_sft_samples(hindsight_samples)
+        if memory_snapshots_by_cutoff is None:
+            sft_samples = build_sft_samples(hindsight_samples)
+        else:
+            sft_samples = build_sft_samples(
+                hindsight_samples,
+                memory_snapshots_by_cutoff=memory_snapshots_by_cutoff,
+            )
 
-        prior_output_dir = self.output_dir / "prior_sft"
+        prior_output_dir = self.output_dir / output_subdir
+        prior_output_dir.mkdir(parents=True, exist_ok=True)
+        save_sft_dataset(sft_samples, prior_output_dir / "dataset.jsonl")
+        resolved_config = config_override or self.sft_config
         logger.info("Training prior SFT model; output dir: %s", prior_output_dir)
 
         checkpoint_path = train_prior(
             sft_samples=sft_samples,
-            config=self.sft_config,
+            config=resolved_config,
             output_dir=prior_output_dir,
         )
         logger.info("Prior SFT training complete. Checkpoint: %s", checkpoint_path)
         return checkpoint_path
+
+    def run_prior_refresh(
+        self,
+        *,
+        train_cutoffs: list[str],
+        horizon_months: int,
+        hindsight_samples: list[HindsightSample],
+        bootstrap_prior_checkpoint: str,
+        realization_model_path: str,
+    ) -> tuple[str, dict[str, MemoryStore]]:
+        """Replay train cutoffs, update utility, and train a short refresh prior."""
+        if not train_cutoffs:
+            return "", {}
+
+        llm_client, model = create_client(self.llm_model)
+        refresh_dir = self.output_dir / "prior_refresh"
+        refresh_dir.mkdir(parents=True, exist_ok=True)
+        memory_snapshot_dir = refresh_dir / "memory_snapshots"
+        memory_snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+        utility_overrides: dict[str, tuple[float, dict[str, Any] | None]] = {}
+        refreshed_snapshots: dict[str, MemoryStore] = {}
+        replay_events: list[dict[str, Any]] = []
+
+        for cutoff in sorted(train_cutoffs):
+            replay_memory = build_memory_store_from_hindsight_samples(
+                hindsight_samples,
+                cutoff,
+            ).decay_recency(cutoff)
+            replay_memory = replay_memory.apply_utility_overrides(utility_overrides)
+            replay_memory.persist(memory_snapshot_dir / f"{cutoff}_pre_refresh.json")
+            refreshed_snapshots[cutoff] = replay_memory
+
+            training_papers = [paper for paper in self.papers if paper.month <= cutoff]
+            innovations = sample_innovations(
+                bootstrap_prior_checkpoint,
+                replay_memory,
+                self.inference_config,
+            )
+            proposals = run_joint_inference_fn(
+                innovations=innovations,
+                papers=training_papers,
+                memory_store=replay_memory,
+                llm_client=llm_client,
+                model=model,
+                inference_config=self.inference_config,
+                realization_config=self.realization_config,
+                prior_model_path=bootstrap_prior_checkpoint,
+                realization_model_path=realization_model_path,
+            )
+            delayed_matches = _score_proposals_for_delayed_feedback(
+                papers=self.papers,
+                proposals=proposals,
+                cutoff_month=cutoff,
+                horizon_months=horizon_months,
+            )
+            updated_memory = _apply_delayed_utility_update(
+                replay_memory,
+                proposals,
+                delayed_matches,
+                cutoff_month=cutoff,
+            )
+            updated_memory.persist(memory_snapshot_dir / f"{cutoff}_post_refresh.json")
+            refreshed_snapshots[cutoff] = updated_memory
+            utility_overrides = {
+                entry.source_paper_id: (
+                    float(entry.utility_score),
+                    dict(entry.metadata),
+                )
+                for entry in updated_memory.inventory.entries
+            }
+            replay_events.append(
+                {
+                    "cutoff_month": cutoff,
+                    "innovation_count": len(innovations),
+                    "proposal_count": len(proposals),
+                    "future_match_count": sum(
+                        1 for event in delayed_matches if bool(event.get("future_support_confirmed"))
+                    ),
+                }
+            )
+
+        refresh_config = replace(
+            self.sft_config,
+            num_epochs=1,
+            output_dir=str((self.output_dir / "prior_refresh").resolve()),
+        )
+        refresh_checkpoint = self.run_prior_training(
+            hindsight_samples,
+            output_subdir="prior_refresh",
+            memory_snapshots_by_cutoff=refreshed_snapshots,
+            config_override=refresh_config,
+        )
+        (refresh_dir / "refresh_manifest.json").write_text(
+            json.dumps(
+                {
+                    "bootstrap_prior_checkpoint": bootstrap_prior_checkpoint,
+                    "refresh_prior_checkpoint": refresh_checkpoint,
+                    "realization_model_path": realization_model_path,
+                    "train_cutoffs": list(sorted(train_cutoffs)),
+                    "memory_snapshot_dir": str(memory_snapshot_dir.resolve()),
+                    "replay_events": replay_events,
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        return refresh_checkpoint, refreshed_snapshots
 
     def run_realization_training(
         self,
@@ -212,6 +336,7 @@ class ForecasterPipeline:
                 trainer_config=None,
                 trainer_config_path="grpo.yaml",
                 selection_config_path="selection.yaml",
+                strict_mode=use_strict_mode,
                 prepare_only=dry_run,
                 skip_alignment_check=(dry_run or not use_strict_mode),
                 hindsight_samples=hindsight_samples,
@@ -341,9 +466,13 @@ class ForecasterPipeline:
 
         # Phase 2: Prior SFT
         prior_checkpoint: str = ""
+        bootstrap_prior_checkpoint: str = ""
+        refresh_prior_checkpoint: str = ""
+        refresh_memory_snapshots: dict[str, MemoryStore] = {}
         if not skip_training and training_hindsight_samples:
             logger.info("Phase 2: Prior SFT training.")
             prior_checkpoint = self.run_prior_training(training_hindsight_samples)
+            bootstrap_prior_checkpoint = prior_checkpoint
         elif not skip_training:
             logger.info("Phase 2: No legal training hindsight samples; skipping prior SFT.")
         else:
@@ -388,6 +517,25 @@ class ForecasterPipeline:
                     }
                 )
 
+        if (
+            use_strict_eval
+            and not skip_training
+            and training_hindsight_samples
+            and train_cutoffs
+            and prior_checkpoint
+            and realization_model_path
+        ):
+            logger.info("Phase 3.5: Prior refresh via offline replay.")
+            refresh_prior_checkpoint, refresh_memory_snapshots = self.run_prior_refresh(
+                train_cutoffs=train_cutoffs,
+                horizon_months=horizon_months,
+                hindsight_samples=training_hindsight_samples,
+                bootstrap_prior_checkpoint=prior_checkpoint,
+                realization_model_path=realization_model_path,
+            )
+            if refresh_prior_checkpoint:
+                prior_checkpoint = refresh_prior_checkpoint
+
         # Phase 4: Joint inference on the eval cutoff month
         last_cutoff = eval_cutoff
         proposals: list[ScoredProposal] = []
@@ -401,6 +549,14 @@ class ForecasterPipeline:
                 base_memory_samples,
                 last_cutoff,
             ).decay_recency(last_cutoff)
+            if use_strict_eval and refresh_memory_snapshots:
+                latest_refresh_cutoff = sorted(refresh_memory_snapshots)[-1]
+                latest_refresh_memory = refresh_memory_snapshots[latest_refresh_cutoff]
+                utility_overrides = {
+                    entry.source_paper_id: (float(entry.utility_score), dict(entry.metadata))
+                    for entry in latest_refresh_memory.inventory.entries
+                }
+                self._memory_store = self._memory_store.apply_utility_overrides(utility_overrides)
             pre_inference_memory_path = snapshot_dir / f"{last_cutoff}_pre_inference.json"
             self._memory_store.persist(pre_inference_memory_path)
             self._memory_store.persist(self.output_dir / "memory_inventory.json")
@@ -497,19 +653,32 @@ class ForecasterPipeline:
                 self._memory_store.persist(self.output_dir / "memory_inventory.json")
                 logger.info("Delayed utility update applied; memory persisted.")
 
+        score_contract = (
+            strict_inference_score_contract(
+                score_normalization=self.inference_config.score_normalization,
+                score_temperature=self.inference_config.score_temperature,
+            )
+            if use_strict_eval
+            else {
+                "prior_score_method": self.inference_config.prior_score_method,
+                "realization_score_method": self.inference_config.realization_score_method,
+                "score_normalization": self.inference_config.score_normalization,
+                "score_temperature": self.inference_config.score_temperature,
+                "joint_score_mode": self.inference_config.joint_score_mode,
+                "popularity_weight": self.inference_config.popularity_weight,
+            }
+        )
+
         _persist_runtime_contract(
             output_dir=self.output_dir,
             strict_eval=use_strict_eval,
             train_cutoffs=train_cutoffs,
             eval_cutoff=eval_cutoff,
+            bootstrap_prior_checkpoint=bootstrap_prior_checkpoint,
+            refresh_prior_checkpoint=refresh_prior_checkpoint,
             prior_checkpoint=prior_checkpoint,
             realization_model_path=realization_model_path,
-            score_contract={
-                "prior_score_method": self.inference_config.prior_score_method,
-                "realization_score_method": self.inference_config.realization_score_method,
-                "score_normalization": self.inference_config.score_normalization,
-                "joint_score_mode": self.inference_config.joint_score_mode,
-            },
+            score_contract=score_contract,
             fallback_events=fallback_events,
         )
 
@@ -517,6 +686,8 @@ class ForecasterPipeline:
             "hindsight_samples": hindsight_samples,
             "training_hindsight_samples": training_hindsight_samples,
             "prior_checkpoint": prior_checkpoint,
+            "bootstrap_prior_checkpoint": bootstrap_prior_checkpoint,
+            "refresh_prior_checkpoint": refresh_prior_checkpoint,
             "realization_model_path": realization_model_path or "",
             "proposals": proposals,
             "output_dir": str(self.output_dir),
@@ -621,6 +792,8 @@ def _persist_runtime_contract(
     strict_eval: bool,
     train_cutoffs: list[str],
     eval_cutoff: str,
+    bootstrap_prior_checkpoint: str,
+    refresh_prior_checkpoint: str,
     prior_checkpoint: str,
     realization_model_path: str | None,
     score_contract: dict[str, Any],
@@ -635,10 +808,14 @@ def _persist_runtime_contract(
         "innovation_contract": innovation_schema_contract(),
         "score_contract": score_contract,
         "artifacts": {
+            "bootstrap_prior_checkpoint": bootstrap_prior_checkpoint,
+            "refresh_prior_checkpoint": refresh_prior_checkpoint,
+            "final_prior_checkpoint": prior_checkpoint,
             "prior_checkpoint": prior_checkpoint,
             "realization_model_path": realization_model_path or "",
             "memory_snapshot_dir": str(output_dir / "memory_snapshots"),
             "memory_inventory": str(output_dir / "memory_inventory.json"),
+            "prior_refresh_manifest": str(output_dir / "prior_refresh" / "refresh_manifest.json"),
         },
         "fallback_events": list(fallback_events or []),
     }

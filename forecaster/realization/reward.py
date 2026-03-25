@@ -13,7 +13,13 @@ from forecaster.models import Innovation, innovation_from_dict
 from forecaster.realization.config import RewardConfig
 from forecaster.realization.local_generation import _completion_to_text, parse_single_completion_prediction
 from forecaster.realization.proposal_generator import proposal_to_idea_prediction
-from forecaster.realization.realization_reward import evaluate_realization_reward
+from forecaster.realization.realization_reward import (
+    StrictTrajectoryRewardBreakdown,
+    evaluate_realization_reward,
+    evaluate_strict_trajectory_reward,
+)
+from forecaster.realization.search_env import rollout_search_trajectory
+from forecaster.realization.strict_runtime import parse_search_actions_completion
 from live_idea_bench.similarity import idea_text, paper_text, score_prediction_list
 
 logger = logging.getLogger(__name__)
@@ -232,6 +238,148 @@ def coerce_reward_prediction(
     return prediction, raw_text
 
 
+def evaluate_strict_completion_reward(
+    raw_completion: Any,
+    *,
+    innovation: Innovation | None,
+    train_papers: list[PaperRecord],
+    reward_config: RewardConfig,
+    realization_config: RealizationConfig,
+    search_env_payload: dict[str, Any] | None = None,
+) -> StrictTrajectoryRewardBreakdown:
+    """Replay a strict interactive completion and score its trajectory reward."""
+    if innovation is None:
+        return StrictTrajectoryRewardBreakdown(
+            evidence_quality=0.0,
+            operator_adherence=0.0,
+            proposal_coherence=0.0,
+            total_reward=round(reward_config.invalid_completion_reward, 4),
+            invalid_completion=True,
+            invalid_reason="missing_innovation",
+        )
+    actions = parse_search_actions_completion(_completion_to_text(raw_completion))
+    if not actions:
+        return StrictTrajectoryRewardBreakdown(
+            evidence_quality=0.0,
+            operator_adherence=0.0,
+            proposal_coherence=0.0,
+            total_reward=round(reward_config.invalid_completion_reward, 4),
+            invalid_completion=True,
+            invalid_reason="invalid_action_sequence",
+        )
+    env = dict(search_env_payload or {})
+    trajectory = rollout_search_trajectory(
+        innovation,
+        actions,
+        train_papers,
+        top_k=int(env.get("top_k", 5) or 5),
+        max_search_steps=int(env.get("max_search_steps", 3) or 3),
+        max_selected_evidence=int(env.get("max_selected_evidence", 5) or 5),
+    )
+    strict_reward = evaluate_strict_trajectory_reward(
+        trajectory,
+        train_papers,
+        realization_config,
+    )
+    if strict_reward.invalid_completion:
+        return StrictTrajectoryRewardBreakdown(
+            evidence_quality=strict_reward.evidence_quality,
+            operator_adherence=strict_reward.operator_adherence,
+            proposal_coherence=strict_reward.proposal_coherence,
+            total_reward=round(reward_config.invalid_completion_reward, 4),
+            invalid_completion=True,
+            invalid_reason=strict_reward.invalid_reason,
+        )
+    return strict_reward
+
+
+def evaluate_strict_rl_reward(
+    raw_completion: Any,
+    *,
+    innovation: Innovation | None,
+    train_papers: list[PaperRecord],
+    future_papers: list[PaperRecord],
+    reward_config: RewardConfig,
+    realization_config: RealizationConfig,
+    search_env_payload: dict[str, Any] | None = None,
+    similarity_config_path: str = "similarity.yaml",
+    runtime_config_path: str | None = None,
+    model_name: str | None = None,
+    cutoff_date: str | None = None,
+    future_end_date: str | None = None,
+) -> RLRewardEvaluation:
+    if innovation is None:
+        return build_invalid_reward_evaluation(reward_config)
+    raw_text = _completion_to_text(raw_completion)
+    actions = parse_search_actions_completion(raw_text)
+    if not actions:
+        return build_invalid_reward_evaluation(reward_config)
+    env = dict(search_env_payload or {})
+    trajectory = rollout_search_trajectory(
+        innovation,
+        actions,
+        train_papers,
+        top_k=int(env.get("top_k", 5) or 5),
+        max_search_steps=int(env.get("max_search_steps", 3) or 3),
+        max_selected_evidence=int(env.get("max_selected_evidence", 5) or 5),
+    )
+    strict_reward = evaluate_strict_trajectory_reward(
+        trajectory,
+        train_papers,
+        realization_config,
+    )
+    if strict_reward.invalid_completion or trajectory.result is None:
+        return build_invalid_reward_evaluation(reward_config)
+    paper_lookup = {paper.paper_id: paper for paper in train_papers}
+    selected_evidence = [
+        paper_lookup[paper_id]
+        for paper_id in trajectory.result.selected_evidence_ids
+        if paper_id in paper_lookup
+    ]
+    prediction = proposal_to_idea_prediction(
+        trajectory.result.proposal_text,
+        innovation,
+        rank=1,
+    )
+    benchmark = evaluate_rl_reward(
+        predictions=[prediction],
+        train_papers=train_papers,
+        future_papers=future_papers,
+        reward_config=reward_config,
+        innovation=innovation,
+        evidence_papers=selected_evidence,
+        proposal_text=trajectory.result.proposal_text,
+        realization_config=realization_config,
+        similarity_config_path=similarity_config_path,
+        runtime_config_path=runtime_config_path,
+        model_name=model_name,
+        cutoff_date=cutoff_date,
+        future_end_date=future_end_date,
+    )
+    benchmark_match_value = float(benchmark.reward_breakdown.get("benchmark_match", 0.0))
+    return RLRewardEvaluation(
+        benchmark_evaluation=benchmark.benchmark_evaluation,
+        benchmark_score=benchmark.benchmark_score,
+        list_reward=round(strict_reward.total_reward, 4),
+        invalid_completion=False,
+        per_idea_rewards=benchmark.per_idea_rewards,
+        reward_breakdown={
+            "dense_reward": round(strict_reward.total_reward, 4),
+            "evidence_quality": strict_reward.evidence_quality,
+            "operator_adherence": strict_reward.operator_adherence,
+            "coherence": strict_reward.proposal_coherence,
+            "benchmark_match": round(benchmark_match_value, 4),
+            "benchmark_score": benchmark.benchmark_score,
+            "lead_time": benchmark.benchmark_evaluation.lead_time,
+            "duplicate_rate": benchmark.benchmark_evaluation.duplicate_rate,
+            "parse_failure": 0.0,
+            "invalid_completion": 0.0,
+            "invalid_completion_reward": round(reward_config.invalid_completion_reward, 4),
+        },
+        match_details=benchmark.match_details,
+    )
+
+
 def evaluate_rl_reward(
     predictions: list[IdeaPrediction],
     train_papers: list[PaperRecord],
@@ -376,6 +524,7 @@ def build_online_rl_reward_function(
         innovation: Sequence[dict[str, Any]] | None = None,
         evidence_papers: Sequence[list[dict[str, Any]]] | None = None,
         realization_config_payload: Sequence[dict[str, Any]] | None = None,
+        search_env_payload: Sequence[dict[str, Any]] | None = None,
         cutoff_date: Sequence[str] | None = None,
         future_end_date: Sequence[str] | None = None,
         **_: Any,
@@ -398,6 +547,7 @@ def build_online_rl_reward_function(
             innovation_payload = _value_for_index(innovation, idx, total)
             evidence_payload = _value_for_index(evidence_papers, idx, total) or []
             config_payload = _value_for_index(realization_config_payload, idx, total)
+            search_env_value = _value_for_index(search_env_payload, idx, total)
             try:
                 innovation_value = (
                     innovation_from_dict(innovation_payload)
@@ -415,6 +565,18 @@ def build_online_rl_reward_function(
                 innovation_value = None
                 evidence_value = []
                 resolved_realization_config = realization_config or RealizationConfig()
+                search_env_value = None
+            if prompt_mode_value == "strict_interactive_realization":
+                strict_reward = evaluate_strict_completion_reward(
+                    completion,
+                    innovation=innovation_value,
+                    train_papers=reconstructed_train,
+                    reward_config=reward_config,
+                    realization_config=resolved_realization_config,
+                    search_env_payload=search_env_value if isinstance(search_env_value, dict) else None,
+                )
+                rewards.append(strict_reward.total_reward)
+                continue
             prediction, proposal_text_value = coerce_reward_prediction(
                 completion,
                 prompt_mode=prompt_mode_value,

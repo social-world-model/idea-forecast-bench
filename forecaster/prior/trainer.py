@@ -5,45 +5,102 @@ import json
 import logging
 from pathlib import Path
 
-import yaml
-
 from forecaster.config import SFTTrainConfig
-from forecaster.prior.sft_dataset import build_sft_samples, load_sft_dataset
+from forecaster.prior.prompting import load_prior_prompt_config, render_prior_chat_transcript
 
 logger = logging.getLogger(__name__)
 
-_PROMPT_YAML_PATH = Path(__file__).resolve().parents[2] / "forecaster" / "prompt" / "prior_sft.yaml"
-
 
 def _load_system_prompt() -> str:
-    raw = yaml.safe_load(_PROMPT_YAML_PATH.read_text(encoding="utf-8"))
-    return str(raw["system_prompt"]).strip()
+    return load_prior_prompt_config()["system_prompt"]
 
 
-def _format_sample(system_prompt: str, sample: dict[str, str]) -> str:
-    return (
-        f"<system>\n{system_prompt}\n</system>\n"
-        f"<user>\n{sample['input']}\n</user>\n"
-        f"<assistant>\n{sample['target']}\n</assistant>"
+def _normalize_tokenizer_output(value: object, key: str) -> list[int]:
+    if not isinstance(value, dict):
+        raise TypeError("Tokenizer output must be a mapping.")
+    payload = value.get(key)
+    if payload is None:
+        if key == "attention_mask":
+            input_ids = _normalize_tokenizer_output(value, "input_ids")
+            return [1] * len(input_ids)
+        raise KeyError(f"Tokenizer output missing required key: {key}")
+    if isinstance(payload, list):
+        if payload and isinstance(payload[0], list):
+            return [int(token) for token in payload[0]]
+        return [int(token) for token in payload]
+    raise TypeError(f"Tokenizer output[{key!r}] must be a list or list[list].")
+
+
+def _build_target_only_labels(input_ids: list[int], prompt_token_count: int) -> list[int]:
+    masked_prefix = min(len(input_ids), max(0, prompt_token_count))
+    return ([-100] * masked_prefix) + input_ids[masked_prefix:]
+
+
+def _tokenize_training_sample(
+    *,
+    system_prompt: str,
+    sample: dict[str, str],
+    tokenizer: object,
+    max_seq_length: int,
+) -> dict[str, list[int]]:
+    prompt_text = render_prior_chat_transcript(
+        system_prompt=system_prompt,
+        user_prompt=sample["input"],
+        assistant_text=None,
     )
+    full_text = render_prior_chat_transcript(
+        system_prompt=system_prompt,
+        user_prompt=sample["input"],
+        assistant_text=sample["target"],
+    )
+    prompt_encoded = tokenizer(  # type: ignore[operator]
+        prompt_text,
+        truncation=True,
+        max_length=max_seq_length,
+        padding=False,
+        add_special_tokens=False,
+    )
+    full_encoded = tokenizer(  # type: ignore[operator]
+        full_text,
+        truncation=True,
+        max_length=max_seq_length,
+        padding=False,
+        add_special_tokens=False,
+    )
+    input_ids = _normalize_tokenizer_output(full_encoded, "input_ids")
+    attention_mask = _normalize_tokenizer_output(full_encoded, "attention_mask")
+    prompt_ids = _normalize_tokenizer_output(prompt_encoded, "input_ids")
+    labels = _build_target_only_labels(input_ids, len(prompt_ids))
+    return {
+        "input_ids": input_ids,
+        "attention_mask": attention_mask,
+        "labels": labels,
+    }
 
 
-def _build_hf_dataset(sft_samples: list[dict[str, str]], system_prompt: str, tokenizer: object, max_seq_length: int) -> object:
+def _build_hf_dataset(
+    sft_samples: list[dict[str, str]],
+    system_prompt: str,
+    tokenizer: object,
+    max_seq_length: int,
+) -> object:
     import datasets as ds
-    texts = [_format_sample(system_prompt, s) for s in sft_samples]
-    raw_ds = ds.Dataset.from_dict({"text": texts})
-
-    def tokenize(batch: dict) -> dict:
-        return tokenizer(  # type: ignore[operator]
-            batch["text"],
-            truncation=True,
-            max_length=max_seq_length,
-            padding=False,
+    rows = [
+        _tokenize_training_sample(
+            system_prompt=system_prompt,
+            sample=sample,
+            tokenizer=tokenizer,
+            max_seq_length=max_seq_length,
         )
-
-    tokenized = raw_ds.map(tokenize, batched=True, remove_columns=["text"])
-    tokenized = tokenized.map(lambda b: {"labels": b["input_ids"]}, batched=True)
-    return tokenized
+        for sample in sft_samples
+    ]
+    return ds.Dataset.from_dict(
+        {
+            "input_ids": [row["input_ids"] for row in rows],
+            "attention_mask": [row["attention_mask"] for row in rows],
+            "labels": [row["labels"] for row in rows],
+        }
+    )
 
 
 def train_prior(
@@ -68,7 +125,6 @@ def train_prior(
         import torch
         from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments, Trainer
         from peft import get_peft_model, LoraConfig, TaskType
-        import datasets
     except ImportError as exc:
         raise ImportError(
             "SFT training requires: torch, transformers, peft, datasets. "

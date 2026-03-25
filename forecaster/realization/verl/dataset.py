@@ -35,6 +35,8 @@ def build_verl_dataset_rows(prompt_rows: list[dict[str, Any]], *, data_source: s
             "evidence_papers": row.get("evidence_papers", []),
             "train_papers": row.get("train_papers", []),
             "future_papers": row.get("future_papers", []),
+            "search_env": row.get("search_env", {}),
+            "strict_contract": row.get("strict_contract", {}),
         }
         rows.append(
             {

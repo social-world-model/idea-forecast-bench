@@ -6,22 +6,15 @@ import logging
 from pathlib import Path
 from typing import Any, Callable
 
-import yaml
-
-from forecaster.models import Innovation, innovation_to_dict
+from forecaster.models import Innovation, innovation_from_json, innovation_to_json
 from forecaster.config import InferenceConfig
+from forecaster.prior.prompting import load_prior_prompt_config, render_prior_chat_transcript, render_prior_user_prompt
 
 logger = logging.getLogger(__name__)
 
-_PROMPT_YAML_PATH = Path(__file__).resolve().parents[2] / "forecaster" / "prompt" / "prior_sft.yaml"
-
 
 def _load_prompt_config() -> dict[str, str]:
-    raw = yaml.safe_load(_PROMPT_YAML_PATH.read_text(encoding="utf-8"))
-    return {
-        "system_prompt": str(raw["system_prompt"]).strip(),
-        "input_template": str(raw["input_template"]).strip(),
-    }
+    return load_prior_prompt_config()
 
 
 def _parse_innovation(text: str) -> Innovation | None:
@@ -32,21 +25,20 @@ def _parse_innovation(text: str) -> Innovation | None:
     if start == -1 or end == 0:
         return None
     try:
-        obj = json.loads(text[start:end])
-        return Innovation(
-            base_direction=str(obj["base_direction"]),
-            operator=str(obj["operator"]),
-            gap=str(obj["gap"]),
-        )
-    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        return innovation_from_json(text[start:end])
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         logger.warning("Failed to parse innovation from text: %s — %s", text[:80], exc)
         return None
 
 
 def _build_prompt(system_prompt: str, input_template: str, memory_store: Any) -> str:
     memory_summary = memory_store.format_for_prompt()
-    user_content = input_template.format(memory_summary=memory_summary)
-    return f"<system>\n{system_prompt}\n</system>\n<user>\n{user_content}\n</user>\n<assistant>"
+    user_content = render_prior_user_prompt(memory_summary, input_template=input_template)
+    return render_prior_chat_transcript(
+        system_prompt=system_prompt,
+        user_prompt=user_content,
+        assistant_text=None,
+    )
 
 
 def _detect_base_model(model_path_str: str) -> str | None:
@@ -145,7 +137,7 @@ def build_prior_scorer(
         temperature = 1.0
 
     def score(innovation: Innovation) -> float:
-        target = json.dumps(innovation_to_dict(innovation), ensure_ascii=False)
+        target = innovation_to_json(innovation)
         full_text = f"{prompt}{target}"
         encoded = tokenizer([full_text], return_tensors="pt")
         encoded = {name: value.to(model.device) for name, value in encoded.items()}

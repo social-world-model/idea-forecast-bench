@@ -14,6 +14,7 @@ from forecaster.inference.scoring import (
     compute_prior_score,
     compute_realization_score,
     compute_joint_score,
+    compute_strict_joint_score,
 )
 
 
@@ -211,7 +212,12 @@ class TestComputeJointScore:
 
     def test_compute_joint_score_with_popularity_bonus_increases_score(self) -> None:
         """A popularity_bonus > 0 with popularity_weight > 0 increases the score."""
-        config = InferenceConfig(prior_weight=0.4, realization_weight=0.6, popularity_weight=0.2)
+        config = InferenceConfig(
+            runtime_mode="demo",
+            prior_weight=0.4,
+            realization_weight=0.6,
+            popularity_weight=0.2,
+        )
         base = compute_joint_score(-1.0, -1.0, config, popularity_bonus=0.0)
         boosted = compute_joint_score(-1.0, -1.0, config, popularity_bonus=1.0)
         assert boosted > base
@@ -232,3 +238,13 @@ class TestComputeJointScore:
         """Default InferenceConfig has popularity_weight=0.0 (opt-in)."""
         config = InferenceConfig()
         assert config.popularity_weight == 0.0
+
+    def test_compute_strict_joint_score_uses_only_prior_and_realization(self) -> None:
+        config = InferenceConfig(
+            runtime_mode="strict_eval",
+            prior_weight=0.4,
+            realization_weight=0.6,
+        )
+        score = compute_strict_joint_score(-0.7, -0.4, config)
+
+        assert score == pytest.approx((0.4 * -0.7) + (0.6 * -0.4))

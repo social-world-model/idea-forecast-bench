@@ -227,6 +227,10 @@ class TestTrainPriorMetadata:
         fake_torch.cuda.is_available.return_value = False
 
         fake_tokenizer = MagicMock()
+        fake_tokenizer.return_value = {
+            "input_ids": [1, 2, 3, 4],
+            "attention_mask": [1, 1, 1, 1],
+        }
         fake_model = MagicMock()
         fake_peft_model = MagicMock()
         fake_lora_config_cls = MagicMock()

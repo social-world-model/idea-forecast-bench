@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from live_idea_bench.models import PaperRecord
+from forecaster.models import strict_runtime_manifest_contract
 from forecaster.realization.io import _write_json
 
 
@@ -116,6 +117,7 @@ def build_policy_manifest(
         "output_top_k": int(output_top_k),
         "training_split_policy": training_split_policy,
         "dry_run": dry_run,
+        "strict_contract": strict_runtime_manifest_contract(),
     }
     if launch_config_path:
         payload["launch_config_path"] = str(launch_config_path)

@@ -27,10 +27,12 @@ from forecaster.realization import (
     SelectionConfig,
     build_grpo_advantages,
     build_grpo_prompt_rows,
+    build_strict_rl_prompt_rows,
     build_rl_episodes,
     compute_reward_alignment,
     create_trainer_runner,
     evaluate_rl_reward,
+    generate_episode_candidate_lists,
     list_small_model_specs,
     prepare_common_rl_context,
     resolve_small_model,
@@ -222,6 +224,40 @@ def test_build_online_reward_function_penalizes_invalid_completion() -> None:
     )
 
     assert rewards == [-0.05]
+
+
+def test_build_online_reward_function_supports_strict_interactive_completion() -> None:
+    reward_func = build_online_rl_reward_function(RewardConfig(top_k=1, invalid_completion_reward=-0.05))
+
+    rewards = reward_func(
+        completions=[
+            json.dumps(
+                {
+                    "actions": [
+                        {"action_type": "search", "query": "retrieval planning grounded agents"},
+                        {"action_type": "select", "paper_id": "train-1"},
+                        {
+                            "action_type": "finish",
+                            "proposal_text": "Grounded Retrieval Planning\nWe compose retrieval and planning with memory.",
+                        },
+                    ]
+                }
+            )
+        ],
+        train_papers=[[asdict(_paper("train-1", "2024-01", published_date="2024-01-01", summary="retrieval planning grounded long-horizon agents compose memory"))]],
+        future_papers=[[]],
+        prompt_mode=["strict_interactive_realization"],
+        innovation=[
+            {
+                "base_direction": "retrieval planning",
+                "operator": "compose",
+                "gap": "ground long-horizon agents",
+            }
+        ],
+        search_env_payload=[{"max_search_steps": 3, "top_k": 5, "max_selected_evidence": 5}],
+    )
+
+    assert rewards[0] > 0.0
 
 
 def test_build_grpo_advantages_from_episode_candidates() -> None:
@@ -440,6 +476,93 @@ def test_build_grpo_prompt_rows_use_matching_hindsight_innovation() -> None:
     assert rows[0]["innovation"]["operator"] == "compose"
 
 
+def test_build_strict_rl_prompt_rows_expose_env_without_evidence() -> None:
+    papers = [
+        _paper("p-01", "2024-01", published_date="2024-01-01", summary="retrieval planning agents"),
+        _paper("p-02", "2024-02", published_date="2024-02-01", summary="grounded planning memory"),
+    ]
+    episodes = build_rl_episodes(
+        papers,
+        EpisodeBuildConfig(horizon_months=1, min_train_papers=1, step_months=1),
+    )
+
+    rows = build_strict_rl_prompt_rows(
+        papers,
+        episodes,
+        candidate_config=CandidateGenerationConfig(backend="heuristic"),
+    )
+
+    assert rows
+    row = rows[0]
+    assert row["prompt_mode"] == "strict_interactive_realization"
+    assert row["evidence_papers"] == []
+    assert row["search_env"]["max_search_steps"] == 3
+    assert row["strict_contract"]["trajectory_schema_version"] >= 1
+    assert "Return ONLY JSON" in row["prompt"]
+
+
+def test_generate_episode_candidate_lists_supports_strict_interactive_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "forecaster.realization.reward.score_prediction_list",
+        lambda **_: _mock_scored_prediction_list(),
+    )
+    papers = [
+        _paper("p-01", "2024-01", published_date="2024-01-01", summary="retrieval planning agents compose memory"),
+        _paper("p-02", "2024-02", published_date="2024-02-01", summary="grounded long-horizon agents"),
+    ]
+    episodes = build_rl_episodes(
+        papers,
+        EpisodeBuildConfig(horizon_months=1, min_train_papers=1, step_months=1),
+    )
+    prompt_rows = build_strict_rl_prompt_rows(
+        papers,
+        episodes,
+        candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=1),
+    )
+
+    candidate_lists = generate_episode_candidate_lists(
+        papers,
+        episodes,
+        model_name="unused-for-heuristic",
+        candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=1),
+        reward_config=RewardConfig(top_k=1),
+        prompt_rows=prompt_rows,
+    )
+
+    assert candidate_lists
+    candidate = candidate_lists[0].candidates[0]
+    assert candidate.predictions[0].metadata["prompt_mode"] == "strict_interactive_realization"
+    assert candidate.reward.invalid_completion is False
+    assert candidate.reward.reward_breakdown["evidence_quality"] >= 0.0
+
+
+def test_prepare_common_rl_context_strict_mode_uses_strict_prompt_rows(tmp_path: Path) -> None:
+    papers = [
+        _paper(f"p-{month:02d}", f"2024-{month:02d}", published_date=f"2024-{month:02d}-01", summary=f"summary {month}")
+        for month in range(1, 13)
+    ]
+
+    common = prepare_common_rl_context(
+        papers,
+        model_name="Qwen/Qwen2.5-3B-Instruct",
+        output_dir=str(tmp_path / "rl-run"),
+        episode_config=EpisodeBuildConfig(horizon_months=1, min_train_papers=2, past_window_months=6, step_months=3),
+        candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=2, ideas_per_list=4),
+        reward_config=RewardConfig(top_k=2),
+        selection_config=SelectionConfig(),
+        split="all",
+        strict_mode=True,
+    )
+
+    manifest = json.loads((tmp_path / "rl-run" / "shared" / "shared_manifest.json").read_text(encoding="utf-8"))
+    assert common.prompt_rows[0]["prompt_mode"] == "strict_interactive_realization"
+    assert common.prompt_rows[0]["evidence_papers"] == []
+    assert manifest["prompt_mode"] == "strict_interactive_realization"
+    assert manifest["strict_mode"] is True
+
+
 def test_run_policy_rl_pipeline_prepare_only_writes_expected_artifacts_for_ppo(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -478,6 +601,41 @@ def test_run_policy_rl_pipeline_prepare_only_writes_expected_artifacts_for_ppo(
     assert manifest["prepare_only"] is True
     assert manifest["trainer_policy_manifest_path"] == ""
     assert manifest["training_split_policy"] == "train_only"
+    assert manifest["strict_contract"]["search_env_defaults"]["max_search_steps"] == 3
+
+
+def test_run_policy_rl_pipeline_prepare_only_supports_strict_mode(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _enable_fake_parquet(monkeypatch)
+    papers = [
+        _paper(f"p-{month:02d}", f"2024-{month:02d}", published_date=f"2024-{month:02d}-01", summary=f"summary {month}")
+        for month in range(1, 13)
+    ]
+
+    manifest = run_policy_rl_pipeline(
+        papers,
+        trainer="ppo",
+        model_name="Qwen/Qwen2.5-3B-Instruct",
+        output_dir=str(tmp_path / "rl-run"),
+        episode_config=EpisodeBuildConfig(horizon_months=1, min_train_papers=2, past_window_months=6, step_months=3),
+        candidate_config=CandidateGenerationConfig(backend="heuristic", num_candidate_lists=2, ideas_per_list=4),
+        reward_config=RewardConfig(top_k=1),
+        reward_config_path="reward.yaml",
+        selection_config=SelectionConfig(),
+        trainer_config=PPOTrainConfig(dry_run=True),
+        trainer_config_path="ppo_train.yaml",
+        selection_config_path="selection.yaml",
+        split="all",
+        strict_mode=True,
+        prepare_only=True,
+    )
+
+    shared_manifest = json.loads((tmp_path / "rl-run" / "shared" / "shared_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["prompt_mode"] == "strict_interactive_realization"
+    assert manifest["strict_mode"] is True
+    assert shared_manifest["prompt_mode"] == "strict_interactive_realization"
 
 
 def test_run_policy_rl_pipeline_grpo_supports_init_policy_and_skip_alignment(
@@ -518,6 +676,7 @@ def test_run_policy_rl_pipeline_grpo_supports_init_policy_and_skip_alignment(
     assert payload["init_policy_path"] == str(init_path)
     assert payload["base_model_name"] == "Qwen/Qwen2.5-3B-Instruct"
     assert payload["inference_model_name"] == "Qwen/Qwen2.5-3B-Instruct"
+    assert payload["strict_contract"]["trajectory_schema_version"] >= 1
 
 
 def test_run_policy_rl_pipeline_rejects_non_train_training_split(tmp_path: Path) -> None:

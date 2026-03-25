@@ -10,7 +10,7 @@ from difflib import SequenceMatcher
 
 from live_idea_bench.models import PaperRecord
 
-from forecaster.models import Innovation
+from forecaster.models import Innovation, RealizationTrajectory
 from forecaster.config import RealizationConfig
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,19 @@ class RealizationRewardBreakdown:
     total_reward: float
 
     def to_dict(self) -> dict[str, float]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class StrictTrajectoryRewardBreakdown:
+    evidence_quality: float
+    operator_adherence: float
+    proposal_coherence: float
+    total_reward: float
+    invalid_completion: bool = False
+    invalid_reason: str | None = None
+
+    def to_dict(self) -> dict[str, float | bool | str | None]:
         return asdict(self)
 
 
@@ -210,4 +223,66 @@ def evaluate_realization_reward(
         operator_adherence=round(operator_adherence, 4),
         coherence=round(coherence, 4),
         total_reward=total_reward,
+    )
+
+
+def build_invalid_trajectory_reward(reason: str) -> StrictTrajectoryRewardBreakdown:
+    """Return the frozen invalid-completion reward for strict trajectory scoring."""
+    return StrictTrajectoryRewardBreakdown(
+        evidence_quality=0.0,
+        operator_adherence=0.0,
+        proposal_coherence=0.0,
+        total_reward=0.0,
+        invalid_completion=True,
+        invalid_reason=reason,
+    )
+
+
+def evaluate_strict_trajectory_reward(
+    trajectory: RealizationTrajectory,
+    papers: list[PaperRecord],
+    config: RealizationConfig,
+) -> StrictTrajectoryRewardBreakdown:
+    """Score a strict realization trajectory using only policy-surfaced evidence."""
+    if trajectory.invalid_reason:
+        return build_invalid_trajectory_reward(str(trajectory.invalid_reason))
+    if trajectory.result is None:
+        return build_invalid_trajectory_reward("missing_finish_result")
+
+    surfaced_ids = {
+        observation.paper_id
+        for step in trajectory.steps
+        for observation in step.observation
+    }
+    paper_lookup = {paper.paper_id: paper for paper in papers}
+    selected_evidence: list[PaperRecord] = []
+    for paper_id in trajectory.result.selected_evidence_ids:
+        if paper_id not in surfaced_ids:
+            return build_invalid_trajectory_reward("selected_paper_id_not_surfaced")
+        paper = paper_lookup.get(paper_id)
+        if paper is None:
+            return build_invalid_trajectory_reward("selected_paper_id_missing_from_corpus")
+        selected_evidence.append(paper)
+
+    proposal_text = trajectory.result.proposal_text.strip()
+    if not proposal_text:
+        return build_invalid_trajectory_reward("missing_proposal_text")
+
+    evidence_quality = (
+        compute_evidence_accuracy(selected_evidence, trajectory.innovation)
+        if selected_evidence
+        else 0.0
+    )
+    operator_adherence = compute_operator_adherence(proposal_text, trajectory.innovation)
+    proposal_coherence = compute_coherence_score(proposal_text, trajectory.innovation)
+    reward = (
+        config.evidence_accuracy_weight * evidence_quality
+        + config.operator_adherence_weight * operator_adherence
+        + config.coherence_weight * proposal_coherence
+    )
+    return StrictTrajectoryRewardBreakdown(
+        evidence_quality=round(evidence_quality, 4),
+        operator_adherence=round(operator_adherence, 4),
+        proposal_coherence=round(proposal_coherence, 4),
+        total_reward=round(max(0.0, min(1.0, reward)), 4),
     )

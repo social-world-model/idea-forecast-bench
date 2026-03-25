@@ -7,9 +7,14 @@ from typing import TYPE_CHECKING, Callable
 from live_idea_bench.models import PaperRecord
 
 from forecaster.models import Innovation
-from forecaster.config import InferenceConfig, RealizationConfig
+from forecaster.config import (
+    InferenceConfig,
+    RealizationConfig,
+    validate_inference_config,
+)
 from forecaster.realization.realization_reward import compute_realization_reward
 from forecaster.realization.proposal_generator import score_local_proposal
+from forecaster.realization.strict_runtime import score_strict_policy_completion
 
 if TYPE_CHECKING:
     from forecaster.prior.memory import MemoryStore
@@ -133,6 +138,29 @@ def build_realization_scorer(
     return score
 
 
+def build_strict_realization_scorer(
+    realization_model_path: str,
+    inference_config: InferenceConfig,
+) -> Callable[[Innovation, str], float]:
+    """Build a scorer for strict policy completions under the shared strict prompt."""
+    normalization = str(getattr(inference_config, "score_normalization", "per_token")).strip().lower()
+    score_temperature = float(getattr(inference_config, "score_temperature", 1.0) or 1.0)
+
+    def score(
+        innovation: Innovation,
+        completion_text: str,
+    ) -> float:
+        return score_strict_policy_completion(
+            innovation,
+            completion_text,
+            model_name_or_path=realization_model_path,
+            score_normalization=normalization,
+            score_temperature=score_temperature,
+        )
+
+    return score
+
+
 def compute_joint_score(
     prior_score: float,
     realization_score: float,
@@ -152,5 +180,21 @@ def compute_joint_score(
         popularity_score = math.log(_clamp01(popularity_bonus) + _LOG_EPSILON)
         numerator += config.popularity_weight * popularity_score
     if config.popularity_weight > 0 or not math.isclose(total_weight, 1.0):
+        return numerator / total_weight
+    return numerator
+
+
+def compute_strict_joint_score(
+    prior_score: float,
+    realization_score: float,
+    config: InferenceConfig,
+) -> float:
+    """Compute the frozen strict joint score using only prior and realization terms."""
+    validate_inference_config(config)
+    total_weight = config.prior_weight + config.realization_weight
+    if total_weight <= 0:
+        return float("-inf")
+    numerator = (config.prior_weight * prior_score) + (config.realization_weight * realization_score)
+    if not math.isclose(total_weight, 1.0):
         return numerator / total_weight
     return numerator

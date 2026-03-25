@@ -195,6 +195,9 @@ def test_format_for_prompt_returns_string():
     # Should contain numbered entries
     assert "1." in result
     assert "base_direction" in result
+    assert "frequency" in result
+    assert "recency" in result
+    assert "utility" in result
 
 
 def test_hindsight_sample_available_by_cutoff_respects_exact_published_date():

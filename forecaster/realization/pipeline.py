@@ -7,7 +7,13 @@ from typing import Any
 from live_idea_bench.llm import create_client
 from live_idea_bench.models import PaperRecord
 from forecaster.config import RealizationConfig, load_realization_config
-from forecaster.models import HindsightSample, Innovation, innovation_to_dict
+from forecaster.models import (
+    HindsightSample,
+    Innovation,
+    innovation_to_dict,
+    strict_search_contract,
+    strict_runtime_manifest_contract,
+)
 from forecaster.realization.candidates import CandidateListSample, EpisodeCandidateLists
 from forecaster.realization.config import CandidateGenerationConfig, EpisodeBuildConfig, RewardConfig, SelectionConfig
 from forecaster.realization.evidence import retrieve_evidence
@@ -21,7 +27,17 @@ from forecaster.realization.proposal_generator import (
     generate_proposal,
     proposal_to_idea_prediction,
 )
-from forecaster.realization.reward import build_invalid_reward_evaluation, evaluate_rl_reward, serialize_reward_evaluation
+from forecaster.realization.reward import (
+    build_invalid_reward_evaluation,
+    evaluate_rl_reward,
+    evaluate_strict_rl_reward,
+    serialize_reward_evaluation,
+)
+from forecaster.realization.strict_runtime import (
+    build_strict_interactive_messages,
+    generate_strict_policy_completion,
+    run_strict_realization_rollout,
+)
 from forecaster.realization.trainers import PreparedRLContext, TrainerPreparedArtifacts, create_trainer_runner
 from forecaster.realization.trainers.base import build_config_fingerprint
 
@@ -176,6 +192,43 @@ def _serialize_episode_prompt_row(
     }
 
 
+def _build_strict_interactive_prompt(innovation: Innovation) -> tuple[str, str]:
+    return build_strict_interactive_messages(innovation)
+
+
+def _serialize_strict_episode_prompt_row(
+    *,
+    episode: RLEpisode,
+    train_papers: list[PaperRecord],
+    future_papers: list[PaperRecord],
+    target_future_paper: PaperRecord,
+    innovation: Innovation,
+    realization_config: RealizationConfig,
+    system_prompt: str,
+    user_prompt: str,
+) -> dict[str, Any]:
+    return {
+        "episode": asdict(episode),
+        "prompt_mode": "strict_interactive_realization",
+        "prompt": f"{system_prompt}\n\n{user_prompt}".strip(),
+        "system_prompt": system_prompt,
+        "user_prompt": user_prompt,
+        "cutoff_month": episode.cutoff_month,
+        "cutoff_date": episode.cutoff_date,
+        "future_end_month": episode.future_end_month,
+        "future_end_date": episode.future_end_date,
+        "train_papers": _serialize_papers(train_papers),
+        "future_papers": _serialize_papers(future_papers),
+        "target_future_paper": asdict(target_future_paper),
+        "target_future_paper_id": target_future_paper.paper_id,
+        "innovation": innovation_to_dict(innovation),
+        "evidence_papers": [],
+        "realization_config": asdict(realization_config),
+        "search_env": strict_search_contract()["search_env_defaults"],
+        "strict_contract": strict_runtime_manifest_contract(),
+    }
+
+
 def _build_episode_prompt_row(
     episode: RLEpisode,
     train_papers: list[PaperRecord],
@@ -211,6 +264,35 @@ def _build_episode_prompt_row(
         target_future_paper=target_future_paper,
         innovation=innovation,
         evidence_papers=evidence_papers,
+        realization_config=realization_config,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+    )
+
+
+def _build_strict_episode_prompt_row(
+    episode: RLEpisode,
+    train_papers: list[PaperRecord],
+    future_papers: list[PaperRecord],
+    *,
+    realization_config: RealizationConfig,
+    hindsight_samples: list[HindsightSample] | None,
+) -> dict[str, Any] | None:
+    target_future_paper = _select_episode_target_future_paper(future_papers)
+    if target_future_paper is None:
+        return None
+    innovation = _resolve_episode_innovation(
+        episode,
+        target_future_paper,
+        hindsight_samples,
+    )
+    system_prompt, user_prompt = _build_strict_interactive_prompt(innovation)
+    return _serialize_strict_episode_prompt_row(
+        episode=episode,
+        train_papers=train_papers,
+        future_papers=future_papers,
+        target_future_paper=target_future_paper,
+        innovation=innovation,
         realization_config=realization_config,
         system_prompt=system_prompt,
         user_prompt=user_prompt,
@@ -339,6 +421,118 @@ def _generate_realization_candidate_predictions(
     raise ValueError(f"Unsupported candidate generation backend: {backend}")
 
 
+def _generate_strict_realization_completion(
+    row: dict[str, Any],
+    model_name: str,
+    temperature: float,
+    config: CandidateGenerationConfig,
+    *,
+    realization_config: RealizationConfig,
+    top_p: float | None = None,
+    seed: int | None = None,
+    base_model_name: str | None = None,
+) -> tuple[str, str]:
+    backend = _resolve_generation_backend(model_name, config.backend)
+    innovation = Innovation(**dict(row.get("innovation", {})))
+    train_papers = [PaperRecord(**paper) for paper in row.get("train_papers", [])]
+    search_env = row.get("search_env", {})
+    top_p_value = top_p if top_p is not None else config.top_p
+    if backend == "heuristic":
+        return (
+            generate_strict_policy_completion(
+                innovation,
+                train_papers,
+                llm_client=None,
+                model=None,
+                realization_config=realization_config,
+                search_env_payload=search_env if isinstance(search_env, dict) else None,
+                backend="heuristic",
+            ),
+            backend,
+        )
+    if backend == "api":
+        client, resolved_model = create_client(model_name)
+        return (
+            generate_strict_policy_completion(
+                innovation,
+                train_papers,
+                llm_client=client,
+                model=resolved_model,
+                realization_config=realization_config,
+                search_env_payload=search_env if isinstance(search_env, dict) else None,
+                temperature=temperature,
+                top_p=top_p_value,
+                seed=seed,
+            ),
+            backend,
+        )
+    if backend == "local_hf":
+        return (
+            generate_strict_policy_completion(
+                innovation,
+                train_papers,
+                llm_client=None,
+                model=None,
+                realization_config=realization_config,
+                realization_model_path=model_name,
+                search_env_payload=search_env if isinstance(search_env, dict) else None,
+                temperature=temperature,
+                top_p=top_p_value,
+                seed=seed,
+                base_model_name=base_model_name,
+            ),
+            backend,
+        )
+    raise ValueError(f"Unsupported strict generation backend: {backend}")
+
+
+def _strict_prediction_from_completion(
+    row: dict[str, Any],
+    completion_text: str,
+    *,
+    backend: str,
+    temperature: float,
+    top_p: float,
+    realization_config: RealizationConfig,
+) -> list[Any]:
+    innovation = Innovation(**dict(row.get("innovation", {})))
+    train_papers = [PaperRecord(**paper) for paper in row.get("train_papers", [])]
+    trajectory, evidence_papers = run_strict_realization_rollout(
+        innovation,
+        train_papers,
+        llm_client=None,
+        model=None,
+        realization_config=realization_config,
+        completion_text=completion_text,
+        search_env_payload=row.get("search_env") if isinstance(row.get("search_env"), dict) else None,
+    )
+    if trajectory.invalid_reason or trajectory.result is None:
+        return []
+    prediction = proposal_to_idea_prediction(
+        trajectory.result.proposal_text,
+        innovation,
+        rank=1,
+    )
+    prediction = replace(
+        prediction,
+        rank=1,
+        metadata={
+            **prediction.metadata,
+            "proposal_text": trajectory.result.proposal_text,
+            "policy_completion": completion_text,
+            "selected_evidence_ids": list(trajectory.result.selected_evidence_ids),
+            "search_queries": list(trajectory.result.search_queries),
+            "sampling_temperature": temperature,
+            "sampling_top_p": top_p,
+            "generation_backend": backend,
+            "prompt_mode": "strict_interactive_realization",
+            "evidence_paper_ids": [paper.paper_id for paper in evidence_papers],
+            "target_future_paper_id": str(row.get("target_future_paper_id", "") or ""),
+        },
+    )
+    return [prediction]
+
+
 def _single_idea_candidate_config(config: CandidateGenerationConfig) -> CandidateGenerationConfig:
     return replace(config, ideas_per_list=1)
 
@@ -382,36 +576,78 @@ def generate_episode_candidate_lists(
         innovation = Innovation(**dict(row.get("innovation", {})))
         evidence_papers = [PaperRecord(**paper) for paper in row.get("evidence_papers", [])]
         prompt = str(row.get("prompt", ""))
+        prompt_mode = str(row.get("prompt_mode", "z_conditioned_realization") or "z_conditioned_realization")
         candidates: list[CandidateListSample] = []
         for temperature in temperatures:
-            backend = _resolve_generation_backend(model_name, single_config.backend)
             try:
-                predictions = _generate_realization_candidate_predictions(
-                    row,
-                    model_name,
-                    temperature,
-                    single_config,
-                    realization_config=resolved_realization_config,
-                    top_p=single_config.top_p,
-                    seed=single_config.seed + int(temperature * 1000),
-                    base_model_name=base_model_name,
-                    fallback_to_heuristic=fallback_to_heuristic,
-                )
+                if prompt_mode == "strict_interactive_realization":
+                    completion_text, backend = _generate_strict_realization_completion(
+                        row,
+                        model_name,
+                        temperature,
+                        single_config,
+                        realization_config=resolved_realization_config,
+                        top_p=single_config.top_p,
+                        seed=single_config.seed + int(temperature * 1000),
+                        base_model_name=base_model_name,
+                    )
+                    predictions = _strict_prediction_from_completion(
+                        row,
+                        completion_text,
+                        backend=backend,
+                        temperature=temperature,
+                        top_p=single_config.top_p,
+                        realization_config=resolved_realization_config,
+                    )
+                else:
+                    backend = _resolve_generation_backend(model_name, single_config.backend)
+                    predictions = _generate_realization_candidate_predictions(
+                        row,
+                        model_name,
+                        temperature,
+                        single_config,
+                        realization_config=resolved_realization_config,
+                        top_p=single_config.top_p,
+                        seed=single_config.seed + int(temperature * 1000),
+                        base_model_name=base_model_name,
+                        fallback_to_heuristic=fallback_to_heuristic,
+                    )
             except Exception:
                 if not fallback_to_heuristic:
                     raise
-                predictions = _generate_realization_candidate_predictions(
-                    row,
-                    model_name,
-                    temperature,
-                    replace(single_config, backend="heuristic"),
-                    realization_config=resolved_realization_config,
-                    top_p=single_config.top_p,
-                    seed=single_config.seed + int(temperature * 1000),
-                    base_model_name=base_model_name,
-                    fallback_to_heuristic=True,
-                )
-                backend = "heuristic_fallback"
+                if prompt_mode == "strict_interactive_realization":
+                    completion_text, _ = _generate_strict_realization_completion(
+                        row,
+                        model_name,
+                        temperature,
+                        replace(single_config, backend="heuristic"),
+                        realization_config=resolved_realization_config,
+                        top_p=single_config.top_p,
+                        seed=single_config.seed + int(temperature * 1000),
+                        base_model_name=base_model_name,
+                    )
+                    predictions = _strict_prediction_from_completion(
+                        row,
+                        completion_text,
+                        backend="heuristic_fallback",
+                        temperature=temperature,
+                        top_p=single_config.top_p,
+                        realization_config=resolved_realization_config,
+                    )
+                    backend = "heuristic_fallback"
+                else:
+                    predictions = _generate_realization_candidate_predictions(
+                        row,
+                        model_name,
+                        temperature,
+                        replace(single_config, backend="heuristic"),
+                        realization_config=resolved_realization_config,
+                        top_p=single_config.top_p,
+                        seed=single_config.seed + int(temperature * 1000),
+                        base_model_name=base_model_name,
+                        fallback_to_heuristic=True,
+                    )
+                    backend = "heuristic_fallback"
             predictions = [
                 replace(
                     prediction,
@@ -425,7 +661,23 @@ def generate_episode_candidate_lists(
                 )
                 for idx, prediction in enumerate(predictions, start=1)
             ]
-            if len(predictions) != 1:
+            if prompt_mode == "strict_interactive_realization":
+                policy_completion = str(predictions[0].metadata.get("policy_completion", "") or "") if predictions else ""
+                reward = evaluate_strict_rl_reward(
+                    policy_completion,
+                    innovation=innovation,
+                    train_papers=train_papers,
+                    future_papers=future_papers,
+                    reward_config=reward_config,
+                    realization_config=resolved_realization_config,
+                    search_env_payload=row.get("search_env") if isinstance(row.get("search_env"), dict) else None,
+                    similarity_config_path=similarity_config_path,
+                    runtime_config_path=runtime_config_path,
+                    model_name=model_name,
+                    cutoff_date=episode.cutoff_date,
+                    future_end_date=episode.future_end_date,
+                ) if len(predictions) == 1 and policy_completion else build_invalid_reward_evaluation(reward_config)
+            elif len(predictions) != 1:
                 reward = build_invalid_reward_evaluation(reward_config)
             else:
                 reward = evaluate_rl_reward(
@@ -452,10 +704,11 @@ def generate_episode_candidate_lists(
                 {
                     "episode": asdict(episode),
                     "prompt": prompt,
-                    "prompt_mode": row.get("prompt_mode", "z_conditioned_realization"),
+                    "prompt_mode": prompt_mode,
                     "innovation": row.get("innovation", {}),
                     "target_future_paper_id": row.get("target_future_paper_id", ""),
                     "evidence_papers": row.get("evidence_papers", []),
+                    "search_env": row.get("search_env", {}),
                     "realization_config": row.get("realization_config", {}),
                     "candidates": [
                         {
@@ -502,6 +755,32 @@ def build_grpo_prompt_rows(
     for episode in episodes:
         train_papers, future_papers = _materialize_episode(episode, paper_lookup)
         row = _build_episode_prompt_row(
+            episode,
+            train_papers,
+            future_papers,
+            realization_config=resolved_realization_config,
+            hindsight_samples=hindsight_samples,
+        )
+        if row is not None:
+            rows.append(row)
+    return rows
+
+
+def build_strict_rl_prompt_rows(
+    papers: list[PaperRecord],
+    episodes: list[RLEpisode],
+    *,
+    candidate_config: CandidateGenerationConfig,
+    realization_config: RealizationConfig | None = None,
+    hindsight_samples: list[HindsightSample] | None = None,
+) -> list[dict[str, Any]]:
+    del candidate_config
+    paper_lookup = _paper_lookup(papers)
+    resolved_realization_config = realization_config or load_realization_config()
+    rows: list[dict[str, Any]] = []
+    for episode in episodes:
+        train_papers, future_papers = _materialize_episode(episode, paper_lookup)
+        row = _build_strict_episode_prompt_row(
             episode,
             train_papers,
             future_papers,
@@ -569,6 +848,7 @@ def _shared_fingerprint(
     reward_config: RewardConfig,
     selection_config: SelectionConfig,
     similarity_config_path: str,
+    strict_mode: bool = False,
     hindsight_samples: list[HindsightSample] | None = None,
 ) -> str:
     return build_config_fingerprint(
@@ -582,6 +862,7 @@ def _shared_fingerprint(
             "reward_config": reward_config,
             "selection_config": selection_config,
             "similarity_config_path": similarity_config_path,
+            "strict_mode": strict_mode,
             "hindsight_samples": [
                 {
                     "cutoff_month": sample.cutoff_month,
@@ -656,6 +937,7 @@ def prepare_common_rl_context(
     max_episodes: int | None = None,
     similarity_config_path: str = "similarity.yaml",
     runtime_config_path: str | None = None,
+    strict_mode: bool = False,
     hindsight_samples: list[HindsightSample] | None = None,
 ) -> PreparedRLContext:
     target_dir = Path(output_dir).resolve()
@@ -671,6 +953,7 @@ def prepare_common_rl_context(
         reward_config=reward_config,
         selection_config=selection_config,
         similarity_config_path=similarity_config_path,
+        strict_mode=strict_mode,
         hindsight_samples=hindsight_samples,
     )
     cached = _load_cached_context(
@@ -693,12 +976,22 @@ def prepare_common_rl_context(
     selected_episodes = _select_episodes(episodes, split, max_episodes)
     if not selected_episodes:
         raise ValueError("No RL episodes were selected. Adjust split, window, or date settings.")
-    prompt_rows = build_grpo_prompt_rows(
-        papers,
-        selected_episodes,
-        candidate_config=candidate_config,
-        realization_config=resolved_realization_config,
-        hindsight_samples=hindsight_samples,
+    prompt_rows = (
+        build_strict_rl_prompt_rows(
+            papers,
+            selected_episodes,
+            candidate_config=candidate_config,
+            realization_config=resolved_realization_config,
+            hindsight_samples=hindsight_samples,
+        )
+        if strict_mode
+        else build_grpo_prompt_rows(
+            papers,
+            selected_episodes,
+            candidate_config=candidate_config,
+            realization_config=resolved_realization_config,
+            hindsight_samples=hindsight_samples,
+        )
     )
     episodes_path = shared_dir / "episodes.json"
     prompt_rows_path = shared_dir / "prompts.jsonl"
@@ -719,7 +1012,9 @@ def prepare_common_rl_context(
             "similarity_config_path": similarity_config_path,
             "model_name": model_name,
             "fingerprint": fingerprint,
-            "prompt_mode": "z_conditioned_realization",
+            "prompt_mode": "strict_interactive_realization" if strict_mode else "z_conditioned_realization",
+            "strict_mode": strict_mode,
+            "strict_contract": strict_runtime_manifest_contract(),
         },
     )
     return PreparedRLContext(
@@ -762,10 +1057,36 @@ def _prompt_baseline_evaluation(
     runtime_config_path: str | None,
 ) -> Any:
     single_config = _single_idea_candidate_config(candidate_config)
+    prompt_mode = str(prompt_row.get("prompt_mode", "z_conditioned_realization") or "z_conditioned_realization")
     train_papers = [PaperRecord(**paper) for paper in prompt_row.get("train_papers", [])]
     future_papers = [PaperRecord(**paper) for paper in prompt_row.get("future_papers", [])]
     innovation = Innovation(**dict(prompt_row.get("innovation", {})))
     evidence_papers = [PaperRecord(**paper) for paper in prompt_row.get("evidence_papers", [])]
+    if prompt_mode == "strict_interactive_realization":
+        completion_text, _ = _generate_strict_realization_completion(
+            prompt_row,
+            policy_model_name,
+            _midpoint_temperature(single_config),
+            single_config,
+            realization_config=realization_config,
+            top_p=single_config.top_p,
+            seed=single_config.seed,
+            base_model_name=base_model_name,
+        )
+        return evaluate_strict_rl_reward(
+            completion_text,
+            innovation=innovation,
+            train_papers=train_papers,
+            future_papers=future_papers,
+            reward_config=reward_config,
+            realization_config=realization_config,
+            search_env_payload=prompt_row.get("search_env") if isinstance(prompt_row.get("search_env"), dict) else None,
+            similarity_config_path=similarity_config_path,
+            runtime_config_path=runtime_config_path,
+            model_name=policy_model_name,
+            cutoff_date=str(prompt_row.get("cutoff_date", "") or "") or None,
+            future_end_date=str(prompt_row.get("future_end_date", "") or "") or None,
+        )
     predictions = _generate_realization_candidate_predictions(
         prompt_row,
         policy_model_name,
@@ -806,18 +1127,29 @@ def run_online_alignment_gate(
     reward_config: RewardConfig,
     trainer_config: Any,
     trainer_output_dir: Path,
+    strict_mode: bool = False,
 ) -> dict[str, Any]:
     episodes = _alignment_episodes(common_context)
     policy_model_name, base_model_name = _resolve_policy_source(
         model_name=model_name,
         init_policy_path=init_policy_path,
     )
-    validation_prompt_rows = build_grpo_prompt_rows(
-        common_context.papers,
-        episodes,
-        candidate_config=candidate_config,
-        realization_config=realization_config,
-        hindsight_samples=common_context.hindsight_samples,
+    validation_prompt_rows = (
+        build_strict_rl_prompt_rows(
+            common_context.papers,
+            episodes,
+            candidate_config=candidate_config,
+            realization_config=realization_config,
+            hindsight_samples=common_context.hindsight_samples,
+        )
+        if strict_mode
+        else build_grpo_prompt_rows(
+            common_context.papers,
+            episodes,
+            candidate_config=candidate_config,
+            realization_config=realization_config,
+            hindsight_samples=common_context.hindsight_samples,
+        )
     )
     candidate_lists = generate_episode_candidate_lists(
         common_context.papers,
@@ -926,6 +1258,7 @@ def run_policy_rl_pipeline(
     max_episodes: int | None = None,
     similarity_config_path: str = "similarity.yaml",
     runtime_config_path: str | None = None,
+    strict_mode: bool = False,
     prepare_only: bool = False,
     init_policy_path: str | None = None,
     skip_alignment_check: bool = False,
@@ -948,6 +1281,7 @@ def run_policy_rl_pipeline(
         max_episodes=max_episodes,
         similarity_config_path=similarity_config_path,
         runtime_config_path=runtime_config_path,
+        strict_mode=strict_mode,
         hindsight_samples=hindsight_samples,
     )
     prepared = runner.prepare(
@@ -969,6 +1303,7 @@ def run_policy_rl_pipeline(
             reward_config=reward_config,
             trainer_config=trainer_config,
             trainer_output_dir=prepared.output_dir,
+            strict_mode=strict_mode,
         )
         if not diagnostics.get("alignment_passed", False):
             raise ValueError(
@@ -1011,11 +1346,13 @@ def run_policy_rl_pipeline(
         "trainer_policy_manifest_path": str((prepared.output_dir / "policy_manifest.json").resolve()) if trainer_manifest else "",
         "prepare_only": prepare_only,
         "selection_config_path": selection_config_path,
-        "prompt_mode": "z_conditioned_realization",
+        "prompt_mode": "strict_interactive_realization" if strict_mode else "z_conditioned_realization",
+        "strict_mode": strict_mode,
         "recommended_small_models": list_small_model_payloads(),
         "shared_fingerprint": common_context.config_fingerprint,
         "trainer_metadata": prepared.metadata,
         "diagnostics": diagnostics,
+        "strict_contract": strict_runtime_manifest_contract(),
     }
     _write_json(target_dir / "pipeline_manifest.json", manifest)
     return manifest

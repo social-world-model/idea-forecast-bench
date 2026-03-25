@@ -8,7 +8,17 @@ import pytest
 
 from live_idea_bench.models import PaperRecord
 
-from forecaster.models import Innovation, MemoryEntry, MemoryInventory, ScoredProposal
+from forecaster.models import (
+    Innovation,
+    MemoryEntry,
+    MemoryInventory,
+    RealizationTrajectory,
+    RealizationTrajectoryStep,
+    ScoredProposal,
+    SearchAction,
+    SearchObservation,
+    StrictRealizationResult,
+)
 from forecaster.config import InferenceConfig, RealizationConfig
 from forecaster.prior.memory import MemoryStore
 from forecaster.inference.algorithm import run_joint_inference
@@ -316,6 +326,21 @@ class TestRunJointInference:
                 realization_config=RealizationConfig(),
             )
 
+    def test_run_joint_inference_strict_mode_rejects_popularity_scorer(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="does not allow popularity_scorer"):
+            run_joint_inference(
+                innovations=[_make_innovation()],
+                papers=[_make_paper("p1", "attention mechanism for long document sequences training")],
+                memory_store=MemoryStore.empty("2024-01"),
+                llm_client=MagicMock(),
+                model="gpt-4o",
+                inference_config=InferenceConfig(runtime_mode="strict_eval"),
+                realization_config=RealizationConfig(),
+                popularity_scorer=lambda innovation, papers: 1.0,
+                prior_model_path=str(tmp_path),
+                realization_model_path=str(tmp_path),
+            )
+
     def test_run_joint_inference_strict_mode_raises_when_realization_scorer_fails(self, tmp_path: Path) -> None:
         """Strict mode should not silently revert to proxy realization scoring."""
         artifact_dir = tmp_path / "realization"
@@ -325,7 +350,7 @@ class TestRunJointInference:
             "forecaster.inference.algorithm.build_prior_scorer",
             return_value=lambda innovation: -0.2,
         ), patch(
-            "forecaster.inference.algorithm.build_realization_scorer",
+            "forecaster.inference.algorithm.build_strict_realization_scorer",
             side_effect=RuntimeError("broken scorer"),
         ):
             with pytest.raises(RuntimeError, match="Strict realization scorer initialization failed"):
@@ -340,3 +365,71 @@ class TestRunJointInference:
                     prior_model_path=str(tmp_path),
                     realization_model_path=str(artifact_dir),
                 )
+
+    def test_run_joint_inference_strict_mode_persists_search_metadata(self, tmp_path: Path) -> None:
+        """Strict runtime should persist the interactive search trace into proposal metadata."""
+        artifact_dir = tmp_path / "realization"
+        artifact_dir.mkdir()
+        trajectory = RealizationTrajectory(
+            innovation=_make_innovation(),
+            steps=(
+                RealizationTrajectoryStep(
+                    action=SearchAction(action_type="search", query="attention efficiency"),
+                    observation=(
+                        SearchObservation(
+                            paper_id="p1",
+                            title="paper one",
+                            month="2024-01",
+                            summary="summary one",
+                        ),
+                    ),
+                    selected_evidence_ids=(),
+                ),
+                RealizationTrajectoryStep(
+                    action=SearchAction(action_type="finish", proposal_text="Strict Proposal\nBody"),
+                    observation=(),
+                    selected_evidence_ids=("p1",),
+                ),
+            ),
+            result=StrictRealizationResult(
+                selected_evidence_ids=("p1",),
+                proposal_text="Strict Proposal\nBody",
+                search_queries=("attention efficiency",),
+            ),
+        )
+
+        with patch(
+            "forecaster.inference.algorithm.build_prior_scorer",
+            return_value=lambda innovation: -0.2,
+        ), patch(
+            "forecaster.inference.algorithm.build_strict_realization_scorer",
+            return_value=lambda innovation, completion_text: -0.3,
+        ), patch(
+            "forecaster.inference.algorithm.generate_strict_policy_completion",
+            return_value='{"actions":[{"action_type":"search","query":"attention efficiency"},{"action_type":"finish","proposal_text":"Strict Proposal\\nBody"}]}',
+        ), patch(
+            "forecaster.inference.algorithm.run_strict_realization_rollout",
+            return_value=(trajectory, [_make_paper("p1", "attention mechanism for long document sequences training")]),
+        ):
+            result = run_joint_inference(
+                innovations=[_make_innovation()],
+                papers=[_make_paper("p1", "attention mechanism for long document sequences training")],
+                memory_store=MemoryStore.empty("2024-01"),
+                llm_client=MagicMock(),
+                model="gpt-4o",
+                inference_config=InferenceConfig(runtime_mode="strict_eval"),
+                realization_config=RealizationConfig(),
+                prior_model_path=str(tmp_path),
+                realization_model_path=str(artifact_dir),
+            )
+
+        assert result[0].metadata["search_queries"] == ["attention efficiency"]
+        assert result[0].metadata["surfaced_paper_ids_by_step"] == [["p1"]]
+        assert result[0].metadata["selected_evidence_ids"] == ["p1"]
+        assert result[0].metadata["evidence_paper_ids"] == ["p1"]
+        assert result[0].joint_score == pytest.approx((0.4 * -0.2) + (0.6 * -0.3))
+        assert result[0].metadata["strict_score_contract"]["joint_score_components"] == (
+            "prior_score",
+            "realization_score",
+        )
+        assert result[0].metadata["strict_score_contract"]["popularity_weight"] == 0.0

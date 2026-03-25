@@ -10,3 +10,4 @@ realization_score_method: conditional_logprob
 score_normalization: per_token
 score_temperature: 1.0
 joint_score_mode: linear_blend
+popularity_weight: 0.0

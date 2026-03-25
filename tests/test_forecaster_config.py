@@ -98,11 +98,26 @@ class TestInferenceConfigDefaults:
         assert cfg.score_normalization == "per_token"
         assert cfg.score_temperature == pytest.approx(1.0)
         assert cfg.joint_score_mode == "linear_blend"
+        assert cfg.popularity_weight == pytest.approx(0.0)
 
     def test_weights_sum_to_one(self) -> None:
         cfg = InferenceConfig()
         total = cfg.prior_weight + cfg.realization_weight
         assert total == pytest.approx(1.0)
+
+    def test_strict_init_rejects_popularity_weight(self) -> None:
+        with pytest.raises(ValueError, match="popularity_weight must be 0.0"):
+            InferenceConfig(runtime_mode="strict_eval", popularity_weight=0.1)
+
+    def test_strict_init_rejects_non_conditional_score_methods(self) -> None:
+        with pytest.raises(ValueError, match="prior_score_method must be 'conditional_logprob'"):
+            InferenceConfig(runtime_mode="strict_eval", prior_score_method="heuristic_memory")
+        with pytest.raises(ValueError, match="realization_score_method must be 'conditional_logprob'"):
+            InferenceConfig(runtime_mode="strict_eval", realization_score_method="paper_reward")
+
+    def test_demo_mode_still_allows_popularity_weight(self) -> None:
+        cfg = InferenceConfig(runtime_mode="demo", popularity_weight=0.2)
+        assert cfg.popularity_weight == pytest.approx(0.2)
 
 
 class TestEpisodeBuildConfigDefaults:
@@ -172,8 +187,27 @@ class TestLoadInferenceConfig:
         assert cfg.num_candidates == 16
         assert cfg.top_k == 5
         assert cfg.prior_score_method == "conditional_logprob"
+        assert cfg.popularity_weight == pytest.approx(0.0)
 
     def test_weights_sum_to_one_from_yaml(self) -> None:
         cfg = load_inference_config("inference.yaml")
         total = cfg.prior_weight + cfg.realization_weight
         assert total == pytest.approx(1.0)
+
+    def test_invalid_strict_yaml_raises(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        path = tmp_path / "invalid_inference.yaml"
+        path.write_text(
+            "\n".join(
+                [
+                    "runtime_mode: strict_eval",
+                    "prior_score_method: conditional_logprob",
+                    "realization_score_method: conditional_logprob",
+                    "joint_score_mode: linear_blend",
+                    "popularity_weight: 0.2",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError, match="popularity_weight must be 0.0"):
+            load_inference_config(str(path))
