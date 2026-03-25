@@ -169,12 +169,15 @@ def _sample_paths_deterministically(paths: list[Path], limit: int) -> list[Path]
 
 def _discover_markdown_files_with_progress(input_dir: Path) -> list[Path]:
     progress_every = _resolve_progress_every()
+    max_files = _resolve_max_files()
     _print_progress(f"[topic-hindsight] discovering markdown files under {input_dir}")
 
     files: list[Path] = []
     discovered_count = 0
     scanned_dirs = 0
     for dirpath, _dirnames, filenames in os.walk(input_dir):
+        _dirnames.sort()
+        filenames.sort()
         scanned_dirs += 1
         for filename in filenames:
             if not filename.lower().endswith(".md"):
@@ -188,20 +191,21 @@ def _discover_markdown_files_with_progress(input_dir: Path) -> list[Path]:
                     f"[topic-hindsight] discovered {discovered_count} markdown files "
                     f"after scanning {scanned_dirs} directories"
                 )
+            if max_files is not None and discovered_count >= max_files:
+                _print_progress(
+                    f"[topic-hindsight] early-stop smoke sample enabled: "
+                    f"stopping discovery after {discovered_count} markdown files"
+                )
+                break
         if scanned_dirs % progress_every == 0 and discovered_count == 0:
             _print_progress(
                 f"[topic-hindsight] scanned {scanned_dirs} directories, "
                 "no markdown files discovered yet"
             )
+        if max_files is not None and discovered_count >= max_files:
+            break
 
     files.sort()
-    max_files = _resolve_max_files()
-    if max_files is not None and len(files) > max_files:
-        files = _sample_paths_deterministically(files, max_files)
-        _print_progress(
-            f"[topic-hindsight] deterministic smoke-test sample enabled: "
-            f"keeping {len(files)} of {discovered_count} discovered markdown files"
-        )
     _print_progress(
         f"[topic-hindsight] discovery complete: found {len(files)} markdown files "
         f"across {scanned_dirs} directories"
