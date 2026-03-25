@@ -1,7 +1,10 @@
 """Shared helpers for topic-based hindsight manifest and preview scripts."""
 from __future__ import annotations
 
+import concurrent.futures
 import json
+import os
+import sys
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,8 +15,10 @@ from live_idea_bench.config import TopicDefinition, load_topics
 from live_idea_bench.models import PaperRecord
 from live_idea_bench.papers import (
     date_to_ordinal,
+    find_markdown_files,
     get_paper_published_date,
-    load_papers_from_markdown,
+    month_to_index,
+    parse_markdown_paper,
 )
 from live_idea_bench.topics import classify_papers_by_topic
 
@@ -22,6 +27,7 @@ DEFAULT_TOPICS_CONFIG_PATH = "config/topics_v2.yaml"
 TOPIC_HINDSIGHT_START_MONTH = "2023-01"
 TOPIC_HINDSIGHT_END_MONTH = "2025-03"
 TOPIC_HINDSIGHT_HORIZON_MONTHS = 3
+TOPIC_HINDSIGHT_DEFAULT_PROGRESS_EVERY = 2_000
 
 
 @dataclass(frozen=True)
@@ -101,6 +107,102 @@ def _resolve_path(path: str | Path) -> Path:
     return (PROJECT_ROOT / raw).resolve()
 
 
+def _resolve_loader_workers() -> int:
+    raw = str(os.environ.get("TOPIC_HINDSIGHT_LOAD_WORKERS", "") or "").strip()
+    if raw:
+        return max(1, int(raw))
+    cpu_count = os.cpu_count() or 1
+    return max(4, min(32, cpu_count * 4))
+
+
+def _resolve_progress_every() -> int:
+    raw = str(os.environ.get("TOPIC_HINDSIGHT_PROGRESS_EVERY", "") or "").strip()
+    if raw:
+        return max(1, int(raw))
+    return TOPIC_HINDSIGHT_DEFAULT_PROGRESS_EVERY
+
+
+def _parse_markdown_path(path: Path) -> PaperRecord | None:
+    if path.name.lower() == "readme.md":
+        return None
+    return parse_markdown_paper(path)
+
+
+def _paper_within_month_range(
+    paper: PaperRecord,
+    *,
+    start_month: str,
+    end_month: str,
+) -> bool:
+    paper_month_idx = month_to_index(paper.month)
+    return month_to_index(start_month) <= paper_month_idx <= month_to_index(end_month)
+
+
+def _print_progress(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
+
+
+def _load_papers_with_progress(
+    input_dir: Path,
+    *,
+    start_month: str,
+    end_month: str,
+) -> tuple[PaperRecord, ...]:
+    files = [path for path in find_markdown_files(input_dir) if path.name.lower() != "readme.md"]
+    total_files = len(files)
+    if total_files == 0:
+        _print_progress(f"[topic-hindsight] no markdown files found under {input_dir}")
+        return ()
+
+    workers = _resolve_loader_workers()
+    progress_every = _resolve_progress_every()
+    _print_progress(
+        f"[topic-hindsight] parsing {total_files} markdown files under {input_dir} "
+        f"with {workers} worker threads"
+    )
+
+    kept_records: list[PaperRecord] = []
+    parsed_count = 0
+    kept_count = 0
+    skipped_count = 0
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        future_to_path = {
+            executor.submit(_parse_markdown_path, path): path
+            for path in files
+        }
+        for future in concurrent.futures.as_completed(future_to_path):
+            path = future_to_path[future]
+            try:
+                paper = future.result()
+            except Exception as exc:
+                raise RuntimeError(f"Failed to parse markdown file: {path}") from exc
+
+            parsed_count += 1
+            if paper is not None and _paper_within_month_range(
+                paper,
+                start_month=start_month,
+                end_month=end_month,
+            ):
+                kept_records.append(paper)
+                kept_count += 1
+            else:
+                skipped_count += 1
+
+            if parsed_count == total_files or parsed_count % progress_every == 0:
+                _print_progress(
+                    f"[topic-hindsight] parsed {parsed_count}/{total_files} files "
+                    f"(kept={kept_count}, skipped={skipped_count})"
+                )
+
+    kept_records.sort(key=lambda paper: (date_to_ordinal(get_paper_published_date(paper)), paper.paper_id))
+    _print_progress(
+        f"[topic-hindsight] finished loading papers: kept={len(kept_records)} "
+        f"within {start_month}..{end_month}"
+    )
+    return tuple(kept_records)
+
+
 def load_topic_hindsight_context(
     input_dir: str | Path,
     *,
@@ -108,19 +210,22 @@ def load_topic_hindsight_context(
 ) -> TopicHindsightContext:
     resolved_input_dir = Path(input_dir).resolve()
     resolved_topics_config = _resolve_path(topics_config_path)
-    papers = tuple(
-        load_papers_from_markdown(
-            resolved_input_dir,
-            start_month=TOPIC_HINDSIGHT_START_MONTH,
-            end_month=TOPIC_HINDSIGHT_END_MONTH,
-        )
+    papers = _load_papers_with_progress(
+        resolved_input_dir,
+        start_month=TOPIC_HINDSIGHT_START_MONTH,
+        end_month=TOPIC_HINDSIGHT_END_MONTH,
     )
     topics = tuple(load_topics(str(resolved_topics_config)))
+    _print_progress(
+        f"[topic-hindsight] classifying {len(papers)} papers across {len(topics)} topics "
+        f"from {resolved_topics_config}"
+    )
     grouped_raw = classify_papers_by_topic(list(papers), list(topics))
     grouped = OrderedDict(
         (topic.id, tuple(grouped_raw.get(topic.id, [])))
         for topic in topics
     )
+    _print_progress("[topic-hindsight] topic classification complete")
     return TopicHindsightContext(
         input_dir=resolved_input_dir,
         topics_config_path=resolved_topics_config,
@@ -175,10 +280,17 @@ def build_topic_hindsight_manifest(
 
     rows: list[dict[str, Any]] = []
     total_selected_samples = 0
+    total_windows = len(context.topics) * len(FIXED_TOPIC_HINDSIGHT_EPISODES)
+    window_index = 0
+    _print_progress(
+        f"[topic-hindsight] building manifest rows for {len(context.topics)} topics "
+        f"x {len(FIXED_TOPIC_HINDSIGHT_EPISODES)} episodes = {total_windows} windows"
+    )
 
     for topic in context.topics:
         topic_papers = list(context.grouped_papers.get(topic.id, ()))
         for episode in FIXED_TOPIC_HINDSIGHT_EPISODES:
+            window_index += 1
             train_papers, future_papers, _future_end_month, _future_end_date = split_train_future_by_cutoff(
                 papers=topic_papers,
                 cutoff_date=episode.cutoff_date,
@@ -204,6 +316,11 @@ def build_topic_hindsight_manifest(
                     "selected_future_source_paths": [paper.source_path for paper in selected_future],
                 }
             )
+            if window_index == total_windows or window_index % 50 == 0:
+                _print_progress(
+                    f"[topic-hindsight] built {window_index}/{total_windows} manifest windows "
+                    f"(selected_samples={total_selected_samples})"
+                )
 
     return {
         "topics_config_path": str(context.topics_config_path),
@@ -291,4 +408,3 @@ def write_json(path: str | Path, payload: dict[str, Any]) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return target
-
