@@ -4,6 +4,7 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import os
+import re
 import sys
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ from live_idea_bench.papers import (
     date_to_ordinal,
     get_paper_published_date,
     month_to_index,
+    normalize_month,
     parse_markdown_paper,
 )
 from live_idea_bench.topics import classify_papers_by_topic
@@ -149,22 +151,32 @@ def _print_progress(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
 
 
-def _sample_paths_deterministically(paths: list[Path], limit: int) -> list[Path]:
-    if limit <= 0:
-        raise ValueError("limit must be positive")
-    if len(paths) <= limit:
-        return list(paths)
+def _infer_month_from_path_for_prefilter(path: Path) -> str | None:
+    stem = path.stem.strip()
+    if len(stem) >= 4 and stem[:4].isdigit():
+        try:
+            return normalize_month(stem[:4])
+        except ValueError:
+            pass
 
-    sampled: list[Path] = []
-    seen_indices: set[int] = set()
-    for slot in range(limit):
-        quantile = (slot + 0.5) / limit
-        index = min(len(paths) - 1, int(quantile * len(paths)))
-        if index in seen_indices:
-            continue
-        seen_indices.add(index)
-        sampled.append(paths[index])
-    return sampled
+    for parent in path.parents:
+        name = parent.name.strip()
+        if re.match(r"^\d{4}-\d{2}$", name):
+            return normalize_month(name)
+    return None
+
+
+def _path_in_month_range_or_unknown(
+    path: Path,
+    *,
+    start_month: str,
+    end_month: str,
+) -> bool:
+    inferred_month = _infer_month_from_path_for_prefilter(path)
+    if inferred_month is None:
+        return True
+    inferred_idx = month_to_index(inferred_month)
+    return month_to_index(start_month) <= inferred_idx <= month_to_index(end_month)
 
 
 def _discover_markdown_files_with_progress(input_dir: Path) -> list[Path]:
@@ -174,6 +186,7 @@ def _discover_markdown_files_with_progress(input_dir: Path) -> list[Path]:
 
     files: list[Path] = []
     discovered_count = 0
+    filtered_by_month_count = 0
     scanned_dirs = 0
     for dirpath, _dirnames, filenames in os.walk(input_dir):
         _dirnames.sort()
@@ -184,12 +197,21 @@ def _discover_markdown_files_with_progress(input_dir: Path) -> list[Path]:
                 continue
             if filename.lower() == "readme.md":
                 continue
+            path = Path(dirpath) / filename
+            if not _path_in_month_range_or_unknown(
+                path,
+                start_month=TOPIC_HINDSIGHT_START_MONTH,
+                end_month=TOPIC_HINDSIGHT_END_MONTH,
+            ):
+                filtered_by_month_count += 1
+                continue
             discovered_count += 1
-            files.append(Path(dirpath) / filename)
+            files.append(path)
             if discovered_count % progress_every == 0:
                 _print_progress(
                     f"[topic-hindsight] discovered {discovered_count} markdown files "
-                    f"after scanning {scanned_dirs} directories"
+                    f"after scanning {scanned_dirs} directories "
+                    f"(prefiltered_out={filtered_by_month_count})"
                 )
             if max_files is not None and discovered_count >= max_files:
                 _print_progress(
@@ -208,7 +230,8 @@ def _discover_markdown_files_with_progress(input_dir: Path) -> list[Path]:
     files.sort()
     _print_progress(
         f"[topic-hindsight] discovery complete: found {len(files)} markdown files "
-        f"across {scanned_dirs} directories"
+        f"across {scanned_dirs} directories "
+        f"(prefiltered_out={filtered_by_month_count})"
     )
     return files
 

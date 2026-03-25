@@ -47,12 +47,31 @@ def _write_markdown_paper(
     return path
 
 
+def _write_legacy_arxiv_markdown(root: Path, *, paper_id: str) -> Path:
+    path = root / paper_id / "auto" / f"{paper_id}.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "\n".join(
+            [
+                f"# Legacy Paper {paper_id}",
+                "",
+                f"Paper ID: {paper_id}",
+                "",
+                "Abstract— Legacy paper that should be ignored by the hindsight range filter.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 def _build_sample_corpus(root: Path) -> Path:
     data_dir = root / "papers"
     common_title = "Time-series Forecasting for Tabular Data Systems"
     common_summary = (
         "This work studies time-series forecasting for tabular data with stable baselines."
     )
+    _write_legacy_arxiv_markdown(data_dir, paper_id="0704.0047")
 
     _write_markdown_paper(
         data_dir,
@@ -113,6 +132,7 @@ def test_prepare_topic_hindsight_manifest_enforces_fixed_windows_and_sampling(
     assert summary["topic_count"] == 52
     assert len(manifest["topic_episode_rows"]) == 52 * 6
     assert "bench-2024-10" not in [paper.paper_id for paper in context.papers]
+    assert "0704.0047" not in [paper.paper_id for paper in context.papers]
 
     non_empty_rows = [
         row
@@ -160,6 +180,7 @@ def test_load_topic_hindsight_context_supports_deterministic_smoke_sample(
     context_two = load_topic_hindsight_context(data_dir)
 
     assert 1 <= len(context_one.papers) <= 5
+    assert "0704.0047" not in [paper.paper_id for paper in context_one.papers]
     assert [paper.paper_id for paper in context_one.papers] == [
         paper.paper_id for paper in context_two.papers
     ]
