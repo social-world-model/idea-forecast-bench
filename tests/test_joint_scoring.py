@@ -73,10 +73,33 @@ class TestComputePriorScore:
 
         assert score == -2.0
 
-    def test_compute_prior_score_different_innovation_not_matched(self) -> None:
-        """Innovation with different fields does not match the entry in memory."""
+    def test_compute_prior_score_different_innovation_semantic_fallback(self) -> None:
+        """Innovation with different fields may get a semantic score instead of -2.0.
+
+        With the semantic prior scoring, non-exact matches that share keywords can
+        score above the base -2.0. Completely unrelated innovations still score -2.0.
+        """
         stored_innovation = _make_innovation(gap="different gap")
         query_innovation = _make_innovation(gap="long sequence efficiency")
+        store = _make_memory_store_with(stored_innovation)
+
+        score = compute_prior_score(query_innovation, store)
+
+        # Score is either base (-2.0) or a semantic score; must be >= -2.0
+        assert score >= -2.0
+
+    def test_compute_prior_score_unrelated_innovation_returns_base(self) -> None:
+        """Completely unrelated innovation returns base score -2.0."""
+        stored_innovation = _make_innovation(
+            base_direction="quantum physics",
+            operator="apply",
+            gap="superconductor materials",
+        )
+        query_innovation = _make_innovation(
+            base_direction="transformer attention",
+            operator="extend",
+            gap="long sequence efficiency",
+        )
         store = _make_memory_store_with(stored_innovation)
 
         score = compute_prior_score(query_innovation, store)

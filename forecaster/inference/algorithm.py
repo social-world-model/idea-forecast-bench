@@ -32,6 +32,7 @@ def run_joint_inference(
     realization_config: RealizationConfig,
     *,
     popularity_scorer: Callable[[Innovation, list[PaperRecord]], float] | None = None,
+    realization_model_path: str | None = None,
 ) -> list[ScoredProposal]:
     """Run Algorithm 1: joint inference for idea forecasting.
 
@@ -58,6 +59,11 @@ def run_joint_inference(
     Errors in individual proposals (LLM failures, etc.) are logged as warnings
     and skipped rather than failing the entire inference.
 
+    Args:
+        realization_model_path: Optional path to the GRPO-trained realization checkpoint.
+            When provided, proposal generation uses the trained local model (p_ψ)
+            instead of the generic LLM client. Falls back to llm_client on failure.
+
     Returns:
         Top-K ScoredProposal objects, ranked and deduplicated.
     """
@@ -80,6 +86,7 @@ def run_joint_inference(
                 llm_client=llm_client,
                 model=model,
                 config=realization_config,
+                realization_model_path=realization_model_path,
             )
 
             realization_score = compute_realization_score(

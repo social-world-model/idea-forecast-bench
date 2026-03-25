@@ -15,29 +15,71 @@ if TYPE_CHECKING:
 
 _BASE_PRIOR_SCORE = -2.0
 _LOG_EPSILON = 1e-6
+# Minimum cosine-like similarity to treat a memory entry as "relevant"
+_SEMANTIC_MATCH_THRESHOLD = 0.1
+
+
+def _innovation_text(innovation: Innovation) -> str:
+    """Render an innovation triple as a single string for semantic comparison."""
+    return f"{innovation.base_direction} {innovation.operator}: {innovation.gap}"
+
+
+def _semantic_similarity(text_a: str, text_b: str) -> float:
+    """Compute a lightweight semantic similarity score using hybrid text similarity.
+
+    Uses the same hybrid engine as evidence retrieval (difflib + keyword overlap),
+    avoiding any heavy ML dependency. Returns a value in [0, 1].
+    """
+    from live_idea_bench.similarity import _hybrid_similarity, _keyword_overlap
+    semantic = _hybrid_similarity(text_a, text_b)
+    keyword = _keyword_overlap(text_a, text_b)
+    return max(semantic, keyword)
 
 
 def compute_prior_score(innovation: Innovation, memory_store: "MemoryStore") -> float:
     """Compute prior score for an innovation from memory.
 
-    Proxy for log p_θ(z|M_t): uses the innovation's frequency and recency
-    from the memory store as a log-likelihood proxy.
+    Proxy for log p_θ(z|M_t): combines frequency/recency from the memory store
+    with semantic similarity to the innovation text.
 
-    If the innovation is not in memory, returns a small negative base score (-2.0).
-    If it IS in memory, returns log(frequency * recency_score + 1).
+    Scoring strategy:
+    - Exact match: returns log(frequency * recency_score + 1) directly.
+    - Semantic match (similarity >= threshold): returns a weighted combination of
+      the memory entry's log-score scaled by similarity.
+    - No match: returns _BASE_PRIOR_SCORE (-2.0).
+
+    This replaces the original exact-string-only matching which caused sampled
+    innovations (rarely exact copies of memory entries) to always score -2.0.
 
     Returns:
         Float score (typically in range [-2, 3]).
     """
+    if not memory_store.inventory.entries:
+        return _BASE_PRIOR_SCORE
+
+    query_text = _innovation_text(innovation)
+
+    best_score = _BASE_PRIOR_SCORE
     for entry in memory_store.inventory.entries:
         inn = entry.innovation
+        # Exact match: full credit
         if (
             inn.base_direction == innovation.base_direction
             and inn.operator == innovation.operator
             and inn.gap == innovation.gap
         ):
             return math.log(entry.frequency * entry.recency_score + 1)
-    return _BASE_PRIOR_SCORE
+
+        # Semantic match: scale memory score by similarity
+        entry_text = _innovation_text(inn)
+        similarity = _semantic_similarity(query_text, entry_text)
+        if similarity >= _SEMANTIC_MATCH_THRESHOLD:
+            entry_log_score = math.log(entry.frequency * entry.recency_score + 1)
+            candidate = similarity * entry_log_score
+            if candidate > best_score:
+                best_score = candidate
+
+    return best_score
 
 
 def compute_realization_score(

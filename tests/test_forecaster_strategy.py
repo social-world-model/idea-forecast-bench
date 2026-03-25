@@ -112,7 +112,7 @@ class TestForecasterStrategyGenerate:
 
         captured_innovations: list = []
 
-        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config):  # type: ignore[no-untyped-def]
+        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
             captured_innovations.extend(innovations)
             return []
 
@@ -135,7 +135,7 @@ class TestForecasterStrategyGenerate:
 
         captured_innovations: list = []
 
-        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config):  # type: ignore[no-untyped-def]
+        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
             captured_innovations.extend(innovations)
             return []
 
@@ -184,7 +184,7 @@ class TestForecasterStrategyPriorWiring:
 
         captured_innovations: list = []
 
-        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config):  # type: ignore[no-untyped-def]
+        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
             captured_innovations.extend(innovations)
             return proposals
 
@@ -206,7 +206,7 @@ class TestForecasterStrategyPriorWiring:
 
         captured_innovations: list = []
 
-        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config):  # type: ignore[no-untyped-def]
+        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
             captured_innovations.extend(innovations)
             return proposals
 
@@ -229,7 +229,7 @@ class TestForecasterStrategyPriorWiring:
 
         captured_innovations: list = []
 
-        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config):  # type: ignore[no-untyped-def]
+        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
             captured_innovations.extend(innovations)
             return proposals
 
@@ -239,3 +239,97 @@ class TestForecasterStrategyPriorWiring:
             strategy.generate(train_papers, "2024-06", top_k=3)
 
         assert len(captured_innovations) >= 1
+
+
+class TestForecasterStrategyMemoryConditioning:
+    """Phase 3: strategy builds memory from train_papers when no memory_path given."""
+
+    def test_default_memory_is_non_empty_from_train_papers(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        """Without memory_path, strategy builds memory from train_papers."""
+        train_papers = [
+            _paper("p1", "2024-01", keywords=["transformer", "attention"]),
+            _paper("p2", "2024-02", keywords=["diffusion", "generation"]),
+        ]
+        strategy = ForecasterStrategy()
+        memory_store = strategy._load_memory_store(train_papers=train_papers, cutoff_month="2024-03")
+        assert memory_store.size > 0
+
+    def test_default_memory_has_entries_matching_papers(self) -> None:
+        """Memory entries are built from paper keywords."""
+        train_papers = [
+            _paper("p1", "2024-01", keywords=["neural", "network", "attention"]),
+        ]
+        strategy = ForecasterStrategy()
+        memory_store = strategy._load_memory_store(train_papers=train_papers, cutoff_month="2024-02")
+        entries = memory_store.inventory.entries
+        assert len(entries) >= 1
+        directions = [e.innovation.base_direction for e in entries]
+        assert any("neural" in d for d in directions)
+
+    def test_explicit_memory_path_takes_precedence(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        """When memory_path points to a valid file, it is loaded instead of built."""
+        from forecaster.prior.memory import MemoryStore
+        memory = MemoryStore.empty("2024-01")
+        memory_file = tmp_path / "mem.json"
+        memory.persist(memory_file)
+
+        train_papers = [_paper("p1", "2024-01")]
+        strategy = ForecasterStrategy(memory_path=str(memory_file))
+        loaded = strategy._load_memory_store(train_papers=train_papers, cutoff_month="2024-03")
+        assert loaded.size == 0
+
+    def test_memory_chronology_warning_when_newer_than_cutoff(self, tmp_path, caplog) -> None:  # type: ignore[no-untyped-def]
+        """Warning emitted when loaded memory is newer than inference cutoff."""
+        import logging
+        from forecaster.prior.memory import MemoryStore
+
+        memory = MemoryStore.empty("2025-06")
+        memory_file = tmp_path / "future_mem.json"
+        memory.persist(memory_file)
+
+        strategy = ForecasterStrategy(memory_path=str(memory_file))
+        with caplog.at_level(logging.WARNING):
+            strategy._load_memory_store(cutoff_month="2024-01")
+
+        assert any("newer than cutoff" in r.message for r in caplog.records)
+
+
+class TestForecasterStrategyRealizationCheckpoint:
+    """Phase 1: strategy passes realization_checkpoint to run_joint_inference."""
+
+    def test_realization_checkpoint_passed_to_inference(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        """When realization_checkpoint exists, it is passed as realization_model_path."""
+        train_papers = [_paper("p1", "2024-01")]
+        proposals = [_make_scored_proposal(1)]
+        ckpt_dir = tmp_path / "realization_ckpt"
+        ckpt_dir.mkdir()
+
+        captured_kwargs: dict = {}
+
+        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
+            captured_kwargs.update(kwargs)
+            return proposals
+
+        with patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference), \
+             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")):
+            strategy = ForecasterStrategy(realization_checkpoint=str(ckpt_dir))
+            strategy.generate(train_papers, "2024-06", top_k=3)
+
+        assert captured_kwargs.get("realization_model_path") == str(ckpt_dir)
+
+    def test_no_realization_checkpoint_passes_none(self) -> None:
+        """When realization_checkpoint is absent, realization_model_path is None."""
+        train_papers = [_paper("p1", "2024-01")]
+        proposals = [_make_scored_proposal(1)]
+        captured_kwargs: dict = {}
+
+        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
+            captured_kwargs.update(kwargs)
+            return proposals
+
+        with patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference), \
+             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")):
+            strategy = ForecasterStrategy(realization_checkpoint=None)
+            strategy.generate(train_papers, "2024-06", top_k=3)
+
+        assert captured_kwargs.get("realization_model_path") is None

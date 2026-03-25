@@ -164,3 +164,139 @@ def test_format_for_prompt_returns_string():
     # Should contain numbered entries
     assert "1." in result
     assert "base_direction" in result
+
+
+# ---------------------------------------------------------------------------
+# Phase 5: Chronology guard tests
+# ---------------------------------------------------------------------------
+
+def test_load_with_cutoff_warns_when_memory_newer(tmp_path, caplog):  # type: ignore[no-untyped-def]
+    """MemoryStore.load with cutoff_month warns when memory is newer than cutoff."""
+    import logging
+
+    store = MemoryStore.empty("2025-06")  # future month
+    path = tmp_path / "mem.json"
+    store.persist(path)
+
+    with caplog.at_level(logging.WARNING, logger="forecaster.prior.memory"):
+        MemoryStore.load(path, cutoff_month="2024-01")
+
+    assert any("newer than" in r.message for r in caplog.records)
+
+
+def test_load_with_cutoff_no_warning_when_memory_is_current(tmp_path, caplog):  # type: ignore[no-untyped-def]
+    """MemoryStore.load does not warn when memory is not newer than cutoff."""
+    import logging
+
+    store = MemoryStore.empty("2024-01")
+    path = tmp_path / "mem.json"
+    store.persist(path)
+
+    with caplog.at_level(logging.WARNING, logger="forecaster.prior.memory"):
+        MemoryStore.load(path, cutoff_month="2024-06")
+
+    assert not any("newer than" in r.message for r in caplog.records)
+
+
+def test_load_without_cutoff_never_warns(tmp_path, caplog):  # type: ignore[no-untyped-def]
+    """MemoryStore.load without cutoff_month does not check chronology."""
+    import logging
+
+    store = MemoryStore.empty("2099-12")  # far-future month
+    path = tmp_path / "mem.json"
+    store.persist(path)
+
+    with caplog.at_level(logging.WARNING, logger="forecaster.prior.memory"):
+        MemoryStore.load(path)  # no cutoff_month
+
+    assert not any("newer than" in r.message for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# Phase 4: Delayed utility update integration tests
+# ---------------------------------------------------------------------------
+
+def test_apply_delayed_utility_update_increases_utility_on_match():
+    """_apply_delayed_utility_update raises utility for matching evidence paper."""
+    from forecaster.orchestrator import _apply_delayed_utility_update
+    from forecaster.models import Innovation, ScoredProposal
+
+    innovation = Innovation(base_direction="neural network", operator="extend", gap="efficiency")
+    store = MemoryStore.empty("2024-01")
+    store = store.append(innovation, source_paper_id="src-paper-1", month="2024-01")
+
+    proposal = ScoredProposal(
+        innovation=innovation,
+        proposal_text="Title\nBody",
+        prior_score=0.5,
+        realization_score=0.5,
+        joint_score=0.5,
+        evidence_paper_ids=("future-paper-1",),  # overlaps with future set
+        rank=1,
+    )
+
+    future_paper_ids = {"future-paper-1"}
+    updated = _apply_delayed_utility_update(store, [proposal], future_paper_ids)
+
+    original_entry = store.inventory.entries[0]
+    updated_entry = updated.inventory.entries[0]
+    # utility_delta=1.0 matched → new_utility = 0.3 * 1.0 + 0.7 * 0.0 = 0.3
+    assert updated_entry.utility_score > original_entry.utility_score
+
+
+def test_apply_delayed_utility_update_decreases_utility_on_no_match():
+    """_apply_delayed_utility_update applies small negative delta for non-matching proposals."""
+    from forecaster.orchestrator import _apply_delayed_utility_update
+    from forecaster.models import Innovation, ScoredProposal
+
+    innovation = Innovation(base_direction="neural network", operator="extend", gap="efficiency")
+    store = MemoryStore.empty("2024-01")
+    store = store.append(innovation, source_paper_id="src-paper-1", month="2024-01")
+    # Set a positive utility first
+    store = store.update_utility("src-paper-1", 1.0)
+
+    proposal = ScoredProposal(
+        innovation=innovation,
+        proposal_text="Title\nBody",
+        prior_score=0.5,
+        realization_score=0.5,
+        joint_score=0.5,
+        evidence_paper_ids=("unrelated-paper",),  # no overlap with future set
+        rank=1,
+    )
+
+    future_paper_ids = {"different-future-paper"}
+    updated = _apply_delayed_utility_update(store, [proposal], future_paper_ids)
+
+    original_entry = store.inventory.entries[0]
+    updated_entry = updated.inventory.entries[0]
+    # utility_delta=-0.1 no match → utility decreases slightly
+    assert updated_entry.utility_score < original_entry.utility_score
+
+
+def test_apply_delayed_utility_update_preserves_immutability():
+    """_apply_delayed_utility_update returns new store, does not mutate original."""
+    from forecaster.orchestrator import _apply_delayed_utility_update
+    from forecaster.models import Innovation, ScoredProposal
+
+    innovation = Innovation(base_direction="neural", operator="extend", gap="test")
+    store = MemoryStore.empty("2024-01")
+    store = store.append(innovation, source_paper_id="src-1", month="2024-01")
+
+    proposal = ScoredProposal(
+        innovation=innovation,
+        proposal_text="T\nB",
+        prior_score=0.5,
+        realization_score=0.5,
+        joint_score=0.5,
+        evidence_paper_ids=("future-1",),
+        rank=1,
+    )
+
+    original_utility = store.inventory.entries[0].utility_score
+    updated = _apply_delayed_utility_update(store, [proposal], {"future-1"})
+
+    # Original is unchanged
+    assert store.inventory.entries[0].utility_score == original_utility
+    # Updated is different
+    assert updated.inventory.entries[0].utility_score != original_utility

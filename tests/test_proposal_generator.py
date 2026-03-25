@@ -168,3 +168,96 @@ class TestProposalToIdeaPrediction:
         result = proposal_to_idea_prediction(proposal_text, innovation)
         assert result.title == "Only A Title Line"
         assert isinstance(result, IdeaPrediction)
+
+
+class TestGenerateProposalLocalModel:
+    """Phase 1: generate_proposal dispatches to local model when realization_model_path given."""
+
+    def test_generate_proposal_uses_local_model_when_path_provided(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        """When realization_model_path exists, uses _generate_proposal_local, not LLM client."""
+        from forecaster.config import RealizationConfig
+
+        ckpt_dir = tmp_path / "realization_ckpt"
+        ckpt_dir.mkdir()
+
+        innovation = _make_innovation()
+        config = RealizationConfig()
+        mock_client = MagicMock()
+
+        with patch(
+            "forecaster.realization.proposal_generator._generate_proposal_local",
+            return_value="Local Model Title\nLocal body text.",
+        ) as mock_local, \
+        patch(
+            "forecaster.realization.proposal_generator.get_response_from_llm",
+            return_value=("LLM response", []),
+        ) as mock_llm:
+            result = generate_proposal(
+                innovation=innovation,
+                evidence=[],
+                llm_client=mock_client,
+                model="gpt-4o",
+                config=config,
+                realization_model_path=str(ckpt_dir),
+            )
+
+        mock_local.assert_called_once()
+        mock_llm.assert_not_called()
+        assert result == "Local Model Title\nLocal body text."
+
+    def test_generate_proposal_falls_back_to_llm_when_local_fails(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        """When local model generation fails, falls back to generic LLM client."""
+        from forecaster.config import RealizationConfig
+
+        ckpt_dir = tmp_path / "realization_ckpt"
+        ckpt_dir.mkdir()
+
+        innovation = _make_innovation()
+        config = RealizationConfig()
+        mock_client = MagicMock()
+
+        with patch(
+            "forecaster.realization.proposal_generator._generate_proposal_local",
+            side_effect=RuntimeError("GPU OOM"),
+        ), \
+        patch(
+            "forecaster.realization.proposal_generator.get_response_from_llm",
+            return_value=("LLM fallback response", []),
+        ) as mock_llm:
+            result = generate_proposal(
+                innovation=innovation,
+                evidence=[],
+                llm_client=mock_client,
+                model="gpt-4o",
+                config=config,
+                realization_model_path=str(ckpt_dir),
+            )
+
+        mock_llm.assert_called_once()
+        assert result == "LLM fallback response"
+
+    def test_generate_proposal_uses_llm_when_no_path(self) -> None:
+        """Without realization_model_path, always uses the generic LLM client."""
+        from forecaster.config import RealizationConfig
+
+        innovation = _make_innovation()
+        config = RealizationConfig()
+        mock_client = MagicMock()
+
+        with patch(
+            "forecaster.realization.proposal_generator._generate_proposal_local",
+        ) as mock_local, \
+        patch(
+            "forecaster.realization.proposal_generator.get_response_from_llm",
+            return_value=("LLM response", []),
+        ):
+            generate_proposal(
+                innovation=innovation,
+                evidence=[],
+                llm_client=mock_client,
+                model="gpt-4o",
+                config=config,
+                realization_model_path=None,
+            )
+
+        mock_local.assert_not_called()

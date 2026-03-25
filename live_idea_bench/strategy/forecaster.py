@@ -4,7 +4,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 from pathlib import Path
-from typing import Any, List
+from typing import Any, List, Optional
 
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.strategy.base import IdeaStrategy
@@ -30,12 +30,14 @@ class ForecasterStrategy(IdeaStrategy):
         model_name: str | None = None,
         memory_path: str | None = None,
         prior_checkpoint: str | None = None,
+        realization_checkpoint: str | None = None,
         inference_config_path: str = "inference.yaml",
         realization_config_path: str = "realization.yaml",
     ) -> None:
         self.model_name = model_name
         self.memory_path = memory_path or ""
         self.prior_checkpoint = prior_checkpoint or None
+        self.realization_checkpoint = realization_checkpoint or None
         self.inference_config_path = inference_config_path
         self.realization_config_path = realization_config_path
 
@@ -55,15 +57,52 @@ class ForecasterStrategy(IdeaStrategy):
         except (FileNotFoundError, ValueError):
             return RealizationConfig()
 
-    def _load_memory_store(self) -> Any:
+    def _load_memory_store(self, train_papers: Optional[List] = None, cutoff_month: Optional[str] = None) -> Any:
         from forecaster.prior.memory import MemoryStore
 
         if self.memory_path:
             try:
-                return MemoryStore.load(self.memory_path)
+                store = MemoryStore.load(self.memory_path)
+                if cutoff_month and store.inventory.last_updated_month > cutoff_month:
+                    logger.warning(
+                        "Memory last_updated_month=%s is newer than cutoff_month=%s; "
+                        "this may introduce temporal leakage.",
+                        store.inventory.last_updated_month,
+                        cutoff_month,
+                    )
+                return store
             except Exception as exc:
                 logger.warning("Could not load memory store from %r: %s", self.memory_path, exc)
+
+        # No explicit memory path: build a minimal memory from training papers
+        # so p(z|M_t) has meaningful conditioning rather than returning -2.0 for all innovations.
+        if train_papers:
+            return self._build_memory_from_papers(train_papers, cutoff_month or "1970-01")
         return MemoryStore.empty("1970-01")
+
+    def _build_memory_from_papers(self, train_papers: List, current_month: str) -> Any:
+        """Build a MemoryStore from training papers as a heuristic M_t.
+
+        Creates Innovation entries from paper metadata chronologically,
+        mirroring how the orchestrator populates memory from hindsight samples.
+        """
+        from forecaster.prior.memory import MemoryStore
+        from forecaster.models import Innovation
+
+        store = MemoryStore.empty(current_month)
+        for paper in train_papers:
+            keywords = paper.keywords or []
+            base_direction = (
+                " ".join(keywords[:3]) if keywords else " ".join(paper.title.split()[:5])
+            )
+            gap = paper.summary[:100] if paper.summary else paper.title
+            innovation = Innovation(
+                base_direction=base_direction,
+                operator="extend",
+                gap=gap,
+            )
+            store = store.append(innovation, paper.paper_id, paper.month)
+        return store
 
     def _build_heuristic_innovations(
         self,
@@ -118,7 +157,7 @@ class ForecasterStrategy(IdeaStrategy):
 
         inference_config = self._load_inference_config()
         realization_config = self._load_realization_config()
-        memory_store = self._load_memory_store()
+        memory_store = self._load_memory_store(train_papers=train_papers, cutoff_month=cutoff_month)
 
         # Build innovations: use trained prior if checkpoint is available, else heuristic fallback
         innovations: list
@@ -168,6 +207,12 @@ class ForecasterStrategy(IdeaStrategy):
             )
             return []
 
+        realization_model_path = (
+            self.realization_checkpoint
+            if self.realization_checkpoint and Path(self.realization_checkpoint).exists()
+            else None
+        )
+
         proposals = run_joint_inference(
             innovations=innovations,
             papers=train_papers,
@@ -176,6 +221,7 @@ class ForecasterStrategy(IdeaStrategy):
             model=model,
             inference_config=inference_config,
             realization_config=realization_config,
+            realization_model_path=realization_model_path,
         )
 
         # Convert ScoredProposal → IdeaPrediction with 1-indexed ranks

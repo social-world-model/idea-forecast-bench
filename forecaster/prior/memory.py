@@ -60,13 +60,28 @@ class MemoryStore:
         return cls(inventory)
 
     @classmethod
-    def load(cls, path: str | Path) -> MemoryStore:
-        """Load from JSON file. Returns empty store if file doesn't exist."""
+    def load(cls, path: str | Path, *, cutoff_month: str | None = None) -> MemoryStore:
+        """Load from JSON file. Returns empty store if file doesn't exist.
+
+        Args:
+            path: Path to the JSON file.
+            cutoff_month: Optional inference cutoff month ('YYYY-MM'). When provided,
+                logs a warning if the memory's last_updated_month is newer than the
+                cutoff, which would indicate a temporal leakage risk.
+        """
         path = Path(path)
         if not path.exists():
             return cls.empty("1970-01")
         raw = json.loads(path.read_text(encoding="utf-8"))
         inventory = memory_inventory_from_dict(raw)
+        if cutoff_month and inventory.last_updated_month > cutoff_month:
+            import logging as _logging
+            _logging.getLogger(__name__).warning(
+                "Memory last_updated_month=%s is newer than inference cutoff_month=%s. "
+                "Ensure the memory was built only from papers up to the cutoff to avoid leakage.",
+                inventory.last_updated_month,
+                cutoff_month,
+            )
         return cls(inventory)
 
     def persist(self, path: str | Path) -> None:

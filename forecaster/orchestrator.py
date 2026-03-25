@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from live_idea_bench.models import PaperRecord
 from live_idea_bench.llm import create_client
@@ -204,12 +204,17 @@ class ForecasterPipeline:
         self,
         cutoff_month: str,
         innovations: list[Innovation],
+        *,
+        realization_model_path: Optional[str] = None,
     ) -> list[ScoredProposal]:
         """Phase 4: run Algorithm 1 for joint inference.
 
         Args:
             cutoff_month: The forecasting cutoff month.
             innovations: Pre-sampled candidate innovations from the prior.
+            realization_model_path: Optional path to the GRPO-trained realization
+                checkpoint (from Phase 3). When provided, proposal generation uses
+                p_ψ(y|z,X) trained model instead of the generic LLM client.
 
         Returns:
             Top-K ScoredProposal objects.
@@ -222,9 +227,11 @@ class ForecasterPipeline:
         ]
 
         logger.info(
-            "Running joint inference: %d innovations, %d training papers.",
+            "Running joint inference: %d innovations, %d training papers, "
+            "realization_model_path=%s.",
             len(innovations),
             len(training_papers),
+            realization_model_path or "none (LLM fallback)",
         )
 
         proposals = run_joint_inference_fn(
@@ -235,6 +242,7 @@ class ForecasterPipeline:
             model=model,
             inference_config=self.inference_config,
             realization_config=self.realization_config,
+            realization_model_path=realization_model_path,
         )
 
         logger.info("Joint inference complete: %d proposals.", len(proposals))
@@ -282,12 +290,18 @@ class ForecasterPipeline:
             logger.info("Phase 2: Skipping prior SFT training (skip_training=True).")
 
         # Phase 3: Realization GRPO (skip if skip_training)
+        realization_model_path: Optional[str] = None
         if not skip_training:
             logger.info("Phase 3: Realization GRPO training.")
-            self.run_realization_training(
+            manifest_path = self.run_realization_training(
                 cutoff_months=cutoff_months,
                 horizon_months=horizon_months,
             )
+            realization_model_path = _extract_realization_model_path(manifest_path)
+            if realization_model_path:
+                logger.info("Phase 3 artifact: realization model at %s", realization_model_path)
+            else:
+                logger.info("Phase 3: No realization model checkpoint found; Phase 4 will use LLM fallback.")
         else:
             logger.info("Phase 3: Skipping realization training (skip_training=True).")
 
@@ -331,11 +345,25 @@ class ForecasterPipeline:
             proposals = self.run_joint_inference(
                 cutoff_month=last_cutoff,
                 innovations=innovations,
+                realization_model_path=realization_model_path,
             )
+
+            # Delayed utility update: close the self-evolving memory loop.
+            # Use the next cutoff month's papers (if any) as the "future" for
+            # evaluating how useful each proposal's source innovation was.
+            # When running a single cutoff, future papers come from hindsight samples.
+            future_paper_ids = {s.future_paper_id for s in sorted_samples if s.cutoff_month == last_cutoff}
+            if future_paper_ids:
+                self._memory_store = _apply_delayed_utility_update(
+                    self._memory_store, proposals, future_paper_ids
+                )
+                self._memory_store.persist(self.output_dir / "memory_inventory.json")
+                logger.info("Delayed utility update applied; memory persisted.")
 
         return {
             "hindsight_samples": hindsight_samples,
             "prior_checkpoint": prior_checkpoint,
+            "realization_model_path": realization_model_path or "",
             "proposals": proposals,
             "output_dir": str(self.output_dir),
         }
@@ -344,6 +372,71 @@ class ForecasterPipeline:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _extract_realization_model_path(manifest_path: Optional[str]) -> Optional[str]:
+    """Extract the trained realization model path from the pipeline manifest.
+
+    The manifest's trainer_output_dir is where the GRPO-trained realization
+    checkpoint lands. Returns None if the manifest is absent or incomplete.
+    """
+    if not manifest_path:
+        return None
+    path = Path(manifest_path)
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        trainer_output_dir = payload.get("trainer_output_dir", "")
+        if trainer_output_dir and Path(trainer_output_dir).exists():
+            return trainer_output_dir
+    except Exception:
+        pass
+    return None
+
+
+def _apply_delayed_utility_update(
+    memory_store: MemoryStore,
+    proposals: list[ScoredProposal],
+    future_paper_ids: set[str],
+) -> MemoryStore:
+    """Apply delayed utility updates to memory based on proposal evaluation.
+
+    For each proposal, determines whether the innovation's source paper appeared
+    in the future paper set (a proxy for the innovation being correct/useful).
+    A match yields a positive utility delta; no match yields a small negative delta.
+
+    This closes the self-evolving loop: M_t^+ = U(M_t, Δ_t) as described
+    in the paper's abstract.
+
+    Args:
+        memory_store: Current memory store.
+        proposals: Ranked proposals from joint inference.
+        future_paper_ids: Set of future paper IDs used as ground truth.
+
+    Returns:
+        Updated MemoryStore with utility scores adjusted via EMA.
+    """
+    updated = memory_store
+    for proposal in proposals:
+        # A proposal is considered "useful" if any evidence paper it relied on
+        # appears in the future set, or if the proposal's innovation is semantically
+        # represented in the future papers (approximated by evidence overlap).
+        evidence_ids = set(proposal.evidence_paper_ids)
+        matched = bool(evidence_ids & future_paper_ids)
+        utility_delta = 1.0 if matched else -0.1
+        # Update memory entry for the source paper that generated this innovation
+        # (stored in source_paper_id when memory was populated from hindsight)
+        for entry in updated.inventory.entries:
+            inn = entry.innovation
+            if (
+                inn.base_direction == proposal.innovation.base_direction
+                and inn.operator == proposal.innovation.operator
+                and inn.gap == proposal.innovation.gap
+            ):
+                updated = updated.update_utility(entry.source_paper_id, utility_delta)
+                break
+    return updated
 
 
 def _heuristic_innovations(

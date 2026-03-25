@@ -169,7 +169,7 @@ class TestForecasterPipelineRunJointInference:
 
         captured_papers: list = []
 
-        def _capture_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config):  # type: ignore[no-untyped-def]
+        def _capture_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
             captured_papers.extend(papers)
             return []
 
@@ -271,7 +271,7 @@ class TestRunFullPipelinePriorWiring:
         mock_client = MagicMock()
         captured_innovations: list = []
 
-        def _capture_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config):  # type: ignore[no-untyped-def]
+        def _capture_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
             captured_innovations.extend(innovations)
             return []
 
@@ -297,7 +297,7 @@ class TestRunFullPipelinePriorWiring:
         mock_client = MagicMock()
         captured_innovations: list = []
 
-        def _capture_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config):  # type: ignore[no-untyped-def]
+        def _capture_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
             captured_innovations.extend(innovations)
             return []
 
@@ -325,7 +325,7 @@ class TestRunFullPipelinePriorWiring:
         mock_client = MagicMock()
         captured_innovations: list = []
 
-        def _capture_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config):  # type: ignore[no-untyped-def]
+        def _capture_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
             captured_innovations.extend(innovations)
             return []
 
