@@ -40,8 +40,7 @@ from forecaster.realization.strict_runtime import (
     run_strict_realization_rollout,
     serialize_strict_rollout_completion,
 )
-from forecaster.realization.trainers import PreparedRLContext, TrainerPreparedArtifacts, create_trainer_runner
-from forecaster.realization.trainers.base import build_config_fingerprint
+from forecaster.realization.trainers import PreparedRLContext, TrainerPreparedArtifacts, build_config_fingerprint, create_trainer_runner
 
 
 def _paper_lookup(papers: list[PaperRecord]) -> dict[str, PaperRecord]:

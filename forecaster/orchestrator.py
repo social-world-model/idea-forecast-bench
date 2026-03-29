@@ -107,7 +107,6 @@ class ForecasterPipeline:
         )
         logger.info("Hindsight extraction complete: %d samples.", len(samples))
 
-        # Persist samples to disk for reproducibility
         hindsight_path = self.output_dir / "hindsight_samples.json"
         hindsight_path.write_text(
             json.dumps(
@@ -377,7 +376,6 @@ class ForecasterPipeline:
         """
         llm_client, model = create_client(self.llm_model)
 
-        # Filter papers to training window (up to and including cutoff_month)
         training_papers = [
             p for p in self.papers if p.month <= cutoff_month
         ]
@@ -446,7 +444,6 @@ class ForecasterPipeline:
         )
         fallback_events: list[dict[str, Any]] = []
 
-        # Phase 1: Hindsight extraction
         logger.info("Phase 1: Hindsight extraction.")
         hindsight_samples = self.run_hindsight_extraction(
             cutoff_months=sorted_cutoffs,
@@ -464,7 +461,6 @@ class ForecasterPipeline:
             snapshot_dir,
         )
 
-        # Phase 2: Prior SFT
         prior_checkpoint: str = ""
         bootstrap_prior_checkpoint: str = ""
         refresh_prior_checkpoint: str = ""
@@ -478,7 +474,6 @@ class ForecasterPipeline:
         else:
             logger.info("Phase 2: Skipping prior SFT training (skip_training=True).")
 
-        # Phase 3: Realization GRPO (skip if skip_training)
         realization_model_path: Optional[str] = None
         if not skip_training and train_cutoffs:
             logger.info("Phase 3: Realization GRPO training.")
@@ -536,7 +531,6 @@ class ForecasterPipeline:
             if refresh_prior_checkpoint:
                 prior_checkpoint = refresh_prior_checkpoint
 
-        # Phase 4: Joint inference on the eval cutoff month
         last_cutoff = eval_cutoff
         proposals: list[ScoredProposal] = []
         if last_cutoff:

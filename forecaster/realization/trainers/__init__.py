@@ -1,4 +1,4 @@
-from forecaster.realization.trainers.base import PreparedRLContext, RLTrainerRunner, TrainerPreparedArtifacts
+from forecaster.realization.trainers.base import PreparedRLContext, RLTrainerRunner, TrainerPreparedArtifacts, build_config_fingerprint
 from forecaster.realization.trainers.grpo import GRPOTrainerRunner, train_grpo_with_verl
 from forecaster.realization.trainers.ppo import PPOTrainerRunner, train_ppo_with_verl
 from forecaster.realization.trainers.registry import create_trainer_runner
@@ -11,6 +11,7 @@ __all__ = [
     "RLTrainerRunner",
     "RLOOTrainerRunner",
     "TrainerPreparedArtifacts",
+    "build_config_fingerprint",
     "create_trainer_runner",
     "train_grpo_with_verl",
     "train_ppo_with_verl",
