@@ -27,6 +27,16 @@ flask-cors = ">=4,<7"
 openreview-py = "*"
 pandas = "^2.2.0"
 
+[tool.poetry.group.sft]
+optional = true
+
+[tool.poetry.group.sft.dependencies]
+torch = ">=2.0"
+transformers = ">=4.40"
+peft = ">=0.10"
+datasets = ">=2.18"
+accelerate = ">=0.27"
+
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.6.0"
 nbmake = "^1.5.0"

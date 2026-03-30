@@ -104,31 +104,57 @@ def _paper_path(base_dir: Path, paper_id: str, month: str) -> Path:
 
 
 def _build_markdown(entry: Dict[str, Any]) -> str:
-    title = json.dumps(entry["title"], ensure_ascii=False)
-    paper_id = json.dumps(entry["paper_id"], ensure_ascii=False)
-    source_url = json.dumps(entry["source_url"], ensure_ascii=False)
-    date = json.dumps(entry["published_at"].date().isoformat(), ensure_ascii=False)
-    keywords = entry.get("keywords") or []
-    if keywords:
-        keywords_yaml = "\n".join(f"  - {json.dumps(k, ensure_ascii=False)}" for k in keywords)
-    else:
-        keywords_yaml = "  - \"\""
     summary = (entry.get("summary") or "").strip()
     if not summary:
         summary = "No abstract provided by arXiv."
 
-    return (
-        "---\n"
-        f"paper_id: {paper_id}\n"
-        f"title: {title}\n"
-        f"date: {date}\n"
-        "keywords:\n"
-        f"{keywords_yaml}\n"
-        f"source_url: {source_url}\n"
-        "---\n\n"
-        "# Abstract\n\n"
-        f"{summary}\n"
+    lines = [
+        f"# {entry['title'].strip()}",
+        "",
+        f"Paper ID: {entry['paper_id']}",
+        f"Date: {entry['published_at'].date().isoformat()}",
+    ]
+    keywords = [str(keyword).strip() for keyword in (entry.get("keywords") or []) if str(keyword).strip()]
+    if keywords:
+        lines.append(f"Keywords: {', '.join(keywords)}")
+    if entry.get("source_url"):
+        lines.append(f"Source URL: {entry['source_url']}")
+
+    lines.extend(
+        [
+            "",
+            "# Abstract",
+            "",
+            summary,
+        ]
     )
+
+    references = entry.get("references") or []
+    rendered_references: List[str] = []
+    for index, reference in enumerate(references, start=1):
+        if isinstance(reference, dict):
+            text = str(
+                reference.get("text")
+                or reference.get("title")
+                or reference.get("paper_title")
+                or ""
+            ).strip()
+        else:
+            text = str(reference).strip()
+        if text:
+            rendered_references.append(f"[{index}] {text}")
+
+    if rendered_references:
+        lines.extend(
+            [
+                "",
+                "# References",
+                "",
+                *rendered_references,
+            ]
+        )
+
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def ingest_latest_arxiv_papers(

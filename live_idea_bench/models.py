@@ -13,7 +13,10 @@ class PaperRecord:
     keywords: List[str]
     source_path: str
     published_date: str = ""
-    metadata: Dict[str, str] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    references: List[Dict[str, Any]] = field(default_factory=list)
+    citations: List[Dict[str, Any]] = field(default_factory=list)
+    popularity_score: float = 0.0
 
 
 @dataclass
@@ -40,6 +43,11 @@ class EvaluationResult:
     matched_paper_ids: List[str]
     lead_time: float = 0.0
     duplicate_rate: float = 0.0
+    # Popularity-weighted metrics (opt-in; 0.0 when no popularity_weights provided)
+    weighted_hit_at_k: float = 0.0
+    weighted_precision_at_k: float = 0.0
+    weighted_mrr: float = 0.0
+    popularity_recall_at_k: float = 0.0
 
 
 @dataclass
@@ -73,6 +81,7 @@ class PredictionMatchDetail:
     lead_time: float = 0.0
     matched_reasoning: Optional[str] = None
     duplicate_candidate_paper_ids: List[str] = field(default_factory=list)
+    matched_paper_popularity: float = 0.0
 
 
 @dataclass

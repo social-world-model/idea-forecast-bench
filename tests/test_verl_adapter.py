@@ -6,11 +6,20 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from live_idea_bench.models import IdeaPrediction, PaperRecord
-from live_idea_bench.rl import RewardConfig, evaluate_rl_reward, load_ppo_train_config
-from live_idea_bench.rl.verl import dataset as verl_dataset_module
-from live_idea_bench.rl.verl.dataset import build_verl_dataset_rows, write_verl_dataset
-from live_idea_bench.rl.verl.reward_fn import compute_score
+from live_idea_bench.models import EvaluationResult, IdeaPrediction, PaperRecord, PredictionMatchDetail, ScoredPredictionList
+from forecaster.models import (
+    Innovation,
+    RealizationTrajectory,
+    RealizationTrajectoryStep,
+    SearchAction,
+    SearchObservation,
+    StrictRealizationResult,
+)
+from forecaster.realization import RewardConfig, evaluate_rl_reward, load_ppo_train_config
+from forecaster.realization.strict_runtime import serialize_strict_rollout_completion
+from forecaster.realization.verl import dataset as verl_dataset_module
+from forecaster.realization.verl.dataset import build_verl_dataset_rows, write_verl_dataset
+from forecaster.realization.verl.reward_fn import compute_score
 
 
 def _paper(paper_id: str, month: str, *, published_date: str, summary: str) -> PaperRecord:
@@ -22,6 +31,34 @@ def _paper(paper_id: str, month: str, *, published_date: str, summary: str) -> P
         keywords=summary.split()[:3],
         source_path=f"/fake/{paper_id}.md",
         published_date=published_date,
+    )
+
+
+def _mock_scored_prediction_list() -> ScoredPredictionList:
+    return ScoredPredictionList(
+        evaluation=EvaluationResult(
+            hit_at_k=1.0,
+            recall_at_k=1.0,
+            precision_at_k=1.0,
+            mrr=1.0,
+            novelty=0.0,
+            diversity=0.0,
+            matched_prediction_ranks=[1],
+            matched_paper_ids=["future-1"],
+            lead_time=0.5,
+            duplicate_rate=0.0,
+        ),
+        matches=[
+            PredictionMatchDetail(
+                prediction_rank=1,
+                prediction_title="idea",
+                paper_id="future-1",
+                score=0.9,
+                is_match=True,
+                lead_time=0.5,
+            )
+        ],
+        unmatched_future_paper_ids=[],
     )
 
 
@@ -56,6 +93,24 @@ def test_build_verl_dataset_rows_serializes_reward_context() -> None:
     assert payload["future_papers"] == [{"paper_id": "future-1"}]
 
 
+def test_build_verl_dataset_rows_serializes_strict_env_context() -> None:
+    rows = build_verl_dataset_rows(
+        [
+            {
+                "prompt": "prompt",
+                "prompt_mode": "strict_interactive_realization",
+                "search_env": {"max_search_steps": 3, "top_k": 5, "max_selected_evidence": 5},
+                "strict_contract": {"trajectory_schema_version": 1},
+            }
+        ]
+    )
+
+    payload = json.loads(rows[0]["extra_info"])
+    assert payload["prompt_mode"] == "strict_interactive_realization"
+    assert payload["search_env"]["max_search_steps"] == 3
+    assert payload["strict_contract"]["trajectory_schema_version"] == 1
+
+
 def test_write_verl_dataset_writes_parquet_and_preview(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(verl_dataset_module, "_detect_parquet_engine", lambda: "pyarrow")
 
@@ -76,23 +131,36 @@ def test_write_verl_dataset_writes_parquet_and_preview(monkeypatch: pytest.Monke
     assert artifacts.primary_path == artifacts.parquet_path
 
 
-def test_compute_score_matches_rule_reward_and_handles_invalid_completion() -> None:
+def test_compute_score_matches_rule_reward_and_handles_invalid_completion(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "forecaster.realization.reward.score_prediction_list",
+        lambda **_: _mock_scored_prediction_list(),
+    )
+    monkeypatch.setattr(
+        "forecaster.realization.verl.reward_fn.evaluate_rl_reward",
+        evaluate_rl_reward,
+    )
     train = [_paper("train-1", "2024-01", published_date="2024-01-01", summary="old retrieval baseline")]
     future = [_paper("future-1", "2024-02", published_date="2024-02-15", summary="retrieval agent planning")]
+    innovation = {
+        "base_direction": "retrieval planning",
+        "operator": "compose",
+        "gap": "ground long-horizon agents",
+    }
     extra_info = json.dumps(
         {
+            "prompt_mode": "z_conditioned_realization",
+            "innovation": innovation,
+            "evidence_papers": [train[0].__dict__],
             "train_papers": [train[0].__dict__],
             "future_papers": [future[0].__dict__],
             "cutoff_date": "2024-02-01",
             "future_end_date": "2024-03-31",
         }
     )
-    completion = json.dumps(
-        {
-            "title": "retrieval agent planning",
-            "rationale": "retrieval agent planning",
-            "approach": "retrieval agent planning",
-        }
+    completion = (
+        "Grounded Retrieval Planning\n"
+        "We compose retrieval and planning to ground long-horizon agents with evidence."
     )
 
     score = compute_score("live_idea_bench", completion, "", extra_info=extra_info)
@@ -100,23 +168,91 @@ def test_compute_score_matches_rule_reward_and_handles_invalid_completion() -> N
         predictions=[
             IdeaPrediction(
                 rank=1,
-                title="retrieval agent planning",
-                rationale="retrieval agent planning",
-                approach="retrieval agent planning",
+                title="Grounded Retrieval Planning",
+                rationale="ground long-horizon agents",
+                approach="compose: retrieval planning",
             )
         ],
         train_papers=train,
         future_papers=future,
         reward_config=RewardConfig(top_k=1),
+        innovation=Innovation(**innovation),
+        evidence_papers=train,
+        proposal_text=completion,
         cutoff_date="2024-02-01",
         future_end_date="2024-03-31",
     )
     assert score == expected.list_reward
-    assert compute_score("live_idea_bench", "not-json", "", extra_info=extra_info) == RewardConfig().invalid_completion_reward
+    assert compute_score("live_idea_bench", "", "", extra_info=extra_info) == RewardConfig().invalid_completion_reward
+
+
+def test_compute_score_supports_strict_interactive_completion() -> None:
+    train = [_paper("train-1", "2024-01", published_date="2024-01-01", summary="retrieval planning grounded long-horizon agents compose memory")]
+    extra_info = json.dumps(
+        {
+            "prompt_mode": "strict_interactive_realization",
+            "innovation": {
+                "base_direction": "retrieval planning",
+                "operator": "compose",
+                "gap": "ground long-horizon agents",
+            },
+            "search_env": {"max_search_steps": 3, "top_k": 5, "max_selected_evidence": 5},
+            "train_papers": [train[0].__dict__],
+            "future_papers": [],
+        }
+    )
+    completion = serialize_strict_rollout_completion(
+        RealizationTrajectory(
+            innovation=Innovation(
+                base_direction="retrieval planning",
+                operator="compose",
+                gap="ground long-horizon agents",
+            ),
+            steps=(
+                RealizationTrajectoryStep(
+                    action=SearchAction(action_type="search", query="retrieval planning grounded agents"),
+                    observation=(
+                        SearchObservation(
+                            paper_id="train-1",
+                            title="Paper train-1",
+                            month="2024-01",
+                            summary="retrieval planning grounded long-horizon agents compose memory",
+                        ),
+                    ),
+                    surfaced_paper_ids=("train-1",),
+                    selected_evidence_ids=(),
+                ),
+                RealizationTrajectoryStep(
+                    action=SearchAction(action_type="select", paper_id="train-1"),
+                    observation=(),
+                    surfaced_paper_ids=("train-1",),
+                    selected_evidence_ids=("train-1",),
+                ),
+                RealizationTrajectoryStep(
+                    action=SearchAction(
+                        action_type="finish",
+                        proposal_text="Grounded Retrieval Planning\nWe compose retrieval and planning with memory.",
+                    ),
+                    observation=(),
+                    surfaced_paper_ids=("train-1",),
+                    selected_evidence_ids=("train-1",),
+                ),
+            ),
+            result=StrictRealizationResult(
+                selected_evidence_ids=("train-1",),
+                proposal_text="Grounded Retrieval Planning\nWe compose retrieval and planning with memory.",
+                search_queries=("retrieval planning grounded agents",),
+            ),
+        )
+    )
+
+    score = compute_score("live_idea_bench", completion, "", extra_info=extra_info)
+
+    assert score > 0.0
 
 
 def test_rl_runtime_no_longer_imports_trl() -> None:
-    rl_root = Path(__file__).resolve().parents[1] / "live_idea_bench" / "rl"
+    rl_root = Path(__file__).resolve().parents[1] / "forecaster" / "realization"
     banned_patterns = (
         'import_module("trl")',
         "import trl",

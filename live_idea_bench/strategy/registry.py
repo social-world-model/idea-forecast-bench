@@ -43,4 +43,15 @@ def create_strategy(
                 else None
             ),
         )
+    if normalized == "forecaster":
+        from live_idea_bench.strategy.forecaster import ForecasterStrategy
+
+        return ForecasterStrategy(
+            model_name=model_name,
+            memory_path=str(legacy_params.get("memory_path") or ""),
+            prior_checkpoint=str(legacy_params.get("prior_checkpoint") or ""),
+            realization_checkpoint=str(legacy_params.get("realization_checkpoint") or ""),
+            inference_config_path=str(legacy_params.get("inference_config_path") or "inference.yaml"),
+            realization_config_path=str(legacy_params.get("realization_config_path") or "realization.yaml"),
+        )
     raise ValueError(f"Unsupported strategy: {strategy_name}")

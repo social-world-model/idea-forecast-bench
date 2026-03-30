@@ -10,8 +10,8 @@ import random
 from live_idea_bench.daily import coerce_prediction
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.predictor import generate_predictions
-from live_idea_bench.rl.config import SelectionConfig, load_selection_config
-from live_idea_bench.rl.selection import select_top_k_predictions
+from forecaster.realization.config import SelectionConfig, load_selection_config
+from forecaster.realization.selection import select_top_k_predictions
 from live_idea_bench.strategy.base import IdeaStrategy
 
 
@@ -113,7 +113,7 @@ class PolicyRLStrategy(IdeaStrategy):
         temperature: float | None,
         base_model_name: str | None,
     ) -> list[IdeaPrediction]:
-        from live_idea_bench.rl.local_generation import generate_local_predictions
+        from forecaster.realization.local_generation import generate_local_predictions
 
         candidates: list[IdeaPrediction] = []
         for sample in self._sampling_plan(selection_config, temperature):

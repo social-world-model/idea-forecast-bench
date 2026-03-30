@@ -12,15 +12,13 @@ embedding:
   introduction_weight: 0.2
   method_weight: 0.2
   conclusion_weight: 0.2
-  # Embedding endpoint (OpenAI-compatible):
-  #   "http://localhost:8000/v1" → local vllm/sglang
-  #   "https://some-provider.com/v1" → third-party
-  #   "" (empty) → official OpenAI API
-  # Leave unset to use local sentence-transformers (with a warning).
-  embedding_base_url: ""
-  api_model: "text-embedding-3-small"
+  # Voyage AI embedding endpoint (OpenAI-compatible).
+  # Set OPENAI_API_KEY to your Voyage API key at runtime.
+  embedding_base_url: "https://api.voyageai.com/v1"
+  api_model: "voyage-3"
 
 topics:
+  # --- Language Models & Generation ---
   - id: "diffusion_language_model"
     name: "Diffusion Language Model"
     aliases:
@@ -33,6 +31,88 @@ topics:
       - "masked diffusion"
       - "diffusion transformer"
       - "language diffusion"
+  - id: "long_context_llm"
+    name: "Long-Context LLM"
+    aliases:
+      - "long context"
+      - "long sequence"
+      - "extended context"
+    keywords:
+      - "context length"
+      - "long-range dependency"
+      - "sliding window attention"
+      - "positional encoding"
+      - "rope"
+  - id: "mixture_of_experts"
+    name: "Mixture of Experts"
+    aliases:
+      - "mixture of experts"
+      - "moe"
+      - "sparse moe"
+    keywords:
+      - "expert routing"
+      - "sparse activation"
+      - "load balancing"
+      - "top-k routing"
+  - id: "speculative_decoding"
+    name: "Speculative Decoding"
+    aliases:
+      - "speculative decoding"
+      - "speculative sampling"
+      - "draft model"
+    keywords:
+      - "draft-and-verify"
+      - "token speculation"
+      - "parallel decoding"
+      - "inference acceleration"
+  - id: "chain_of_thought_reasoning"
+    name: "Chain-of-Thought Reasoning"
+    aliases:
+      - "chain of thought"
+      - "cot"
+      - "step-by-step reasoning"
+      - "scratchpad"
+    keywords:
+      - "reasoning chain"
+      - "intermediate steps"
+      - "self-consistency"
+      - "thought generation"
+  - id: "llm_alignment_rlhf"
+    name: "LLM Alignment & RLHF"
+    aliases:
+      - "rlhf"
+      - "reinforcement learning from human feedback"
+      - "alignment"
+      - "preference learning"
+    keywords:
+      - "reward model"
+      - "dpo"
+      - "ppo"
+      - "constitutional ai"
+      - "human preference"
+  - id: "in_context_learning"
+    name: "In-Context Learning"
+    aliases:
+      - "in-context learning"
+      - "icl"
+      - "few-shot prompting"
+    keywords:
+      - "few-shot"
+      - "prompt examples"
+      - "demonstration selection"
+      - "context examples"
+  - id: "retrieval_augmented_generation"
+    name: "Retrieval-Augmented Generation"
+    aliases:
+      - "rag"
+      - "retrieval augmented generation"
+      - "retrieval-augmented"
+    keywords:
+      - "dense retrieval"
+      - "knowledge retrieval"
+      - "document retrieval"
+      - "open-domain qa"
+  # --- Multimodal & Vision-Language ---
   - id: "multimodal_visual_reasoning"
     name: "Multimodal Visual Reasoning"
     aliases:
@@ -46,6 +126,42 @@ topics:
       - "chart reasoning"
       - "document reasoning"
       - "multimodal reasoning"
+  - id: "video_understanding"
+    name: "Video Understanding"
+    aliases:
+      - "video understanding"
+      - "video llm"
+      - "video language model"
+    keywords:
+      - "temporal understanding"
+      - "video captioning"
+      - "video qa"
+      - "video grounding"
+  - id: "image_generation_editing"
+    name: "Image Generation & Editing"
+    aliases:
+      - "image generation"
+      - "image editing"
+      - "text-to-image"
+    keywords:
+      - "stable diffusion"
+      - "image synthesis"
+      - "inpainting"
+      - "controlnet"
+      - "text-guided editing"
+  - id: "3d_scene_understanding"
+    name: "3D Scene Understanding"
+    aliases:
+      - "3d understanding"
+      - "3d reconstruction"
+      - "nerf"
+    keywords:
+      - "3d representation"
+      - "neural radiance field"
+      - "point cloud"
+      - "depth estimation"
+      - "novel view synthesis"
+  # --- Agents & Tool Use ---
   - id: "gui_computer_use_web_agent"
     name: "GUI / Computer Use / Web Agent"
     aliases:
@@ -59,6 +175,41 @@ topics:
       - "computer-use"
       - "gui grounding"
       - "agentic browsing"
+  - id: "llm_tool_use_function_calling"
+    name: "LLM Tool Use & Function Calling"
+    aliases:
+      - "tool use"
+      - "function calling"
+      - "tool-augmented llm"
+    keywords:
+      - "api call"
+      - "tool selection"
+      - "code execution"
+      - "external tool"
+  - id: "multi_agent_systems"
+    name: "Multi-Agent Systems"
+    aliases:
+      - "multi-agent"
+      - "multi agent"
+      - "agent collaboration"
+    keywords:
+      - "agent communication"
+      - "agent coordination"
+      - "society of agents"
+      - "agent framework"
+  - id: "llm_planning"
+    name: "LLM Planning & Task Decomposition"
+    aliases:
+      - "llm planning"
+      - "task planning"
+      - "task decomposition"
+    keywords:
+      - "plan generation"
+      - "subgoal"
+      - "tree of thoughts"
+      - "react"
+      - "hierarchical planning"
+  # --- Efficient ML & Architecture ---
   - id: "optimizer"
     name: "Optimizer"
     aliases:
@@ -71,6 +222,234 @@ topics:
       - "adamw"
       - "sgd"
       - "training dynamics"
+  - id: "model_compression_pruning"
+    name: "Model Compression & Pruning"
+    aliases:
+      - "model compression"
+      - "model pruning"
+      - "network pruning"
+    keywords:
+      - "weight pruning"
+      - "structured pruning"
+      - "magnitude pruning"
+      - "lottery ticket"
+  - id: "quantization"
+    name: "Model Quantization"
+    aliases:
+      - "quantization"
+      - "model quantization"
+      - "low-bit"
+    keywords:
+      - "int4"
+      - "int8"
+      - "post-training quantization"
+      - "quantization-aware training"
+      - "gguf"
+  - id: "efficient_attention"
+    name: "Efficient Attention Mechanisms"
+    aliases:
+      - "efficient attention"
+      - "linear attention"
+      - "fast attention"
+    keywords:
+      - "flash attention"
+      - "sparse attention"
+      - "linear complexity"
+      - "attention approximation"
+  - id: "knowledge_distillation"
+    name: "Knowledge Distillation"
+    aliases:
+      - "knowledge distillation"
+      - "model distillation"
+      - "teacher-student"
+    keywords:
+      - "teacher model"
+      - "student model"
+      - "soft labels"
+      - "response distillation"
+  - id: "state_space_models"
+    name: "State Space Models"
+    aliases:
+      - "state space model"
+      - "ssm"
+      - "mamba"
+    keywords:
+      - "selective ssm"
+      - "structured ssm"
+      - "hippo"
+      - "linear recurrence"
+  # --- Training & Fine-tuning ---
+  - id: "parameter_efficient_finetuning"
+    name: "Parameter-Efficient Fine-Tuning"
+    aliases:
+      - "peft"
+      - "parameter efficient"
+      - "lora"
+    keywords:
+      - "low-rank adaptation"
+      - "adapter"
+      - "prefix tuning"
+      - "prompt tuning"
+  - id: "continual_learning"
+    name: "Continual Learning"
+    aliases:
+      - "continual learning"
+      - "lifelong learning"
+      - "incremental learning"
+    keywords:
+      - "catastrophic forgetting"
+      - "elastic weight consolidation"
+      - "replay buffer"
+      - "task-incremental"
+  - id: "federated_learning"
+    name: "Federated Learning"
+    aliases:
+      - "federated learning"
+      - "federated optimization"
+    keywords:
+      - "local training"
+      - "fedavg"
+      - "communication efficiency"
+      - "privacy-preserving"
+  - id: "data_augmentation"
+    name: "Data Augmentation"
+    aliases:
+      - "data augmentation"
+      - "synthetic data"
+      - "data generation"
+    keywords:
+      - "augmentation strategy"
+      - "mixup"
+      - "cutmix"
+      - "synthetic training data"
+  # --- Code & Math ---
+  - id: "code_generation"
+    name: "Code Generation & Program Synthesis"
+    aliases:
+      - "code generation"
+      - "program synthesis"
+      - "code llm"
+    keywords:
+      - "code completion"
+      - "code editing"
+      - "test generation"
+      - "software engineering agent"
+  - id: "mathematical_reasoning"
+    name: "Mathematical Reasoning"
+    aliases:
+      - "mathematical reasoning"
+      - "math llm"
+      - "theorem proving"
+    keywords:
+      - "formal proof"
+      - "symbolic reasoning"
+      - "math word problem"
+      - "lean"
+      - "isabelle"
+  # --- Evaluation & Benchmarking ---
+  - id: "llm_evaluation_benchmarking"
+    name: "LLM Evaluation & Benchmarking"
+    aliases:
+      - "llm evaluation"
+      - "llm benchmark"
+      - "model evaluation"
+    keywords:
+      - "benchmark dataset"
+      - "evaluation framework"
+      - "llm judge"
+      - "contamination"
+  - id: "hallucination_factuality"
+    name: "Hallucination & Factuality"
+    aliases:
+      - "hallucination"
+      - "factuality"
+      - "faithfulness"
+    keywords:
+      - "factual consistency"
+      - "grounding"
+      - "attribution"
+      - "source faithfulness"
+  # --- Safety & Privacy ---
+  - id: "llm_safety_red_teaming"
+    name: "LLM Safety & Red Teaming"
+    aliases:
+      - "llm safety"
+      - "red teaming"
+      - "adversarial attack"
+    keywords:
+      - "jailbreak"
+      - "prompt injection"
+      - "safety alignment"
+      - "harmful content"
+  - id: "differential_privacy_ml"
+    name: "Differential Privacy in ML"
+    aliases:
+      - "differential privacy"
+      - "privacy-preserving ml"
+      - "dp-sgd"
+    keywords:
+      - "privacy budget"
+      - "noise addition"
+      - "membership inference"
+      - "private training"
+  # --- Graphs & Structured Data ---
+  - id: "graph_neural_networks"
+    name: "Graph Neural Networks"
+    aliases:
+      - "graph neural network"
+      - "gnn"
+      - "graph learning"
+    keywords:
+      - "message passing"
+      - "graph convolution"
+      - "node classification"
+      - "link prediction"
+  - id: "knowledge_graphs"
+    name: "Knowledge Graphs & Reasoning"
+    aliases:
+      - "knowledge graph"
+      - "knowledge base"
+      - "entity linking"
+    keywords:
+      - "relation extraction"
+      - "knowledge base completion"
+      - "entity embedding"
+      - "triple classification"
+  # --- Science & Domain Applications ---
+  - id: "protein_structure_prediction"
+    name: "Protein Structure & Biology"
+    aliases:
+      - "protein structure"
+      - "protein folding"
+      - "alphafold"
+    keywords:
+      - "protein sequence"
+      - "structure prediction"
+      - "molecular biology"
+      - "drug discovery"
+  - id: "molecule_generation"
+    name: "Molecule Generation & Drug Design"
+    aliases:
+      - "molecule generation"
+      - "drug design"
+      - "molecular generation"
+    keywords:
+      - "molecular property"
+      - "scaffold"
+      - "generative chemistry"
+      - "de novo design"
+  - id: "scientific_discovery_llm"
+    name: "Scientific Discovery with LLMs"
+    aliases:
+      - "ai for science"
+      - "scientific llm"
+      - "hypothesis generation"
+    keywords:
+      - "automated discovery"
+      - "research hypothesis"
+      - "scientific reasoning"
+      - "experiment design"
+  # --- Time-series & Forecasting ---
   - id: "time_series_forecasting"
     name: "Time-series Forecasting"
     aliases:
@@ -83,3 +462,141 @@ topics:
       - "long-term forecasting"
       - "sequence forecasting"
       - "timeseries"
+  - id: "anomaly_detection"
+    name: "Anomaly Detection"
+    aliases:
+      - "anomaly detection"
+      - "outlier detection"
+      - "out-of-distribution detection"
+    keywords:
+      - "ood detection"
+      - "novelty detection"
+      - "distribution shift"
+      - "isolation forest"
+  # --- Representation Learning ---
+  - id: "self_supervised_learning"
+    name: "Self-Supervised Learning"
+    aliases:
+      - "self-supervised learning"
+      - "ssl"
+      - "contrastive learning"
+    keywords:
+      - "contrastive loss"
+      - "simclr"
+      - "masked autoencoder"
+      - "representation learning"
+  - id: "multimodal_pretraining"
+    name: "Multimodal Pretraining"
+    aliases:
+      - "multimodal pretraining"
+      - "vision-language pretraining"
+      - "clip"
+    keywords:
+      - "image-text contrastive"
+      - "visual pretraining"
+      - "cross-modal"
+      - "align"
+  - id: "transfer_learning_domain_adaptation"
+    name: "Transfer Learning & Domain Adaptation"
+    aliases:
+      - "transfer learning"
+      - "domain adaptation"
+      - "domain generalization"
+    keywords:
+      - "source domain"
+      - "target domain"
+      - "distribution shift"
+      - "fine-tuning"
+  # --- NLP Tasks ---
+  - id: "information_extraction"
+    name: "Information Extraction"
+    aliases:
+      - "information extraction"
+      - "named entity recognition"
+      - "relation extraction"
+    keywords:
+      - "ner"
+      - "event extraction"
+      - "slot filling"
+      - "open information extraction"
+  - id: "machine_translation"
+    name: "Machine Translation"
+    aliases:
+      - "machine translation"
+      - "neural machine translation"
+      - "nmt"
+    keywords:
+      - "translation quality"
+      - "low-resource translation"
+      - "multilingual"
+      - "cross-lingual"
+  - id: "text_summarization"
+    name: "Text Summarization"
+    aliases:
+      - "text summarization"
+      - "abstractive summarization"
+      - "document summarization"
+    keywords:
+      - "extractive summarization"
+      - "abstractive summarization"
+      - "summarization faithfulness"
+      - "long document"
+  # --- Reinforcement Learning ---
+  - id: "reinforcement_learning"
+    name: "Reinforcement Learning"
+    aliases:
+      - "reinforcement learning"
+      - "rl"
+      - "deep reinforcement learning"
+    keywords:
+      - "policy gradient"
+      - "q-learning"
+      - "reward shaping"
+      - "offline rl"
+  - id: "llm_reasoning_rl"
+    name: "LLM Reasoning via RL"
+    aliases:
+      - "reasoning via rl"
+      - "grpo"
+      - "rl for reasoning"
+    keywords:
+      - "process reward model"
+      - "outcome reward"
+      - "verifiable reward"
+      - "reasoning policy"
+  # --- Robustness & Generalization ---
+  - id: "robustness_adversarial"
+    name: "Robustness & Adversarial Examples"
+    aliases:
+      - "adversarial robustness"
+      - "adversarial examples"
+      - "robust ml"
+    keywords:
+      - "adversarial training"
+      - "certified defense"
+      - "perturbation"
+      - "pgd attack"
+  - id: "calibration_uncertainty"
+    name: "Calibration & Uncertainty Estimation"
+    aliases:
+      - "uncertainty estimation"
+      - "model calibration"
+      - "conformal prediction"
+    keywords:
+      - "confidence calibration"
+      - "epistemic uncertainty"
+      - "bayesian deep learning"
+      - "prediction interval"
+  # --- Systems & Infrastructure ---
+  - id: "llm_inference_serving"
+    name: "LLM Inference & Serving"
+    aliases:
+      - "llm inference"
+      - "llm serving"
+      - "inference optimization"
+    keywords:
+      - "batching strategy"
+      - "kv cache"
+      - "continuous batching"
+      - "vllm"
+      - "throughput"

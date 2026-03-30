@@ -1,0 +1,6 @@
+evidence_top_k: 5
+evidence_similarity_threshold: 0.3
+proposal_max_tokens: 1024
+evidence_accuracy_weight: 0.2
+operator_adherence_weight: 0.3
+coherence_weight: 0.5

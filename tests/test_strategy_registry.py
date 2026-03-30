@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from live_idea_bench.strategy.forecaster import ForecasterStrategy
 from live_idea_bench.strategy.keyword_trend import KeywordTrendStrategy
 from live_idea_bench.strategy.predictor_llm import PredictorLLMStrategy
 from live_idea_bench.strategy.registry import create_strategy
@@ -37,6 +38,12 @@ def test_create_strategy_keyword_trend_unchanged() -> None:
     assert isinstance(strategy, KeywordTrendStrategy)
     assert strategy.recent_months == 5
     assert strategy.min_keyword_freq == 4
+
+
+def test_create_strategy_forecaster() -> None:
+    strategy = create_strategy("forecaster")
+    assert isinstance(strategy, ForecasterStrategy)
+    assert strategy.name == "forecaster"
 
 
 def test_create_strategy_unsupported_raises() -> None:
