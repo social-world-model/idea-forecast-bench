@@ -37,6 +37,7 @@ class BacktestConfig:
     end_month: Optional[str] = None
     similarity_config: str = "similarity.yaml"
     popularity_cache_path: Optional[str] = None  # Path to popularity cache JSON
+    candidate_limit: Optional[int] = None  # max future papers per prediction for LLM eval
 
 
 def _filter_by_month(
@@ -201,6 +202,7 @@ def run_backtest(
     config: BacktestConfig,
     *,
     model_name: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> Dict[str, object]:
     scoped_papers = _filter_by_month(
         papers,
@@ -254,6 +256,8 @@ def run_backtest(
             cutoff_date=cutoff_date,
             future_end_date=future_end_date,
             popularity_weights=popularity_weights,
+            reasoning_effort=reasoning_effort,
+            candidate_limit=config.candidate_limit,
         )
 
         window_results.append(

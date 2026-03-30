@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 from live_idea_bench.config import load_predictor_config, load_runtime_config
 from live_idea_bench.llm import create_client, get_response_from_llm
 from live_idea_bench.models import IdeaPrediction, PaperRecord
+from live_idea_bench.similarity import _sanitize
 
 STOPWORDS = {
     "a",
@@ -257,7 +258,7 @@ def _build_abstract_block(train_papers: list[PaperRecord], max_context_papers: i
     blocks = []
     for idx, paper in enumerate(train_papers[-max_context_papers:], start=1):
         blocks.append(
-            f"{idx}. Title: {paper.title}\nMonth: {paper.month}\nSummary: {paper.summary}"
+            f"{idx}. Title: {_sanitize(paper.title)}\nMonth: {paper.month}\nSummary: {_sanitize(paper.summary)}"
         )
     return "\n\n---\n\n".join(blocks)
 
@@ -273,6 +274,7 @@ def _llm_predictions(
     top_p: float | None,
     seed: int | None,
     retry_hint: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> list[IdeaPrediction]:
     predictor_config = load_predictor_config(predictor_config_path)
     runtime_config = load_runtime_config()
@@ -308,6 +310,7 @@ def _llm_predictions(
         temperature=resolved_temperature,
         top_p=top_p,
         seed=seed,
+        reasoning_effort=reasoning_effort,
     )
     payload = _extract_json_payload(raw_text)
     if top_k == 1:
@@ -406,6 +409,7 @@ def generate_predictions(
     top_p: float | None = None,
     seed: int | None = None,
     fallback_to_heuristic: bool = True,
+    reasoning_effort: str | None = None,
 ) -> list[IdeaPrediction]:
     if not train_papers or top_k <= 0:
         return []
@@ -437,6 +441,7 @@ def generate_predictions(
                 top_p=top_p,
                 seed=seed,
                 retry_hint=retry_hint,
+                reasoning_effort=reasoning_effort,
             )
             if len(predictions) >= top_k:
                 break

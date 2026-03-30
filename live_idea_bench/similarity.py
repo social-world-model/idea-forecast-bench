@@ -88,15 +88,20 @@ def _llm_similarity(
     runtime_config: Config,
     *,
     model_name: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> MatchResult:
     resolved_model = model_name or runtime_config.model_name
     client, resolved_model = create_client(resolved_model)
+    max_chars = runtime_config.embedding.max_context_chars
+    clean_idea = _sanitize(idea)
+    clean_context = _sanitize(context[:max_chars])
     raw, _ = get_response_from_llm(
-        msg=similarity_config.user_prompt_template.format(idea=idea, context=context),
+        msg=similarity_config.user_prompt_template.format(idea=clean_idea, context=clean_context),
         client=client,
         model=resolved_model,
         system_message=similarity_config.system_prompt,
         temperature=runtime_config.temperature,
+        reasoning_effort=reasoning_effort,
     )
 
     score = 0.0
@@ -127,7 +132,7 @@ def _api_embed_pair(idea: str, context: str, runtime_config: Config) -> MatchRes
     import openai
 
     base_url = runtime_config.embedding.embedding_base_url or None
-    _is_voyage = base_url and "voyageai.com" in base_url
+    _is_voyage = base_url and ("voyageai.com" in base_url or "voyageai" in base_url.lower())
     if _is_voyage:
         api_key = os.environ.get("VOYAGE_API_KEY") or os.environ.get("OPENAI_API_KEY") or "no-key"
         endpoint = "voyage"
@@ -207,13 +212,14 @@ def compute_similarity(
     runtime_config: Config | None = None,
     *,
     model_name: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> MatchResult:
     resolved_similarity = similarity_config or load_similarity_config()
     resolved_runtime = runtime_config or load_runtime_config()
 
     engine = resolved_similarity.engine.lower().strip()
     if engine == "llm":
-        return _llm_similarity(idea, context, resolved_similarity, resolved_runtime, model_name=model_name)
+        return _llm_similarity(idea, context, resolved_similarity, resolved_runtime, model_name=model_name, reasoning_effort=reasoning_effort)
     if engine == "embedding":
         return _embedding_similarity(idea, context, resolved_runtime)
 
@@ -295,6 +301,7 @@ def score_prediction_list(
     future_end_date: str | None = None,
     candidate_limit: int | None = None,
     popularity_weights: dict[str, float] | None = None,
+    reasoning_effort: str | None = None,
 ) -> ScoredPredictionList:
     similarity_config = load_similarity_config(similarity_config_path)
     runtime_config = load_runtime_config(runtime_config_path)
@@ -315,22 +322,26 @@ def score_prediction_list(
             candidate_limit=candidate_limit,
         )
         scored_candidates: list[tuple[PaperRecord, MatchResult, bool]] = []
-        for paper in candidate_papers:
-            paper_body = paper_text(paper)
-            result = compute_similarity(
+
+        def _eval_paper(paper: PaperRecord) -> tuple[PaperRecord, MatchResult, bool]:
+            body = paper_text(paper)
+            res = compute_similarity(
                 pred_text,
-                paper_body,
+                body,
                 similarity_config,
                 runtime_config,
                 model_name=model_name,
+                reasoning_effort=reasoning_effort,
             )
-            scored_candidates.append(
-                (
-                    paper,
-                    result,
-                    is_match(result, pred_text, paper_body, similarity_config),
-                )
-            )
+            res.paper_id = paper.paper_id
+            return paper, res, is_match(res, pred_text, body, similarity_config)
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        _EVAL_WORKERS = 8
+        with ThreadPoolExecutor(max_workers=_EVAL_WORKERS) as pool:
+            futures = {pool.submit(_eval_paper, p): p for p in candidate_papers}
+            for fut in as_completed(futures):
+                scored_candidates.append(fut.result())
 
         scored_candidates.sort(key=lambda item: (item[1].score, item[0].paper_id), reverse=True)
 
