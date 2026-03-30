@@ -1,4 +1,4 @@
-engine: llm
+engine: heuristic
 embedding_threshold: 0.4
 semantic_threshold: 0.5
 keyword_threshold: 0.3
