@@ -437,16 +437,53 @@ def parse_markdown_paper(path: Path) -> Optional[PaperRecord]:
     )
 
 
+def _arxiv_dir_in_range(name: str, start_idx: Optional[int], end_idx: Optional[int]) -> bool:
+    """Fast pre-filter: arxiv IDs start with YYMM (e.g. 2401 = 2024-01).
+
+    Returns True if the directory name could contain papers within [start_idx, end_idx].
+    Returns True when uncertain (non-standard naming) to avoid false negatives.
+    """
+    if len(name) < 4 or not name[:4].isdigit():
+        return True  # can't tell — let it through
+    yymm = name[:4]
+    yy, mm = int(yymm[:2]), int(yymm[2:])
+    if mm < 1 or mm > 12:
+        return True
+    year = 2000 + yy
+    month_str = f"{year:04d}-{mm:02d}"
+    try:
+        idx = month_to_index(month_str)
+    except Exception:
+        return True
+    if start_idx is not None and idx < start_idx:
+        return False
+    if end_idx is not None and idx > end_idx:
+        return False
+    return True
+
+
 def load_papers_from_markdown(
     input_dir: Path,
     start_month: Optional[str] = None,
     end_month: Optional[str] = None,
 ) -> List[PaperRecord]:
-    files = find_markdown_files(input_dir)
-    records: List[PaperRecord] = []
-
     start_idx = month_to_index(start_month) if start_month else None
     end_idx = month_to_index(end_month) if end_month else None
+
+    # Fast path: if date range is given, pre-filter directories by arxiv ID prefix
+    # before doing any file I/O (avoids scanning millions of old papers).
+    if (start_idx is not None or end_idx is not None):
+        files: List[Path] = []
+        input_dir = Path(input_dir)
+        for child in sorted(input_dir.iterdir()):
+            if child.is_dir() and _arxiv_dir_in_range(child.name, start_idx, end_idx):
+                files.extend(sorted(child.rglob("*.md")))
+            elif child.is_file() and child.suffix == ".md":
+                files.append(child)
+    else:
+        files = find_markdown_files(input_dir)
+
+    records: List[PaperRecord] = []
 
     for file_path in files:
         if file_path.name.lower() == "readme.md":

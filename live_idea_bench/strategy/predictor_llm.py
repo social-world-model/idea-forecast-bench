@@ -16,11 +16,13 @@ class PredictorLLMStrategy(IdeaStrategy):
         predictor_config: str = "predictor.yaml",
         similarity_config: str = "similarity.yaml",
         temperature: float | None = None,
+        reasoning_effort: str | None = None,
     ) -> None:
         self.model_name = model_name
         self.predictor_config = predictor_config
         self.similarity_config = similarity_config
         self.temperature = temperature
+        self.reasoning_effort = reasoning_effort
 
     def generate(
         self,
@@ -35,4 +37,5 @@ class PredictorLLMStrategy(IdeaStrategy):
             model_name=self.model_name,
             predictor_config_path=self.predictor_config,
             temperature=self.temperature,
+            reasoning_effort=self.reasoning_effort,
         )

@@ -1,7 +1,9 @@
 from live_idea_bench.strategy.base import IdeaStrategy
 from live_idea_bench.strategy.keyword_trend import KeywordTrendStrategy
+from live_idea_bench.strategy.memory_prompting import MemoryPromptingStrategy
 from live_idea_bench.strategy.policy_rl import PolicyRLStrategy
 from live_idea_bench.strategy.predictor_llm import PredictorLLMStrategy
+from live_idea_bench.strategy.topic_trend import TopicTrendStrategy
 
 
 def create_strategy(
@@ -13,6 +15,7 @@ def create_strategy(
     selection_config: str = "selection.yaml",
     similarity_config: str = "similarity.yaml",
     temperature: float | None = None,
+    reasoning_effort: str | None = None,
     **legacy_params,
 ) -> IdeaStrategy:
     normalized = strategy_name.strip().lower()
@@ -28,6 +31,7 @@ def create_strategy(
             predictor_config=str(legacy_params.get("predictor_config", predictor_config)),
             similarity_config=str(legacy_params.get("similarity_config", similarity_config)),
             temperature=temperature,
+            reasoning_effort=reasoning_effort,
         )
     if normalized == PolicyRLStrategy.name:
         resolved_model = model_name or legacy_params.get("model_id")
@@ -53,5 +57,21 @@ def create_strategy(
             realization_checkpoint=str(legacy_params.get("realization_checkpoint") or ""),
             inference_config_path=str(legacy_params.get("inference_config_path") or "inference.yaml"),
             realization_config_path=str(legacy_params.get("realization_config_path") or "realization.yaml"),
+        )
+    if normalized == TopicTrendStrategy.name:
+        resolved_model = model_name or legacy_params.get("model_id")
+        return TopicTrendStrategy(
+            model_name=str(resolved_model) if resolved_model else None,
+            recent_months=recent_months,
+            min_keyword_freq=min_keyword_freq,
+            temperature=temperature,
+            reasoning_effort=reasoning_effort,
+        )
+    if normalized == MemoryPromptingStrategy.name:
+        resolved_model = model_name or legacy_params.get("model_id")
+        return MemoryPromptingStrategy(
+            model_name=str(resolved_model) if resolved_model else None,
+            temperature=temperature,
+            reasoning_effort=reasoning_effort,
         )
     raise ValueError(f"Unsupported strategy: {strategy_name}")
