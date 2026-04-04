@@ -467,7 +467,11 @@ def _parse_and_filter(
     start_idx: Optional[int],
     end_idx: Optional[int],
 ) -> Optional[PaperRecord]:
-    """Parse a single markdown file and apply month filter. Thread-safe."""
+    """Parse a single markdown file and apply month filter. Thread-safe.
+
+    Strips references/citations/metadata immediately to keep memory low
+    (references alone are ~700MB for 83k papers).
+    """
     if file_path.name.lower() == "readme.md":
         return None
     paper = parse_markdown_paper(file_path)
@@ -478,6 +482,10 @@ def _parse_and_filter(
         return None
     if end_idx is not None and idx > end_idx:
         return None
+    # Strip heavy fields immediately — saves ~700MB for 83k papers
+    paper.references = []
+    paper.citations = []
+    paper.metadata = {}
     return paper
 
 
