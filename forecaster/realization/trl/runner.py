@@ -118,10 +118,12 @@ def train_with_trl(
         return scores
 
     # --- Build dataset ---
+    # TRL 1.0 expects conversational format (list of message dicts) for proper
+    # tokenization with variable-length prompts.
     ds_records = []
     for row in dataset_rows:
         ds_records.append({
-            "prompt": row["prompt"],
+            "prompt": [{"role": "user", "content": row["prompt"]}],
             "extra_info": row.get("extra_info", "{}"),
         })
     dataset = Dataset.from_list(ds_records)
