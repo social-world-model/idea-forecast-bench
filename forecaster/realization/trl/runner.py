@@ -6,27 +6,6 @@ training results — both implement standard GRPO (Eq. 2 in the paper).
 """
 from __future__ import annotations
 
-# Block broken vllm_ascend plugin before any TRL/vLLM import touches it.
-# vllm_ascend is a Huawei Ascend NPU plugin that isn't installed; vLLM tries
-# to probe it at import time and fails with ValueError if a stub exists.
-import importlib.util
-import sys
-import types
-if importlib.util.find_spec("vllm_ascend") is None:
-    _fake = types.ModuleType("vllm_ascend")
-    _fake.__path__ = []
-    _fake.__spec__ = importlib.machinery.ModuleSpec("vllm_ascend", None)
-    sys.modules["vllm_ascend"] = _fake
-    for _sub in (
-        "vllm_ascend.distributed",
-        "vllm_ascend.distributed.device_communicators",
-        "vllm_ascend.distributed.device_communicators.pyhccl",
-    ):
-        _m = types.ModuleType(_sub)
-        if _sub.endswith("pyhccl"):
-            _m.PyHcclCommunicator = None
-        sys.modules[_sub] = _m
-
 import json
 import logging
 from dataclasses import asdict
