@@ -6,26 +6,6 @@ training results — both implement standard GRPO (Eq. 2 in the paper).
 """
 from __future__ import annotations
 
-# Prevent vLLM's broken vllm_ascend plugin probe from crashing TRL import.
-# vllm_ascend is a Huawei Ascend NPU plugin irrelevant to CUDA/A100 training;
-# vLLM probes it at import time and crashes if a stale stub is found.
-import importlib.util as _ilu
-import sys as _sys
-import types as _types
-if _ilu.find_spec("vllm_ascend") is None:
-    _mod = _types.ModuleType("vllm_ascend")
-    _mod.__path__ = []
-    import importlib.machinery
-    _mod.__spec__ = importlib.machinery.ModuleSpec("vllm_ascend", None)
-    _sys.modules["vllm_ascend"] = _mod
-    for _sub in ("distributed", "distributed.device_communicators",
-                 "distributed.device_communicators.pyhccl"):
-        _fqn = f"vllm_ascend.{_sub}"
-        _m = _types.ModuleType(_fqn)
-        if _sub.endswith("pyhccl"):
-            _m.PyHcclCommunicator = None
-        _sys.modules[_fqn] = _m
-
 import json
 import logging
 from dataclasses import asdict
