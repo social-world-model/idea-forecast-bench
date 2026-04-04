@@ -61,6 +61,7 @@ else
     --output-dir "$GRPO_DIR" \
     --model-preset "$MODEL" \
     --trainer grpo \
+    --hindsight "$HINDSIGHT" \
     --start-month "$START_MONTH" \
     --end-month "$END_MONTH" \
     --skip-alignment-check

@@ -47,6 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reward-config", type=str, default="reward.yaml", help="Reward config file under config/rl.")
     parser.add_argument("--selection-config", type=str, default="selection.yaml", help="Selector config file under config/rl.")
     parser.add_argument("--similarity-config", type=str, default="similarity.yaml", help="Similarity config used for reward evaluation.")
+    parser.add_argument("--hindsight", type=str, default=None, help="Path to hindsight_samples.jsonl for GRPO training data.")
     parser.add_argument("--list-model-presets", action="store_true", help="Print the built-in small-model candidates and exit.")
     return parser
 
@@ -135,6 +136,13 @@ def main() -> int:
     if overrides:
         episode_config = replace(episode_config, **overrides)
 
+    # Load hindsight samples for GRPO (provides innovation z per future paper)
+    hindsight_samples = None
+    if args.hindsight:
+        from forecaster.hindsight.dataset_builder import load_hindsight_samples_jsonl
+        hindsight_samples = load_hindsight_samples_jsonl(args.hindsight)
+        print(f"Loaded {len(hindsight_samples)} hindsight samples from {args.hindsight}")
+
     manifest = run_policy_rl_pipeline(
         papers,
         trainer=args.trainer,
@@ -154,6 +162,7 @@ def main() -> int:
         prepare_only=args.prepare_only,
         init_policy_path=_validate_init_policy_path(args.init_policy_path),
         skip_alignment_check=args.skip_alignment_check,
+        hindsight_samples=hindsight_samples,
     )
     manifest_path = Path(args.output_dir)
     if not manifest_path.is_absolute():
