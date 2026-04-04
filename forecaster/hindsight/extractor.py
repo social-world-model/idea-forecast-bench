@@ -62,10 +62,6 @@ def parse_innovation(text: str) -> Innovation:
     )
 
 
-# Backward-compatible alias
-_parse_innovation = parse_innovation
-
-
 def extract_innovation(
     future_paper: PaperRecord,
     context_papers: list[PaperRecord],

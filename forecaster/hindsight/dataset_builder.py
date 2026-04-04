@@ -1,7 +1,9 @@
 """Build the hindsight dataset D_z = {(X_<=t, z_tilde_{t+1})}."""
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 from typing import Any
 
 from live_idea_bench.backtest import split_train_future_by_cutoff
@@ -9,7 +11,7 @@ from live_idea_bench.models import PaperRecord
 
 from forecaster.config import HindsightConfig
 from forecaster.hindsight.extractor import extract_innovation
-from forecaster.models import HindsightSample
+from forecaster.models import HindsightSample, Innovation
 
 logger = logging.getLogger(__name__)
 
@@ -91,4 +93,46 @@ def build_hindsight_dataset(
                 )
             )
 
+    return samples
+
+
+def load_hindsight_samples_jsonl(path: str | Path) -> list[HindsightSample]:
+    """Load HindsightSample objects from a batch-extraction JSONL file.
+
+    The JSONL schema (from batch hindsight extraction) uses ``cutoff_date``
+    ("YYYY-MM-DD") rather than ``cutoff_month`` ("YYYY-MM") and stores
+    ``context_paper_count`` instead of ``context_paper_ids``.  This loader
+    bridges that gap so the samples can be fed directly into the SFT pipeline.
+
+    Args:
+        path: Path to the ``.jsonl`` file.
+
+    Returns:
+        List of HindsightSample objects sorted by (cutoff_month, published_date).
+    """
+    path = Path(path)
+    samples: list[HindsightSample] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        row = json.loads(line)
+        innovation = Innovation(
+            base_direction=str(row["innovation"]["base_direction"]),
+            operator=str(row["innovation"]["operator"]),
+            gap=str(row["innovation"]["gap"]),
+        )
+        cutoff_month = str(row["cutoff_date"])[:7]
+        samples.append(
+            HindsightSample(
+                context_paper_ids=(),
+                cutoff_month=cutoff_month,
+                future_paper_id=str(row["future_paper_id"]),
+                future_paper_published_date=str(row["future_paper_published_date"]),
+                innovation=innovation,
+            )
+        )
+    samples.sort(
+        key=lambda s: (s.cutoff_month, s.future_paper_published_date, s.future_paper_id),
+    )
     return samples

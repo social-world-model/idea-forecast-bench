@@ -128,7 +128,7 @@ def build_prior_scorer(
     )
 
     model, tokenizer = _load_prior_model_and_tokenizer(str(model_path))
-    prompt_encoded = tokenizer([prompt], return_tensors="pt")
+    prompt_encoded = tokenizer([prompt], return_tensors="pt", add_special_tokens=False)
     prompt_ids = prompt_encoded["input_ids"]
     prompt_len = prompt_ids.shape[1]
     normalization = str(getattr(config, "score_normalization", "per_token")).strip().lower()
@@ -139,7 +139,7 @@ def build_prior_scorer(
     def score(innovation: Innovation) -> float:
         target = innovation_to_json(innovation)
         full_text = f"{prompt}{target}"
-        encoded = tokenizer([full_text], return_tensors="pt")
+        encoded = tokenizer([full_text], return_tensors="pt", add_special_tokens=False)
         encoded = {name: value.to(model.device) for name, value in encoded.items()}
 
         with torch.no_grad():
@@ -195,7 +195,7 @@ def sample_innovations(
 
     model, tokenizer = _load_prior_model_and_tokenizer(str(model_path))
 
-    encoded = tokenizer([prompt], return_tensors="pt")
+    encoded = tokenizer([prompt], return_tensors="pt", add_special_tokens=False)
     encoded = {k: v.to(model.device) for k, v in encoded.items()}
 
     generation_kwargs: dict[str, Any] = {

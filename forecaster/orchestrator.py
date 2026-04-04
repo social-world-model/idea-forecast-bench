@@ -143,21 +143,28 @@ class ForecasterPipeline:
 
         Returns path to checkpoint.
         """
+        resolved_config = config_override or self.sft_config
+        max_mem = resolved_config.max_memory_entries
         logger.info(
-            "Building SFT dataset from %d hindsight samples.", len(hindsight_samples)
+            "Building SFT dataset from %d hindsight samples (max_memory_entries=%d).",
+            len(hindsight_samples),
+            max_mem,
         )
         if memory_snapshots_by_cutoff is None:
-            sft_samples = build_sft_samples(hindsight_samples)
+            sft_samples = build_sft_samples(
+                hindsight_samples,
+                max_memory_entries=max_mem,
+            )
         else:
             sft_samples = build_sft_samples(
                 hindsight_samples,
+                max_memory_entries=max_mem,
                 memory_snapshots_by_cutoff=memory_snapshots_by_cutoff,
             )
 
         prior_output_dir = self.output_dir / output_subdir
         prior_output_dir.mkdir(parents=True, exist_ok=True)
         save_sft_dataset(sft_samples, prior_output_dir / "dataset.jsonl")
-        resolved_config = config_override or self.sft_config
         logger.info("Training prior SFT model; output dir: %s", prior_output_dir)
 
         checkpoint_path = train_prior(
