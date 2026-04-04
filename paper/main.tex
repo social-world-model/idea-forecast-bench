@@ -1,0 +1,748 @@
+\documentclass{article} % For LaTeX2e
+\usepackage[submission]{colm2026_conference}
+
+\usepackage{microtype}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+\usepackage{lineno}
+
+\definecolor{darkblue}{rgb}{0, 0, 0.5}
+\hypersetup{colorlinks=true, citecolor=darkblue, linkcolor=darkblue, urlcolor=darkblue}
+
+\newcommand{\keyang}[1]{\textcolor{teal}{~[KX: #1]}}
+\newcommand{\paul}[1]{\textcolor{red}{paul: #1}}
+
+\title{LiveIdeaBench: Forecasting Research Ideas via Self-Evolving Agents}
+
+\author{Anonymous Authors}
+
+\begin{document}
+
+\ifcolmsubmission
+\linenumbers
+\fi
+
+\maketitle
+
+\begin{abstract}
+We study \paul{study or propose this new task?} \emph{research idea forecasting}: generating ideas from literature available at time $t$ and evaluating whether these ideas are later borne out by future papers. This task introduces two core challenges. First, future ideas are not simple next-topic continuations; they often arise from reusable research strategies such as limitation extension, cross-domain transfer, benchmark proposal, and method composition. Second, existing ideation work lacks a temporally grounded benchmark that evaluates forecasts against future literature rather than immediate plausibility alone. We address these challenges with two contributions. We introduce \textbf{LiveIdeaBench}, a benchmark and live evaluation framework with strict temporal splits, future-paper validation, and rolling forecasting windows. We also introduce an initial \textbf{self-evolving strategy-memory forecaster} \paul{need to better explain technical novelty of this} that distills reusable forecasting strategies from past episodes, stores them in an evolving memory, retrieves and composes them for new contexts, and updates the memory after delayed evaluation. Experiments show that LiveIdeaBench provides meaningful forecasting signal and supports systematic comparison of forecasting methods, while the strategy-memory formulation provides a concrete prototype method view for this task.
+\end{abstract}
+
+\section{Introduction}
+
+Automatic research has become a rapidly growing area, with Large Language Models (LLMs) increasingly used for scientific literature understanding \citep{li2024scilitllm}, automated literature review \citep{tang2025literaturereview}, research ideation \citep{baek-etal-2025-researchagent,si2025novel}, and broader autonomous discovery pipelines \citep{lu2024aiscientist,zheng2025automation}. These advances motivate a stronger question than standard idea generation: instead of asking whether an idea appears plausible when it is generated \citep{si2025novel,baek-etal-2025-researchagent}, can a model anticipate research ideas that later emerge in the community? Prior work on topic evolution and long-term scientific impact suggests that scientific activity follows nontrivial temporal regularities \citep{blei2006dynamic,wang2013impact}, but does not evaluate predictions in the form of natural-language research ideas against future papers. \paul{put the name of the new task here, and say we propose this new task. and just give one proper definition not two} We therefore ask a more fundamental question: when a research community becomes sufficiently large, does its evolution become predictable? More concretely, \textit{can we forecast the research ideas that are likely to emerge next in the research community?} \paul{be more precise and dont repeat research questions twice}
+
+Answering this research question offers three major benefits: (1) \textbf{early discovery}: an idea forecaster can surface promising research directions before they are fully visible in the literature, enabling earlier and more proactive scientific discovery; unlike conventional ideation, this requires anticipating trajectories that later materialize rather than merely generating ideas that appear novel, interesting, or plausible at the time of generation \citep{si2025novel,baek-etal-2025-researchagent,guo2024ideabench,liu2025hypobench}; (2) \textbf{decision support}: a forecasting-oriented formulation better matches the practical role of scientific ideation systems, whose utility lies in identifying important directions early enough to shape downstream research and autonomous discovery workflows, while distinguishing genuinely emerging lines of work from suggestions that only appear reasonable in hindsight \citep{lu2024aiscientist,zheng2025automation,blei2006dynamic,wang2013impact}; and (3) \textbf{community modeling}: the task provides an operational framework for studying how research communities evolve over time, complementing prior work on topic evolution, scientific impact, and simulated research communities by using natural-language research ideas as the prediction target rather than only topics, citations, or aggregate outcomes \citep{blei2006dynamic,wang2013impact,yu2024researchtown}.
+
+At the same time, research idea forecasting is challenging for three main reasons: (1) \textbf{noise}: only a small fraction of historical papers contain signals that meaningfully shape later directions, while most reflect incremental or transient activity that do not drive the core evolution of the research community \citep{wang2013impact,li2024scilitllm}; (2) \textbf{dynamic evolution}: research communities evolve over time, so strategies that were once predictive may become less relevant, while new combinations become plausible as the field shifts \citep{blei2006dynamic,yu2024researchtown}; and (3) \textbf{benchmarking}: idea generation is inherently hard to evaluate \citep{si2025novel,guo2024ideabench,liu2025hypobench}, and although forecasting introduces a natural temporally grounded framework by comparing predictions against future papers \citep{karger2024forecastbench,wen2025predicting}, standardized benchmarks and evaluation protocols for this setting remain limited. These challenges suggest that effective research idea forecasting should not directly extrapolate from raw historical papers, but instead distill reusable research templates from noisy literature, maintain them in an evolving memory, and evaluate predictions against future papers under strict temporal protocols.
+
+To address these challenges, we make three \paul{abstract says two contributions. we should just emphasize 2 for clarity. one benchmarking and one modeling. choose the most important modeling contribution, rephrase other one as secondary contribution} contributions: (1) to handle \textbf{noise}, we decompose the direct generation of multiple future ideas into the prediction of a less noisy latent innovation variable $z$, followed by a realization step $p(y \mid z, x)$ that performs the final generation. \paul{this does not sound super novel since all neural networks do this already?} By separating abstract conceptual leaps from concrete textual generation, this factorization filters out the transient, surface-level details present in raw publication streams. (2) to model \textbf{dynamic evolution}, \paul{phrase this as self-evolution? or is it just normal memory?} we propose a memory-augmented prior that compresses the massive, continuous history of research into an actively updated inventory of conceptual anchors. This allows the forecaster to efficiently track macroscopic trends and adapt as the research community shifts, rather than relying on an intractable or static view of past literature. (3) to support \textbf{benchmarking}, we introduce \textsc{LiveIdeaBench}, a temporally grounded benchmark for research idea forecasting. It evaluates generated ideas only against papers published after the forecasting cutoff. This complements existing idea-generation and hypothesis-generation benchmarks with explicit future-based validation \citep{si2025novel,guo2024ideabench,liu2025hypobench,karger2024forecastbench,wen2025predicting}.
+
+\vspace{-2mm}
+\paragraph{Main discovery} Based on the experimental results, we make two main observations: (1) effective research idea forecasting should operate over reusable research templates distilled from historical papers, rather than directly extrapolating from raw literature; and (2) these research templates should be selectively maintained and recombined in an evolving memory, rather than treated as a static summary of past work. This turns forecasting into a structured process of distillation, memory-guided composition, and delayed update. \paul{summarize most impressive key results}
+
+
+\section{Related Works}
+
+\paragraph{Automatic research agents.}
+Recent work has used large language models to automate code generation from papers \citep{li2025papercoder}, code-based experimentation \citep{jansen2025codescientist}, end-to-end scientific discovery with experiment execution and paper writing \citep{lu2024aiscientist}, and community-level paper and review generation \citep{yu2024researchtown}. Recent work has also studied automatic research idea generation more directly \citep{baek-etal-2025-researchagent,si2025novel,zhao2025ramon}. These ideation works are typically evaluated with judged quality measures such as novelty, feasibility, usefulness, or preference \citep{guo2024ideabench,liu2025hypobench}. By contrast, we study \emph{idea-level forecasting} under strict timestamps and future-paper validation, where the question is not only whether an idea appears plausible at generation time, but whether related ideas later emerge in the literature. \paul{not just emerge but make impact in the future also}
+
+\vspace{-2mm}
+\paragraph{Self-evolving agents.}
+Recent work develops agents that improve over time by accumulating experience across episodes. Some approaches use long-term memory to preserve useful context and retrieve past experience in later interactions \citep{zhong2023memorybank,packer2024memgpt}. Others use reflective feedback to refine future behavior \citep{shinn2023reflexion}. Another line studies iterative exploration and skill accumulation in embodied settings \citep{wang2023voyager}. More recent work extends this direction to procedural memory \citep{cao2025reme}, reasoning memory \citep{ouyang2025reasoningbank}, and evolving memory skills \citep{zhang2026memskill,zhang2025memgen}. These works provide methodological inspiration for our forecasting model, especially in how reusable patterns can be accumulated and later reused, but they are typically evaluated on interactive tasks, coding tasks, or general agent-improvement settings rather than temporally grounded forecasting of future research ideas.
+
+\vspace{-2mm}
+\paragraph{Forecasting benchmarks.}
+Prior benchmarks evaluate forecasting and prediction in a range of domains. ForecastBench studies dynamic forecasting with unresolved future questions and continuously updated evaluation \citep{karger2024forecastbench}. Financial benchmarks such as PIXIU \citep{xie2023pixiu} and FinBen \citep{xie2024finben} evaluate language models on financial forecasting, analysis, and decision-making tasks. More closely related to scientific forecasting, \citet{wen2025predicting} study whether language models can predict the outcomes of empirical {AI} research ideas without running the underlying experiments. However, these benchmarks focus on general future questions, financial applications, or experiment-outcome prediction rather than the emergence of future scientific ideas expressed in natural language and validated against later papers. In contrast, \textsc{LiveIdeaBench} studies temporally grounded forecasting at the level of research ideas and evaluates whether generated ideas align with future literature under strict time splits.
+
+%\section{Preliminaries}
+
+%\subsection{From Idea Generation to Idea Forecasting}
+
+%Existing scientific ideation systems usually focus on generating research ideas and assessing them at the time of generation. However, an idea that appears novel or promising at one moment may still fail to capture the direction that the field actually moves toward. This gap motivates a shift in perspective. Instead of treating research ideation as a static generation problem, we study it as a temporal forecasting problem: given historical literature up to a cutoff time, the goal is to predict research ideas that will later materialize in future work.
+
+
+
+\section{Method \paul{give a good name}}
+To tackle the scale and noise of continuous literature streams, we formulate idea forecasting as a factorized latent variable model. By introducing a discrete innovation variable $z$, we decouple the prediction of abstract conceptual leaps from the generation of concrete text. We first train a memory-augmented prior to forecast $z$ based on historical trends. We then train a realization module via GRPO to expand $z$ into a full research proposal through grounded search and reasoning. Finally, we combine these components for joint inference to produce the final forecast list. \paul{add a nice figure}
+
+%\paragraph{Notation.}
+%Let $X_t$ denote the historical literature available up to forecasting cutoff $t$. Let $T_t$ denote the set of research templates distilled from $X_t$, let $M_t$ denote the self-evolving template memory, let $R_t$ denote the retrieved working set of templates for the current forecasting instance, let $C_t$ denote the candidate forecast ideas constructed from templates, and let $Y_t$ denote the final forecast list. Operationally, the method first distills templates from $X_t$, then obtains a working set $R_t$ from memory $M_t$, then adds noise by recombining templates into candidate ideas $C_t$, and finally produces $Y_t$, with delayed future feedback used to update the memory. Additional implementation details, prompt designs, and update heuristics are deferred to the appendix.
+
+
+\subsection{Problem Definition}
+
+\paragraph{Idea forecasting task} Let the historical context up to cutoff time $t$ be denoted as $X_{\le t} = \{x_1, x_2, \dots, x_M\}$, a massive collection of $M$ published research papers. The goal of idea forecasting is to predict the set of novel research proposals $Y_{t+1} = \{y_1, y_2, \dots, y_N\}$ that will emerge in the subsequent time window $t+1$, comprising $N$ future papers. Formally, we aim to model the predictive distribution $p(Y_{t+1} \mid X_{\le t})$. However, mapping a massive, unstructured research corpus directly to a specific set of future text proposals is highly unconstrained. To bridge this gap, we introduce a latent innovation variable $z$, which represents the discrete conceptual leap (e.g., the base direction, the applied operator, and the target gap \paul{not clear what these 3 things mean}) driving a single new idea.
+
+\paragraph{Temporal decomposition for idea forecasting} The raw temporal stream of $M$ historical papers is inherently noisy, saturated with incremental engineering tweaks, concurrent overlapping works, and superficial topical trends. Forecasting directly within this high-dimensional observation space forces a model to memorize fleeting artifacts rather than learn fundamental research trajectories. To address this, we posit that the true evolution of research is driven by a sequence of underlying, denoised conceptual leaps. Assuming the $N$ future papers are conditionally independent given the historical context and their respective latent drivers, we decompose the generation of the future paper set by marginalizing over the latent innovation space:
+\begin{equation}
+p(Y_{t+1} \mid X_{\le t}) \approx \prod_{j=1}^{N} \sum_{z_j} p(y_j \mid z_j, X_{\le t}) p(z_j \mid X_{\le t})
+\end{equation}
+This temporal decomposition strictly decouples our problem into two distinct objectives: discovering the clean evolutionary dynamics of research concepts from the noisy history (the prior $p(z \mid X_{\le t})$), and subsequently grounding these abstract drivers into concrete textual proposals (the realization $p(y \mid z, X_{\le t})$).
+
+
+\subsection{Training the Innovation Prior through Hindsight}
+
+\paragraph{Hindsight data collection} To train the prior forecasting model, we first require a dataset of historical innovations, which are inherently unobserved in the raw publication stream \paul{why are the innovations unobserved? arent they the papers? or what do innovations mean}. We construct this dataset through a hindsight extraction \paul{not defined} process. Given a historical context $X_{\le t}$ and an actually observed future paper $y$, we deploy a retrospective extraction pipeline to infer the latent conceptual leap $\tilde{z}_{t+1}$ that bridges the past to the new idea. This pipeline analyzes the text and citations of $y$ to identify the work it builds upon, the specific gap it addresses, and the conceptual operator \paul{not defined. give some examples} it applies. By running this hindsight extraction across sequential time steps in the training corpus, we construct a temporally ordered dataset of pseudo-labeled innovation transitions, $\mathcal{D}_z = \{(X_{\le t}, \tilde{z}_{t+1})\}$, which serves as the empirical ground truth for our prior. \paul{can u give some examples of the list of conceptual operators. and need much more precise definitions}
+
+\paragraph{Prior development with memory} Directly conditioning the prior \paul{what does prior mean in this case?} $p(z_{t+1} \mid X_{\le t})$ on the raw, massive stream of historical papers is computationally intractable and structurally inefficient. To address this, we parameterize the historical context using a continually updated memory module, $\mathcal{M}_t$. Rather than storing raw text, this memory compresses $X_{\le t}$ into a structured, evolving inventory of active research directions and established anchors \paul{anchors is not defined}. The prior is thus reformulated as $p_\theta(z_{t+1} \mid \mathcal{M}_t)$. We train this memory-augmented \paul{did not say how the memory works at all! and what is the architecture of the memory?} prior via supervised fine-tuning on our extracted dataset $\mathcal{D}_z$. The model is optimized to autoregressively predict the components of the next latent innovation \paul{all of these are unclear, pls define and give examples}—such as the target base direction, the operator, and the gap—by minimizing the negative log-likelihood $-\log p_\theta(\tilde{z}_{t+1} \mid \mathcal{M}_t)$. This design allows the model to efficiently forecast macroscopic research trajectories grounded in a tractable, summarized representation of history. \paul{also, not clear what is novel about all this. can u clarify the key ideas and the most novel parts. new memory method? new self-evolving approach?}
+
+\subsection{Training Proposal Realization via Searching}
+The second phase trains the realization module to translate an abstract innovation \paul{the terminology changed again. it was conceptual leap, then anchors, then latent innovation... pls use consistent terminology} $z$ into a comprehensive, text-based research proposal $y$. We frame this step as a sequential search-and-reasoning task: given a predicted latent innovation $z$, the model must actively search the historical context for supporting methodological evidence and logically reason about the proposed conceptual gap. The generation policy $p_{\psi}(y \mid z, X_{\le t})$ is optimized using Group Relative Policy Optimization (GRPO). Rather than relying entirely on supervised imitation, GRPO fine-tunes the reasoning policy by sampling a group of $G$ output trajectories $\{y_1, \dots, y_G\}$ for each condition $(z, X_{\le t})$ and computing relative advantages $\hat{A}_i$ normalized across the group based on verifiable rewards—specifically, the accuracy of evidence retrieval, logical adherence to the prescribed operator $o$, and the scientific coherence of the proposal. The policy is then updated by maximizing the GRPO objective:
+\begin{equation}
+\mathcal{J}_{\text{GRPO}}(\psi) = \mathbb{E} \left[ \frac{1}{G} \sum_{i=1}^G \left( \min\left( \rho_i \hat{A}_i, \text{clip}(\rho_i, 1-\epsilon, 1+\epsilon) \hat{A}_i \right) - \beta \mathbb{D}_{\text{KL}}(p_\psi \| p_{\text{ref}}) \right) \right]
+\end{equation}
+
+where $\rho_i = \frac{p_\psi(y_i \mid z, X_{\le t})}{p_{\text{ref}}(y_i \mid z, X_{\le t})}$ is the probability ratio between the active policy and the reference model. This formulation efficiently drives the model to discover rigorous research realization strategies without the severe memory overhead of training a separate value network, perfectly suiting the long-context demands of historical paper retrieval \paul{sounds ai generated}. \paul{again not clear the novel ideas and key difference in all this. or just application of grpo?} 
+
+\subsection{Joint Inference for Idea Forecasting}
+At inference time, the framework combines the prior forecasting and proposal realization components to approximate the marginalized probability $p(Y_{t+1} \mid X_{\le t})$. Given the historical context $X_{\le t}$ and the current structured memory state $\mathcal{M}_t$, the algorithm first utilizes the prior model $p_\theta$ to sample a diverse candidate set of latent innovations $Z = \{z_1, \dots, z_C\}$, recording their prior likelihood scores. For each sampled innovation $z_i$, the realization module \paul{terminology is not consistent, called it generation policy above} $p_\psi$ executes a search-and-reasoning loop over $X_{\le t}$ to synthesize a concrete textual proposal $y_i$, yielding a corresponding realization score. To determine the final forecast list, the algorithm computes a joint score for each $(z_i, y_i)$ pair that integrates both the conceptual predictiveness of the prior and the logical coherence of the realization. The candidates are then deduplicated, and the top-$K$ highest-scoring proposals are selected to form $Y_{t+1}$. Algorithm \ref{alg:inference} summarizes this joint procedure.
+
+\begin{algorithm}[t]
+
+\caption{Joint Inference Procedure for Idea Forecasting}
+
+\label{alg:inference}
+
+\begin{algorithmic}[1]
+
+\Require Historical literature $X_{\le t}$, memory state $\mathcal{M}_t$, candidate pool size $C$, forecast length $K$
+
+\Require Trained innovation prior $p_\theta$, realization policy $p_\psi$
+
+\Ensure Forecast list $Y_{t+1}$
+
+\State Sample $C$ candidate latent innovations $Z \sim p_\theta(z \mid \mathcal{M}_t)$
+
+\State $S_{\text{candidates}} \gets \emptyset$
+
+\For{each $z_i \in Z$}
+
+\State Compute prior score $s_{\text{prior}} \gets \log p_\theta(z_i \mid \mathcal{M}_t)$
+
+\State Retrieve supporting evidence from $X_{\le t}$ based on $z_i$
+
+\State Generate candidate proposal $y_i \sim p_\psi(y \mid z_i, X_{\le t})$
+
+\State Compute realization score $s_{\text{realize}} \gets \log p_\psi(y_i \mid z_i, X_{\le t})$
+
+\State Compute joint score $s_{\text{joint}} \gets \lambda s_{\text{prior}} + (1-\lambda) s_{\text{realize}}$
+
+\State $S_{\text{candidates}} \gets S_{\text{candidates}} \cup \{(y_i, s_{\text{joint}})\}$
+
+\EndFor
+
+\State $Y_{t+1} \gets \textsc{DeduplicateAndTopK}(S_{\text{candidates}}, K)$
+
+\State \Return $Y_{t+1}$
+
+\end{algorithmic}
+
+\end{algorithm}
+
+% \section{Method}
+
+% \kyang{The structure of your methodology should be consistent with your structure the challenges/contributions mentioned in your introduction}
+% \subsection{Denoising Historical Literature into Research Templates}
+
+% \paragraph{Motivation.}
+% Historical papers contain both persistent signals and many local or transient details. Some papers reveal patterns that continue to shape later directions, while others mainly reflect narrow design choices or short-lived follow-up activity. Directly forecasting from the full paper stream therefore risks overfitting to paper-level noise. Our first module denoises the historical literature into a smaller set of reusable research templates.
+
+% \paragraph{Template extraction.}
+% Let
+% $
+% \Psi_\eta : \mathcal{X} \rightarrow 2^{\mathcal{T}}
+% $
+% denote the template extraction operator parameterized by $\eta$. Given the historical context $X_t$, the extractor outputs a finite template set
+% $
+% \mathcal{T}_t = \Psi_\eta(X_t) = \{r_{t,1}, r_{t,2}, \dots, r_{t,L_t}\},
+% $
+% where $L_t = |\mathcal{T}_t|$ is the number of extracted templates at cutoff $t$. In our implementation, $\Psi_\eta$ is instantiated with an LLM that reads the historical context and outputs structured problem templates, bottleneck templates, and move templates.
+
+% \paragraph{Denoised representation.} \keyang{This title is too engineering}
+% The extracted template set $\mathcal{T}_t$ provides a denoised representation of the historical literature. Instead of preserving every paper-level detail, it keeps a smaller set of reusable research patterns that can be used in later forecasting stages. The rest of the method therefore operates on templates rather than on the raw paper stream.
+
+% \subsection{Template Expansion and Combination (Add Noise)}
+
+% \paragraph{Why expansion is needed.}
+% Denoising produces a compressed template-level representation, but forecasting cannot stop at that level. The model still needs to expand and combine templates into concrete future ideas. This second module therefore learns how to split the current context into promising sub-directions and how to recombine retrieved templates into candidate ideas.
+
+% \paragraph{Retrieved working set.}
+% Given the current memory pool $\mathcal{M}_t$, we retrieve a working set
+% $
+% \mathcal{R}_t \subseteq \mathcal{M}_t
+% $
+% for the current forecasting instance. We write
+% $
+% \mathcal{R}_t = \operatorname{Retrieve}(X_t, \mathcal{M}_t),
+% $
+% where $\operatorname{Retrieve}$ selects templates that are relevant to the current historical context and complementary to one another. The details of memory construction and update are given in Section~4.3.
+
+% \paragraph{Decomposition-combination plans.}
+% The model does not directly generate future ideas from $\mathcal{R}_t$ in one step. Instead, it first constructs a latent \emph{decomposition-combination plan}. Let
+% $
+% z_t = (d_t, a_t)
+% $
+% denote one such plan, where $d_t$ is a decomposition of the current context into a small number of promising sub-directions, and $a_t$ specifies how retrieved templates should be expanded and combined within those sub-directions. The decomposition part $d_t$ identifies what to pursue next, such as unresolved bottlenecks, transfer opportunities, or promising cross-domain links. The action part $a_t$ specifies which templates should be extended, transferred, recombined, or reframed.
+
+% \paragraph{Plan scorer.}
+% The main trainable component of our method lies in this module. Let
+% $
+% s_\phi(z \mid X_t, \mathcal{R}_t)
+% $
+% denote the score assigned by a parameterized plan scorer with parameters $\phi$ to a plan $z$ under context $X_t$ and retrieved templates $\mathcal{R}_t$. A higher score means that the plan proposes a more plausible decomposition of the current community state and a more promising combination of retrieved templates. The corresponding training objective is introduced later in Section~4.4.
+
+% \paragraph{Instantiation into candidate ideas.}
+% After scoring candidate plans, we keep the top-$B$ plans, where $B \in \mathbb{N}$ is the plan budget. Let
+% $
+% \mathcal{Z}_t
+% $
+% denote this retained plan set:
+% $
+% \mathcal{Z}_t = \operatorname{TopB}\bigl(\{z\}, s_\phi(z \mid X_t, \mathcal{R}_t)\bigr).
+% $
+% We then instantiate each retained plan into a natural-language candidate idea. Let
+% $
+% \Gamma
+% $
+% denote the instantiation operator, and let
+% $
+% \mathcal{C}_t
+% =
+% \{\Gamma(X_t, \mathcal{R}_t, z) : z \in \mathcal{Z}_t\}
+% =
+% \{c_{t,1}, c_{t,2}, \dots, c_{t,N_t}\}
+% $
+% denote the resulting candidate pool, where each
+% $
+% c_{t,n} \in \mathcal{C}_t
+% $
+% is one candidate future idea and $N_t = |\mathcal{C}_t|$. In our implementation, an LLM instantiates each retained plan into a natural-language candidate, but the output is constrained by the learned plan rather than produced by unconstrained free-form ideation.
+
+% \subsection{Memory Mechanism}
+
+% \paragraph{Memory construction.}
+% The extracted templates are not used only once. We maintain a memory pool that accumulates reusable templates across forecasting episodes. Let
+% $
+% \mathcal{M}_t^{-}
+% $
+% denote the pre-update memory before processing cutoff $t$. After extracting the current template set $\mathcal{T}_t$, we merge it into memory and obtain the active memory
+% $
+% \mathcal{M}_t = \operatorname{Merge}(\mathcal{M}_t^{-}, \mathcal{T}_t).
+% $
+% This active memory is the template pool used by the current forecasting episode.
+
+% \paragraph{What memory stores.}
+% The memory pool stores typed research templates together with lightweight metadata. In our implementation, the stored metadata may include recency, frequency, and utility estimated from later feedback. The memory does not store the full raw paper stream and does not directly store final forecasted ideas. Its role is to keep reusable research patterns that can be selectively retrieved and recombined later.
+
+% \paragraph{Selective retrieval.}
+% The memory pool is not a passive archive. Retrieval is selective and context dependent. Given the current historical context $X_t$, the retrieval operator prefers templates that are relevant to the present literature state, complementary to one another, and historically useful. This allows the model to dynamically change which templates it relies on at different forecasting cutoffs.
+
+% \paragraph{Self-evolving update.}
+% After a forecast is produced, the method later receives a delayed feedback signal. Let
+% $
+% \Delta_t
+% $
+% denote this feedback signal for cutoff $t$. Let
+% $
+% U
+% $
+% denote the memory update operator. The post-update memory is
+% $
+% \mathcal{M}_t^{+} = U(\mathcal{M}_t, \Delta_t).
+% $
+% The role of $U$ is to reinforce templates and combination patterns that led to useful forecasts, while downweighting or pruning templates that were stale, noisy, or consistently unhelpful. This update rule makes the memory pool self-evolving across forecasting episodes.
+
+% \subsection{Training, Inference, and Overall Algorithm}
+
+% \paragraph{Training.}
+% The main learning signal comes from the decomposition-combination plan scorer. Let
+% $
+% z_t^{+}
+% $
+% denote a positive plan that is supported by later future work, and let
+% $
+% z_t^{-}
+% $
+% denote a negative plan that is unsupported or weakly supported. We train the scorer with a margin-based ranking loss
+% $
+% \mathcal{L}_{\mathrm{plan}}
+% =
+% \max\!\left(
+% 0,\,
+% m - s_\phi(z_t^{+} \mid X_t, \mathcal{R}_t) + s_\phi(z_t^{-} \mid X_t, \mathcal{R}_t)
+% \right),
+% $
+% where $m > 0$ is a margin hyperparameter. If desired, the template extractor can also be trained with an auxiliary extraction loss $\mathcal{L}_{\mathrm{ext}}$. The full objective is then
+% $
+% \mathcal{L}
+% =
+% \mathcal{L}_{\mathrm{plan}} + \alpha \mathcal{L}_{\mathrm{ext}},
+% $
+% where $\alpha \ge 0$ is a weighting coefficient. In our framework, $\mathcal{L}_{\mathrm{plan}}$ is the main objective, while $\mathcal{L}_{\mathrm{ext}}$ is optional and auxiliary.
+
+% \paragraph{Inference.}
+% At inference time, the method follows the same modular structure. It first extracts a template set $\mathcal{T}_t$ from the historical context $X_t$. It then merges $\mathcal{T}_t$ into the memory pool to obtain $\mathcal{M}_t$, retrieves a working set $\mathcal{R}_t$, scores candidate decomposition-combination plans, retains the top-$B$ plans, instantiates them into a candidate pool $\mathcal{C}_t$, and finally selects the forecast list $Y_t$. After later feedback becomes available, the memory pool is updated to $\mathcal{M}_t^{+}$.
+
+% \paragraph{Joint view.}
+% Taken together, the method works as follows. The first module builds a denoised template-level representation of the historical literature. The second module learns how to expand and combine retrieved templates into candidate future ideas. The third module maintains a memory pool that supports retrieval and evolves after delayed feedback. In this way, training learns how to split and combine templates, while memory update adapts the template pool online across forecasting episodes.
+
+% \paragraph{Overall algorithm.}
+% Algorithm~\ref{alg:rtf-sem} summarizes the full procedure.
+
+% \begin{algorithm}[t]
+% \caption{Research-Template Forecasting with Self-Evolving Memory}
+% \label{alg:rtf-sem}
+% \begin{algorithmic}[1]
+% \Require Historical context $X_t$, pre-update memory pool $\mathcal{M}_t^{-}$, forecast length $K$, plan budget $B$
+% \Ensure Forecast list $Y_t$, post-update memory pool $\mathcal{M}_t^{+}$
+
+% \State \textbf{// Module 1: denoise into research templates}
+% \State $\mathcal{T}_t \gets \Psi_\eta(X_t)$
+
+% \State \textbf{// Module 2: template expansion and combination}
+% \State $\mathcal{M}_t \gets \operatorname{Merge}(\mathcal{M}_t^{-}, \mathcal{T}_t)$
+% \State $\mathcal{R}_t \gets \operatorname{Retrieve}(X_t, \mathcal{M}_t)$
+% \State Construct candidate plans $\{z\}$ from $(X_t, \mathcal{R}_t)$
+% \State Score candidate plans using $s_\phi(z \mid X_t, \mathcal{R}_t)$
+% \State $\mathcal{Z}_t \gets \operatorname{TopB}(\{z\}, s_\phi)$
+% \State $\mathcal{C}_t \gets \{\Gamma(X_t, \mathcal{R}_t, z) : z \in \mathcal{Z}_t\}$
+% \State $Y_t \gets \operatorname{TopK}(\mathcal{C}_t, K)$
+
+% \State \textbf{// Module 3: self-evolving memory update}
+% \State Receive delayed feedback signal $\Delta_t$
+% \State $\mathcal{M}_t^{+} \gets U(\mathcal{M}_t, \Delta_t)$
+
+% \State \Return $Y_t$, $\mathcal{M}_t^{+}$
+% \end{algorithmic}
+% \end{algorithm}
+
+
+
+
+
+% \section{Method}
+
+% \keyang{The structure of your methodology should be consistent with your structure the challenges/contributions mentioned in your introduction}
+% \subsection{Denoising Historical Literature into Research Templates}
+
+% \paragraph{Motivation.}
+% Historical papers contain both persistent signals and many local or transient details. Some papers reveal patterns that continue to shape later directions, while others mainly reflect narrow design choices or short-lived follow-up activity. Directly forecasting from the full paper stream therefore risks overfitting to paper-level noise. Our first module denoises the historical literature into a smaller set of reusable research templates.
+
+% \paragraph{Template extraction.}
+% Let
+% $
+% \Psi_\eta : \mathcal{X} \rightarrow 2^{\mathcal{T}}
+% $
+% denote the template extraction operator parameterized by $\eta$. Given the historical context $X_t$, the extractor outputs a finite template set
+% $
+% \mathcal{T}_t = \Psi_\eta(X_t) = \{r_{t,1}, r_{t,2}, \dots, r_{t,L_t}\},
+% $
+% where $L_t = |\mathcal{T}_t|$ is the number of extracted templates at cutoff $t$. In our implementation, $\Psi_\eta$ is instantiated with an LLM that reads the historical context and outputs structured problem templates, bottleneck templates, and move templates.
+
+% \paragraph{Denoised representation.} \keyang{This title is too engineering}
+% The extracted template set $\mathcal{T}_t$ provides a denoised representation of the historical literature. Instead of preserving every paper-level detail, it keeps a smaller set of reusable research patterns that can be used in later forecasting stages. The rest of the method therefore operates on templates rather than on the raw paper stream.
+
+% \subsection{Template Expansion and Combination (Add Noise)}
+
+% \paragraph{Why expansion is needed.}
+% Denoising produces a compressed template-level representation, but forecasting cannot stop at that level. The model still needs to expand and combine templates into concrete future ideas. This second module therefore learns how to split the current context into promising sub-directions and how to recombine retrieved templates into candidate ideas.
+
+% \paragraph{Retrieved working set.}
+% Given the current memory pool $\mathcal{M}_t$, we retrieve a working set
+% $
+% \mathcal{R}_t \subseteq \mathcal{M}_t
+% $
+% for the current forecasting instance. We write
+% $
+% \mathcal{R}_t = \operatorname{Retrieve}(X_t, \mathcal{M}_t),
+% $
+% where $\operatorname{Retrieve}$ selects templates that are relevant to the current historical context and complementary to one another. The details of memory construction and update are given in Section~4.3.
+
+% \paragraph{Decomposition-combination plans.}
+% The model does not directly generate future ideas from $\mathcal{R}_t$ in one step. Instead, it first constructs a latent \emph{decomposition-combination plan}. Let
+% $
+% z_t = (d_t, a_t)
+% $
+% denote one such plan, where $d_t$ is a decomposition of the current context into a small number of promising sub-directions, and $a_t$ specifies how retrieved templates should be expanded and combined within those sub-directions. The decomposition part $d_t$ identifies what to pursue next, such as unresolved bottlenecks, transfer opportunities, or promising cross-domain links. The action part $a_t$ specifies which templates should be extended, transferred, recombined, or reframed.
+
+% \paragraph{Plan scorer.}
+% The main trainable component of our method lies in this module. Let
+% $
+% s_\phi(z \mid X_t, \mathcal{R}_t)
+% $
+% denote the score assigned by a parameterized plan scorer with parameters $\phi$ to a plan $z$ under context $X_t$ and retrieved templates $\mathcal{R}_t$. A higher score means that the plan proposes a more plausible decomposition of the current community state and a more promising combination of retrieved templates. The corresponding training objective is introduced later in Section~4.4.
+
+% \paragraph{Instantiation into candidate ideas.}
+% After scoring candidate plans, we keep the top-$B$ plans, where $B \in \mathbb{N}$ is the plan budget. Let
+% $
+% \mathcal{Z}_t
+% $
+% denote this retained plan set:
+% $
+% \mathcal{Z}_t = \operatorname{TopB}\bigl(\{z\}, s_\phi(z \mid X_t, \mathcal{R}_t)\bigr).
+% $
+% We then instantiate each retained plan into a natural-language candidate idea. Let
+% $
+% \Gamma
+% $
+% denote the instantiation operator, and let
+% $
+% \mathcal{C}_t
+% =
+% \{\Gamma(X_t, \mathcal{R}_t, z) : z \in \mathcal{Z}_t\}
+% =
+% \{c_{t,1}, c_{t,2}, \dots, c_{t,N_t}\}
+% $
+% denote the resulting candidate pool, where each
+% $
+% c_{t,n} \in \mathcal{C}_t
+% $
+% is one candidate future idea and $N_t = |\mathcal{C}_t|$. In our implementation, an LLM instantiates each retained plan into a natural-language candidate, but the output is constrained by the learned plan rather than produced by unconstrained free-form ideation.
+
+% \subsection{Memory Mechanism}
+
+% \paragraph{Memory construction.}
+% The extracted templates are not used only once. We maintain a memory pool that accumulates reusable templates across forecasting episodes. Let
+% $
+% \mathcal{M}_t^{-}
+% $
+% denote the pre-update memory before processing cutoff $t$. After extracting the current template set $\mathcal{T}_t$, we merge it into memory and obtain the active memory
+% $
+% \mathcal{M}_t = \operatorname{Merge}(\mathcal{M}_t^{-}, \mathcal{T}_t).
+% $
+% This active memory is the template pool used by the current forecasting episode.
+
+% \paragraph{What memory stores.}
+% The memory pool stores typed research templates together with lightweight metadata. In our implementation, the stored metadata may include recency, frequency, and utility estimated from later feedback. The memory does not store the full raw paper stream and does not directly store final forecasted ideas. Its role is to keep reusable research patterns that can be selectively retrieved and recombined later.
+
+% \paragraph{Selective retrieval.}
+% The memory pool is not a passive archive. Retrieval is selective and context dependent. Given the current historical context $X_t$, the retrieval operator prefers templates that are relevant to the present literature state, complementary to one another, and historically useful. This allows the model to dynamically change which templates it relies on at different forecasting cutoffs.
+
+% \paragraph{Self-evolving update.}
+% After a forecast is produced, the method later receives a delayed feedback signal. Let
+% $
+% \Delta_t
+% $
+% denote this feedback signal for cutoff $t$. Let
+% $
+% U
+% $
+% denote the memory update operator. The post-update memory is
+% $
+% \mathcal{M}_t^{+} = U(\mathcal{M}_t, \Delta_t).
+% $
+% The role of $U$ is to reinforce templates and combination patterns that led to useful forecasts, while downweighting or pruning templates that were stale, noisy, or consistently unhelpful. This update rule makes the memory pool self-evolving across forecasting episodes.
+
+% \subsection{Training, Inference, and Overall Algorithm}
+
+% \paragraph{Training.}
+% The main learning signal comes from the decomposition-combination plan scorer. Let
+% $
+% z_t^{+}
+% $
+% denote a positive plan that is supported by later future work, and let
+% $
+% z_t^{-}
+% $
+% denote a negative plan that is unsupported or weakly supported. We train the scorer with a margin-based ranking loss
+% $
+% \mathcal{L}_{\mathrm{plan}}
+% =
+% \max\!\left(
+% 0,\,
+% m - s_\phi(z_t^{+} \mid X_t, \mathcal{R}_t) + s_\phi(z_t^{-} \mid X_t, \mathcal{R}_t)
+% \right),
+% $
+% where $m > 0$ is a margin hyperparameter. If desired, the template extractor can also be trained with an auxiliary extraction loss $\mathcal{L}_{\mathrm{ext}}$. The full objective is then
+% $
+% \mathcal{L}
+% =
+% \mathcal{L}_{\mathrm{plan}} + \alpha \mathcal{L}_{\mathrm{ext}},
+% $
+% where $\alpha \ge 0$ is a weighting coefficient. In our framework, $\mathcal{L}_{\mathrm{plan}}$ is the main objective, while $\mathcal{L}_{\mathrm{ext}}$ is optional and auxiliary.
+
+% \paragraph{Inference.}
+% At inference time, the method follows the same modular structure. It first extracts a template set $\mathcal{T}_t$ from the historical context $X_t$. It then merges $\mathcal{T}_t$ into the memory pool to obtain $\mathcal{M}_t$, retrieves a working set $\mathcal{R}_t$, scores candidate decomposition-combination plans, retains the top-$B$ plans, instantiates them into a candidate pool $\mathcal{C}_t$, and finally selects the forecast list $Y_t$. After later feedback becomes available, the memory pool is updated to $\mathcal{M}_t^{+}$.
+
+% \paragraph{Joint view.}
+% Taken together, the method works as follows. The first module builds a denoised template-level representation of the historical literature. The second module learns how to expand and combine retrieved templates into candidate future ideas. The third module maintains a memory pool that supports retrieval and evolves after delayed feedback. In this way, training learns how to split and combine templates, while memory update adapts the template pool online across forecasting episodes.
+
+% \paragraph{Overall algorithm.}
+% Algorithm~\ref{alg:rtf-sem} summarizes the full procedure.
+
+% \begin{algorithm}[t]
+% \caption{Research-Template Forecasting with Self-Evolving Memory}
+% \label{alg:rtf-sem}
+% \begin{algorithmic}[1]
+% \Require Historical context $X_t$, pre-update memory pool $\mathcal{M}_t^{-}$, forecast length $K$, plan budget $B$
+% \Ensure Forecast list $Y_t$, post-update memory pool $\mathcal{M}_t^{+}$
+
+% \State \textbf{// Module 1: denoise into research templates}
+% \State $\mathcal{T}_t \gets \Psi_\eta(X_t)$
+
+% \State \textbf{// Module 2: template expansion and combination}
+% \State $\mathcal{M}_t \gets \operatorname{Merge}(\mathcal{M}_t^{-}, \mathcal{T}_t)$
+% \State $\mathcal{R}_t \gets \operatorname{Retrieve}(X_t, \mathcal{M}_t)$
+% \State Construct candidate plans $\{z\}$ from $(X_t, \mathcal{R}_t)$
+% \State Score candidate plans using $s_\phi(z \mid X_t, \mathcal{R}_t)$
+% \State $\mathcal{Z}_t \gets \operatorname{TopB}(\{z\}, s_\phi)$
+% \State $\mathcal{C}_t \gets \{\Gamma(X_t, \mathcal{R}_t, z) : z \in \mathcal{Z}_t\}$
+% \State $Y_t \gets \operatorname{TopK}(\mathcal{C}_t, K)$
+
+% \State \textbf{// Module 3: self-evolving memory update}
+% \State Receive delayed feedback signal $\Delta_t$
+% \State $\mathcal{M}_t^{+} \gets U(\mathcal{M}_t, \Delta_t)$
+
+% \State \Return $Y_t$, $\mathcal{M}_t^{+}$
+% \end{algorithmic}
+% \end{algorithm}
+
+
+\section{Benchmarking for Idea Forecasting}
+
+To study research idea forecasting under a strict temporal protocol, we construct \textsc{LiveIdeaBench}, a benchmark built from the arXiv \texttt{cs.ML} stream. Rather than treating idea generation as open-ended brainstorming, \textsc{LiveIdeaBench} formulates it as a forecasting task: a model observes only papers available before a cutoff time and is evaluated against research ideas that are realized only after that cutoff. The benchmark is designed to provide broad topical coverage, scalable automatic evaluation, and strict prevention of temporal leakage.
+
+\paragraph{Data coverage.}
+\textsc{LiveIdeaBench} is constructed from the arXiv \texttt{cs.ML} stream, which provides a broad and continuously updated source of machine learning research. This domain covers a wide range of topics, including representation learning, optimization, generative modeling, reinforcement learning, multimodal learning, reasoning, agentic systems, safety, and evaluation. In total, the benchmark contains 62572 papers collected from 2024-01 to 2025-06. For each paper, we extract timestamped metadata and summarize its main contribution into a compact key point, which serves as the basic semantic unit for forecasting and evaluation. This design allows the benchmark to capture a large and evolving research community while keeping the representation of each paper concise and comparable across time.
+
+\paragraph{Leakage control.}
+To ensure strict temporal consistency, we split the benchmark by arXiv submission identifier and timestamp so that historical inputs and future targets never overlap in time. For each forecasting episode, the model only observes papers published up to the cutoff, while the target set contains only papers that appear strictly afterward. All preprocessing steps, retrieval corpora, summaries, and auxiliary metadata are constructed only from the historical side of the split. As a result, future papers are never visible during input construction, and benchmark performance reflects genuine forecasting ability rather than accidental temporal leakage. \paul{some papers are updated many times after their initial submission. will this be an issue?}
+
+\paragraph{Forecasting evaluation.}
+For each forecasting episode, the model outputs a ranked list of predicted ideas
+$
+\hat{Y} = (\hat y_1, \hat y_2, \dots, \hat y_K),
+$
+and the future window provides a set of realized target ideas
+$
+Y = (y_1, y_2, \dots, y_M).
+$
+For each pair $(\hat y_i, y_j)$, we compute a semantic matching score
+$
+s(\hat y_i, y_j) \in [0,1],
+$
+using either an embedding-based similarity model or an LLM-as-a-judge. The relevance of each predicted idea is defined by its best match to the future set,
+$
+r_i = \max_{1 \le j \le M} s(\hat y_i, y_j).
+$
+If $r_i$ exceeds a predefined threshold, then $\hat y_i$ is counted as a successful prediction. This gives an instance-level semantic matching measure between each predicted idea and the realized future ideas. To evaluate the ranked forecast as a whole, we treat $(r_1, r_2, \dots, r_K)$ as relevance scores and compute a ranking-based metric such as NDCG@K. In this way, the benchmark evaluates both whether predicted ideas are realized in the future and whether the model ranks stronger predictions higher. \paul{to benchmark against real future ideas, is it all future ideas? or only future ideas that are very impactful? ie many citations?}
+
+\section{Experimental Setup}
+
+We next describe the setup used in our experiments. Unless otherwise stated, all methods are evaluated under the same rolling temporal cutoffs and future-only validation protocol of \textsc{LiveIdeaBench}. We focus on three aspects: the generation backbone, the compared baselines, and the evaluation metrics.
+
+\paragraph{Backbone.}
+We instantiate all generation-based methods with the same backbone family, so that differences in performance are primarily attributable to forecasting strategy rather than unrelated changes in model capacity or prompting format. For each forecasting episode, the model only observes literature available before the cutoff time and outputs a ranked list of future ideas of length $K$. Unless otherwise stated, all generation-based methods use the same generation budget.
+
+\paragraph{Baselines.}
+We compare against several baseline families that test progressively stronger uses of historical signal: (1) \textbf{Keyword Trend}, which extrapolates salient keywords or phrases from the historical literature into future idea candidates and tests whether simple lexical continuation is sufficient for forecasting; (2) \textbf{Topic Trend}, which summarizes dominant historical topic trajectories and extends them forward, thereby testing whether coarse topic evolution alone explains future idea emergence; (3) \textbf{Direct Prompting}, which conditions directly on the historical literature context and asks the backbone model to generate future ideas in one step; (4) \textbf{Summary Prompting}, which first compresses the historical literature into a short summary and then forecasts future ideas from that summary, testing whether lightweight historical abstraction is sufficient; (5) \textbf{Retrieval-Augmented Prompting}, which augments the historical context with retrieved representative papers or summaries before generation, testing whether stronger grounding in the historical literature improves forecasting beyond direct prompting; and (6) \textbf{Memory-Augmented Prompting}, which equips the generator with an external memory of historical exemplars or reusable notes, but does not explicitly extract community prototypes or apply structured branching operators, testing whether generic memory augmentation alone explains the gains of more structured forecasting methods. We compare all of these baselines against our proposed \textbf{Community-Prototype Forecaster} \paul{use this name earlier and be consistent with naming your approach}.
+
+\paragraph{Evaluation metrics.}
+We evaluate each forecast list from two complementary perspectives: \emph{future alignment} and \emph{generation quality}. For \emph{future alignment}, we report four metrics: (1) \textbf{Hit@5}, which measures whether the top-5 forecast contains at least one idea that aligns with future work; (2) \textbf{Precision@5}, which measures the fraction of the top-5 forecasted ideas that are matched to future papers and therefore reflects how concentrated the forecast list is around ideas that later materialize; (3) \textbf{Recall@5}, which measures how much of the future paper pool is covered by the top-5 forecast and therefore captures set-level future coverage; and (4) \textbf{MRR}, which evaluates whether stronger matches appear earlier in the ranked forecast list.
+
+For \emph{generation quality}, we report two metrics \paul{how are these 2 metrics computed?}: (1) \textbf{Novelty}, which measures how distinct the generated ideas are from the historical literature available before the cutoff and therefore captures whether the forecaster goes beyond simple restatement of past work; and (2) \textbf{Diversity}, which measures how different the generated ideas are from one another within the same forecast list and therefore captures whether the model covers multiple plausible branches rather than producing near-duplicate ideas. Together, these metrics evaluate both whether a method can anticipate future work and whether it produces forecasts that are nontrivial and sufficiently varied. 
+
+\section{Experimental Results}
+
+We next ask two questions. First, does research idea forecasting admit meaningful predictive signal under strict temporal evaluation? Second, does our proposed structured forecaster improve over trend-based, prompting-based, and generic memory-based baselines? We answer both questions with the main benchmark results.
+
+\subsection{Idea Forecasting Achieves Meaningful Predictive Performance}
+
+\begin{table*}[t]
+\centering
+\small
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Method} & \textbf{Hit@5} & \textbf{P@5} & \textbf{R@5} & \textbf{MRR} & \textbf{Novelty} & \textbf{Diversity} \\
+\midrule
+Keyword Trend & 0.0036 & 0.0007 & 0.0007 & 0.0036 & 0.9413 & 0.1572  \\
+Topic Trend & 0.6521 & 0.1677 & 0.1572 & 0.6113 & 0.8976 & 0.9064  \\
+Direct Prompting & 0.6449 & 0.2479 & 0.2479 & 0.4502 & 0.8868 & 0.9145 \\
+Summary Prompting &  &  &  &  &  &  \\
+Retrieval-Augmented Prompting &  &  &  &  &  &  \\
+Memory-Augmented Prompting & 0.8027 & 0.3630 & 0.3630 & 0.6266 & 0.8889 & 0.9160  \\
+% Human Expert &  &  &  &  &  &  \\
+\midrule
+\textbf{Community-Prototype Forecaster (ours)} &  &  &  &  &  &  \\
+\bottomrule
+\end{tabular}
+\caption{Main results on \textsc{LiveIdeaBench}. Each method predicts a ranked set of future ideas using only pre-cutoff literature and is evaluated by future-alignment and generation-quality metrics.}
+\label{tab:main_results}
+\end{table*}
+
+\paragraph{Main result.}
+Table~\ref{tab:main_results} reports the main benchmark results on \textsc{LiveIdeaBench}. Across forecasting episodes, the compared methods achieve nontrivial performance under strict temporal cutoffs and future-only validation. This indicates that research idea forecasting is not a degenerate task: future idea emergence contains usable predictive signal.
+
+\paragraph{Trend baselines versus generation baselines.}
+A first pattern is the gap between simple trend-following methods and generation-based methods. In particular, \textsc{Keyword Trend} and \textsc{Topic Trend} test whether future ideas can be recovered from lexical continuation or coarse topic extrapolation alone. If these methods are consistently weaker than prompting-based baselines, the benchmark is capturing more than surface-level trend continuation.
+
+\paragraph{Interpretation.}
+Taken together, these results support the view that future research directions are partially predictable, but not in a trivial way. Stronger performance requires modeling higher-order structure in the historical literature rather than merely extending visible keywords or broad topics.
+
+\paragraph{Human reference point.}
+If a human baseline is included, its relative position provides a useful reference for how much headroom remains between automated forecasters and expert intuition. In that case, the comparison can clarify whether current forecasting systems are only weakly predictive or already competitive with human judgment on this benchmark.
+
+\subsection{Prototype Extraction and Structured Branching Improve Forecasting}
+
+\paul{pls add a lot of qualitative examples}
+
+\paragraph{Main comparison.}
+We next compare our method against stronger baselines that already exploit increasingly rich forms of historical context, including \textsc{Direct Prompting}, \textsc{Summary Prompting}, \textsc{Retrieval-Augmented Prompting}, and \textsc{Memory-Augmented Prompting}. The key question is whether structured forecasting provides gains beyond simply giving the model more historical evidence.
+
+\paragraph{Why the method helps.}
+Our proposed \textsc{Community-Prototype Forecaster} is built from three components: prototype extraction, branching, and ranking. Prototype extraction denoises the historical literature into a small set of persistent community trajectories. Branching operators then expand these trajectories into multiple plausible future directions, rather than forcing the model to produce a single continuation in one step. Finally, the ranking stage favors candidates that are both trajectory-consistent and sufficiently diverse.
+
+\paragraph{Result interpretation.}
+If the final results show that \textsc{Community-Prototype Forecaster} outperforms retrieval- and memory-based baselines, the gains support two conclusions. First, better forecasting does not come merely from adding more historical context, since generic retrieval and memory augmentation do not substitute for structured prototype extraction and branching. Second, forecasting benefits from separating persistent historical signal from future diversification: denoising the literature into community prototypes and then generating structured branches is more effective than direct ideation from raw papers alone.
+
+\paragraph{Metric-level view.}
+The expected gains should appear in both metric groups. Improvements on Hit@5, Precision@5, Recall@5, and MRR would indicate stronger alignment with future papers. Improvements on Novelty and Diversity would indicate that the method does not simply restate past work, but instead generates nontrivial and sufficiently varied forecasts. Viewed together, these metrics test whether the method improves both future alignment and forecast quality.
+
+\section{Discussion}
+% A few RQ. 
+
+% RQ1: Does LLMs already know some trend and it causes leaks?
+
+% RQ2: Can such a framework used for cross-domain research idea forecasting?
+
+% RQ3: How is those not hit forcasted idea? They are low-quality or just do not have existing literature to support?
+
+% RQ4: Is the ranking resutls or not?
+
+Our results suggest that research idea forecasting is a meaningful and nontrivial prediction problem under strict temporal evaluation. At the same time, several questions remain important for interpreting the benchmark and the current forecasting framework.
+
+\paragraph{Pretraining leakage and benchmark validity.}
+A natural concern is whether strong forecasting performance partly reflects memorized trends rather than genuine anticipation of future ideas. Our benchmark controls leakage at the protocol level by enforcing strict temporal cutoffs: each forecast only uses papers available before the cutoff, and evaluation is performed only on later papers. This rules out direct leakage from benchmark construction itself. However, it does not fully eliminate the possibility that a pretrained backbone has already absorbed signals about emerging directions from sources outside the benchmark. We therefore view the current setup as controlling benchmark-level leakage while leaving model-level contamination as an important question for future work.
+
+\paragraph{Cross-domain forecasting.}
+The current benchmark is built on arXiv \texttt{cs.ML}, which provides a high-volume and rapidly evolving testbed for temporally grounded evaluation. This makes the present study practical and well-scoped, but it also limits the current results to a single research community. At the framework level, the same idea-forecasting protocol could be extended to other domains. In practice, however, cross-domain forecasting is likely to be substantially harder because publication tempo, topic drift, and idea-paper matching may vary across fields. We therefore view cross-domain forecasting as a natural extension, but not a trivial one.
+
+\paragraph{Interpreting non-hit ideas.}
+A forecasted idea that is not validated by later papers should not automatically be interpreted as low-quality. A miss can arise because the idea is weak, but it can also arise because the idea is too early, too niche, or not well captured by the current matching backend. For this reason, a non-hit in \textsc{LiveIdeaBench} is best interpreted as lack of support within the observed future literature under the current evaluation protocol, rather than as a definitive judgment of scientific value. This distinction matters because forecasting future literature and evaluating intrinsic idea quality are related but different problems.
+
+\paragraph{What ranking results mean.}
+We report ranking-based metrics because idea forecasting is naturally a ranked-list problem: the forecaster outputs a prioritized set of possible future directions rather than a single deterministic prediction. In this setting, strong ranking performance means that future-supported ideas tend to appear near the top of the list. At the same time, a high MRR or Hit@K does not imply that the entire forecast list is correct, nor does it fully capture scientific value. Instead, these metrics should be interpreted as measuring prioritization quality under temporal grounding. They provide a useful but partial view of forecasting quality.
+
+Taken together, these points clarify both the promise and the current limits of research idea forecasting. The benchmark provides an objective and scalable way to test whether future scientific directions can be anticipated under strict temporal constraints. At the same time, important issues remain open, including pretraining leakage, cross-domain generalization, the interpretation of non-hit ideas, and the meaning of ranking-based success.
+\section{Ablation Study}
+% memory size, strategy prompting, backbone model, method hyper-parameter
+We next study which components of the proposed forecaster are responsible for the observed gains. In particular, we examine memory size, strategy prompting, backbone choice, and method hyper-parameters.
+
+\paragraph{Memory size.}
+We first vary the memory size to study how many strategy items are needed for effective forecasting. Increasing memory size improves performance at first, suggesting that a richer strategy pool provides broader coverage of historical research patterns. Beyond a certain point, however, the gains become smaller or plateau, indicating that excessively large memories may introduce redundancy and less focused retrieval.
+
+\paragraph{Strategy prompting.}
+We next remove or weaken the strategy-prompting component. Performance drops in this setting, suggesting that the benefit of memory does not come only from storing additional information, but also from exposing retrieved strategies to the backbone in an explicit and usable form. This supports strategy prompting as an important interface between memory and forecasting.
+
+\paragraph{Backbone model.}
+We also evaluate the framework with different backbone models. Stronger backbones generally achieve better absolute performance, but the relative benefit of strategy memory remains visible across models. This suggests that the proposed memory mechanism is complementary to backbone scale rather than specific to a single model family.
+
+\paragraph{Method hyper-parameters.}
+Finally, we analyze the sensitivity of the method to its main hyper-parameters, including retrieval budget, update rate, and memory-update thresholds. The method is generally stable within a reasonable range, although overly small retrieval budgets may underuse memory and overly aggressive updates may reduce stability. This suggests that the framework benefits from calibration but does not depend on fragile tuning.
+
+\paragraph{Summary.}
+Taken together, these ablations show that the gains of the proposed forecaster arise from the combined effect of memory, strategy prompting, and delayed memory updates, rather than from a single implementation detail.
+
+\section{Conclusion}
+
+In this paper, we formulate \emph{research idea forecasting} as a temporally grounded task and introduce \textsc{LiveIdeaBench}, a benchmark that evaluates whether forecasted ideas are later supported by future papers under strict time cutoffs. We further present an initial \emph{self-evolving strategy-memory forecaster}, which augments idea forecasting with reusable strategies extracted from historical data and updated through delayed validation.
+
+Our results suggest that research idea forecasting admits meaningful predictive signal under objective and scalable evaluation, and that explicit strategy memory provides a useful mechanism for improving forecasting performance beyond standard generation baselines. At the same time, the task remains challenging, leaving substantial room for better forecasting models, stronger validation backends, and broader benchmark coverage.
+
+We hope this work provides a useful benchmark for future study on temporally grounded research forecasting, and a first step toward moving automatic research from subjective ideation alone to objective evaluation of whether proposed ideas are later realized in the literature.
+
+
+\bibliographystyle{plainnat}
+\bibliography{colm2026_conference}
+
+\appendix 
+
+\section{Evaluation Metrics}
+
+\paragraph{Matched set.}
+For a forecast list $Y_{t_n}$ and future paper pool $\mathcal{P}_{(t_n,\,t_n+h]}$, let
+$
+\mathcal{M}_{t_n} \subseteq \{1,\dots,K\} \times \mathcal{P}_{(t_n,\,t_n+h]}
+$
+denote the final set of one-to-one matches returned by the matcher. Each pair
+$
+(k, p) \in \mathcal{M}_{t_n}
+$
+means that the $k$-th forecasted idea $y_{n,k}$ is validated by future paper $p$. Using this matched set, the benchmark computes both hit-based and ranking-based metrics.
+
+\paragraph{Hit-based metrics.}
+A forecast is successful at cutoff $K'$ if at least one of the top-$K'$ predicted ideas is matched to a future paper. Formally, define
+$
+\mathrm{Hit@}K'(t_n) =
+\mathbf{1}\!\left[
+\exists (k,p) \in \mathcal{M}_{t_n}
+\text{ such that } k \le K'
+\right],
+$
+where $\mathbf{1}[\cdot]$ is the indicator function. Averaging over all forecasting episodes yields
+$
+\mathrm{Hit@}K' =
+\frac{1}{N}\sum_{n=1}^{N} \mathrm{Hit@}K'(t_n).
+$
+This metric measures whether the model can place at least one validated future idea within its top-ranked predictions.
+
+\paragraph{Ranking-based metrics.}
+To measure where the first validated idea appears in the ranked list, we define the reciprocal rank for episode $n$ as
+$$
+\mathrm{RR}(t_n) =
+\begin{cases}
+\frac{1}{\min\{k : \exists (k,p)\in \mathcal{M}_{t_n}\}}, & \text{if } \mathcal{M}_{t_n} \neq \emptyset,\\[6pt]
+0, & \text{otherwise.}
+\end{cases}
+$$
+The mean reciprocal rank is then
+$
+\mathrm{MRR} = \frac{1}{N}\sum_{n=1}^{N}\mathrm{RR}(t_n).
+$
+MRR rewards models that rank validated ideas closer to the top of the forecast list.
+
+\paragraph{Precision and recall style metrics.}
+We also report precision-style and recall-style metrics over the top-$K'$ predictions. Let
+$
+m_{t_n}(K') = \left|\{(k,p)\in \mathcal{M}_{t_n} : k \le K'\}\right|
+$
+denote the number of matched predictions among the top-$K'$ forecasted ideas in episode $n$, and let
+$
+F_{t_n} = \left|\mathcal{P}_{(t_n,\,t_n+h]}\right|
+$
+denote the number of future papers in the corresponding validation pool. We define
+$
+\mathrm{Precision@}K'(t_n) = \frac{m_{t_n}(K')}{K'}
+$
+and
+$
+\mathrm{Recall@}K'(t_n) = \frac{m_{t_n}(K')}{F_{t_n}}.
+$
+Averaging these quantities across episodes yields $\mathrm{Precision@}K'$ and $\mathrm{Recall@}K'$. Precision@K measures how many top-ranked forecasts are validated, while Recall@K measures how much of the available future paper pool is covered by the forecast.
+
+
+\section{Implementation Notes}
+
+The repository exposes the following implementation details, which should be read as one current instantiation of the broader framework described in the main method section:
+\begin{itemize}
+    \item Backtest windows are constructed from explicit cutoff and future-end dates.
+    \item Prediction objects contain titles, rationales, approaches, scores, confidence values, and key terms.
+    \item Evaluation uses unique future matching, novelty, diversity, lead time, and duplicate-rate accounting.
+    \item The policy pipeline optimizes single-idea candidates and then constructs top-$K$ lists with diversity-aware selection at inference time.
+    \item GRPO training includes a validation-time alignment gate before optimization proceeds.
+\end{itemize}
+
+\section{Configuration Details}
+
+The default RL configuration used by the current repository instantiates a 24-month historical window, a 6-month future horizon, and a 3-month episode step size. The default selector configuration carries temperature and top-$p$ schedules plus context shuffling for policy inference, while the training path itself samples eight single-idea generations per prompt. The default reward weights emphasize future match (0.7) over novelty (0.05), specificity (0.1), and lead time (0.15). The current GRPO training configuration uses one epoch, low-rank adaptation, and a reward-alignment threshold before policy optimization is allowed to continue.
+
+The keyword-trend baseline reported in the main text uses a simpler setup: it scores keywords by recent frequency and trend gain over a short historical window, filters generic stop terms, and emits the top $K$ structured directions as forecast candidates. This baseline is intentionally weak in modeling capacity but strong in interpretability, which makes it a useful first point on the benchmark frontier.
+
+
+\end{document}

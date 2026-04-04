@@ -81,8 +81,22 @@ def train_with_trl(
     import torch
     from datasets import Dataset
     from peft import LoraConfig
-    from trl import GRPOConfig, GRPOTrainer
     from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    # Block vllm_ascend import (broken plugin) before TRL touches vLLM
+    import sys
+    if "vllm_ascend" not in sys.modules:
+        import types
+        _fake = types.ModuleType("vllm_ascend")
+        _fake.__path__ = []
+        sys.modules["vllm_ascend"] = _fake
+        sys.modules["vllm_ascend.distributed"] = types.ModuleType("vllm_ascend.distributed")
+        sys.modules["vllm_ascend.distributed.device_communicators"] = types.ModuleType("vllm_ascend.distributed.device_communicators")
+        _pyhccl = types.ModuleType("vllm_ascend.distributed.device_communicators.pyhccl")
+        _pyhccl.PyHcclCommunicator = None
+        sys.modules["vllm_ascend.distributed.device_communicators.pyhccl"] = _pyhccl
+
+    from trl import GRPOConfig, GRPOTrainer
 
     target_dir = Path(output_dir).resolve()
     target_dir.mkdir(parents=True, exist_ok=True)

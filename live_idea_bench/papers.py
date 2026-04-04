@@ -478,6 +478,10 @@ def _parse_and_filter(
         return None
     if end_idx is not None and idx > end_idx:
         return None
+    # Strip heavy fields not used by evidence retrieval or GRPO reward
+    paper.references = []
+    paper.citations = []
+    paper.metadata = {}
     return paper
 
 
