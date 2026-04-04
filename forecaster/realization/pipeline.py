@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from live_idea_bench.llm import create_client
 from live_idea_bench.models import PaperRecord
@@ -760,8 +763,10 @@ def build_grpo_prompt_rows(
     paper_lookup = _paper_lookup(papers)
     resolved_realization_config = realization_config or load_realization_config()
     rows: list[dict[str, Any]] = []
-    for episode in episodes:
+    for i, episode in enumerate(episodes):
         train_papers, future_papers = _materialize_episode(episode, paper_lookup)
+        logger.info("Episode %d/%d: %d train papers, %d future papers",
+                     i + 1, len(episodes), len(train_papers), len(future_papers))
         row = _build_episode_prompt_row(
             episode,
             train_papers,
@@ -859,9 +864,10 @@ def _shared_fingerprint(
     strict_mode: bool = False,
     hindsight_samples: list[HindsightSample] | None = None,
 ) -> str:
+    # model_name deliberately excluded — episodes and prompt rows are
+    # model-independent, so the cache can be shared across model runs.
     return build_config_fingerprint(
         {
-            "model_name": model_name,
             "split": split,
             "max_episodes": max_episodes,
             "episode_config": episode_config,
