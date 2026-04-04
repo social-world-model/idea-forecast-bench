@@ -134,7 +134,6 @@ def train_with_trl(
         gradient_accumulation_steps=config.gradient_accumulation_steps,
         learning_rate=config.learning_rate,
         num_generations=config.num_generations,
-        max_prompt_length=config.max_prompt_length,
         max_completion_length=config.max_completion_length,
         beta=config.kl_coef,
         logging_steps=config.logging_steps,
@@ -142,7 +141,6 @@ def train_with_trl(
         bf16=torch.cuda.is_available(),
         gradient_checkpointing=True,
         report_to="none",
-        use_vllm=config.use_vllm,
     )
 
     lora_config = LoraConfig(
