@@ -487,14 +487,51 @@ def _default_workers() -> int:
     return min(os.cpu_count() or 4, 32)
 
 
+def _discover_files_for_dir(args: tuple) -> List[Path]:
+    """Discover .md files in a single paper directory. Thread-safe."""
+    child_path, child_name = args
+    child = Path(child_path)
+    # Fast: try known structure {id}/auto/{id}.md first
+    direct = child / "auto" / f"{child_name}.md"
+    if direct.is_file():
+        return [direct]
+    # Fallback: rglob for non-standard layouts
+    return [p for p in child.rglob("*.md") if p.name.lower() != "readme.md"]
+
+
+def _cache_path_for(input_dir: Path, start_month: Optional[str], end_month: Optional[str]) -> Path:
+    """Return a deterministic pickle cache path for the given query."""
+    import hashlib
+    key = f"{Path(input_dir).resolve()}|{start_month}|{end_month}"
+    h = hashlib.sha256(key.encode()).hexdigest()[:16]
+    cache_dir = Path(input_dir) / ".paper_cache"
+    cache_dir.mkdir(exist_ok=True)
+    return cache_dir / f"papers_{h}.pkl"
+
+
 def load_papers_from_markdown(
     input_dir: Path,
     start_month: Optional[str] = None,
     end_month: Optional[str] = None,
     *,
     workers: Optional[int] = None,
+    use_cache: bool = True,
 ) -> List[PaperRecord]:
+    import os
+    import pickle
     from concurrent.futures import ThreadPoolExecutor
+
+    # --- Cache layer: load from pickle if available ---
+    cache_file = _cache_path_for(input_dir, start_month, end_month)
+    if use_cache and cache_file.is_file():
+        try:
+            with open(cache_file, "rb") as f:
+                cached = pickle.load(f)
+            if isinstance(cached, list) and cached:
+                print(f"[papers] Loaded {len(cached)} papers from cache ({cache_file.name})")
+                return cached
+        except Exception:
+            pass  # stale/corrupt cache — rebuild
 
     if workers is None:
         workers = _default_workers()
@@ -502,19 +539,38 @@ def load_papers_from_markdown(
     start_idx = month_to_index(start_month) if start_month else None
     end_idx = month_to_index(end_month) if end_month else None
 
-    # Fast path: if date range is given, pre-filter directories by arxiv ID prefix
-    # before doing any file I/O (avoids scanning millions of old papers).
+    # Fast path: single os.listdir + prefix set filter — avoids slow iterdir/glob
+    # on 239k-entry directories. Then parallel file discovery + parsing.
     if (start_idx is not None or end_idx is not None):
-        files: List[Path] = []
         input_dir = Path(input_dir)
-        for child in sorted(input_dir.iterdir()):
-            if child.is_dir() and _arxiv_dir_in_range(child.name, start_idx, end_idx):
-                files.extend(sorted(child.rglob("*.md")))
-            elif child.is_file() and child.suffix == ".md":
-                files.append(child)
+        s_idx = start_idx if start_idx is not None else 0
+        e_idx = end_idx if end_idx is not None else 9999
+        # Build YYMM prefix set for O(1) lookup
+        prefixes: set = set()
+        for idx in range(s_idx, e_idx + 1):
+            yy = (idx // 12) % 100
+            mm = (idx % 12) + 1
+            prefixes.add(f"{yy:02d}{mm:02d}")
+        # Single listdir (1-2s for 239k entries) + in-memory filter (~0.02s)
+        all_names = os.listdir(input_dir)
+        dir_args: List[tuple] = []
+        for name in all_names:
+            if len(name) >= 4 and name[:4] in prefixes:
+                dir_args.append((str(input_dir / name), name))
+        print(f"[papers] Found {len(dir_args)} dirs, discovering .md files ({workers} workers)...")
+        effective_disc = min(max(1, workers), len(dir_args)) if dir_args else 1
+        if effective_disc <= 1:
+            nested = [_discover_files_for_dir(a) for a in dir_args]
+        else:
+            with ThreadPoolExecutor(max_workers=effective_disc) as pool:
+                nested = list(pool.map(_discover_files_for_dir, dir_args))
+        files: List[Path] = []
+        for batch in nested:
+            files.extend(batch)
     else:
         files = find_markdown_files(input_dir)
 
+    print(f"[papers] Parsing {len(files)} files ({workers} workers)...")
     effective_workers = min(max(1, workers), len(files)) if files else 1
     if effective_workers <= 1:
         records = [_parse_and_filter(f, start_idx, end_idx) for f in files]
@@ -527,6 +583,16 @@ def load_papers_from_markdown(
 
     results = [r for r in records if r is not None]
     results.sort(key=lambda p: (date_to_ordinal(get_paper_published_date(p)), p.paper_id))
+
+    # --- Save to cache ---
+    if use_cache and results:
+        try:
+            with open(cache_file, "wb") as f:
+                pickle.dump(results, f, protocol=pickle.HIGHEST_PROTOCOL)
+            print(f"[papers] Cached {len(results)} papers to {cache_file.name}")
+        except Exception:
+            pass  # non-fatal
+
     return results
 
 
