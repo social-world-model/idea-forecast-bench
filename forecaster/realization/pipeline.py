@@ -763,19 +763,54 @@ def build_grpo_prompt_rows(
     paper_lookup = _paper_lookup(papers)
     resolved_realization_config = realization_config or load_realization_config()
     rows: list[dict[str, Any]] = []
+
+    # Index hindsight samples by future_paper_id for fast lookup
+    hs_by_paper: dict[str, list[HindsightSample]] = {}
+    for sample in (hindsight_samples or []):
+        hs_by_paper.setdefault(sample.future_paper_id, []).append(sample)
+
     for i, episode in enumerate(episodes):
         train_papers, future_papers = _materialize_episode(episode, paper_lookup)
-        logger.info("Episode %d/%d: %d train papers, %d future papers",
-                     i + 1, len(episodes), len(train_papers), len(future_papers))
-        row = _build_episode_prompt_row(
-            episode,
-            train_papers,
-            future_papers,
-            realization_config=resolved_realization_config,
-            hindsight_samples=hindsight_samples,
-        )
-        if row is not None:
-            rows.append(row)
+        future_ids = {p.paper_id for p in future_papers}
+
+        # Collect all hindsight samples whose future paper falls in this episode
+        episode_samples = [
+            s for pid in future_ids
+            for s in hs_by_paper.get(pid, [])
+        ]
+
+        if episode_samples:
+            # One training row per hindsight sample (each has a unique innovation z)
+            logger.info("Episode %d/%d: %d train papers, %d future papers, %d hindsight samples",
+                         i + 1, len(episodes), len(train_papers), len(future_papers), len(episode_samples))
+            for sample in episode_samples:
+                target = paper_lookup.get(sample.future_paper_id)
+                if target is None:
+                    continue
+                row = _build_episode_prompt_row(
+                    episode,
+                    train_papers,
+                    [target],
+                    realization_config=resolved_realization_config,
+                    hindsight_samples=[sample],
+                )
+                if row is not None:
+                    rows.append(row)
+        else:
+            # Fallback: single row from first future paper
+            logger.info("Episode %d/%d: %d train papers, %d future papers, 0 hindsight samples (fallback)",
+                         i + 1, len(episodes), len(train_papers), len(future_papers))
+            row = _build_episode_prompt_row(
+                episode,
+                train_papers,
+                future_papers,
+                realization_config=resolved_realization_config,
+                hindsight_samples=hindsight_samples,
+            )
+            if row is not None:
+                rows.append(row)
+
+    logger.info("Built %d GRPO prompt rows from %d episodes", len(rows), len(episodes))
     return rows
 
 
