@@ -20,6 +20,19 @@ from forecaster.realization.trainers.base import (
 from forecaster.realization.verl.dataset import build_verl_dataset_rows, write_verl_dataset
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _detect_gpu_count() -> int:
+    """Auto-detect available GPU count (veRL defaults to 8 which fails on smaller setups)."""
+    import os
+    try:
+        import torch
+        return max(1, torch.cuda.device_count())
+    except ImportError:
+        visible = os.environ.get("CUDA_VISIBLE_DEVICES", "")
+        return max(1, len(visible.split(","))) if visible else 1
+
+
 REWARD_FN_PATH = (Path(__file__).resolve().parent / "reward_fn.py").resolve()
 _ADV_ESTIMATOR_MAP = {
     "ppo": "gae",
@@ -119,12 +132,16 @@ def _build_overrides(
         "actor_rollout_ref.rollout.name": "vllm" if config.use_vllm else "hf",
         "actor_rollout_ref.rollout.temperature": 1.0,
         "actor_rollout_ref.rollout.gpu_memory_utilization": config.vllm_gpu_memory_utilization,
+        "actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu": config.per_device_batch_size,
+        "actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu": config.per_device_batch_size,
         "custom_reward_function.path": str(REWARD_FN_PATH),
         "custom_reward_function.name": "compute_score",
         "custom_reward_function.reward_kwargs.reward_config_path": reward_config_path,
         "custom_reward_function.reward_kwargs.realization_config_path": realization_config_path,
         "custom_reward_function.reward_kwargs.similarity_config_path": similarity_config_path,
         "custom_reward_function.reward_kwargs.model_name": model_name,
+        "trainer.n_gpus_per_node": _detect_gpu_count(),
+        "trainer.nnodes": 1,
         "trainer.project_name": "live-idea-bench",
         "trainer.experiment_name": f"{trainer_name}-{output_dir.name}",
         "trainer.default_local_dir": str((output_dir / "artifacts").resolve()),
@@ -155,10 +172,15 @@ def _build_overrides(
     return overrides
 
 
+_FORCE_ADD_PREFIXES = ("custom_reward_function.reward_kwargs.",)
+
+
 def _command_from_overrides(overrides: dict[str, Any]) -> list[str]:
     command = [sys.executable, "-m", "verl.trainer.main_ppo"]
     for key, value in overrides.items():
-        command.append(f"{key}={_hydra_value(value)}")
+        # Use ++ prefix for keys not in the Hydra schema (e.g. reward_kwargs)
+        prefix = "++" if any(key.startswith(p) for p in _FORCE_ADD_PREFIXES) else ""
+        command.append(f"{prefix}{key}={_hydra_value(value)}")
     return command
 
 
