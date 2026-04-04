@@ -160,15 +160,23 @@ def train_with_trl(
 
     logger.info("Loading model %s with LoRA (r=%d, alpha=%d)...", training_model_name, config.lora_r, config.lora_alpha)
 
-    # --- Train ---
-    # Force plain tokenizer (not Qwen3.5 VLM Processor which expects multimodal content)
-    from transformers import AutoTokenizer
+    # --- Load model + tokenizer explicitly ---
+    # Qwen3.5 config registers as ForConditionalGeneration (VLM) by default.
+    # Force AutoModelForCausalLM to get the text-only CausalLM head, avoiding
+    # the VLM's 3D position embedding code path that breaks on text-only input.
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    model = AutoModelForCausalLM.from_pretrained(
+        training_model_name,
+        torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
+        attn_implementation="sdpa",
+    )
     tokenizer = AutoTokenizer.from_pretrained(training_model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    # --- Train ---
     trainer = GRPOTrainer(
-        model=training_model_name,
+        model=model,
         reward_funcs=reward_fn,
         args=grpo_config,
         train_dataset=dataset,
