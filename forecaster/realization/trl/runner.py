@@ -161,12 +161,19 @@ def train_with_trl(
     logger.info("Loading model %s with LoRA (r=%d, alpha=%d)...", training_model_name, config.lora_r, config.lora_alpha)
 
     # --- Train ---
+    # Force plain tokenizer (not Qwen3.5 VLM Processor which expects multimodal content)
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained(training_model_name)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
     trainer = GRPOTrainer(
         model=training_model_name,
         reward_funcs=reward_fn,
         args=grpo_config,
         train_dataset=dataset,
         peft_config=lora_config,
+        processing_class=tokenizer,
     )
 
     logger.info("Starting GRPO training with TRL (%d examples, %d epochs)...", len(dataset), config.num_train_epochs)
