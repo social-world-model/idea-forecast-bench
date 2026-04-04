@@ -49,9 +49,6 @@ from forecaster.realization.trainers import (
     RLOOTrainerRunner,
     TrainerPreparedArtifacts,
     create_trainer_runner,
-    train_grpo_with_verl,
-    train_ppo_with_verl,
-    train_rloo_with_verl,
 )
 
 _LAZY = {
@@ -122,9 +119,6 @@ __all__ = [
     "RLOOTrainerRunner",
     "TrainerPreparedArtifacts",
     "create_trainer_runner",
-    "train_grpo_with_verl",
-    "train_ppo_with_verl",
-    "train_rloo_with_verl",
     # lazy (backtest dependency via episodes.py)
     "CandidateListSample",
     "EpisodeCandidateLists",

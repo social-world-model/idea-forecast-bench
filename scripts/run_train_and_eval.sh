@@ -66,25 +66,28 @@ else
     --skip-alignment-check
 fi
 
-# Resolve the actual checkpoint path from veRL artifacts
+# Resolve the actual checkpoint path (supports both TRL and veRL layouts)
 REAL_CKPT=$(python3 -c "
 from pathlib import Path
-import json, glob
+import glob
 
 grpo_dir = Path('${GRPO_DIR}/grpo')
-# veRL saves checkpoints under artifacts/default/global_step_*/actor/
+
+# TRL: checkpoints/final_checkpoint/
+trl_ckpt = grpo_dir / 'checkpoints' / 'final_checkpoint'
+if trl_ckpt.exists():
+    print(str(trl_ckpt)); exit()
+
+# veRL: artifacts/default/global_step_*/actor/
 pattern = str(grpo_dir / 'artifacts' / 'default' / 'global_step_*' / 'actor')
 candidates = sorted(glob.glob(pattern))
 if candidates:
-    print(candidates[-1])  # latest step
-elif (grpo_dir / 'artifacts').exists():
-    # fallback: find any adapter_config.json
-    for p in grpo_dir.rglob('adapter_config.json'):
-        print(str(p.parent)); break
-    else:
-        print(str(grpo_dir))
-else:
-    print(str(grpo_dir))
+    print(candidates[-1]); exit()
+
+# Fallback: find any adapter_config.json
+for p in grpo_dir.rglob('adapter_config.json'):
+    print(str(p.parent)); exit()
+print(str(grpo_dir))
 ")
 echo "Realization checkpoint: ${REAL_CKPT}"
 
