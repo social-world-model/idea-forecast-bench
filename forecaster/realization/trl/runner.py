@@ -127,13 +127,18 @@ def train_with_trl(
     dataset = Dataset.from_list(ds_records)
 
     # --- Configure training ---
+    # per_device_train_batch_size must be divisible by num_generations in TRL 1.0
+    num_gen = config.num_generations
+    batch_size = max(num_gen, config.per_device_batch_size)
+    batch_size = (batch_size // num_gen) * num_gen  # round down to nearest multiple
+
     grpo_config = GRPOConfig(
         output_dir=str(target_dir / "checkpoints"),
         num_train_epochs=config.num_train_epochs,
-        per_device_train_batch_size=config.per_device_batch_size,
+        per_device_train_batch_size=batch_size,
         gradient_accumulation_steps=config.gradient_accumulation_steps,
         learning_rate=config.learning_rate,
-        num_generations=config.num_generations,
+        num_generations=num_gen,
         max_completion_length=config.max_completion_length,
         beta=config.kl_coef,
         logging_steps=config.logging_steps,
