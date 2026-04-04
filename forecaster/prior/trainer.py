@@ -1,4 +1,5 @@
 """SFT trainer for the innovation prior using HuggingFace Trainer + LoRA."""
+
 from __future__ import annotations
 
 import json
@@ -6,7 +7,10 @@ import logging
 from pathlib import Path
 
 from forecaster.config import SFTTrainConfig
-from forecaster.prior.prompting import load_prior_prompt_config, render_prior_chat_transcript
+from forecaster.prior.prompting import (
+    load_prior_prompt_config,
+    render_prior_chat_transcript,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +20,9 @@ def _load_system_prompt() -> str:
 
 
 def _normalize_tokenizer_output(value: object, key: str) -> list[int]:
-    if not isinstance(value, dict):
+    from collections.abc import Mapping
+
+    if not isinstance(value, Mapping):
         raise TypeError("Tokenizer output must be a mapping.")
     payload = value.get(key)
     if payload is None:
@@ -31,7 +37,9 @@ def _normalize_tokenizer_output(value: object, key: str) -> list[int]:
     raise TypeError(f"Tokenizer output[{key!r}] must be a list or list[list].")
 
 
-def _build_target_only_labels(input_ids: list[int], prompt_token_count: int) -> list[int]:
+def _build_target_only_labels(
+    input_ids: list[int], prompt_token_count: int
+) -> list[int]:
     masked_prefix = min(len(input_ids), max(0, prompt_token_count))
     return ([-100] * masked_prefix) + input_ids[masked_prefix:]
 
@@ -85,6 +93,7 @@ def _build_hf_dataset(
     max_seq_length: int,
 ) -> object:
     import datasets as ds
+
     rows = [
         _tokenize_training_sample(
             system_prompt=system_prompt,
@@ -123,7 +132,13 @@ def train_prior(
     """
     try:
         import torch
-        from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments, Trainer
+        from transformers import (
+            AutoTokenizer,
+            AutoModelForCausalLM,
+            TrainingArguments,
+            Trainer,
+            DataCollatorForSeq2Seq,
+        )
         from peft import get_peft_model, LoraConfig, TaskType
     except ImportError as exc:
         raise ImportError(
@@ -132,6 +147,7 @@ def train_prior(
         ) from exc
 
     from forecaster.realization.model_zoo import resolve_small_model
+
     model_spec = resolve_small_model(config.model_alias)
 
     save_dir = str(output_dir) if output_dir is not None else config.output_dir
@@ -153,6 +169,7 @@ def train_prior(
         r=config.lora_r,
         lora_alpha=config.lora_alpha,
         lora_dropout=config.lora_dropout,
+        target_modules="all-linear",
         task_type=TaskType.CAUSAL_LM,
         bias="none",
     )
@@ -160,7 +177,9 @@ def train_prior(
     model.print_trainable_parameters()
 
     system_prompt = _load_system_prompt()
-    dataset = _build_hf_dataset(sft_samples, system_prompt, tokenizer, config.max_seq_length)
+    dataset = _build_hf_dataset(
+        sft_samples, system_prompt, tokenizer, config.max_seq_length
+    )
 
     training_args = TrainingArguments(
         output_dir=save_dir,
@@ -176,11 +195,18 @@ def train_prior(
         fp16=torch.cuda.is_available(),
     )
 
+    data_collator = DataCollatorForSeq2Seq(
+        tokenizer=tokenizer,
+        model=model,
+        padding=True,
+        label_pad_token_id=-100,
+    )
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=dataset,
-        tokenizer=tokenizer,
+        data_collator=data_collator,
+        processing_class=tokenizer,
     )
     trainer.train()
 
