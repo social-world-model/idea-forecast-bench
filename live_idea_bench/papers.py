@@ -462,11 +462,43 @@ def _arxiv_dir_in_range(name: str, start_idx: Optional[int], end_idx: Optional[i
     return True
 
 
+def _parse_and_filter(
+    file_path: Path,
+    start_idx: Optional[int],
+    end_idx: Optional[int],
+) -> Optional[PaperRecord]:
+    """Parse a single markdown file and apply month filter. Thread-safe."""
+    if file_path.name.lower() == "readme.md":
+        return None
+    paper = parse_markdown_paper(file_path)
+    if not paper:
+        return None
+    idx = month_to_index(paper.month)
+    if start_idx is not None and idx < start_idx:
+        return None
+    if end_idx is not None and idx > end_idx:
+        return None
+    return paper
+
+
+def _default_workers() -> int:
+    """Use all available CPU cores, capped at 32 to avoid fd exhaustion."""
+    import os
+    return min(os.cpu_count() or 4, 32)
+
+
 def load_papers_from_markdown(
     input_dir: Path,
     start_month: Optional[str] = None,
     end_month: Optional[str] = None,
+    *,
+    workers: Optional[int] = None,
 ) -> List[PaperRecord]:
+    from concurrent.futures import ThreadPoolExecutor
+
+    if workers is None:
+        workers = _default_workers()
+
     start_idx = month_to_index(start_month) if start_month else None
     end_idx = month_to_index(end_month) if end_month else None
 
@@ -483,24 +515,19 @@ def load_papers_from_markdown(
     else:
         files = find_markdown_files(input_dir)
 
-    records: List[PaperRecord] = []
+    effective_workers = min(max(1, workers), len(files)) if files else 1
+    if effective_workers <= 1:
+        records = [_parse_and_filter(f, start_idx, end_idx) for f in files]
+    else:
+        with ThreadPoolExecutor(max_workers=effective_workers) as pool:
+            records = list(pool.map(
+                lambda f: _parse_and_filter(f, start_idx, end_idx),
+                files,
+            ))
 
-    for file_path in files:
-        if file_path.name.lower() == "readme.md":
-            continue
-        paper = parse_markdown_paper(file_path)
-        if not paper:
-            continue
-
-        month_idx = month_to_index(paper.month)
-        if start_idx is not None and month_idx < start_idx:
-            continue
-        if end_idx is not None and month_idx > end_idx:
-            continue
-        records.append(paper)
-
-    records.sort(key=lambda p: (date_to_ordinal(get_paper_published_date(p)), p.paper_id))
-    return records
+    results = [r for r in records if r is not None]
+    results.sort(key=lambda p: (date_to_ordinal(get_paper_published_date(p)), p.paper_id))
+    return results
 
 
 def get_paper_published_date(paper: PaperRecord) -> str:
