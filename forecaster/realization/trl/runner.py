@@ -157,12 +157,17 @@ def train_with_trl(
     logger.info("Loading model %s with LoRA (r=%d, alpha=%d)...", training_model_name, config.lora_r, config.lora_alpha)
 
     # --- Train ---
+    model_init_kwargs = {
+        "attn_implementation": "sdpa",
+        "use_cache": False,
+    }
     trainer = GRPOTrainer(
         model=training_model_name,
         reward_funcs=reward_fn,
         args=grpo_config,
         train_dataset=dataset,
         peft_config=lora_config,
+        model_init_kwargs=model_init_kwargs,
     )
 
     logger.info("Starting GRPO training with TRL (%d examples, %d epochs)...", len(dataset), config.num_train_epochs)
