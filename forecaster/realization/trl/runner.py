@@ -81,7 +81,6 @@ def train_with_trl(
     import torch
     from datasets import Dataset
     from peft import LoraConfig
-    from transformers import AutoModelForCausalLM, AutoTokenizer
     from trl import GRPOConfig, GRPOTrainer
 
     target_dir = Path(output_dir).resolve()
@@ -156,26 +155,13 @@ def train_with_trl(
 
     logger.info("Loading model %s with LoRA (r=%d, alpha=%d)...", training_model_name, config.lora_r, config.lora_alpha)
 
-    # Load model explicitly to control kwargs (TRL 0.15 passes use_cache
-    # to from_pretrained which conflicts with transformers 5.x)
-    model = AutoModelForCausalLM.from_pretrained(
-        training_model_name,
-        attn_implementation="sdpa",
-        torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
-        device_map="auto",
-    )
-    tokenizer = AutoTokenizer.from_pretrained(training_model_name)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
     # --- Train ---
     trainer = GRPOTrainer(
-        model=model,
+        model=training_model_name,
         reward_funcs=reward_fn,
         args=grpo_config,
         train_dataset=dataset,
         peft_config=lora_config,
-        processing_class=tokenizer,
     )
 
     logger.info("Starting GRPO training with TRL (%d examples, %d epochs)...", len(dataset), config.num_train_epochs)
