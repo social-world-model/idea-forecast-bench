@@ -45,18 +45,18 @@ def _auto_batch_size(num_generations: int, max_completion_length: int, model_nam
     reserved_mb = min(15_000, free_mb * 0.50)
     available_for_batch_mb = max(0, free_mb - reserved_mb)
 
-    # Memory per sample includes KV cache, activations, AND the lm_head logits
-    # spike (batch × seq_len × vocab_size × 2 bytes). For Qwen with 151k vocab
-    # and 1024 tokens: 1024 * 151k * 2 = ~300MB per sample at peak.
-    # Use ~400MB per sample as a safe estimate including all overheads.
-    mb_per_sample = max(200, max_completion_length * 0.4)
+    # Memory per sample includes KV cache, activations, lm_head logits AND
+    # backward gradients. For Qwen with 151k vocab, backward through lm_head
+    # allocates batch × seq × vocab × 4 bytes (fp32 grads). With 1024 tokens:
+    # ~600MB per sample for forward+backward. Use 800MB as safe margin.
+    mb_per_sample = max(400, max_completion_length * 0.8)
 
     max_samples = int(available_for_batch_mb / mb_per_sample)
 
     # Must be a multiple of num_generations
     batch_size = (max_samples // num_generations) * num_generations
     batch_size = max(batch_size, num_generations)  # at least one group
-    batch_size = min(batch_size, num_generations * 4)  # cap at 4 groups
+    batch_size = min(batch_size, num_generations * 2)  # cap at 2 groups
 
     print(f"[auto_batch] GPU free={free_mb:.0f}MB, reserved={reserved_mb:.0f}MB, "
           f"available={available_for_batch_mb:.0f}MB, {mb_per_sample:.0f}MB/sample → batch_size={batch_size}")
