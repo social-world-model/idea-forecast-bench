@@ -176,6 +176,11 @@ def _serialize_episode_prompt_row(
     system_prompt: str,
     user_prompt: str,
 ) -> dict[str, Any]:
+    # Only serialize evidence papers (top-5) and target future paper into the
+    # prompt row — NOT the full train/future sets (50k+ papers each, causing
+    # 31GB+ prompts.jsonl and OOM). The reward function uses evidence_papers
+    # for the dense reward (evidence accuracy, operator adherence, coherence)
+    # and the target paper for future matching.
     return {
         "episode": asdict(episode),
         "prompt_mode": "z_conditioned_realization",
@@ -186,8 +191,8 @@ def _serialize_episode_prompt_row(
         "cutoff_date": episode.cutoff_date,
         "future_end_month": episode.future_end_month,
         "future_end_date": episode.future_end_date,
-        "train_papers": _serialize_papers(train_papers),
-        "future_papers": _serialize_papers(future_papers),
+        "train_papers": _serialize_papers(evidence_papers),
+        "future_papers": _serialize_papers([target_future_paper]),
         "target_future_paper": asdict(target_future_paper),
         "target_future_paper_id": target_future_paper.paper_id,
         "innovation": innovation_to_dict(innovation),
