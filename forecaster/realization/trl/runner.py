@@ -25,6 +25,44 @@ from forecaster.realization.verl.dataset import build_verl_dataset_rows
 logger = logging.getLogger(__name__)
 
 
+def _auto_batch_size(num_generations: int, max_completion_length: int) -> int:
+    """Pick the largest batch size that fits in GPU memory.
+
+    Estimates memory per sample from completion length and model size,
+    then fills available GPU memory to ~70% (leaving room for activations
+    and optimizer states).
+    """
+    import torch
+
+    if not torch.cuda.is_available():
+        return num_generations
+
+    free_mb = torch.cuda.mem_get_info()[0] / 1024 / 1024
+    total_mb = torch.cuda.get_device_properties(0).total_memory / 1024 / 1024
+
+    # Heuristic: ~2MB per token position per sample in bf16 with LoRA + grad ckpt.
+    # A 2B model with 1024 completion tokens needs ~20MB per concurrent sample
+    # for KV cache + activations. Conservative estimate to avoid OOM.
+    mb_per_sample = max(15, max_completion_length * 0.02)
+
+    # Use at most 70% of free memory (rest for model weights, optimizer, overhead)
+    usable_mb = free_mb * 0.70
+    max_samples = int(usable_mb / mb_per_sample)
+
+    # Must be a multiple of num_generations
+    batch_size = (max_samples // num_generations) * num_generations
+    batch_size = max(batch_size, num_generations)  # at least one group
+
+    # Cap at a reasonable maximum to avoid diminishing returns
+    batch_size = min(batch_size, num_generations * 8)
+
+    logger.info(
+        "GPU free=%.0fMB, total=%.0fMB, est %.0fMB/sample, auto batch_size=%d",
+        free_mb, total_mb, mb_per_sample, batch_size,
+    )
+    return batch_size
+
+
 def prepare_trl_artifacts(
     common_context: PreparedRLContext,
     *,
@@ -129,10 +167,9 @@ def train_with_trl(
     dataset = Dataset.from_list(ds_records)
 
     # --- Configure training ---
-    # per_device_train_batch_size must be divisible by num_generations in TRL 1.0
     num_gen = config.num_generations
-    batch_size = max(num_gen, config.per_device_batch_size)
-    batch_size = (batch_size // num_gen) * num_gen  # round down to nearest multiple
+    batch_size = _auto_batch_size(num_gen, config.max_completion_length)
+    logger.info("Auto-selected batch_size=%d (num_generations=%d)", batch_size, num_gen)
 
     grpo_config = GRPOConfig(
         output_dir=str(target_dir / "checkpoints"),
