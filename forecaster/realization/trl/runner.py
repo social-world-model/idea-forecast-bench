@@ -45,18 +45,17 @@ def _auto_batch_size(num_generations: int, max_completion_length: int, model_nam
     reserved_mb = min(15_000, free_mb * 0.50)
     available_for_batch_mb = max(0, free_mb - reserved_mb)
 
-    # Memory per sample includes KV cache, activations, lm_head logits AND
-    # backward gradients. For Qwen with 151k vocab, backward through lm_head
-    # allocates batch × seq × vocab × 4 bytes (fp32 grads). With 1024 tokens:
-    # ~600MB per sample for forward+backward. Use 800MB as safe margin.
-    mb_per_sample = max(400, max_completion_length * 0.8)
+    # With gradient checkpointing + expandable_segments, peak memory per sample
+    # is dominated by generation (KV cache) not backward. Estimate ~150MB/sample
+    # for generation + ~100MB for training overhead = ~250MB total.
+    mb_per_sample = max(150, max_completion_length * 0.25)
 
     max_samples = int(available_for_batch_mb / mb_per_sample)
 
     # Must be a multiple of num_generations
     batch_size = (max_samples // num_generations) * num_generations
     batch_size = max(batch_size, num_generations)  # at least one group
-    batch_size = min(batch_size, num_generations * 2)  # cap at 2 groups
+    batch_size = min(batch_size, num_generations * 4)  # cap at 4 groups
 
     print(f"[auto_batch] GPU free={free_mb:.0f}MB, reserved={reserved_mb:.0f}MB, "
           f"available={available_for_batch_mb:.0f}MB, {mb_per_sample:.0f}MB/sample → batch_size={batch_size}")
@@ -171,11 +170,14 @@ def train_with_trl(
     batch_size = _auto_batch_size(num_gen, config.max_completion_length)
     logger.info("Auto-selected batch_size=%d (num_generations=%d)", batch_size, num_gen)
 
+    # With larger batch sizes, drop gradient accumulation to minimize steps
+    grad_accum = max(1, config.gradient_accumulation_steps // (batch_size // num_gen))
+
     grpo_config = GRPOConfig(
         output_dir=str(target_dir / "checkpoints"),
         num_train_epochs=config.num_train_epochs,
         per_device_train_batch_size=batch_size,
-        gradient_accumulation_steps=config.gradient_accumulation_steps,
+        gradient_accumulation_steps=grad_accum,
         learning_rate=config.learning_rate,
         num_generations=num_gen,
         max_completion_length=config.max_completion_length,
@@ -184,6 +186,7 @@ def train_with_trl(
         save_strategy="epoch",
         bf16=torch.cuda.is_available(),
         gradient_checkpointing=True,
+        torch_compile=True,
         report_to="none",
     )
 
