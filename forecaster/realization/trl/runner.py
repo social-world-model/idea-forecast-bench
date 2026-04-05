@@ -187,9 +187,6 @@ def train_with_trl(
         bf16=torch.cuda.is_available(),
         gradient_checkpointing=True,
         report_to="none",
-        # vLLM for fast generation (PagedAttention + continuous batching)
-        use_vllm=True,
-        vllm_gpu_memory_utilization=0.5,
     )
 
     lora_config = LoraConfig(
