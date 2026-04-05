@@ -25,12 +25,11 @@ from forecaster.realization.verl.dataset import build_verl_dataset_rows
 logger = logging.getLogger(__name__)
 
 
-def _auto_batch_size(num_generations: int, max_completion_length: int) -> int:
+def _auto_batch_size(num_generations: int, max_completion_length: int, model_name: str = "") -> int:
     """Pick the largest batch size that fits in GPU memory.
 
-    Estimates memory per sample from completion length and model size,
-    then fills available GPU memory to ~70% (leaving room for activations
-    and optimizer states).
+    Called BEFORE model loading. Reserves memory for model weights + optimizer
+    then fills the rest with generation batches.
     """
     import torch
 
@@ -40,26 +39,24 @@ def _auto_batch_size(num_generations: int, max_completion_length: int) -> int:
     free_mb = torch.cuda.mem_get_info()[0] / 1024 / 1024
     total_mb = torch.cuda.get_device_properties(0).total_memory / 1024 / 1024
 
-    # Heuristic: ~2MB per token position per sample in bf16 with LoRA + grad ckpt.
-    # A 2B model with 1024 completion tokens needs ~20MB per concurrent sample
-    # for KV cache + activations. Conservative estimate to avoid OOM.
-    mb_per_sample = max(15, max_completion_length * 0.02)
+    # Reserve memory for model weights + ref copy + optimizer + gradients.
+    # For a 2B param model in bf16: ~4GB model + ~4GB ref + ~4GB opt = ~12GB.
+    # Use 15GB as a safe default; scale with free memory for larger models.
+    reserved_mb = min(15_000, free_mb * 0.50)
+    available_for_batch_mb = max(0, free_mb - reserved_mb)
 
-    # Use at most 70% of free memory (rest for model weights, optimizer, overhead)
-    usable_mb = free_mb * 0.70
-    max_samples = int(usable_mb / mb_per_sample)
+    # ~20-30MB per concurrent sample (KV cache + activations for 1024 tokens in bf16)
+    mb_per_sample = max(20, max_completion_length * 0.025)
+
+    max_samples = int(available_for_batch_mb / mb_per_sample)
 
     # Must be a multiple of num_generations
     batch_size = (max_samples // num_generations) * num_generations
     batch_size = max(batch_size, num_generations)  # at least one group
+    batch_size = min(batch_size, num_generations * 8)  # cap at 8 groups
 
-    # Cap at a reasonable maximum to avoid diminishing returns
-    batch_size = min(batch_size, num_generations * 8)
-
-    logger.info(
-        "GPU free=%.0fMB, total=%.0fMB, est %.0fMB/sample, auto batch_size=%d",
-        free_mb, total_mb, mb_per_sample, batch_size,
-    )
+    print(f"[auto_batch] GPU free={free_mb:.0f}MB, reserved={reserved_mb:.0f}MB, "
+          f"available={available_for_batch_mb:.0f}MB, {mb_per_sample:.0f}MB/sample → batch_size={batch_size}")
     return batch_size
 
 
