@@ -28,7 +28,48 @@ _SMALL_MODEL_SPECS = (
         min_transformers_version="4.37.0",
         notes="Legacy Qwen2.5 baseline; prefer Qwen3.5 models for new work.",
     ),
-    # ----- Qwen 3.5 -----
+    # ----- Qwen 3 (text-only, compatible with vLLM) -----
+    SmallModelSpec(
+        alias="qwen3-0.6b",
+        model_id="Qwen/Qwen3-0.6B",
+        family="qwen3",
+        params_billions=0.6,
+        variant="base",
+        license_name="apache-2.0",
+        min_transformers_version="4.51.0",
+        notes="Smallest Qwen3; fast iteration and vLLM-compatible.",
+    ),
+    SmallModelSpec(
+        alias="qwen3-1.7b",
+        model_id="Qwen/Qwen3-1.7B",
+        family="qwen3",
+        params_billions=1.7,
+        variant="base",
+        license_name="apache-2.0",
+        min_transformers_version="4.51.0",
+        notes="Good balance of speed and quality; vLLM-compatible.",
+    ),
+    SmallModelSpec(
+        alias="qwen3-4b",
+        model_id="Qwen/Qwen3-4B",
+        family="qwen3",
+        params_billions=4.0,
+        variant="base",
+        license_name="apache-2.0",
+        min_transformers_version="4.51.0",
+        notes="Strong text model; vLLM-compatible.",
+    ),
+    SmallModelSpec(
+        alias="qwen3-8b",
+        model_id="Qwen/Qwen3-8B",
+        family="qwen3",
+        params_billions=8.0,
+        variant="base",
+        license_name="apache-2.0",
+        min_transformers_version="4.51.0",
+        notes="Largest Qwen3 dense model; vLLM-compatible.",
+    ),
+    # ----- Qwen 3.5 (VLM, requires transformers >=5.x, no vLLM) -----
     SmallModelSpec(
         alias="qwen3.5-0.8b",
         model_id="Qwen/Qwen3.5-0.8B",
@@ -105,13 +146,9 @@ _SMALL_MODEL_SPECS = (
 
 
 _MODEL_ALIAS_REDIRECTS = {
-    # Old Qwen3 aliases → closest Qwen3.5 equivalents
-    "qwen3-1.7b": "qwen3.5-2b",
-    "qwen3-4b": "qwen3.5-4b",
-    "qwen3-4b-base": "qwen3.5-4b-base",
-    "qwen3-4b-instruct": "qwen3.5-4b",
-    "qwen3-4b-instruct-2507": "qwen3.5-4b",
-    "qwen3-8b": "qwen3.5-9b",
+    "qwen3-4b-base": "qwen3-4b",
+    "qwen3-4b-instruct": "qwen3-4b",
+    "qwen3-4b-instruct-2507": "qwen3-4b",
     "qwen3-8b-base": "qwen3.5-9b-base",
     "qwen3-8b-instruct": "qwen3.5-9b",
     # Old Qwen2.5 aliases

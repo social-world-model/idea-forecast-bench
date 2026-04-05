@@ -25,6 +25,16 @@ from forecaster.realization.verl.dataset import build_verl_dataset_rows
 logger = logging.getLogger(__name__)
 
 
+def _vllm_available() -> bool:
+    """Check if vLLM is installed and compatible with TRL."""
+    try:
+        import vllm  # noqa: F401
+        from trl.import_utils import is_vllm_available
+        return is_vllm_available()
+    except Exception:
+        return False
+
+
 def _auto_batch_size(num_generations: int, max_completion_length: int, model_name: str = "") -> int:
     """Pick the largest batch size that fits in GPU memory.
 
@@ -187,6 +197,9 @@ def train_with_trl(
         bf16=torch.cuda.is_available(),
         gradient_checkpointing=True,
         report_to="none",
+        # vLLM for fast generation (requires Qwen3 + transformers <5 env)
+        use_vllm=_vllm_available(),
+        vllm_gpu_memory_utilization=0.5,
     )
 
     lora_config = LoraConfig(
@@ -208,7 +221,6 @@ def train_with_trl(
         training_model_name,
         torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
         attn_implementation="sdpa",
-        device_map="auto",
     )
     tokenizer = AutoTokenizer.from_pretrained(training_model_name)
     if tokenizer.pad_token is None:
