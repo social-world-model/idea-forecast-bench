@@ -4,7 +4,7 @@ num_train_epochs: 1
 learning_rate: 0.000002
 num_generations: 8
 max_prompt_length: 4096
-max_completion_length: 1024
+max_completion_length: 512
 kl_coef: 0.001
 use_vllm: false
 vllm_gpu_memory_utilization: 0.4
