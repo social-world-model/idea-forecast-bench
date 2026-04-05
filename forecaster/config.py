@@ -65,7 +65,7 @@ class RealizationConfig:
     context_top_k: int = 5
     evidence_top_k: int = 5
     evidence_similarity_threshold: float = 0.3
-    proposal_max_tokens: int = 1024
+    proposal_max_tokens: int = 256
     allow_artifact_fallback_to_llm: bool = False
     evidence_accuracy_weight: float = 0.2
     operator_adherence_weight: float = 0.3
@@ -75,7 +75,7 @@ class RealizationConfig:
 @dataclass
 class InferenceConfig:
     runtime_mode: str = "strict_eval"
-    num_candidates: int = 16
+    num_candidates: int = 8
     prior_weight: float = 0.4
     realization_weight: float = 0.6
     top_k: int = 5

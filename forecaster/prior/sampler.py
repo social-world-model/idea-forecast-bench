@@ -18,17 +18,29 @@ def _load_prompt_config() -> dict[str, str]:
 
 
 def _parse_innovation(text: str) -> Innovation | None:
-    """Parse a JSON string into an Innovation. Returns None on failure."""
+    """Parse a JSON string into an Innovation. Returns None on failure.
+
+    Handles models that output extra text after the JSON object by trying
+    progressively shorter substrings ending at each '}'.
+    """
     text = text.strip()
     start = text.find("{")
-    end = text.rfind("}") + 1
-    if start == -1 or end == 0:
+    if start == -1:
         return None
-    try:
-        return innovation_from_json(text[start:end])
-    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-        logger.warning("Failed to parse innovation from text: %s — %s", text[:80], exc)
-        return None
+    # Try each closing brace from left to right (first complete object)
+    search_from = start
+    while True:
+        end = text.find("}", search_from)
+        if end == -1:
+            break
+        candidate = text[start:end + 1]
+        try:
+            return innovation_from_json(candidate)
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+            search_from = end + 1
+            continue
+    logger.warning("Failed to parse innovation from text: %s", text[:80])
+    return None
 
 
 def _build_prompt(system_prompt: str, input_template: str, memory_store: Any) -> str:
@@ -56,8 +68,17 @@ def _detect_base_model(model_path_str: str) -> str | None:
     return None
 
 
+_PRIOR_MODEL_CACHE: dict[str, tuple[Any, Any]] = {}
+
+
 def _load_prior_model_and_tokenizer(model_path_str: str) -> tuple[Any, Any]:
-    """Load the prior checkpoint and tokenizer, including LoRA adapter checkpoints."""
+    """Load the prior checkpoint and tokenizer, including LoRA adapter checkpoints.
+
+    Caches loaded models to avoid reloading per sliding window.
+    """
+    if model_path_str in _PRIOR_MODEL_CACHE:
+        return _PRIOR_MODEL_CACHE[model_path_str]
+
     try:
         import torch
         from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -80,12 +101,16 @@ def _load_prior_model_and_tokenizer(model_path_str: str) -> tuple[Any, Any]:
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
+        import torch as _torch
         base_model = AutoModelForCausalLM.from_pretrained(
             base_model_id,
-            torch_dtype="auto",
+            torch_dtype=_torch.bfloat16 if _torch.cuda.is_available() else _torch.float32,
             device_map="auto",
         )
-        model = peft.PeftModel.from_pretrained(base_model, model_path_str)
+        model = peft.PeftModel.from_pretrained(
+            base_model, model_path_str,
+            torch_dtype=base_model.dtype,
+        )
     else:
         logger.info("No adapter_config.json found; loading model directly from %r.", model_path_str)
         tokenizer = AutoTokenizer.from_pretrained(model_path_str)
@@ -99,6 +124,7 @@ def _load_prior_model_and_tokenizer(model_path_str: str) -> tuple[Any, Any]:
         )
 
     model.eval()
+    _PRIOR_MODEL_CACHE[model_path_str] = (model, tokenizer)
     return model, tokenizer
 
 
@@ -199,7 +225,7 @@ def sample_innovations(
     encoded = {k: v.to(model.device) for k, v in encoded.items()}
 
     generation_kwargs: dict[str, Any] = {
-        "max_new_tokens": 256,
+        "max_new_tokens": 512,
         "pad_token_id": tokenizer.pad_token_id,
         "do_sample": True,
         "temperature": config.prior_temperature,

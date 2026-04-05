@@ -26,7 +26,15 @@ logger = logging.getLogger(__name__)
 
 
 def _vllm_available() -> bool:
-    """Check if vLLM is installed and compatible with TRL."""
+    """Check if vLLM is installed and compatible with TRL.
+
+    Set DISABLE_VLLM=1 to force HF generate (useful when vLLM's worker
+    process would exceed the cgroup RAM limit).
+    """
+    import os
+    if os.environ.get("DISABLE_VLLM", "").strip() in ("1", "true", "yes"):
+        logger.info("vLLM disabled via DISABLE_VLLM env var")
+        return False
     try:
         import vllm  # noqa: F401
         from trl.import_utils import is_vllm_available
@@ -36,11 +44,13 @@ def _vllm_available() -> bool:
 
 
 def _auto_batch_size(num_generations: int, max_completion_length: int, model_name: str = "") -> int:
-    """Pick the largest batch size that fits in GPU memory.
+    """Pick a safe batch size based on actual free GPU memory.
 
-    Called BEFORE model loading. Reserves memory for model weights + optimizer
-    then fills the rest with generation batches.
+    Conservative: on shared GPUs other users may occupy most VRAM. The backward
+    pass needs ~2-3x the forward memory, so we budget generously. Better to run
+    slower than OOM.
     """
+    import os
     import torch
 
     if not torch.cuda.is_available():
@@ -49,26 +59,31 @@ def _auto_batch_size(num_generations: int, max_completion_length: int, model_nam
     free_mb = torch.cuda.mem_get_info()[0] / 1024 / 1024
     total_mb = torch.cuda.get_device_properties(0).total_memory / 1024 / 1024
 
-    # Reserve memory for model weights + ref copy + optimizer + gradients.
-    # For a 2B param model in bf16: ~4GB model + ~4GB ref + ~4GB opt = ~12GB.
-    # Use 15GB as a safe default; scale with free memory for larger models.
-    reserved_mb = min(15_000, free_mb * 0.50)
+    # Reserve 60% of free memory for model weights + ref model + optimizer +
+    # backward pass activation spikes. Previous 50% was too aggressive — the
+    # backward pass on lm_head alone can spike batch×seq×vocab×4 bytes.
+    reserved_mb = free_mb * 0.65
     available_for_batch_mb = max(0, free_mb - reserved_mb)
 
-    # With gradient checkpointing + expandable_segments, peak memory per sample
-    # is dominated by generation (KV cache) not backward. Estimate ~150MB/sample
-    # for generation + ~100MB for training overhead = ~250MB total.
-    mb_per_sample = max(150, max_completion_length * 0.25)
+    # ~500MB per sample accounts for generation KV cache + backward pass peak.
+    # Previous 250MB estimate caused OOM on shared GPUs.
+    mb_per_sample = max(500, max_completion_length * 0.5)
 
     max_samples = int(available_for_batch_mb / mb_per_sample)
 
     # Must be a multiple of num_generations
     batch_size = (max_samples // num_generations) * num_generations
     batch_size = max(batch_size, num_generations)  # at least one group
-    batch_size = min(batch_size, num_generations * 4)  # cap at 4 groups
+    batch_size = min(batch_size, num_generations * 2)  # cap at 2 groups (not 4)
 
-    print(f"[auto_batch] GPU free={free_mb:.0f}MB, reserved={reserved_mb:.0f}MB, "
-          f"available={available_for_batch_mb:.0f}MB, {mb_per_sample:.0f}MB/sample → batch_size={batch_size}")
+    # Allow override via env var
+    override = os.environ.get("BATCH_SIZE", "").strip()
+    if override:
+        batch_size = int(override)
+
+    print(f"[auto_batch] GPU free={free_mb:.0f}MB (total={total_mb:.0f}MB), "
+          f"reserved={reserved_mb:.0f}MB, available={available_for_batch_mb:.0f}MB, "
+          f"{mb_per_sample:.0f}MB/sample → batch_size={batch_size}")
     return batch_size
 
 

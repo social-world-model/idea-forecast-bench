@@ -46,6 +46,14 @@ def main() -> int:
     parser.add_argument("--recent-months", type=int, default=3)
     parser.add_argument("--min-keyword-freq", type=int, default=1)
     parser.add_argument("--model-name", type=str, help="Model override for predictor_llm.")
+    parser.add_argument("--prior-checkpoint", type=str, default=None,
+                        help="Path to trained prior SFT checkpoint (forecaster strategy).")
+    parser.add_argument("--realization-checkpoint", type=str, default=None,
+                        help="Path to trained GRPO realization checkpoint (forecaster strategy).")
+    parser.add_argument("--memory-path", type=str, default=None,
+                        help="Path to memory snapshot (forecaster strategy).")
+    parser.add_argument("--policy-manifest-path", type=str, default=None,
+                        help="Path to policy manifest JSON (policy_rl strategy).")
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--horizon-months", type=int, default=3)
     parser.add_argument("--min-train-papers", type=int, default=2)
@@ -162,6 +170,10 @@ def main() -> int:
         model_name=args.model_name,
         similarity_config=args.similarity_config,
         reasoning_effort=args.reasoning_effort,
+        prior_checkpoint=args.prior_checkpoint,
+        realization_checkpoint=args.realization_checkpoint,
+        memory_path=args.memory_path,
+        policy_manifest_path=args.policy_manifest_path,
     )
     bt_config = BacktestConfig(
         top_k=args.top_k,

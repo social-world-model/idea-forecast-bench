@@ -131,31 +131,40 @@ print(str(grpo_dir))
 ")
 echo "Realization checkpoint: ${REAL_CKPT}"
 
-# ---- Phase 4: Joint Inference (§3.4, Algorithm 1) ----
-echo ""; echo "===== Phase 4: Joint Inference ====="
-python3 examples/run_joint_inference.py \
-  --prior-checkpoint "$PRIOR_CKPT" \
-  --realization-checkpoint "$REAL_CKPT" \
-  --hindsight "$HINDSIGHT" \
-  --papers-dir "$PAPERS" \
-  --output-dir "${OUT}/inference" \
-  --start-month "$START_MONTH" \
-  --end-month "$END_MONTH"
+# ---- Phase 4: Evaluation via Benchmark Backtest ----
+# Uses run_domain_backtest.py (same as all other strategies) for fair comparison.
+# Eval range: 2024-10 to 2025-03 (3 windows with horizon=3).
 
-# ---- Evaluation with Voyage ----
-echo ""; echo "===== Evaluation ====="
-if [ -n "${VOYAGE_API_KEY:-}" ]; then
-  python3 examples/reeval_voyage.py \
-    --input-json "${OUT}/inference/predictions_for_eval.json" \
-    --papers-dir "$PAPERS" \
-    --output "${OUT}/inference/eval_voyage.json" \
-    --threshold "$THRESHOLD"
-  echo ""; echo "Results: ${OUT}/inference/eval_voyage.json"
+EVAL_START="${EVAL_START:-2024-10}"
+EVAL_END="${EVAL_END:-2025-03}"
+
+TRAINED_EVAL="${OUT}/eval_trained.json"
+if [ -f "$TRAINED_EVAL" ]; then
+  echo ""; echo "===== Phase 4: Eval (trained) — SKIPPED (exists) ====="
 else
-  echo "VOYAGE_API_KEY not set. Run manually:"
-  echo "  VOYAGE_API_KEY=... python3 examples/reeval_voyage.py \\"
-  echo "    --input-json ${OUT}/inference/predictions_for_eval.json \\"
-  echo "    --papers-dir $PAPERS --output ${OUT}/inference/eval_voyage.json"
+  echo ""; echo "===== Phase 4: Eval (trained forecaster) ====="
+  python3 examples/run_domain_backtest.py \
+    --strategy forecaster \
+    --model-name "$BASE_MODEL_ID" \
+    --prior-checkpoint "$PRIOR_CKPT" \
+    --realization-checkpoint "$REAL_CKPT" \
+    --input-dir "$PAPERS" \
+    --start-month "$EVAL_START" --end-month "$EVAL_END" \
+    --top-k 5 --horizon-months 3 \
+    --similarity-engine heuristic --workers 1 \
+    --output "$TRAINED_EVAL"
+fi
+
+echo ""
+echo "===== Results ====="
+if [ -f "$TRAINED_EVAL" ]; then
+  python3 -c "
+import json
+data = json.load(open('${TRAINED_EVAL}'))
+s = data.get('aggregate_summary', {})
+print(f'  hit@k={s.get(\"avg_hit_at_k\", 0):.4f}  mrr={s.get(\"avg_mrr\", 0):.4f}  '
+      f'novelty={s.get(\"avg_novelty\", 0):.4f}  diversity={s.get(\"avg_diversity\", 0):.4f}')
+"
 fi
 
 echo ""; echo "===== Done ====="

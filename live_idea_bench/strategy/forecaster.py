@@ -202,112 +202,71 @@ class ForecasterStrategy(IdeaStrategy):
         if not train_papers:
             return []
 
+        from forecaster.inference.algorithm import run_joint_inference
+        from forecaster.prior.sampler import sample_innovations
+
         inference_config = self._load_inference_config()
         realization_config = self._load_realization_config()
-        runtime_contract = self._resolve_runtime_mode(inference_config)
-        strict_mode = runtime_contract["effective_mode"] == "strict_eval"
-        fallback_events = list(runtime_contract["fallback_events"])
-        memory_store = self._load_memory_store(
-            train_papers=train_papers,
-            cutoff_month=cutoff_month,
-            strict_mode=strict_mode,
-        )
 
-        # Build innovations: strict mode requires the prior artifact; demo mode keeps heuristic fallback.
-        innovations: list
-        if strict_mode:
-            from forecaster.prior.sampler import sample_innovations
-
-            sampled = sample_innovations(
-                str(self.prior_checkpoint),
-                memory_store,
-                inference_config,
-            )
-            if not sampled:
-                raise RuntimeError("Strict forecaster serving requires non-empty prior samples.")
-            innovations = sampled
-        elif self.prior_checkpoint and Path(self.prior_checkpoint).exists():
-            try:
-                from forecaster.prior.sampler import sample_innovations
-
-                sampled = sample_innovations(
-                    self.prior_checkpoint, memory_store, inference_config
-                )
-                if sampled:
-                    innovations = sampled
-                    logger.info(
-                        "Using %d innovations from trained prior.", len(innovations)
-                    )
-                else:
-                    logger.warning(
-                        "Prior sampling empty; falling back to heuristic demo path."
-                    )
-                    innovations = self._build_heuristic_innovations(
-                        train_papers, top_k=top_k
-                    )
-                    fallback_events.append(
-                        {
-                            "phase": "prior",
-                            "fallback": "heuristic_innovations",
-                            "reason": "empty_prior_samples",
-                        }
-                    )
-            except Exception as exc:
-                logger.warning(
-                    "Prior sampling failed (%s); falling back to heuristic demo path.", exc
-                )
-                innovations = self._build_heuristic_innovations(
-                    train_papers, top_k=top_k
-                )
-                fallback_events.append(
-                    {
-                        "phase": "prior",
-                        "fallback": "heuristic_innovations",
-                        "reason": "prior_sampling_error",
-                        "detail": str(exc),
-                    }
-                )
-        else:
-            innovations = self._build_heuristic_innovations(train_papers, top_k=top_k)
-            fallback_events.append(
-                {
-                    "phase": "prior",
-                    "fallback": "heuristic_innovations",
-                    "reason": "missing_prior_checkpoint",
-                }
-            )
-
-        if not innovations:
-            return []
-
-        # Resolve LLM client
-        resolved_model = self.model_name or "gpt-4o"
-        try:
-            from live_idea_bench.llm import create_client
-
-            llm_client, model = create_client(resolved_model)
-        except Exception as exc:
-            logger.warning(
-                "Could not create LLM client for model %r: %s. Returning empty list.",
-                resolved_model,
-                exc,
-            )
-            return []
-
-        realization_model_path = (
-            self.realization_checkpoint
-            if self.realization_checkpoint and Path(self.realization_checkpoint).exists()
-            else None
-        )
-        if strict_mode and not realization_model_path:
-            raise RuntimeError("Strict forecaster serving requires a realization artifact.")
         prior_model_path = (
             self.prior_checkpoint
             if self.prior_checkpoint and Path(self.prior_checkpoint).exists()
             else None
         )
-        if strict_mode and not prior_model_path:
-            raise RuntimeError("Strict forecaster serving requires a prior artifact.")
+        realization_model_path = (
+            self.realization_checkpoint
+            if self.realization_checkpoint and Path(self.realization_checkpoint).exists()
+            else None
+        )
+
+        # Force flexible runtime when using local models — strict_eval requires
+        # memory snapshots we don't have; demo mode falls back to LLM API.
+        # Flexible: use trained models when available, heuristic scoring otherwise.
+        inference_config = dataclasses.replace(inference_config, runtime_mode="flexible")
+
+        fallback_events: list[dict[str, Any]] = []
+        memory_store = self._load_memory_store(
+            train_papers=train_papers,
+            cutoff_month=cutoff_month,
+            strict_mode=False,
+        )
+
+        # Sample innovations from trained prior, or fall back to heuristic
+        innovations: list
+        if prior_model_path:
+            try:
+                sampled = sample_innovations(
+                    prior_model_path, memory_store, inference_config
+                )
+                innovations = sampled if sampled else []
+                if innovations:
+                    logger.info("Sampled %d innovations from trained prior.", len(innovations))
+                else:
+                    logger.warning("Prior sampling returned empty; using heuristic.")
+            except Exception as exc:
+                logger.warning("Prior sampling failed (%s); using heuristic.", exc)
+                innovations = []
+
+            if not innovations:
+                innovations = self._build_heuristic_innovations(train_papers, top_k=top_k)
+                fallback_events.append({"phase": "prior", "fallback": "heuristic_innovations"})
+        else:
+            innovations = self._build_heuristic_innovations(train_papers, top_k=top_k)
+            fallback_events.append({"phase": "prior", "fallback": "heuristic_innovations", "reason": "no_checkpoint"})
+
+        if not innovations:
+            logger.warning("No innovations generated for cutoff=%s", cutoff_month)
+            return []
+
+        # LLM client only needed when no local realization model
+        llm_client, model = None, ""
+        if not realization_model_path:
+            try:
+                from live_idea_bench.llm import create_client
+                llm_client, model = create_client(self.model_name or "gpt-4o")
+            except Exception as exc:
+                logger.warning("No LLM client and no realization model: %s", exc)
+                return []
 
         proposals = run_joint_inference(
             innovations=innovations,
@@ -339,10 +298,8 @@ class ForecasterStrategy(IdeaStrategy):
                     "joint_score": proposal.joint_score,
                     "strategy": self.name,
                     "runtime_surface": self.runtime_surface,
-                    "requested_runtime_mode": runtime_contract["requested_mode"],
-                    "effective_runtime_mode": runtime_contract["effective_mode"],
+                    "effective_runtime_mode": "flexible",
                     "fallback_events": list(fallback_events),
-                    "paper_faithful_entrypoint": "forecaster.orchestrator.ForecasterPipeline",
                 },
             )
             predictions.append(prediction)

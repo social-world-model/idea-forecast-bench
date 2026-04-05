@@ -160,6 +160,72 @@ def _generate_proposal_local(
     return tokenizer.decode(output_ids, skip_special_tokens=True).strip()
 
 
+def generate_proposals_batch(
+    innovations_and_evidence: list[tuple["Innovation", list[PaperRecord]]],
+    realization_model_path: str,
+    config: RealizationConfig,
+    *,
+    context_papers: list[PaperRecord] | None = None,
+    base_model_name: str | None = None,
+    temperature: float | None = None,
+    top_p: float | None = None,
+) -> list[str]:
+    """Batch-generate proposals for multiple innovations in a single model.generate() call.
+
+    Much faster than calling generate_local_proposal() N times sequentially.
+    """
+    if not innovations_and_evidence:
+        return []
+
+    from forecaster.realization.local_generation import _load_local_model, _apply_chat_template, _require_local_generation_stack
+    from forecaster.prior.sampler import _detect_base_model
+
+    resolved_base = base_model_name
+    adapter_path = Path(realization_model_path) / "adapter_config.json"
+    if resolved_base is None and adapter_path.exists():
+        resolved_base = _detect_base_model(realization_model_path)
+
+    model, tokenizer = _load_local_model(realization_model_path, base_model_name=resolved_base)
+    deps = _require_local_generation_stack()
+    torch = deps["torch"]
+
+    # Build all prompts
+    prompt_data = _load_prompt()
+    chat_prompts = []
+    for innovation, evidence in innovations_and_evidence:
+        user_msg = _build_user_message(prompt_data, innovation, evidence, context_papers=context_papers, config=config)
+        full_prompt = f"{prompt_data['system_prompt']}\n\n{user_msg}".strip()
+        chat_prompts.append(_apply_chat_template(tokenizer, full_prompt, None))
+
+    # Tokenize with left-padding for batch generation
+    tokenizer.padding_side = "left"
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token_id = tokenizer.eos_token_id
+    encoded = tokenizer(chat_prompts, return_tensors="pt", padding=True, truncation=True)
+    encoded = {k: v.to(model.device) for k, v in encoded.items()}
+    input_lengths = (encoded["attention_mask"]).sum(dim=1).tolist()
+
+    with torch.no_grad():
+        generated = model.generate(
+            **encoded,
+            max_new_tokens=config.proposal_max_tokens,
+            pad_token_id=tokenizer.pad_token_id,
+            do_sample=True,
+            temperature=0.7 if temperature is None else temperature,
+            top_p=0.9 if top_p is None else top_p,
+        )
+
+    # Decode each sequence, stripping the input portion
+    results = []
+    for i, seq in enumerate(generated):
+        output_ids = seq[encoded["input_ids"].shape[1]:].tolist()
+        text = tokenizer.decode(output_ids, skip_special_tokens=True).strip()
+        results.append(text)
+
+    tokenizer.padding_side = "right"  # restore default
+    return results
+
+
 def generate_local_proposal(
     innovation: Innovation,
     evidence: list[PaperRecord],

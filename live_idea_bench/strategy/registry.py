@@ -52,9 +52,9 @@ def create_strategy(
 
         return ForecasterStrategy(
             model_name=model_name,
-            memory_path=str(legacy_params.get("memory_path") or ""),
-            prior_checkpoint=str(legacy_params.get("prior_checkpoint") or ""),
-            realization_checkpoint=str(legacy_params.get("realization_checkpoint") or ""),
+            memory_path=str(legacy_params["memory_path"]) if legacy_params.get("memory_path") else None,
+            prior_checkpoint=str(legacy_params["prior_checkpoint"]) if legacy_params.get("prior_checkpoint") else None,
+            realization_checkpoint=str(legacy_params["realization_checkpoint"]) if legacy_params.get("realization_checkpoint") else None,
             inference_config_path=str(legacy_params.get("inference_config_path") or "inference.yaml"),
             realization_config_path=str(legacy_params.get("realization_config_path") or "realization.yaml"),
         )
