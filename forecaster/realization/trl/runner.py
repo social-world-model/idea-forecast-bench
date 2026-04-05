@@ -186,8 +186,10 @@ def train_with_trl(
         save_strategy="epoch",
         bf16=torch.cuda.is_available(),
         gradient_checkpointing=True,
-        torch_compile=True,
         report_to="none",
+        # vLLM for fast generation (10-50x faster than HF generate)
+        use_vllm=True,
+        vllm_gpu_memory_utilization=0.6,
     )
 
     lora_config = LoraConfig(
