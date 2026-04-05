@@ -3,17 +3,21 @@
 #  Full paper pipeline: Prior SFT → Realization GRPO → Joint Inference → Eval
 #  Skips SFT/GRPO if checkpoints already exist.
 #
-#  Usage:
-#    conda activate live-idea-bench
-#    VOYAGE_API_KEY=your-key bash scripts/run_train_and_eval.sh
+#  Works with both Qwen3 (vLLM-enabled) and Qwen3.5 (transformers 5.x) envs.
+#  Auto-detects model family and validates the current conda environment.
 #
-#  Override:
-#    MODEL=qwen3.5-4b START_MONTH=2023-01 END_MONTH=2025-03 bash scripts/run_train_and_eval.sh
+#  Usage:
+#    MODEL=qwen3-1.7b bash scripts/run_train_and_eval.sh
+#    MODEL=qwen3.5-2b bash scripts/run_train_and_eval.sh
+#
+#  Environment setup (run once per model family):
+#    bash scripts/setup_rl_env.sh qwen3      # vLLM + transformers <5
+#    bash scripts/setup_rl_env.sh qwen3.5    # transformers >=5, no vLLM
 # ==========================================================================
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-MODEL="${MODEL:-qwen3.5-2b}"
+MODEL="${MODEL:-qwen3-1.7b}"
 HINDSIGHT="${HINDSIGHT:-output/hindsight_samples.jsonl}"
 PAPERS="${PAPERS:-data/csml_v2/raw_markdown}"
 OUT="output/forecaster_${MODEL}"
@@ -21,14 +25,49 @@ THRESHOLD="${THRESHOLD:-0.80}"
 START_MONTH="${START_MONTH:-2023-01}"
 END_MONTH="${END_MONTH:-2025-03}"
 
-BASE_MODEL_ID=$(python3 -c "
+# ---- Auto-detect model family and validate environment ----
+ENV_INFO=$(python3 -c "
 from forecaster.realization.model_zoo import resolve_small_model
-print(resolve_small_model('${MODEL}').model_id)
+import transformers
+spec = resolve_small_model('${MODEL}')
+tv = int(transformers.__version__.split('.')[0])
+family = spec.family
+vllm_ok = False
+try:
+    import vllm
+    from trl.import_utils import is_vllm_available
+    vllm_ok = is_vllm_available()
+except Exception:
+    pass
+
+# Validate env compatibility
+if family == 'qwen3.5' and tv < 5:
+    print(f'ERROR: {spec.alias} requires transformers >=5.x (found {transformers.__version__})')
+    print(f'  Fix: conda activate <qwen35-env> or bash scripts/setup_rl_env.sh qwen3.5')
+    import sys; sys.exit(1)
+if family == 'qwen3' and tv >= 5:
+    print(f'WARNING: {spec.alias} works best with transformers <5 + vLLM (found {transformers.__version__})')
+    print(f'  Hint: conda activate <qwen3-env> or bash scripts/setup_rl_env.sh qwen3')
+
+print(f'{spec.model_id}|{family}|tv={transformers.__version__}|vllm={vllm_ok}')
 ")
+
+# Check if validation failed
+if echo "$ENV_INFO" | grep -q "^ERROR:"; then
+  echo "$ENV_INFO" >&2; exit 1
+fi
+if echo "$ENV_INFO" | grep -q "^WARNING:"; then
+  echo "$ENV_INFO" >&2
+fi
+
+BASE_MODEL_ID=$(echo "$ENV_INFO" | tail -1 | cut -d'|' -f1)
+MODEL_FAMILY=$(echo "$ENV_INFO" | tail -1 | cut -d'|' -f2)
+ENV_DETAIL=$(echo "$ENV_INFO" | tail -1 | cut -d'|' -f3-)
 
 echo "=============================================="
 echo " Full Pipeline (Paper §3.2–3.4)"
 echo "  Model:  ${MODEL} (${BASE_MODEL_ID})"
+echo "  Family: ${MODEL_FAMILY} | ${ENV_DETAIL}"
 echo "  Output: ${OUT}"
 echo "  Dates:  ${START_MONTH} ~ ${END_MONTH}"
 echo "=============================================="

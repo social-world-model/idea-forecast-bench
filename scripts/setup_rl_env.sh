@@ -1,174 +1,53 @@
 #!/usr/bin/env bash
 # ==========================================================================
-#  Set up the Python environment for running the full training pipeline:
-#    bash scripts/run_train_and_eval.sh
+#  Environment setup dispatcher for the training pipeline.
 #
-#  Prerequisites:
-#    - Linux with NVIDIA GPU (CUDA 12.x)
-#    - Python 3.11
-#    - conda or venv environment activated
+#  Qwen3 and Qwen3.5 require different dependency stacks:
+#
+#    Qwen3  (text-only):  vLLM 0.17.1 + transformers <5  → FAST generation
+#    Qwen3.5 (VLM arch):  transformers >=5.x, no vLLM    → slower generation
 #
 #  Usage:
-#    conda create -n live-idea-bench python=3.11 -y
-#    conda activate live-idea-bench
-#    bash scripts/setup_rl_env.sh
+#    # Option A: specify model family directly
+#    bash scripts/setup_rl_env.sh qwen3      # or: qwen3.5
+#
+#    # Option B: auto-detect from MODEL env var
+#    MODEL=qwen3-1.7b bash scripts/setup_rl_env.sh
+#
+#    # Option C: use the specific scripts directly
+#    bash scripts/setup_rl_env_qwen3.sh
+#    bash scripts/setup_rl_env_qwen3_5.sh
+#
+#  Recommended conda environments:
+#    conda create -n live-idea-bench-qwen3  python=3.11 -y   # for Qwen3
+#    conda create -n live-idea-bench-qwen35 python=3.11 -y   # for Qwen3.5
 # ==========================================================================
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PYTHON_BIN="${PYTHON_BIN:-python3}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# ---- Pre-flight checks ----
-
-echo "=== Pre-flight checks ==="
-
-if [[ "$(uname -s)" != "Linux" ]]; then
-  echo "ERROR: Linux required." >&2; exit 1
-fi
-echo "  OS: Linux OK"
-
-PY_VERSION=$("$PYTHON_BIN" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-PY_MAJOR=$("$PYTHON_BIN" -c "import sys; print(sys.version_info.major)")
-PY_MINOR=$("$PYTHON_BIN" -c "import sys; print(sys.version_info.minor)")
-if [ "$PY_MAJOR" -ne 3 ] || [ "$PY_MINOR" -lt 10 ] || [ "$PY_MINOR" -gt 11 ]; then
-  echo "ERROR: Python 3.10 or 3.11 required (found $PY_VERSION)." >&2; exit 1
-fi
-echo "  Python: $PY_VERSION OK"
-
-if ! command -v nvidia-smi &>/dev/null; then
-  echo "ERROR: nvidia-smi not found. NVIDIA driver required." >&2; exit 1
-fi
-GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)
-GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1)
-DRIVER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1)
-echo "  GPU: ${GPU_NAME} (${GPU_MEM} MiB), Driver: ${DRIVER}"
-
-echo ""
-
-# ---- Install dependencies ----
-# Order matters: vLLM pins torch version, everything else builds on top.
-
-echo "=== Installing dependencies ==="
-"$PYTHON_BIN" -m pip install --upgrade pip
-
-# 1. vLLM first (pins torch + transformers to compatible versions)
-echo "  [1/5] Installing vLLM (pins torch + transformers)..."
-"$PYTHON_BIN" -m pip install "vllm==0.17.1"
-
-# 2. TRL GRPO training stack
-echo "  [2/5] Installing TRL training stack..."
-"$PYTHON_BIN" -m pip install \
-  "trl>=1.0.0" \
-  "peft>=0.18.0" \
-  "accelerate>=1.0.0" \
-  "datasets>=2.21.0"
-
-# 3. Similarity / reward computation
-echo "  [3/5] Installing similarity dependencies..."
-"$PYTHON_BIN" -m pip install \
-  "sentence-transformers>=3.0.0" \
-  "scikit-learn>=1.4.0" \
-  "sentencepiece>=0.2.0" \
-  "bitsandbytes>=0.43.0"
-
-# 4. Project backend dependencies (LLM clients, config, utilities)
-echo "  [4/5] Installing backend requirements..."
-if [ -f "$ROOT_DIR/backend/requirements.txt" ]; then
-  "$PYTHON_BIN" -m pip install -r "$ROOT_DIR/backend/requirements.txt"
+# Determine model family from argument or MODEL env var
+FAMILY="${1:-}"
+if [ -z "$FAMILY" ]; then
+  MODEL="${MODEL:-qwen3-1.7b}"
+  case "$MODEL" in
+    qwen3.5*) FAMILY="qwen3.5" ;;
+    qwen3*)   FAMILY="qwen3"   ;;
+    qwen2.5*) FAMILY="qwen3.5" ;;  # legacy, use qwen3.5 env
+    llama*)   FAMILY="qwen3.5" ;;  # no vLLM needed, use generic env
+    *)        FAMILY="qwen3"   ;;  # default to vLLM-enabled env
+  esac
 fi
 
-# 5. FlashAttention 2 (optional)
-echo "  [5/5] Installing FlashAttention 2..."
-"$PYTHON_BIN" -m pip install flash-attn --no-build-isolation 2>/dev/null || \
-  echo "  WARNING: flash-attn build failed. Using SDPA attention."
-
-echo ""
-
-# ---- Set up LD_LIBRARY_PATH ----
-
-echo "=== Configuring CUDA library paths ==="
-NVIDIA_LIB_DIRS=$("$PYTHON_BIN" -c "
-import site, glob, os
-dirs = []
-for base in [site.getusersitepackages(), *site.getsitepackages()]:
-    dirs.extend(glob.glob(os.path.join(base, 'nvidia', '*', 'lib')))
-print(':'.join(dirs))
-")
-
-if [ -n "$NVIDIA_LIB_DIRS" ]; then
-  export LD_LIBRARY_PATH="${NVIDIA_LIB_DIRS}:${LD_LIBRARY_PATH:-}"
-  ACTIVATE_SCRIPT="$ROOT_DIR/scripts/activate_cuda_libs.sh"
-  cat > "$ACTIVATE_SCRIPT" <<ACTIVATE
-#!/usr/bin/env bash
-# Source this before running training: source scripts/activate_cuda_libs.sh
-export LD_LIBRARY_PATH="${NVIDIA_LIB_DIRS}:\${LD_LIBRARY_PATH:-}"
-echo "LD_LIBRARY_PATH configured."
-ACTIVATE
-  chmod +x "$ACTIVATE_SCRIPT"
-  echo "  Wrote $ACTIVATE_SCRIPT"
-fi
-
-echo ""
-
-# ---- Validation ----
-
-echo "=== Validating installation ==="
-"$PYTHON_BIN" - <<'PY'
-import sys
-errors = []
-
-try:
-    import torch
-    if not torch.cuda.is_available():
-        errors.append("PyTorch installed but CUDA not available")
-    else:
-        print(f"  torch {torch.__version__}, CUDA {torch.version.cuda}, GPU: {torch.cuda.get_device_name(0)}")
-except ImportError as e:
-    errors.append(f"torch: {e}")
-
-try:
-    import vllm
-    print(f"  vllm {vllm.__version__}")
-except ImportError as e:
-    errors.append(f"vllm: {e}")
-
-try:
-    from trl import GRPOConfig, GRPOTrainer
-    import trl
-    print(f"  trl {trl.__version__} GRPOTrainer OK")
-except Exception as e:
-    errors.append(f"trl: {e}")
-
-try:
-    import transformers, peft
-    print(f"  transformers {transformers.__version__}, peft {peft.__version__}")
-except ImportError as e:
-    errors.append(f"transformers/peft: {e}")
-
-try:
-    from sentence_transformers import SentenceTransformer
-    print("  sentence-transformers OK")
-except ImportError:
-    print("  WARNING: sentence-transformers not available")
-
-try:
-    from live_idea_bench.papers import load_papers_from_markdown
-    from forecaster.realization.trl.runner import train_with_trl
-    print("  project imports OK")
-except ImportError as e:
-    errors.append(f"project: {e}")
-
-if errors:
-    print("\nFAILED:")
-    for err in errors:
-        print(f"  - {err}")
-    sys.exit(1)
-print("\nAll checks passed.")
-PY
-
-echo ""
-echo "=== Setup complete ==="
-echo ""
-echo "To run training:"
-echo "  source scripts/activate_cuda_libs.sh"
-echo "  PAPERS=/path/to/papers bash scripts/run_train_and_eval.sh"
+case "$FAMILY" in
+  qwen3.5|qwen35)
+    echo "Setting up Qwen3.5 environment (transformers >=5.x, no vLLM)..."
+    echo ""
+    exec bash "$SCRIPT_DIR/setup_rl_env_qwen3_5.sh"
+    ;;
+  qwen3|*)
+    echo "Setting up Qwen3 environment (vLLM 0.17.1 + transformers <5)..."
+    echo ""
+    exec bash "$SCRIPT_DIR/setup_rl_env_qwen3.sh"
+    ;;
+esac
