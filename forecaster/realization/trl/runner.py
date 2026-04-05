@@ -206,6 +206,7 @@ def train_with_trl(
         training_model_name,
         torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
         attn_implementation="sdpa",
+        device_map="auto",
     )
     tokenizer = AutoTokenizer.from_pretrained(training_model_name)
     if tokenizer.pad_token is None:
