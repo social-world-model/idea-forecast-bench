@@ -49,13 +49,14 @@ if [ "$PY_MAJOR" -ne 3 ] || [ "$PY_MINOR" -lt 10 ] || [ "$PY_MINOR" -gt 11 ]; th
 fi
 echo "  Python: $PY_VERSION OK"
 
-if ! command -v nvidia-smi &>/dev/null; then
-  echo "ERROR: nvidia-smi not found. NVIDIA driver required." >&2; exit 1
+if command -v nvidia-smi &>/dev/null && nvidia-smi --query-gpu=name --format=csv,noheader &>/dev/null; then
+  GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)
+  GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1)
+  DRIVER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1)
+  echo "  GPU: ${GPU_NAME} (${GPU_MEM} MiB), Driver: ${DRIVER}"
+else
+  echo "  GPU: not detected (ok for install — GPU needed at runtime)"
 fi
-GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)
-GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1)
-DRIVER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1)
-echo "  GPU: ${GPU_NAME} (${GPU_MEM} MiB), Driver: ${DRIVER}"
 
 echo ""
 
