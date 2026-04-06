@@ -100,9 +100,20 @@ echo "  [4/5] Installing backend requirements..."
 "$PYTHON_BIN" -m pip install "openai>=1.0.0" "anthropic" 2>/dev/null || true
 
 # 5. FlashAttention 2 (optional, falls back to SDPA)
-echo "  [5/5] Installing FlashAttention 2..."
+echo "  [5/6] Installing FlashAttention 2..."
 "$PYTHON_BIN" -m pip install flash-attn --no-build-isolation 2>/dev/null || \
   echo "  WARNING: flash-attn build failed. Using SDPA attention (still fast)."
+
+# 6. SGLang serving (optional, for fast eval via VLM path)
+#    SGLang serves the merged model as a VLM (~1000 tok/s vs ~50 tok/s with HF generate).
+#    Skipped if --no-sglang is passed.
+if [[ "${1:-}" != "--no-sglang" ]]; then
+  echo "  [6/6] Installing SGLang for fast eval serving..."
+  "$PYTHON_BIN" -m pip install "sglang[all]" 2>/dev/null || \
+    echo "  WARNING: SGLang install failed. Eval will use HF generate (slower)."
+else
+  echo "  [6/6] Skipping SGLang (--no-sglang). Eval will use HF generate."
+fi
 
 echo ""
 
@@ -148,13 +159,12 @@ try:
 except ImportError as e:
     errors.append(f"torch: {e}")
 
-# vLLM should NOT be installed in this env
+# SGLang for fast eval serving (optional)
 try:
-    import vllm
-    print(f"  WARNING: vLLM {vllm.__version__} is installed but not used for Qwen3.5")
-    print("           (Qwen3.5 is not supported by vLLM, generation uses HF generate)")
+    import sglang
+    print(f"  sglang {sglang.__version__} OK (fast eval via VLM serving)")
 except ImportError:
-    print("  vLLM: not installed (expected — Qwen3.5 uses HF generate)")
+    print("  sglang: not installed (eval will use HF generate — slower)")
 
 try:
     from trl import GRPOConfig, GRPOTrainer
@@ -205,5 +215,6 @@ echo ""
 echo "Supported Qwen3.5 models: qwen3.5-0.8b, qwen3.5-2b, qwen3.5-4b, qwen3.5-9b"
 echo "                          qwen3.5-4b-base, qwen3.5-9b-base"
 echo ""
-echo "NOTE: No vLLM — generation is slower than Qwen3 env (~5-10x)."
-echo "      Consider Qwen3 models if generation speed is a bottleneck."
+echo "NOTE: If SGLang is installed, eval uses fast VLM serving (~1000 tok/s)."
+echo "      Otherwise falls back to HF generate (~50 tok/s)."
+echo "      Use --no-sglang with this script to skip SGLang installation."

@@ -191,6 +191,52 @@ def build_prior_scorer(
     return score
 
 
+def _sglang_prior_url() -> str | None:
+    """Return the SGLang server URL for prior model if set."""
+    import os
+    url = os.environ.get("SGLANG_PRIOR_URL", "").strip()
+    return url if url else None
+
+
+_SGLANG_MODEL_ID_CACHE: dict[str, str] = {}
+
+
+def _sample_via_sglang(
+    prompt: str,
+    config: InferenceConfig,
+    sglang_url: str,
+) -> list[Innovation]:
+    """Sample innovations via SGLang/vLLM OpenAI-compatible API."""
+    import openai
+
+    client = openai.OpenAI(base_url=f"{sglang_url}/v1", api_key="none")
+
+    if sglang_url not in _SGLANG_MODEL_ID_CACHE:
+        _SGLANG_MODEL_ID_CACHE[sglang_url] = client.models.list().data[0].id
+    model_id = _SGLANG_MODEL_ID_CACHE[sglang_url]
+
+    innovations: list[Innovation] = []
+    for _ in range(config.num_candidates):
+        try:
+            resp = client.completions.create(
+                model=model_id,
+                prompt=prompt,
+                max_tokens=512,
+                temperature=config.prior_temperature,
+                top_p=0.9,
+            )
+            raw_text = resp.choices[0].text
+            inn = _parse_innovation(raw_text)
+            if inn is not None:
+                innovations.append(inn)
+            else:
+                logger.warning("SGLang: unparseable sample: %s", raw_text[:120])
+        except Exception as exc:
+            logger.warning("SGLang prior sampling failed: %s", exc)
+
+    return innovations
+
+
 def sample_innovations(
     model_path: str,
     memory_store: Any,
@@ -202,22 +248,29 @@ def sample_innovations(
     Generates config.num_candidates innovations at config.prior_temperature.
     Returns list of Innovation objects (failed parses are skipped with warning).
 
-    If adapter_config.json is present in model_path, loads via PeftModel.from_pretrained
-    to handle LoRA adapter-only checkpoints saved by train_prior().
+    If SGLANG_PRIOR_URL is set, uses the SGLang API for fast inference.
+    Otherwise loads the model locally via HF generate.
     """
-    try:
-        import torch
-    except ImportError as exc:
-        raise ImportError(
-            "Sampling from the prior requires torch. Install with: pip install torch"
-        ) from exc
-
     prompt_cfg = _load_prompt_config()
     prompt = _build_prompt(
         prompt_cfg["system_prompt"],
         prompt_cfg["input_template"],
         memory_store,
     )
+
+    # Fast path: SGLang API
+    sglang_url = _sglang_prior_url()
+    if sglang_url:
+        logger.info("Using SGLang API at %s for prior sampling", sglang_url)
+        return _sample_via_sglang(prompt, config, sglang_url)
+
+    # Slow path: local HF model
+    try:
+        import torch
+    except ImportError as exc:
+        raise ImportError(
+            "Sampling from the prior requires torch. Install with: pip install torch"
+        ) from exc
 
     model, tokenizer = _load_prior_model_and_tokenizer(str(model_path))
 

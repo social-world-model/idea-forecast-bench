@@ -227,8 +227,9 @@ class ForecasterStrategy(IdeaStrategy):
         # realization scorer to enable the batched fast path.
         import os
         replace_kwargs: dict[str, Any] = {"runtime_mode": "flexible"}
-        if os.environ.get("SGLANG_URL"):
+        if os.environ.get("SGLANG_URL") or os.environ.get("SGLANG_PRIOR_URL"):
             replace_kwargs["realization_score_method"] = "heuristic"
+            replace_kwargs["prior_score_method"] = "heuristic"
         inference_config = dataclasses.replace(inference_config, **replace_kwargs)
 
         fallback_events: list[dict[str, Any]] = []
