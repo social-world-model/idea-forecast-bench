@@ -72,12 +72,47 @@ else
     --output "$TRAINED_EVAL"
 fi
 
+# ---- Voyage re-eval (produces paper-comparable scores) ----
+VOYAGE_EVAL="${OUT}/eval_voyage.json"
+if [ -n "${VOYAGE_API_KEY:-}" ]; then
+  if [ -f "$VOYAGE_EVAL" ]; then
+    echo ""; echo "Voyage re-eval already exists: $VOYAGE_EVAL"
+  else
+    echo ""; echo "===== Voyage Re-eval (threshold=0.80) ====="
+    VOYAGE_API_KEY="$VOYAGE_API_KEY" python3 examples/reeval_voyage.py \
+      --input-json "$TRAINED_EVAL" \
+      --papers-dir "$PAPERS" \
+      --output "$VOYAGE_EVAL" \
+      --threshold 0.80
+  fi
+else
+  echo ""
+  echo "VOYAGE_API_KEY not set. Run Voyage re-eval manually for paper-comparable scores:"
+  echo "  VOYAGE_API_KEY=... python3 examples/reeval_voyage.py \\"
+  echo "    --input-json $TRAINED_EVAL --papers-dir $PAPERS \\"
+  echo "    --output $VOYAGE_EVAL --threshold 0.80"
+fi
+
 echo ""
 echo "===== Results: ${MODEL} ====="
-python3 -c "
+if [ -f "$VOYAGE_EVAL" ]; then
+  echo "  (Voyage, threshold=0.80 — comparable to paper baselines)"
+  python3 -c "
+import json
+data = json.load(open('${VOYAGE_EVAL}'))
+s = data.get('aggregate_summary', {})
+print(f'  hit@5={s.get(\"avg_hit_at_k\", 0):.4f}  P@5={s.get(\"avg_precision_at_k\", 0):.4f}  '
+      f'R@5={s.get(\"avg_recall_at_k\", 0):.4f}  MRR={s.get(\"avg_mrr\", 0):.4f}  '
+      f'Nov={s.get(\"avg_novelty\", 0):.4f}  Div={s.get(\"avg_diversity\", 0):.4f}')
+"
+else
+  echo "  (Heuristic — not comparable to paper baselines)"
+  python3 -c "
 import json
 data = json.load(open('${TRAINED_EVAL}'))
 s = data.get('aggregate_summary', {})
-print(f'  hit@k={s.get(\"avg_hit_at_k\", 0):.4f}  mrr={s.get(\"avg_mrr\", 0):.4f}  '
-      f'novelty={s.get(\"avg_novelty\", 0):.4f}  diversity={s.get(\"avg_diversity\", 0):.4f}')
+print(f'  hit@5={s.get(\"avg_hit_at_k\", 0):.4f}  P@5={s.get(\"avg_precision_at_k\", 0):.4f}  '
+      f'R@5={s.get(\"avg_recall_at_k\", 0):.4f}  MRR={s.get(\"avg_mrr\", 0):.4f}  '
+      f'Nov={s.get(\"avg_novelty\", 0):.4f}  Div={s.get(\"avg_diversity\", 0):.4f}')
 "
+fi

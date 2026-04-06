@@ -222,7 +222,14 @@ class ForecasterStrategy(IdeaStrategy):
         # Force flexible runtime when using local models — strict_eval requires
         # memory snapshots we don't have; demo mode falls back to LLM API.
         # Flexible: use trained models when available, heuristic scoring otherwise.
-        inference_config = dataclasses.replace(inference_config, runtime_mode="flexible")
+        # Force flexible runtime (not strict_eval) for local model inference.
+        # When SGLang handles proposal generation, skip expensive conditional_logprob
+        # realization scorer to enable the batched fast path.
+        import os
+        replace_kwargs: dict[str, Any] = {"runtime_mode": "flexible"}
+        if os.environ.get("SGLANG_URL"):
+            replace_kwargs["realization_score_method"] = "heuristic"
+        inference_config = dataclasses.replace(inference_config, **replace_kwargs)
 
         fallback_events: list[dict[str, Any]] = []
         memory_store = self._load_memory_store(

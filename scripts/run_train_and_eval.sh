@@ -155,16 +155,34 @@ else
     --output "$TRAINED_EVAL"
 fi
 
+# ---- Voyage re-eval (paper-comparable scores) ----
+VOYAGE_EVAL="${OUT}/eval_voyage.json"
+if [ -n "${VOYAGE_API_KEY:-}" ] && [ -f "$TRAINED_EVAL" ]; then
+  if [ -f "$VOYAGE_EVAL" ]; then
+    echo ""; echo "===== Voyage Re-eval — SKIPPED (exists) ====="
+  else
+    echo ""; echo "===== Voyage Re-eval (threshold=0.80) ====="
+    VOYAGE_API_KEY="$VOYAGE_API_KEY" python3 examples/reeval_voyage.py \
+      --input-json "$TRAINED_EVAL" \
+      --papers-dir "$PAPERS" \
+      --output "$VOYAGE_EVAL" \
+      --threshold 0.80
+  fi
+fi
+
 echo ""
 echo "===== Results ====="
-if [ -f "$TRAINED_EVAL" ]; then
+if [ -f "$VOYAGE_EVAL" ]; then
   python3 -c "
 import json
-data = json.load(open('${TRAINED_EVAL}'))
+data = json.load(open('${VOYAGE_EVAL}'))
 s = data.get('aggregate_summary', {})
-print(f'  hit@k={s.get(\"avg_hit_at_k\", 0):.4f}  mrr={s.get(\"avg_mrr\", 0):.4f}  '
-      f'novelty={s.get(\"avg_novelty\", 0):.4f}  diversity={s.get(\"avg_diversity\", 0):.4f}')
+print(f'  hit@5={s.get(\"avg_hit_at_k\", 0):.4f}  P@5={s.get(\"avg_precision_at_k\", 0):.4f}  '
+      f'R@5={s.get(\"avg_recall_at_k\", 0):.4f}  MRR={s.get(\"avg_mrr\", 0):.4f}  '
+      f'Nov={s.get(\"avg_novelty\", 0):.4f}  Div={s.get(\"avg_diversity\", 0):.4f}')
 "
+elif [ -f "$TRAINED_EVAL" ]; then
+  echo "  (Heuristic only — set VOYAGE_API_KEY for paper-comparable scores)"
 fi
 
 echo ""; echo "===== Done ====="

@@ -160,6 +160,24 @@ def _generate_proposal_local(
     return tokenizer.decode(output_ids, skip_special_tokens=True).strip()
 
 
+def _sglang_api_url() -> str | None:
+    """Return the SGLang server URL if available, or None.
+
+    Set SGLANG_URL=http://localhost:30000 to enable.
+    The server must be launched separately (e.g., from the eval-sglang conda env).
+    """
+    import os
+    url = os.environ.get("SGLANG_URL", "").strip()
+    if not url:
+        return None
+    try:
+        import urllib.request
+        urllib.request.urlopen(f"{url}/v1/models", timeout=2)
+        return url
+    except Exception:
+        return None
+
+
 def generate_proposals_batch(
     innovations_and_evidence: list[tuple["Innovation", list[PaperRecord]]],
     realization_model_path: str,
@@ -170,15 +188,47 @@ def generate_proposals_batch(
     temperature: float | None = None,
     top_p: float | None = None,
 ) -> list[str]:
-    """Batch-generate proposals for multiple innovations in a single model.generate() call.
+    """Batch-generate proposals for multiple innovations.
 
-    Much faster than calling generate_local_proposal() N times sequentially.
+    Uses SGLang offline engine when available (~10x faster than HF generate).
+    Falls back to HF model.generate() otherwise.
     """
     if not innovations_and_evidence:
         return []
 
-    from forecaster.realization.local_generation import _load_local_model, _apply_chat_template, _require_local_generation_stack
     from forecaster.prior.sampler import _detect_base_model
+
+    # Build all prompts
+    prompt_data = _load_prompt()
+    prompts: list[str] = []
+    for innovation, evidence in innovations_and_evidence:
+        user_msg = _build_user_message(prompt_data, innovation, evidence, context_papers=context_papers, config=config)
+        prompts.append(f"{prompt_data['system_prompt']}\n\n{user_msg}".strip())
+
+    # --- SGLang API fast path (~10x faster than HF generate) ---
+    sglang_url = _sglang_api_url()
+    if sglang_url:
+        try:
+            import openai
+            client = openai.OpenAI(base_url=f"{sglang_url}/v1", api_key="none")
+            models = client.models.list()
+            model_id = models.data[0].id if models.data else "default"
+
+            results = []
+            for prompt in prompts:
+                r = client.completions.create(
+                    model=model_id, prompt=prompt,
+                    max_tokens=config.proposal_max_tokens,
+                    temperature=0.7 if temperature is None else temperature,
+                    top_p=0.9 if top_p is None else top_p,
+                )
+                results.append(r.choices[0].text.strip())
+            return results
+        except Exception as exc:
+            logger.warning("SGLang API failed (%s); falling back to HF generate.", exc)
+
+    # --- HF generate fallback ---
+    from forecaster.realization.local_generation import _load_local_model, _apply_chat_template, _require_local_generation_stack
 
     resolved_base = base_model_name
     adapter_path = Path(realization_model_path) / "adapter_config.json"
@@ -189,21 +239,13 @@ def generate_proposals_batch(
     deps = _require_local_generation_stack()
     torch = deps["torch"]
 
-    # Build all prompts
-    prompt_data = _load_prompt()
-    chat_prompts = []
-    for innovation, evidence in innovations_and_evidence:
-        user_msg = _build_user_message(prompt_data, innovation, evidence, context_papers=context_papers, config=config)
-        full_prompt = f"{prompt_data['system_prompt']}\n\n{user_msg}".strip()
-        chat_prompts.append(_apply_chat_template(tokenizer, full_prompt, None))
+    chat_prompts = [_apply_chat_template(tokenizer, p, None) for p in prompts]
 
-    # Tokenize with left-padding for batch generation
     tokenizer.padding_side = "left"
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
     encoded = tokenizer(chat_prompts, return_tensors="pt", padding=True, truncation=True)
     encoded = {k: v.to(model.device) for k, v in encoded.items()}
-    input_lengths = (encoded["attention_mask"]).sum(dim=1).tolist()
 
     with torch.no_grad():
         generated = model.generate(
@@ -215,14 +257,12 @@ def generate_proposals_batch(
             top_p=0.9 if top_p is None else top_p,
         )
 
-    # Decode each sequence, stripping the input portion
     results = []
-    for i, seq in enumerate(generated):
+    for seq in generated:
         output_ids = seq[encoded["input_ids"].shape[1]:].tolist()
-        text = tokenizer.decode(output_ids, skip_special_tokens=True).strip()
-        results.append(text)
+        results.append(tokenizer.decode(output_ids, skip_special_tokens=True).strip())
 
-    tokenizer.padding_side = "right"  # restore default
+    tokenizer.padding_side = "right"
     return results
 
 
