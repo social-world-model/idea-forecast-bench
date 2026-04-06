@@ -23,7 +23,9 @@
 #  Supported models: qwen3.5-0.8b, qwen3.5-2b, qwen3.5-4b, qwen3.5-9b
 #                    (also base variants: qwen3.5-4b-base, qwen3.5-9b-base)
 # ==========================================================================
-set -euo pipefail
+set -uo pipefail
+trap 'echo "ERROR: Script failed at line $LINENO (exit code $?)" >&2' ERR
+set -e
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
@@ -49,11 +51,11 @@ if [ "$PY_MAJOR" -ne 3 ] || [ "$PY_MINOR" -lt 10 ] || [ "$PY_MINOR" -gt 11 ]; th
 fi
 echo "  Python: $PY_VERSION OK"
 
-if command -v nvidia-smi &>/dev/null && nvidia-smi --query-gpu=name --format=csv,noheader &>/dev/null; then
-  GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)
-  GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1)
-  DRIVER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1)
-  echo "  GPU: ${GPU_NAME} (${GPU_MEM} MiB), Driver: ${DRIVER}"
+if command -v nvidia-smi &>/dev/null && nvidia-smi &>/dev/null; then
+  GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | wc -l || echo 0)
+  GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo "unknown")
+  DRIVER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1 || echo "unknown")
+  echo "  GPU: ${GPU_COUNT}x ${GPU_NAME}, Driver: ${DRIVER}"
 else
   echo "  GPU: not detected (ok for install — GPU needed at runtime)"
 fi
