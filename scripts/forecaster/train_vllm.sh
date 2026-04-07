@@ -179,7 +179,14 @@ if curl -sf -m 2 "http://localhost:${VLLM_PORT}/health/" > /dev/null 2>&1; then
 fi
 
 # ---- Start trl vllm-serve on the dedicated vLLM GPUs ----
-nohup env CUDA_VISIBLE_DEVICES="${VLLM_CUDA}" trl vllm-serve \
+# We invoke the launcher via `python -m trl.scripts.vllm_serve` (NOT bare
+# `trl vllm-serve`) so the Python from the active conda env is used, even
+# when ~/.local/bin/trl exists from a previous `pip install --user` and
+# would otherwise be picked up first by PATH lookup. The user-site `trl`
+# binary may have a stale shebang pointing at a different Python (e.g.
+# system 3.12) that doesn't have our pinned vllm/transformers versions.
+PYTHON_BIN="${PYTHON_BIN:-python}"
+nohup env CUDA_VISIBLE_DEVICES="${VLLM_CUDA}" "${PYTHON_BIN}" -m trl.scripts.vllm_serve \
   --model "${MODEL_ID}" \
   --port "${VLLM_PORT}" \
   --host "0.0.0.0" \
@@ -188,7 +195,7 @@ nohup env CUDA_VISIBLE_DEVICES="${VLLM_CUDA}" trl vllm-serve \
   --gpu-memory-utilization "${VLLM_GPU_MEM_UTIL}" \
   > "${VLLM_LOG}" 2>&1 &
 VLLM_PID=$!
-echo "Started trl vllm-serve (pid=${VLLM_PID})"
+echo "Started trl vllm-serve via ${PYTHON_BIN} -m trl.scripts.vllm_serve (pid=${VLLM_PID})"
 
 # ---- Cleanup trap ----
 # vLLM spawns EngineCore worker processes that survive a SIGTERM on the
@@ -207,6 +214,7 @@ cleanup() {
   fi
   pkill -KILL -f "VLLM::EngineCore" 2>/dev/null || true
   pkill -KILL -f "trl vllm-serve" 2>/dev/null || true
+  pkill -KILL -f "trl.scripts.vllm_serve" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
