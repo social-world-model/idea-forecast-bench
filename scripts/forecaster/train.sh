@@ -36,4 +36,8 @@ for arg in "$@"; do
   fi
 done
 
-exec python3 examples/forecaster/train.py "$@"
+# Honor PYTHON_BIN if the user set it explicitly (e.g. when there are
+# multiple anaconda installs and `which python` is unreliable). Defaults to
+# `python` from PATH (assumes `conda activate <env>` was run first).
+PYTHON_BIN="${PYTHON_BIN:-python}"
+exec "${PYTHON_BIN}" examples/forecaster/train.py "$@"

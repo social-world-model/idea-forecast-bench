@@ -148,7 +148,16 @@ done
 if [[ -z "${MODEL_ALIAS}" ]]; then
   MODEL_ALIAS="qwen3.5-2b"
 fi
-MODEL_ID=$(python3 -c "
+
+# Resolve PYTHON_BIN early so every Python invocation in this script honors
+# the same interpreter. Default: bare `python` from PATH (assumes the user has
+# `conda activate <env>`-ed and PATH puts the env's bin first). On boxes with
+# multiple anaconda installations or odd ~/.bashrc PATH manipulation, the
+# user can override with PYTHON_BIN=$CONDA_PREFIX/bin/python (or any absolute
+# path) and every step below will use exactly that interpreter.
+PYTHON_BIN="${PYTHON_BIN:-python}"
+
+MODEL_ID=$("${PYTHON_BIN}" -c "
 from forecaster.realization.model_zoo import resolve_small_model
 print(resolve_small_model('${MODEL_ALIAS}').model_id)
 ")
@@ -179,13 +188,12 @@ if curl -sf -m 2 "http://localhost:${VLLM_PORT}/health/" > /dev/null 2>&1; then
 fi
 
 # ---- Start trl vllm-serve on the dedicated vLLM GPUs ----
-# We invoke the launcher via `python -m trl.scripts.vllm_serve` (NOT bare
-# `trl vllm-serve`) so the Python from the active conda env is used, even
-# when ~/.local/bin/trl exists from a previous `pip install --user` and
-# would otherwise be picked up first by PATH lookup. The user-site `trl`
-# binary may have a stale shebang pointing at a different Python (e.g.
-# system 3.12) that doesn't have our pinned vllm/transformers versions.
-PYTHON_BIN="${PYTHON_BIN:-python}"
+# We invoke the launcher via `${PYTHON_BIN} -m trl.scripts.vllm_serve` (NOT
+# bare `trl vllm-serve`) so the Python from the active conda env is used,
+# even when ~/.local/bin/trl exists from a previous `pip install --user` and
+# would otherwise be picked up first by PATH lookup, OR when the user has
+# multiple anaconda installations and `which python` resolves to the wrong
+# one despite `conda activate` updating the prompt.
 nohup env CUDA_VISIBLE_DEVICES="${VLLM_CUDA}" "${PYTHON_BIN}" -m trl.scripts.vllm_serve \
   --model "${MODEL_ID}" \
   --port "${VLLM_PORT}" \
@@ -246,8 +254,14 @@ if [[ "${TRAINER_NUM_GPUS}" -gt 1 ]]; then
   # Multi-rank trainer: use torchrun for DDP / FSDP. Unsloth + TRL GRPO
   # supports this via accelerate's process group setup. Each rank loads its
   # own copy of the model; LoRA grads are all-reduced across ranks.
-  echo "[wrapper] Multi-rank trainer (nproc_per_node=${TRAINER_NUM_GPUS})"
-  CUDA_VISIBLE_DEVICES="${TRAINER_CUDA}" torchrun \
+  # Resolve torchrun from the same Python's bin/ to keep all subprocesses
+  # on the env's interpreter (avoids /usr/local vs ~/.conda PATH confusion).
+  TORCHRUN_BIN="$(dirname "${PYTHON_BIN}")/torchrun"
+  if [[ ! -x "${TORCHRUN_BIN}" ]]; then
+    TORCHRUN_BIN="torchrun"  # fall back to PATH lookup
+  fi
+  echo "[wrapper] Multi-rank trainer (nproc_per_node=${TRAINER_NUM_GPUS}) via ${TORCHRUN_BIN}"
+  CUDA_VISIBLE_DEVICES="${TRAINER_CUDA}" "${TORCHRUN_BIN}" \
     --standalone \
     --nproc_per_node="${TRAINER_NUM_GPUS}" \
     examples/forecaster/train.py \
@@ -255,8 +269,10 @@ if [[ "${TRAINER_NUM_GPUS}" -gt 1 ]]; then
     --use-vllm-server \
     --vllm-server-port "${VLLM_PORT}"
 else
-  # Single-rank trainer: plain python is enough.
-  CUDA_VISIBLE_DEVICES="${TRAINER_CUDA}" python3 \
+  # Single-rank trainer: use the same PYTHON_BIN as the vLLM launcher so the
+  # trainer and the server agree on which interpreter / site-packages they're
+  # loading from.
+  CUDA_VISIBLE_DEVICES="${TRAINER_CUDA}" "${PYTHON_BIN}" \
     examples/forecaster/train.py \
     "$@" \
     --use-vllm-server \
