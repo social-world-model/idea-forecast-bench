@@ -489,8 +489,8 @@ class TestForecasterPipelineStrictMode:
                     strict_eval=True,
                 )
 
-    def test_run_realization_training_enables_alignment_gate_in_strict_mode(self, tmp_path: Path) -> None:
-        """Strict training should stop forcing skip_alignment_check=True."""
+    def test_run_realization_training_enables_alignment_gate_by_default(self, tmp_path: Path) -> None:
+        """Real training should run the alignment gate."""
         pipeline = ForecasterPipeline(papers=[_paper("p1", "2024-01")], output_dir=tmp_path / "out")
         captured_kwargs: dict[str, object] = {}
 
@@ -499,21 +499,18 @@ class TestForecasterPipelineStrictMode:
             return {"trainer_output_dir": str(tmp_path / "trainer")}
 
         with patch("forecaster.realization.pipeline.run_policy_rl_pipeline", side_effect=_capture_pipeline), \
-             patch("forecaster.realization.pipeline.create_trainer_runner"), \
              patch("forecaster.realization.config.load_episode_build_config"), \
              patch("forecaster.realization.config.load_candidate_generation_config"), \
+             patch("forecaster.realization.config.load_grpo_train_config"), \
              patch("forecaster.realization.config.load_reward_config"), \
              patch("forecaster.realization.config.load_selection_config"):
-            result = pipeline.run_realization_training(
-                cutoff_months=["2024-01"],
-                strict_mode=True,
-            )
+            result = pipeline.run_realization_training(cutoff_months=["2024-01"])
 
         assert captured_kwargs["skip_alignment_check"] is False
         assert result is not None
 
-    def test_run_realization_training_allows_demo_alignment_opt_out(self, tmp_path: Path) -> None:
-        """Demo training may still opt out of the alignment gate."""
+    def test_run_realization_training_dry_run_skips_alignment_gate(self, tmp_path: Path) -> None:
+        """Dry-run training opts out of the alignment gate."""
         pipeline = ForecasterPipeline(papers=[_paper("p1", "2024-01")], output_dir=tmp_path / "out")
         captured_kwargs: dict[str, object] = {}
 
@@ -522,14 +519,14 @@ class TestForecasterPipelineStrictMode:
             return {"trainer_output_dir": str(tmp_path / "trainer")}
 
         with patch("forecaster.realization.pipeline.run_policy_rl_pipeline", side_effect=_capture_pipeline), \
-             patch("forecaster.realization.pipeline.create_trainer_runner"), \
              patch("forecaster.realization.config.load_episode_build_config"), \
              patch("forecaster.realization.config.load_candidate_generation_config"), \
+             patch("forecaster.realization.config.load_grpo_train_config"), \
              patch("forecaster.realization.config.load_reward_config"), \
              patch("forecaster.realization.config.load_selection_config"):
             result = pipeline.run_realization_training(
                 cutoff_months=["2024-01"],
-                strict_mode=False,
+                dry_run=True,
             )
 
         assert captured_kwargs["skip_alignment_check"] is True

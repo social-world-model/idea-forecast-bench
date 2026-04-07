@@ -118,12 +118,19 @@ def train_prior(
     *,
     output_dir: str | Path | None = None,
 ) -> str:
-    """Train the innovation prior model via SFT with LoRA.
+    """Train the innovation prior via SFT with Unsloth + TRL (METHOD §3.2).
 
-    Raises ImportError with clear message if heavy ML deps are missing.
+    The loss is the standard target-only NLL
+    ``-log p_θ(̃z_{t+1} | M_t)`` — labels are ``-100`` over the memory-prompt
+    prefix and the real token ids over the innovation-target suffix
+    (``_build_target_only_labels``). Unsloth provides the optimized
+    ``FastLanguageModel`` loader + LoRA attachment, ``trl.SFTTrainer`` runs
+    the training loop on the pre-tokenized rows.
 
     Args:
-        sft_samples: List of {"input": str, "target": str} samples.
+        sft_samples: List of {"input": str, "target": str} samples produced by
+            ``forecaster.prior.sft_dataset.build_sft_samples`` (memory-augmented
+            per METHOD §3.2).
         config: SFTTrainConfig with model alias, LoRA params, etc.
         output_dir: Override output directory (defaults to config.output_dir).
 
@@ -131,19 +138,15 @@ def train_prior(
         Path to the saved checkpoint directory.
     """
     try:
+        # Unsloth must be imported BEFORE transformers/trl so its patches apply.
+        from unsloth import FastLanguageModel
         import torch
-        from transformers import (
-            AutoTokenizer,
-            AutoModelForCausalLM,
-            TrainingArguments,
-            Trainer,
-            DataCollatorForSeq2Seq,
-        )
-        from peft import get_peft_model, LoraConfig, TaskType
+        from trl import SFTTrainer, SFTConfig
+        from transformers import AutoTokenizer, DataCollatorForSeq2Seq
     except ImportError as exc:
         raise ImportError(
-            "SFT training requires: torch, transformers, peft, datasets. "
-            "Install with: pip install torch transformers peft datasets accelerate"
+            "Prior SFT training requires: unsloth, torch, trl, transformers, datasets. "
+            "Install with scripts/forecaster/setup_env.sh"
         ) from exc
 
     from forecaster.realization.model_zoo import resolve_small_model
@@ -153,35 +156,43 @@ def train_prior(
     save_dir = str(output_dir) if output_dir is not None else config.output_dir
     Path(save_dir).mkdir(parents=True, exist_ok=True)
 
-    logger.info("Loading tokenizer from %s", model_spec.model_id)
+    logger.info("Loading %s with Unsloth (max_seq_length=%d)", model_spec.model_id, config.max_seq_length)
+    model, _unsloth_processor = FastLanguageModel.from_pretrained(
+        model_name=model_spec.model_id,
+        max_seq_length=config.max_seq_length,
+        dtype=None,
+        load_in_4bit=False,
+    )
+    # Qwen3.5 is registered as a VLM (Qwen2VLForConditionalGeneration). Unsloth
+    # returns the multi-modal processor whose image_processor would route plain
+    # text prompts through Qwen2VL's image_processing path and crash. Force a
+    # text-only AutoTokenizer here so SFTTrainer never touches the image side.
     tokenizer = AutoTokenizer.from_pretrained(model_spec.model_id)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    logger.info("Loading base model from %s", model_spec.model_id)
-    base_model = AutoModelForCausalLM.from_pretrained(
-        model_spec.model_id,
-        torch_dtype="auto",
-        device_map="auto",
-    )
-
-    lora_config = LoraConfig(
+    model = FastLanguageModel.get_peft_model(
+        model,
         r=config.lora_r,
         lora_alpha=config.lora_alpha,
         lora_dropout=config.lora_dropout,
-        target_modules="all-linear",
-        task_type=TaskType.CAUSAL_LM,
-        bias="none",
+        target_modules=[
+            "q_proj", "k_proj", "v_proj", "o_proj",
+            "gate_proj", "up_proj", "down_proj",
+        ],
+        use_gradient_checkpointing="unsloth",
+        random_state=42,
     )
-    model = get_peft_model(base_model, lora_config)
-    model.print_trainable_parameters()
 
     system_prompt = _load_system_prompt()
+    # _build_hf_dataset produces input_ids/attention_mask/labels with the
+    # prompt-only mask (-100 over memory prompt, real ids over innovation
+    # target). This IS the METHOD §3.2 NLL term — do not modify.
     dataset = _build_hf_dataset(
         sft_samples, system_prompt, tokenizer, config.max_seq_length
     )
 
-    training_args = TrainingArguments(
+    training_args = SFTConfig(
         output_dir=save_dir,
         num_train_epochs=config.num_epochs,
         learning_rate=config.learning_rate,
@@ -192,7 +203,20 @@ def train_prior(
         logging_steps=10,
         save_strategy="epoch",
         report_to="none",
-        fp16=torch.cuda.is_available(),
+        bf16=torch.cuda.is_available(),
+        max_seq_length=config.max_seq_length,
+        dataset_kwargs={"skip_prepare_dataset": True},
+        # 8-bit AdamW: ~50% optimizer-state memory savings vs fp32 state.
+        optim="adamw_8bit",
+        # Auto-retry with smaller batch on OOM (catches PyTorch OOMs from
+        # accelerate's find_executable_batch_size wrapper).
+        auto_find_batch_size=True,
+        # group_by_length is intentionally OFF — Unsloth's patched SFTConfig
+        # rejects it (TypeError) because it conflicts with their internal
+        # sample-packing path.
+        # Prefetch next batch on CPU workers while GPU trains.
+        dataloader_num_workers=2,
+        dataloader_pin_memory=True,
     )
 
     data_collator = DataCollatorForSeq2Seq(
@@ -201,7 +225,7 @@ def train_prior(
         padding=True,
         label_pad_token_id=-100,
     )
-    trainer = Trainer(
+    trainer = SFTTrainer(
         model=model,
         args=training_args,
         train_dataset=dataset,

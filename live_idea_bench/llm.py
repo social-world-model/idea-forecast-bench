@@ -6,6 +6,8 @@ import os
 import threading
 from typing import Any
 
+from live_idea_bench.model_refs import resolve_model_reference
+
 logger = logging.getLogger(__name__)
 
 # ── Batch-mode state (thread-local) ────────────────────────────────────────────
@@ -82,18 +84,14 @@ def batch_clear() -> None:
     _batch_tls.system_prefix = None
 
 
-import anthropic
-import google.generativeai as genai
-import openai
-from google.generativeai.types import GenerationConfig
-
 MAX_NUM_TOKENS = 4096
 
 
 def _unsupported_model_error(model: str) -> ValueError:
     return ValueError(
         "Unsupported model "
-        f"'{model}'. Supported model families: claude-*, gpt-4o*, gpt-5*, *gemini*."
+        f"'{model}'. Supported model families: claude-*, gpt-4o*, gpt-5*, *gemini*, "
+        "or a local/Hugging Face model reference such as Qwen/Qwen3.5-2B."
     )
 
 
@@ -119,19 +117,37 @@ def _is_gemini_model(model: str) -> bool:
     return "gemini" in model
 
 
+def _is_local_model(model: str) -> bool:
+    if _is_openai_model(model) or _is_anthropic_model(model) or _is_gemini_model(model):
+        return False
+    return resolve_model_reference(model) is not None
+
+
 def create_client(model: str) -> tuple[Any, str]:
     if _is_anthropic_model(model):
+        import anthropic
+
         api_key = _require_api_key("ANTHROPIC_API_KEY", model)
         return anthropic.Anthropic(api_key=api_key), model
 
     if _is_openai_model(model):
+        import openai
+
         api_key = _require_api_key("OPENAI_API_KEY", model)
         return openai.OpenAI(api_key=api_key), model
 
     if _is_gemini_model(model):
+        import google.generativeai as genai
+
         api_key = _require_api_key("GOOGLE_API_KEY", model)
         genai.configure(api_key=api_key)
         return genai.GenerativeModel(model), model
+
+    if _is_local_model(model):
+        resolved_model = resolve_model_reference(model)
+        if resolved_model is None:
+            raise _unsupported_model_error(model)
+        return None, resolved_model
 
     raise _unsupported_model_error(model)
 
@@ -250,6 +266,8 @@ def get_response_from_llm(
         content = response.choices[0].message.content or ""
         new_msg_history = new_msg_history + [{"role": "assistant", "content": content}]
     elif _is_gemini_model(model):
+        from google.generativeai.types import GenerationConfig
+
         new_msg_history = msg_history + [{"role": "user", "content": msg}]
         gemini_contents = [{"role": "system", "parts": system_message}]
         for history_msg in new_msg_history:
@@ -269,6 +287,48 @@ def get_response_from_llm(
             generation_config=GenerationConfig(**generation_kwargs),
         )
         content = response.text or ""
+        new_msg_history = new_msg_history + [{"role": "assistant", "content": content}]
+    elif _is_local_model(model):
+        from forecaster.realization.local_generation import (
+            _apply_chat_template,
+            _load_local_model,
+            _require_local_generation_stack,
+        )
+
+        resolved_model = resolve_model_reference(model)
+        if resolved_model is None:
+            raise _unsupported_model_error(model)
+
+        new_msg_history = msg_history + [{"role": "user", "content": msg}]
+        model_obj, tokenizer = _load_local_model(resolved_model)
+        deps = _require_local_generation_stack()
+        torch = deps["torch"]
+
+        full_prompt = f"{system_message}\n\n{msg}".strip()
+        chat_prompt = _apply_chat_template(tokenizer, full_prompt, None)
+        encoded = tokenizer([chat_prompt], return_tensors="pt")
+        encoded = {name: value.to(model_obj.device) for name, value in encoded.items()}
+
+        generate_kwargs: dict[str, Any] = {
+            **encoded,
+            "max_new_tokens": MAX_NUM_TOKENS,
+            "pad_token_id": tokenizer.pad_token_id,
+        }
+        if temperature <= 0:
+            generate_kwargs["do_sample"] = False
+        else:
+            generate_kwargs["do_sample"] = True
+            generate_kwargs["temperature"] = temperature
+            if top_p is not None:
+                generate_kwargs["top_p"] = top_p
+
+        if seed is not None:
+            torch.manual_seed(seed)
+
+        with torch.no_grad():
+            generated = model_obj.generate(**generate_kwargs)
+        output_ids = generated[0][len(encoded["input_ids"][0]):].tolist()
+        content = tokenizer.decode(output_ids, skip_special_tokens=True).strip()
         new_msg_history = new_msg_history + [{"role": "assistant", "content": content}]
     else:
         raise _unsupported_model_error(model)

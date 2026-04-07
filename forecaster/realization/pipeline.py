@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
-from dataclasses import asdict, replace
+from dataclasses import asdict, dataclass, is_dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -43,7 +45,57 @@ from forecaster.realization.strict_runtime import (
     run_strict_realization_rollout,
     serialize_strict_rollout_completion,
 )
-from forecaster.realization.trainers import PreparedRLContext, TrainerPreparedArtifacts, build_config_fingerprint, create_trainer_runner
+from forecaster.realization.unsloth_runner import (
+    prepare_grpo_dataset,
+    train_grpo_with_unsloth,
+)
+
+
+@dataclass
+class PreparedRLContext:
+    """Shared context produced by ``prepare_common_rl_context`` and consumed by
+    the GRPO trainer. Previously lived in ``forecaster.realization.trainers.base``;
+    inlined here after the multi-trainer registry was removed.
+    """
+    papers: list[PaperRecord]
+    all_episodes: list[Any]
+    selected_episodes: list[Any]
+    prompt_rows: list[dict[str, Any]]
+    shared_dir: Path
+    episodes_path: Path
+    prompt_rows_path: Path
+    paper_lookup: dict[str, PaperRecord]
+    config_fingerprint: str
+    selected_split: str
+    model_name: str
+    realization_config: Any
+    hindsight_samples: list[Any]
+    similarity_config_path: str
+    runtime_config_path: str | None
+    episode_cache_root: Path
+    shared_manifest_path: Path
+
+
+def _serialize_for_fingerprint(value: Any) -> Any:
+    if is_dataclass(value):
+        return asdict(value)
+    if isinstance(value, Path):
+        return str(value.resolve())
+    if isinstance(value, dict):
+        return {
+            str(key): _serialize_for_fingerprint(inner)
+            for key, inner in sorted(value.items(), key=lambda item: str(item[0]))
+        }
+    if isinstance(value, (list, tuple)):
+        return [_serialize_for_fingerprint(item) for item in value]
+    return value
+
+
+def build_config_fingerprint(payload: dict[str, Any]) -> str:
+    canonical = json.dumps(
+        _serialize_for_fingerprint(payload), ensure_ascii=False, sort_keys=True
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _paper_lookup(papers: list[PaperRecord]) -> dict[str, PaperRecord]:
@@ -1296,7 +1348,6 @@ def run_online_alignment_gate(
 def run_policy_rl_pipeline(
     papers: list[PaperRecord],
     *,
-    trainer: str,
     model_name: str,
     output_dir: str,
     episode_config: EpisodeBuildConfig,
@@ -1312,14 +1363,17 @@ def run_policy_rl_pipeline(
     max_episodes: int | None = None,
     similarity_config_path: str = "similarity.yaml",
     runtime_config_path: str | None = None,
-    strict_mode: bool = False,
     prepare_only: bool = False,
     init_policy_path: str | None = None,
     skip_alignment_check: bool = False,
     hindsight_samples: list[HindsightSample] | None = None,
+    max_grpo_rows: int | None = None,
+    use_vllm_server: bool = False,
+    vllm_server_host: str = "localhost",
+    vllm_server_port: int = 8765,
 ) -> dict[str, Any]:
+    """Single GRPO training pipeline (METHOD §3.3) using Unsloth + TRL."""
     _require_train_split_for_training(split, prepare_only)
-    runner = create_trainer_runner(trainer)
     target_dir = Path(output_dir).resolve()
     resolved_realization_config = realization_config or load_realization_config()
     common_context = prepare_common_rl_context(
@@ -1335,19 +1389,23 @@ def run_policy_rl_pipeline(
         max_episodes=max_episodes,
         similarity_config_path=similarity_config_path,
         runtime_config_path=runtime_config_path,
-        strict_mode=strict_mode,
+        strict_mode=False,
         hindsight_samples=hindsight_samples,
     )
-    prepared = runner.prepare(
-        common_context,
-        model_name=model_name,
-        candidate_config=candidate_config,
-        reward_config=reward_config,
-        trainer_config=trainer_config,
+    grpo_dir = target_dir / "grpo"
+    prompt_rows = common_context.prompt_rows
+    if max_grpo_rows is not None and max_grpo_rows > 0 and len(prompt_rows) > max_grpo_rows:
+        logger.info(
+            "Capping GRPO dataset from %d → %d rows (--max-grpo-rows).",
+            len(prompt_rows), max_grpo_rows,
+        )
+        prompt_rows = prompt_rows[:max_grpo_rows]
+    dataset_rows, dataset_path = prepare_grpo_dataset(
+        prompt_rows, output_dir=grpo_dir
     )
 
     diagnostics: dict[str, Any] = {}
-    if runner.trainer_name in {"ppo", "grpo", "rloo"} and not skip_alignment_check and not prepare_only:
+    if not skip_alignment_check and not prepare_only:
         diagnostics = run_online_alignment_gate(
             common_context,
             model_name=model_name,
@@ -1356,38 +1414,42 @@ def run_policy_rl_pipeline(
             realization_config=resolved_realization_config,
             reward_config=reward_config,
             trainer_config=trainer_config,
-            trainer_output_dir=prepared.output_dir,
-            strict_mode=strict_mode,
+            trainer_output_dir=grpo_dir,
+            strict_mode=False,
         )
         if not diagnostics.get("alignment_passed", False):
             raise ValueError(
-                f"{runner.trainer_name.upper()} reward alignment check failed with rho="
+                f"GRPO reward alignment check failed with rho="
                 f"{diagnostics.get('alignment_rho', 0.0)}"
             )
 
     trainer_manifest: dict[str, Any] | None = None
     if not prepare_only:
-        trainer_manifest = runner.train(
-            prepared,
-            config=trainer_config,
+        trainer_manifest = train_grpo_with_unsloth(
             model_name=model_name,
+            dataset_rows=dataset_rows,
+            output_dir=grpo_dir,
+            config=trainer_config,
+            init_policy_path=init_policy_path,
             predictor_config=candidate_config.predictor_config,
-            output_dir=str(prepared.output_dir),
-            reward_config=reward_config,
+            trainer_config_path=trainer_config_path,
+            selection_config_path=selection_config_path,
+            selection_candidate_pool_size=selection_config.candidate_pool_size,
+            selection_output_top_k=selection_config.output_top_k,
             reward_config_path=reward_config_path,
             similarity_config_path=similarity_config_path,
             runtime_config_path=runtime_config_path,
-            trainer_config_path=trainer_config_path,
-            selection_config=selection_config,
-            selection_config_path=selection_config_path,
-            init_policy_path=init_policy_path,
+            dataset_path=dataset_path,
             diagnostics=diagnostics or None,
+            use_vllm_server=use_vllm_server,
+            vllm_server_host=vllm_server_host,
+            vllm_server_port=vllm_server_port,
         )
 
     manifest = {
-        "pipeline_manifest_version": 2,
-        "trainer": runner.trainer_name,
-        "trainer_backend": runner.backend_name,
+        "pipeline_manifest_version": 3,
+        "trainer": "grpo",
+        "trainer_backend": "unsloth",
         "model_name": model_name,
         "split": split,
         "training_split_policy": "train_only",
@@ -1395,18 +1457,15 @@ def run_policy_rl_pipeline(
         "shared_manifest_path": str(common_context.shared_manifest_path),
         "episodes_path": str(common_context.episodes_path),
         "prompt_rows_path": str(common_context.prompt_rows_path),
-        "trainer_dataset_path": str(prepared.dataset_path.resolve()),
-        "trainer_output_dir": str(prepared.output_dir.resolve()),
-        "trainer_policy_manifest_path": str((prepared.output_dir / "policy_manifest.json").resolve()) if trainer_manifest else "",
+        "trainer_dataset_path": str(dataset_path.resolve()),
+        "trainer_output_dir": str(grpo_dir.resolve()),
+        "trainer_policy_manifest_path": str((grpo_dir / "policy_manifest.json").resolve()) if trainer_manifest else "",
         "prepare_only": prepare_only,
         "selection_config_path": selection_config_path,
-        "prompt_mode": "strict_interactive_realization" if strict_mode else "z_conditioned_realization",
-        "strict_mode": strict_mode,
+        "prompt_mode": "z_conditioned_realization",
         "recommended_small_models": list_small_model_payloads(),
         "shared_fingerprint": common_context.config_fingerprint,
-        "trainer_metadata": prepared.metadata,
         "diagnostics": diagnostics,
-        "strict_contract": strict_runtime_manifest_contract(),
     }
     _write_json(target_dir / "pipeline_manifest.json", manifest)
     return manifest
