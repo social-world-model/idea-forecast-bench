@@ -16,12 +16,24 @@
 #      /update_named_param, etc. — plain `vllm serve` does NOT expose these)
 #
 #  TOPOLOGY (auto-picked unless overridden):
-#    2 GPUs:  vLLM=1 (GPU 0)            + trainer=1 (GPU 1)
-#    4 GPUs:  vLLM=2 (GPUs 0,1, tp=2)   + trainer=2 (GPUs 2,3)
-#    8 GPUs:  vLLM=4 (GPUs 0-3, tp=4)   + trainer=4 (GPUs 4-7)
-#    Others:  vLLM=floor(N/2)           + trainer=N-floor(N/2)
+#    2 GPUs:  vLLM=1                 + trainer=1
+#    4 GPUs:  vLLM=2 (tp=2)          + trainer=2
+#    8 GPUs:  vLLM=4 (tp=4)          + trainer=4
+#    Others:  vLLM=floor(N/2)        + trainer=N-floor(N/2)
+#
+#  GPU SELECTION:
+#    By default, all physical GPUs reported by nvidia-smi are used. To pin
+#    the script to specific physical cards (e.g. GPUs 1 and 2 on an 8-GPU
+#    box), set CUDA_VISIBLE_DEVICES *before* invoking the script:
+#
+#      CUDA_VISIBLE_DEVICES=1,2 bash scripts/forecaster/train_vllm.sh ...
+#
+#    The script honors the comma-separated list and assigns the first GPU(s)
+#    in it to vLLM and the rest to the trainer, passing PHYSICAL ids
+#    (not re-indexed) to each subprocess via its own CUDA_VISIBLE_DEVICES.
 #
 #  OVERRIDES (env vars):
+#    CUDA_VISIBLE_DEVICES=1,2  restrict to specific physical GPUs (see above)
 #    VLLM_NUM_GPUS=N      number of GPUs reserved for the vLLM server
 #                         (becomes its --tensor_parallel_size)
 #    VLLM_PORT=8765       HTTP port for trl vllm-serve
@@ -34,17 +46,26 @@
 #  Activate the env first:
 #      conda activate live-idea-bench-unsloth
 #
-#  Example (auto 2-GPU split):
+#  Examples
+#  --------
+#  Auto split across all visible GPUs:
 #      bash scripts/forecaster/train_vllm.sh \
 #          --model qwen3.5-2b \
 #          --hindsight output/hindsight_samples.jsonl \
 #          --output-dir output/forecaster_qwen3.5-2b
 #
-#  Example (4 GPUs, custom split):
-#      VLLM_NUM_GPUS=2 bash scripts/forecaster/train_vllm.sh \
-#          --model qwen3.5-4b \
+#  Pin to physical GPUs 1 and 2 only (e.g. 8-GPU box, others busy):
+#      CUDA_VISIBLE_DEVICES=1,2 bash scripts/forecaster/train_vllm.sh \
+#          --model qwen3.5-2b \
 #          --hindsight output/hindsight_samples.jsonl \
-#          --output-dir output/forecaster_qwen3.5-4b
+#          --output-dir output/forecaster_qwen3.5-2b
+#
+#  4 GPUs with a custom split (3 for vLLM tp=3, 1 for trainer):
+#      CUDA_VISIBLE_DEVICES=0,1,2,3 VLLM_NUM_GPUS=3 \
+#      bash scripts/forecaster/train_vllm.sh \
+#          --model qwen3.5-9b \
+#          --hindsight output/hindsight_samples.jsonl \
+#          --output-dir output/forecaster_qwen3.5-9b
 # ============================================================================
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -56,14 +77,30 @@ VLLM_MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-6144}"
 VLLM_BOOT_TIMEOUT="${VLLM_BOOT_TIMEOUT:-360}"
 
 # ---- Detect available GPUs ----
-if ! command -v nvidia-smi >/dev/null 2>&1; then
-  echo "ERROR: nvidia-smi not found. This script requires NVIDIA GPUs." >&2
-  exit 1
+# Honor a parent CUDA_VISIBLE_DEVICES if set (lets the user pin to specific
+# physical cards on a multi-tenant box). Otherwise enumerate all physical GPUs
+# from nvidia-smi. Either way we end up with an array of PHYSICAL gpu ids.
+if [[ -n "${CUDA_VISIBLE_DEVICES:-}" ]]; then
+  IFS=',' read -r -a AVAILABLE_GPUS <<< "${CUDA_VISIBLE_DEVICES}"
+  # Strip any whitespace around entries.
+  for i in "${!AVAILABLE_GPUS[@]}"; do
+    AVAILABLE_GPUS[i]="${AVAILABLE_GPUS[i]// /}"
+  done
+  # Unset the inherited CUDA_VISIBLE_DEVICES so subprocesses get a clean slate
+  # — we'll set it explicitly per subprocess below with the physical id(s)
+  # we want them to see.
+  unset CUDA_VISIBLE_DEVICES
+else
+  if ! command -v nvidia-smi >/dev/null 2>&1; then
+    echo "ERROR: nvidia-smi not found. This script requires NVIDIA GPUs." >&2
+    exit 1
+  fi
+  mapfile -t AVAILABLE_GPUS < <(nvidia-smi --query-gpu=index --format=csv,noheader 2>/dev/null)
 fi
 
-NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | wc -l)
+NUM_GPUS=${#AVAILABLE_GPUS[@]}
 if [[ "${NUM_GPUS}" -lt 2 ]]; then
-  echo "ERROR: train_vllm.sh requires at least 2 GPUs (found ${NUM_GPUS})." >&2
+  echo "ERROR: train_vllm.sh requires at least 2 GPUs (found ${NUM_GPUS}: [${AVAILABLE_GPUS[*]}])." >&2
   echo "       TRL refuses to put trainer + vLLM server on the same device." >&2
   echo "       Use scripts/forecaster/train.sh for single-GPU training." >&2
   exit 1
@@ -83,10 +120,17 @@ if [[ "${TRAINER_NUM_GPUS}" -lt 1 ]]; then
   echo "ERROR: VLLM_NUM_GPUS=${VLLM_NUM_GPUS} leaves no GPUs for the trainer." >&2
   exit 1
 fi
+if [[ "${VLLM_NUM_GPUS}" -lt 1 ]]; then
+  echo "ERROR: VLLM_NUM_GPUS=${VLLM_NUM_GPUS} must be >= 1." >&2
+  exit 1
+fi
 
-# Build CUDA_VISIBLE_DEVICES strings — vLLM owns the first N, trainer owns the rest.
-VLLM_CUDA=$(seq -s, 0 $(( VLLM_NUM_GPUS - 1 )))
-TRAINER_CUDA=$(seq -s, "${VLLM_NUM_GPUS}" $(( NUM_GPUS - 1 )))
+# Slice the AVAILABLE_GPUS array into vLLM and trainer halves. The first
+# VLLM_NUM_GPUS physical ids go to vLLM, the rest go to the trainer.
+VLLM_GPUS=("${AVAILABLE_GPUS[@]:0:${VLLM_NUM_GPUS}}")
+TRAINER_GPUS=("${AVAILABLE_GPUS[@]:${VLLM_NUM_GPUS}}")
+VLLM_CUDA=$(IFS=','; echo "${VLLM_GPUS[*]}")
+TRAINER_CUDA=$(IFS=','; echo "${TRAINER_GPUS[*]}")
 
 # ---- Resolve --model alias to HF model id ----
 MODEL_ALIAS=""
@@ -117,9 +161,9 @@ fi
 VLLM_LOG="/tmp/vllm_serve_${VLLM_PORT}.log"
 echo "============================================================"
 echo " Multi-GPU vLLM training"
-echo "  Total GPUs       : ${NUM_GPUS}"
-echo "  vLLM GPUs        : ${VLLM_NUM_GPUS} (CUDA_VISIBLE_DEVICES=${VLLM_CUDA}, tp=${VLLM_NUM_GPUS})"
-echo "  Trainer GPUs     : ${TRAINER_NUM_GPUS} (CUDA_VISIBLE_DEVICES=${TRAINER_CUDA})"
+echo "  Available GPUs   : [${AVAILABLE_GPUS[*]}] (count=${NUM_GPUS})"
+echo "  vLLM GPUs        : ${VLLM_NUM_GPUS} → physical [${VLLM_CUDA}] (tp=${VLLM_NUM_GPUS})"
+echo "  Trainer GPUs     : ${TRAINER_NUM_GPUS} → physical [${TRAINER_CUDA}]"
 echo "  Model            : ${MODEL_ALIAS} → ${MODEL_ID}"
 echo "  vLLM port        : ${VLLM_PORT}"
 echo "  vLLM gpu-mem-util: ${VLLM_GPU_MEM_UTIL}"
