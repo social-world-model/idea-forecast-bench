@@ -1,13 +1,10 @@
-per_device_batch_size: 1
 gradient_accumulation_steps: 2
 num_train_epochs: 1
 learning_rate: 0.000002
 num_generations: 8
 max_prompt_length: 4096
-max_completion_length: 1024
+max_completion_length: 2048
 kl_coef: 0.001
-use_vllm: false
-vllm_gpu_memory_utilization: 0.4
 logging_steps: 1
 lora_r: 16
 lora_alpha: 32

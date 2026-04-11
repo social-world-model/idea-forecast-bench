@@ -161,16 +161,20 @@ def _load_local_model(model_name_or_path: str, *, base_model_name: str | None = 
                     "Loading LoRA adapters for local RL inference requires peft to be installed."
                 ) from exc
             peft_model = getattr(peft, "PeftModel")
+            torch = deps["torch"]
+            _dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
             model = deps["AutoModelForCausalLM"].from_pretrained(
                 base_model_name,
-                torch_dtype="auto",
+                torch_dtype=_dtype,
                 device_map="auto",
             )
-            model = peft_model.from_pretrained(model, model_name_or_path)
+            model = peft_model.from_pretrained(model, model_name_or_path, torch_dtype=_dtype)
         else:
+            torch = deps["torch"]
+            _dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
             model = deps["AutoModelForCausalLM"].from_pretrained(
                 model_name_or_path,
-                torch_dtype="auto",
+                torch_dtype=_dtype,
                 device_map="auto",
             )
 

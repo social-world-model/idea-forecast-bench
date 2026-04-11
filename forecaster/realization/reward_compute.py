@@ -1,14 +1,17 @@
+"""Reward callable for the realization GRPO trainer.
+
+This is the function passed to ``trl.GRPOTrainer`` via ``reward_funcs=[...]``.
+It decodes the per-row ``extra_info`` payload that ``build_grpo_dataset_rows``
+attached and delegates to ``evaluate_rl_reward`` →
+``evaluate_realization_reward``, which returns the three METHOD §3.3
+verifiable rewards (``evidence_quality``, ``operator_adherence``,
+``coherence``) summed by the weights in ``config/forecaster/reward.yaml``.
+"""
 from __future__ import annotations
 
 from functools import lru_cache
 import json
-from pathlib import Path
-import sys
 from typing import Any
-
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(PROJECT_ROOT))
 
 from live_idea_bench.models import PaperRecord
 from forecaster.config import RealizationConfig, load_realization_config
@@ -17,7 +20,6 @@ from forecaster.realization.config import load_reward_config
 from forecaster.realization.reward import (
     build_invalid_reward_evaluation,
     coerce_reward_prediction,
-    evaluate_strict_completion_reward,
     evaluate_rl_reward,
 )
 
@@ -51,6 +53,11 @@ def compute_score(
     runtime_config_path: str | None = None,
     model_name: str | None = None,
 ) -> float:
+    """Score one rollout completion against METHOD §3.3 verifiable rewards.
+
+    Returns ``evaluation.list_reward`` — a single float that
+    ``trl.GRPOTrainer`` uses to compute group-relative advantages.
+    """
     del data_source, ground_truth
     reward_config = _cached_reward_config(reward_config_path)
     payload = _coerce_extra_info(extra_info)
@@ -78,16 +85,6 @@ def compute_score(
     except (TypeError, ValueError):
         realization_config = load_realization_config(realization_config_path)
     prompt_mode = str(payload.get("prompt_mode", "") or "")
-    if prompt_mode == "strict_interactive_realization":
-        strict_reward = evaluate_strict_completion_reward(
-            solution_str,
-            innovation=innovation,
-            train_papers=train_papers,
-            reward_config=reward_config,
-            realization_config=realization_config,
-            search_env_payload=payload.get("search_env") if isinstance(payload.get("search_env"), dict) else None,
-        )
-        return strict_reward.total_reward
     prediction, proposal_text = coerce_reward_prediction(
         solution_str,
         prompt_mode=prompt_mode,

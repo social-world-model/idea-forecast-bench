@@ -18,17 +18,29 @@ def _load_prompt_config() -> dict[str, str]:
 
 
 def _parse_innovation(text: str) -> Innovation | None:
-    """Parse a JSON string into an Innovation. Returns None on failure."""
+    """Parse a JSON string into an Innovation. Returns None on failure.
+
+    Handles models that output extra text after the JSON object by trying
+    progressively shorter substrings ending at each '}'.
+    """
     text = text.strip()
     start = text.find("{")
-    end = text.rfind("}") + 1
-    if start == -1 or end == 0:
+    if start == -1:
         return None
-    try:
-        return innovation_from_json(text[start:end])
-    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-        logger.warning("Failed to parse innovation from text: %s — %s", text[:80], exc)
-        return None
+    # Try each closing brace from left to right (first complete object)
+    search_from = start
+    while True:
+        end = text.find("}", search_from)
+        if end == -1:
+            break
+        candidate = text[start:end + 1]
+        try:
+            return innovation_from_json(candidate)
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+            search_from = end + 1
+            continue
+    logger.warning("Failed to parse innovation from text: %s", text[:80])
+    return None
 
 
 def _build_prompt(system_prompt: str, input_template: str, memory_store: Any) -> str:
@@ -56,8 +68,17 @@ def _detect_base_model(model_path_str: str) -> str | None:
     return None
 
 
+_PRIOR_MODEL_CACHE: dict[str, tuple[Any, Any]] = {}
+
+
 def _load_prior_model_and_tokenizer(model_path_str: str) -> tuple[Any, Any]:
-    """Load the prior checkpoint and tokenizer, including LoRA adapter checkpoints."""
+    """Load the prior checkpoint and tokenizer, including LoRA adapter checkpoints.
+
+    Caches loaded models to avoid reloading per sliding window.
+    """
+    if model_path_str in _PRIOR_MODEL_CACHE:
+        return _PRIOR_MODEL_CACHE[model_path_str]
+
     try:
         import torch
         from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -80,12 +101,16 @@ def _load_prior_model_and_tokenizer(model_path_str: str) -> tuple[Any, Any]:
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
+        import torch as _torch
         base_model = AutoModelForCausalLM.from_pretrained(
             base_model_id,
-            torch_dtype="auto",
+            torch_dtype=_torch.bfloat16 if _torch.cuda.is_available() else _torch.float32,
             device_map="auto",
         )
-        model = peft.PeftModel.from_pretrained(base_model, model_path_str)
+        model = peft.PeftModel.from_pretrained(
+            base_model, model_path_str,
+            torch_dtype=base_model.dtype,
+        )
     else:
         logger.info("No adapter_config.json found; loading model directly from %r.", model_path_str)
         tokenizer = AutoTokenizer.from_pretrained(model_path_str)
@@ -99,6 +124,7 @@ def _load_prior_model_and_tokenizer(model_path_str: str) -> tuple[Any, Any]:
         )
 
     model.eval()
+    _PRIOR_MODEL_CACHE[model_path_str] = (model, tokenizer)
     return model, tokenizer
 
 
@@ -128,7 +154,7 @@ def build_prior_scorer(
     )
 
     model, tokenizer = _load_prior_model_and_tokenizer(str(model_path))
-    prompt_encoded = tokenizer([prompt], return_tensors="pt")
+    prompt_encoded = tokenizer([prompt], return_tensors="pt", add_special_tokens=False)
     prompt_ids = prompt_encoded["input_ids"]
     prompt_len = prompt_ids.shape[1]
     normalization = str(getattr(config, "score_normalization", "per_token")).strip().lower()
@@ -139,7 +165,7 @@ def build_prior_scorer(
     def score(innovation: Innovation) -> float:
         target = innovation_to_json(innovation)
         full_text = f"{prompt}{target}"
-        encoded = tokenizer([full_text], return_tensors="pt")
+        encoded = tokenizer([full_text], return_tensors="pt", add_special_tokens=False)
         encoded = {name: value.to(model.device) for name, value in encoded.items()}
 
         with torch.no_grad():
@@ -165,6 +191,52 @@ def build_prior_scorer(
     return score
 
 
+def _sglang_prior_url() -> str | None:
+    """Return the SGLang server URL for prior model if set."""
+    import os
+    url = os.environ.get("SGLANG_PRIOR_URL", "").strip()
+    return url if url else None
+
+
+_SGLANG_MODEL_ID_CACHE: dict[str, str] = {}
+
+
+def _sample_via_sglang(
+    prompt: str,
+    config: InferenceConfig,
+    sglang_url: str,
+) -> list[Innovation]:
+    """Sample innovations via SGLang/vLLM OpenAI-compatible API."""
+    import openai
+
+    client = openai.OpenAI(base_url=f"{sglang_url}/v1", api_key="none")
+
+    if sglang_url not in _SGLANG_MODEL_ID_CACHE:
+        _SGLANG_MODEL_ID_CACHE[sglang_url] = client.models.list().data[0].id
+    model_id = _SGLANG_MODEL_ID_CACHE[sglang_url]
+
+    innovations: list[Innovation] = []
+    for _ in range(config.num_candidates):
+        try:
+            resp = client.completions.create(
+                model=model_id,
+                prompt=prompt,
+                max_tokens=512,
+                temperature=config.prior_temperature,
+                top_p=0.9,
+            )
+            raw_text = resp.choices[0].text
+            inn = _parse_innovation(raw_text)
+            if inn is not None:
+                innovations.append(inn)
+            else:
+                logger.warning("SGLang: unparseable sample: %s", raw_text[:120])
+        except Exception as exc:
+            logger.warning("SGLang prior sampling failed: %s", exc)
+
+    return innovations
+
+
 def sample_innovations(
     model_path: str,
     memory_store: Any,
@@ -176,16 +248,9 @@ def sample_innovations(
     Generates config.num_candidates innovations at config.prior_temperature.
     Returns list of Innovation objects (failed parses are skipped with warning).
 
-    If adapter_config.json is present in model_path, loads via PeftModel.from_pretrained
-    to handle LoRA adapter-only checkpoints saved by train_prior().
+    If SGLANG_PRIOR_URL is set, uses the SGLang API for fast inference.
+    Otherwise loads the model locally via HF generate.
     """
-    try:
-        import torch
-    except ImportError as exc:
-        raise ImportError(
-            "Sampling from the prior requires torch. Install with: pip install torch"
-        ) from exc
-
     prompt_cfg = _load_prompt_config()
     prompt = _build_prompt(
         prompt_cfg["system_prompt"],
@@ -193,13 +258,27 @@ def sample_innovations(
         memory_store,
     )
 
+    # Fast path: SGLang API
+    sglang_url = _sglang_prior_url()
+    if sglang_url:
+        logger.info("Using SGLang API at %s for prior sampling", sglang_url)
+        return _sample_via_sglang(prompt, config, sglang_url)
+
+    # Slow path: local HF model
+    try:
+        import torch
+    except ImportError as exc:
+        raise ImportError(
+            "Sampling from the prior requires torch. Install with: pip install torch"
+        ) from exc
+
     model, tokenizer = _load_prior_model_and_tokenizer(str(model_path))
 
-    encoded = tokenizer([prompt], return_tensors="pt")
+    encoded = tokenizer([prompt], return_tensors="pt", add_special_tokens=False)
     encoded = {k: v.to(model.device) for k, v in encoded.items()}
 
     generation_kwargs: dict[str, Any] = {
-        "max_new_tokens": 256,
+        "max_new_tokens": 512,
         "pad_token_id": tokenizer.pad_token_id,
         "do_sample": True,
         "temperature": config.prior_temperature,
