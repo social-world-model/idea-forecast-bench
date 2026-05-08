@@ -572,6 +572,8 @@ def main() -> int:
     parser.add_argument("--top-r",       type=int, default=DEFAULT_TOP_R,
                         help="Number of candidates to retrieve per prediction")
     parser.add_argument("--judge-model", default=DEFAULT_JUDGE)
+    parser.add_argument("--judge-base-url", default=None,
+                        help="Base URL for judge model API (e.g. http://localhost:8000/v1 for local models)")
     parser.add_argument("--embed-model", default=EMBED_MODEL)
     parser.add_argument("--workers",      type=int, default=8,
                         help="Parallel LLM judge threads per window")
@@ -594,7 +596,11 @@ def main() -> int:
         return 1
 
     embed_client = openai.OpenAI(api_key=voyage_key, base_url=VOYAGE_BASE_URL)
-    judge_client = openai.OpenAI(api_key=openai_key, timeout=30.0)
+    judge_client = openai.OpenAI(
+        api_key=openai_key,
+        base_url=args.judge_base_url or None,
+        timeout=30.0,
+    )
 
     out_path   = Path(args.output)
     state_path = Path(args.state_file) if args.state_file else out_path.with_suffix(".state.json")
