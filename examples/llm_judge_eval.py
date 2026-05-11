@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import atexit
 import hashlib
 import json
 import math
@@ -60,17 +61,22 @@ MAX_EMBED_RETRY  = 12
 MAX_JUDGE_RETRY  = 3
 
 JUDGE_SYSTEM = """\
-You are an expert scientific reviewer. You are given a PREDICTED research direction — a forecast made before the paper was published — and a PUBLISHED paper. Your task is to judge whether the published paper is a realization of that prediction: i.e., does the paper actually carry out what was predicted?
+You are an expert scientific reviewer. You are given a PREDICTED research direction — a forecast made before the paper was published — and a PUBLISHED paper. Your task is to judge whether the published paper is a realization of that prediction.
 
-A MATCH requires BOTH:
-(1) The paper addresses the same core research problem as the prediction.
-(2) The paper uses a similar methodological approach as described in the prediction.
+A MATCH requires alignment on ALL FOUR facets (Shahid et al., 2025):
+(1) PURPOSE   — the core research problem / objective being addressed.
+(2) MECHANISM — the specific methodological approach (the technical "how"). The mechanism stated in the prediction must be a concrete technical method, not a generic meta-process.
+(3) EVALUATION — the validation strategy: what is measured, on what data, to demonstrate the contribution.
+(4) APPLICATION — the application domain or scope of use.
 
-Do NOT match based on shared topic or keyword overlap alone. Two works can both be about "long-context LLMs" or "knowledge distillation" without one being a realization of the other. Focus on whether the specific mechanism and goal described in the prediction are present in the paper.
+CRITICAL RULES — apply BEFORE assessing similarity:
+- A. If the prediction is only a topic keyword, a phrase like "Next-stage direction: X", or describes a meta-analytic process (e.g., "track papers", "cluster trends", "benchmark recent methodology shifts"), respond MATCH: NO. Such predictions do not specify a mechanism — alignment on facets (2)–(4) cannot be verified, and shared TOPIC alone is not a realization.
+- B. Do NOT match based on shared topic or keyword overlap alone. A paper being "in the same area" as the prediction's keyword is NOT sufficient. Two works can both be about "long-context LLMs" or "quantization" without one being a realization of the other.
+- C. Do NOT justify a YES with "the paper realizes the broader direction" or "the prediction is a meta-analysis but the paper is a concrete realization within that area." Each facet must align independently and concretely.
 
-Here are two reference examples:
+Below are three reference examples.
 
---- EXAMPLE 1 (MATCH: NO) ---
+--- EXAMPLE 1 (MATCH: NO — divergent mechanism) ---
 Predicted Research Direction:
 Title: Hierarchical Segment-Level Memory Routing with Learned Boundary Detection for Infinite-Context LLMs
 Rationale: Standard attention scales quadratically with sequence length, making truly long-context modeling infeasible. We propose a memory system that learns where natural segment boundaries lie in a document, and routes each segment to a different compression level based on access frequency.
@@ -82,9 +88,9 @@ Title: SnapKV: LLM Knows What You are Looking for Before Generation
 Abstract: SnapKV observes which KV positions receive attention in a fixed observation window before generation, then retains only those important KV entries for the remainder of the sequence. It achieves significant memory reduction without fine-tuning.
 
 MATCH: NO
-REASONING: Both address long-context efficiency via KV compression, but the core mechanisms differ fundamentally. The prediction centers on segment-boundary detection, hierarchical salience-based routing, and cross-segment attention between compressed and full-resolution segments. SnapKV does none of these: it identifies important KV positions by observing attention patterns over a fixed prefix window, with no segmentation, no routing logic, and no cross-segment attention layer.
+REASONING: PURPOSE roughly aligns (long-context efficiency via KV compression). MECHANISM diverges fundamentally: prediction relies on learned segment boundaries, hierarchical salience routing, and cross-segment attention; SnapKV uses attention-pattern observation in a fixed prefix window with no segmentation or routing.
 
---- EXAMPLE 2 (MATCH: YES) ---
+--- EXAMPLE 2 (MATCH: YES — all four facets align) ---
 Predicted Research Direction:
 Title: Distilling Explicit Chain-of-Thought into Implicit Latent Reasoning Without Token Generation
 Rationale: Explicit CoT inference is slow and verbose. If the reasoning steps can be internalized into the model's hidden states via distillation, we can reason without generating visible intermediate tokens.
@@ -96,12 +102,26 @@ Title: Implicit Chain of Thought Reasoning via Knowledge Distillation
 Abstract: We propose to have LLMs reason implicitly. Rather than producing explicit reasoning steps, the model internalizes them as hidden states via a teacher-student distillation framework. At inference time, no intermediate tokens are generated.
 
 MATCH: YES
-REASONING: Both propose to internalize chain-of-thought reasoning into the model's latent states via knowledge distillation from a teacher that generates explicit reasoning traces, such that at inference time no intermediate reasoning tokens are produced. The core problem, mechanism, and implementation goal are identical.
+REASONING: PURPOSE (skipping explicit CoT tokens at inference), MECHANISM (teacher-student distillation of explicit CoT into latent activations), EVALUATION (downstream answer accuracy without intermediate tokens), and APPLICATION (LLM reasoning) all align.
+
+--- EXAMPLE 3 (MATCH: NO — prediction is keyword-only / meta-analytic) ---
+Predicted Research Direction:
+Title: Next-stage direction: Quantization
+Rationale: Keyword "quantization" appears 12 times in the recent 3 month(s), 8 times overall before 2024-08.
+Approach: Track papers centered on quantization, cluster the recent methodology shifts, and benchmark whether the trend remains predictive over the next few months.
+Key Terms: ['quantization']
+
+Published Paper:
+Title: A Scaling Law for Low-Bit Quantization in LLMs
+Abstract: We benchmark 1500 LLM checkpoints under 2-bit and 4-bit post-training quantization and derive a scaling law that predicts downstream accuracy as a function of bit-width and model size.
+
+MATCH: NO
+REASONING: Triggers Rule A. The prediction names only a topic keyword and a meta-analytic process (track / cluster / benchmark trends). MECHANISM, EVALUATION, and APPLICATION cannot be verified because the prediction has no specific technical method — shared topic ("quantization") is not enough.
 ---
 
 Respond with exactly two lines:
 MATCH: YES  or  MATCH: NO
-REASONING: <one to two sentences explaining your decision>\
+REASONING: <one to two sentences naming which facets aligned or which failed; cite Rule A/B/C if invoked>\
 """
 
 JUDGE_USER_TMPL = """\
@@ -115,8 +135,7 @@ Key Terms: {pred_terms}
 Title: {paper_title}
 Abstract: {paper_abstract}
 
-Is this published paper a realization of the predicted research direction?
-Both criteria must hold: same core research problem AND similar methodological approach.
+Apply the rules in order: (1) check Rule A — is the prediction only a topic keyword or a meta-analytic process? If yes, MATCH: NO. (2) Otherwise, verify alignment on PURPOSE, MECHANISM, EVALUATION, and APPLICATION; all four must align for MATCH: YES.
 """
 
 MATCH_RE = re.compile(r"MATCH\s*:\s*(YES|NO)", re.IGNORECASE)
@@ -130,18 +149,33 @@ class RunState:
 
     def __init__(self, path: Path) -> None:
         self.path = path
+        # Embeddings are persisted in a sidecar so the main state stays small
+        # (~25MB: judge_decisions + window_outputs) and flushes fast on NFS.
+        self.embeddings_path = path.with_name(path.stem + ".embeddings.json")
         self._lock = threading.Lock()
+        self._last_flush_time = 0.0
+        self._last_emb_flush_time = 0.0
+        self._dirty = False
+        self._emb_dirty = False
         if path.exists():
             self._data: dict = json.loads(path.read_text(encoding="utf-8"))
         else:
-            self._data = {
-                "version": 1,
-                "paper_embeddings": {},
-                "pred_embeddings": {},
-                "judge_decisions": {},
-                "completed_windows": [],
-                "window_outputs": {},
-            }
+            self._data = {"version": 1}
+        # Forward-compat: ensure all expected keys exist regardless of which
+        # schema version produced the loaded file.
+        self._data.setdefault("version", 1)
+        self._data.setdefault("paper_embeddings", {})
+        self._data.setdefault("pred_embeddings", {})
+        self._data.setdefault("judge_decisions", {})
+        self._data.setdefault("completed_windows", [])
+        self._data.setdefault("window_outputs", {})
+        # If a sidecar embeddings file exists, merge it in. The sidecar is
+        # authoritative when both sources have the same key (it's written more
+        # recently in steady state).
+        if self.embeddings_path.exists():
+            emb = json.loads(self.embeddings_path.read_text(encoding="utf-8"))
+            self._data["paper_embeddings"].update(emb.get("paper_embeddings", {}))
+            self._data["pred_embeddings"].update(emb.get("pred_embeddings", {}))
 
     # ---- embeddings --------------------------------------------------------
     def get_paper_vec(self, paper_id: str) -> list[float] | None:
@@ -153,7 +187,7 @@ class RunState:
         with self._lock:
             for paper_id, vec in id_vec_pairs:
                 self._data["paper_embeddings"][paper_id] = vec
-            self._flush()
+            self._flush_embeddings()
 
     def get_pred_vec(self, pred_hash: str) -> list[float] | None:
         with self._lock:
@@ -162,7 +196,7 @@ class RunState:
     def set_pred_vec(self, pred_hash: str, vec: list[float]) -> None:
         with self._lock:
             self._data["pred_embeddings"][pred_hash] = vec
-            self._flush()
+            self._flush_embeddings()
 
     # ---- judge decisions ---------------------------------------------------
     def get_decision(self, pred_hash: str, paper_id: str) -> dict | None:
@@ -195,12 +229,51 @@ class RunState:
             self._flush()
 
     # ---- persistence -------------------------------------------------------
-    def _flush(self) -> None:
-        """Must be called with self._lock held."""
+    def _flush(self, *, force: bool = False) -> None:
+        """Must be called with self._lock held. Writes only the main state
+        (judge_decisions + window_outputs + completed_windows, ~25 MB at full
+        scale); embeddings live in a sidecar. Throttled to 1 write per 30s."""
+        self._dirty = True
+        now = time.time()
+        if not force and now - self._last_flush_time < 30:
+            return
+        main = {
+            "version": self._data.get("version", 1),
+            "judge_decisions": self._data["judge_decisions"],
+            "completed_windows": self._data["completed_windows"],
+            "window_outputs": self._data["window_outputs"],
+        }
         tmp = self.path.with_suffix(".tmp")
         tmp.parent.mkdir(parents=True, exist_ok=True)
-        tmp.write_text(json.dumps(self._data, ensure_ascii=False), encoding="utf-8")
+        tmp.write_text(json.dumps(main, ensure_ascii=False), encoding="utf-8")
         tmp.replace(self.path)
+        self._last_flush_time = now
+        self._dirty = False
+
+    def _flush_embeddings(self, *, force: bool = False) -> None:
+        """Must be called with self._lock held. Writes the embeddings sidecar
+        (paper_embeddings + pred_embeddings, ~150-250 MB JSON). Throttled to
+        1 write per 300s — embeddings are append-mostly and stabilize early."""
+        self._emb_dirty = True
+        now = time.time()
+        if not force and now - self._last_emb_flush_time < 300:
+            return
+        emb = {
+            "paper_embeddings": self._data["paper_embeddings"],
+            "pred_embeddings": self._data["pred_embeddings"],
+        }
+        tmp = self.embeddings_path.with_suffix(".tmp")
+        tmp.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_text(json.dumps(emb, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(self.embeddings_path)
+        self._last_emb_flush_time = now
+        self._emb_dirty = False
+
+    def force_flush(self) -> None:
+        """Force-write both the main state and the embeddings sidecar."""
+        with self._lock:
+            self._flush(force=True)
+            self._flush_embeddings(force=True)
 
 
 # ---------------------------------------------------------------------------
@@ -607,6 +680,7 @@ def main() -> int:
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     state = RunState(state_path)
+    atexit.register(state.force_flush)
 
     saved = json.loads(Path(args.input_json).read_text(encoding="utf-8"))
     cfg   = saved.get("config", {})
@@ -677,6 +751,7 @@ def main() -> int:
         print(f"  {k}: {v:.4f}")
 
     _write_output(out_path, args, cfg, topic_results, total_windows, aggregate)
+    state.force_flush()
     print(f"\nSaved → {out_path}")
     print(f"State  → {state_path}")
     return 0
