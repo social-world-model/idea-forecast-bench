@@ -24,6 +24,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import atexit
 import hashlib
 import json
 import math
@@ -191,18 +192,34 @@ class RunState:
 
     def __init__(self, path: Path) -> None:
         self.path = path
+        # Split-flush: embeddings live in a sidecar file because they grow to
+        # ~99% of state bytes but only change during the embedding phase. The
+        # main state (decisions + windows, ~30MB) flushes every 30s; the
+        # sidecar (~1.5GB) flushes every 300s. Without this, a single 866MB
+        # flush takes ~10s under lock and drops throughput from ~12 c/s to
+        # under 2 c/s at scale.
+        self.embeddings_path = path.with_name(path.stem + ".embeddings.json")
         self._lock = threading.Lock()
+        self._last_flush_time = 0.0
+        self._last_emb_flush_time = 0.0
         if path.exists():
             self._data: dict = json.loads(path.read_text(encoding="utf-8"))
         else:
-            self._data = {
-                "version": 2,
-                "paper_embeddings": {},
-                "pred_embeddings": {},
-                "judge_decisions": {},
-                "completed_windows": [],
-                "window_outputs": {},
-            }
+            self._data = {"version": 2}
+        # Forward-compat: backfill expected keys regardless of which schema
+        # version produced the loaded file.
+        self._data.setdefault("version", 2)
+        self._data.setdefault("paper_embeddings", {})
+        self._data.setdefault("pred_embeddings", {})
+        self._data.setdefault("judge_decisions", {})
+        self._data.setdefault("completed_windows", [])
+        self._data.setdefault("window_outputs", {})
+        # If a sidecar exists, merge its embeddings in (authoritative when
+        # both sources have the same key — sidecar is written more recently).
+        if self.embeddings_path.exists():
+            emb = json.loads(self.embeddings_path.read_text(encoding="utf-8"))
+            self._data["paper_embeddings"].update(emb.get("paper_embeddings", {}))
+            self._data["pred_embeddings"].update(emb.get("pred_embeddings", {}))
 
     # ---- embeddings --------------------------------------------------------
     def get_paper_vec(self, paper_id: str) -> list[float] | None:
@@ -213,7 +230,7 @@ class RunState:
         with self._lock:
             for paper_id, vec in id_vec_pairs:
                 self._data["paper_embeddings"][paper_id] = vec
-            self._flush()
+            self._flush_embeddings()
 
     def get_pred_vec(self, pred_hash: str) -> list[float] | None:
         with self._lock:
@@ -222,7 +239,7 @@ class RunState:
     def set_pred_vec(self, pred_hash: str, vec: list[float]) -> None:
         with self._lock:
             self._data["pred_embeddings"][pred_hash] = vec
-            self._flush()
+            self._flush_embeddings()
 
     # ---- judge decisions ---------------------------------------------------
     def get_decision(self, pred_hash: str, paper_id: str) -> dict | None:
@@ -252,15 +269,54 @@ class RunState:
             if "window_outputs" not in self._data:
                 self._data["window_outputs"] = {}
             self._data["window_outputs"][key] = window_result
-            self._flush()
+            # Force a flush at window boundaries so the completed_windows
+            # marker is durable for resume.
+            self._flush(force=True)
 
     # ---- persistence -------------------------------------------------------
-    def _flush(self) -> None:
-        """Must be called with self._lock held."""
+    def _flush(self, *, force: bool = False) -> None:
+        """Must be called with self._lock held. Writes only the main state
+        (decisions + windows + version, ~30MB at full scale). Embeddings
+        live in a sidecar with its own throttle. Throttled to 1 write per
+        30s unless force=True."""
+        now = time.time()
+        if not force and now - self._last_flush_time < 30:
+            return
+        main = {
+            "version": self._data.get("version", 2),
+            "judge_decisions": self._data["judge_decisions"],
+            "completed_windows": self._data["completed_windows"],
+            "window_outputs": self._data["window_outputs"],
+        }
         tmp = self.path.with_suffix(".tmp")
         tmp.parent.mkdir(parents=True, exist_ok=True)
-        tmp.write_text(json.dumps(self._data, ensure_ascii=False), encoding="utf-8")
+        tmp.write_text(json.dumps(main, ensure_ascii=False), encoding="utf-8")
         tmp.replace(self.path)
+        self._last_flush_time = now
+
+    def _flush_embeddings(self, *, force: bool = False) -> None:
+        """Must be called with self._lock held. Writes the embeddings sidecar
+        (paper_embeddings + pred_embeddings, ~1.5GB at full scale). Throttled
+        to 1 write per 300s — embeddings are append-mostly and stabilize early
+        in the run."""
+        now = time.time()
+        if not force and now - self._last_emb_flush_time < 300:
+            return
+        emb = {
+            "paper_embeddings": self._data["paper_embeddings"],
+            "pred_embeddings": self._data["pred_embeddings"],
+        }
+        tmp = self.embeddings_path.with_suffix(".tmp")
+        tmp.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_text(json.dumps(emb, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(self.embeddings_path)
+        self._last_emb_flush_time = now
+
+    def force_flush(self) -> None:
+        """Force-write both the main state and the embeddings sidecar."""
+        with self._lock:
+            self._flush(force=True)
+            self._flush_embeddings(force=True)
 
 
 # ---------------------------------------------------------------------------
@@ -797,6 +853,7 @@ def main() -> int:
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     state = RunState(state_path)
+    atexit.register(state.force_flush)
 
     saved = json.loads(Path(args.input_json).read_text(encoding="utf-8"))
     cfg   = saved.get("config", {})
@@ -865,6 +922,7 @@ def main() -> int:
         print(f"  {k}: {v:.4f}")
 
     _write_output(out_path, args, cfg, topic_results, total_windows, aggregate)
+    state.force_flush()
     print(f"\nSaved → {out_path}")
     print(f"State  → {state_path}")
     return 0
