@@ -54,6 +54,7 @@ class SFTTrainConfig:
     lora_alpha: int = 32
     lora_dropout: float = 0.05
     max_seq_length: int = 2048
+    max_memory_entries: int = 20
     output_dir: str = "output/prior_sft"
     warmup_ratio: float = 0.1
     weight_decay: float = 0.01
@@ -64,7 +65,7 @@ class RealizationConfig:
     context_top_k: int = 5
     evidence_top_k: int = 5
     evidence_similarity_threshold: float = 0.3
-    proposal_max_tokens: int = 1024
+    proposal_max_tokens: int = 256
     allow_artifact_fallback_to_llm: bool = False
     evidence_accuracy_weight: float = 0.2
     operator_adherence_weight: float = 0.3
@@ -74,7 +75,7 @@ class RealizationConfig:
 @dataclass
 class InferenceConfig:
     runtime_mode: str = "strict_eval"
-    num_candidates: int = 16
+    num_candidates: int = 8
     prior_weight: float = 0.4
     realization_weight: float = 0.6
     top_k: int = 5

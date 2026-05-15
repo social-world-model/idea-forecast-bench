@@ -3,6 +3,8 @@ from live_idea_bench.strategy.keyword_trend import KeywordTrendStrategy
 from live_idea_bench.strategy.memory_prompting import MemoryPromptingStrategy
 from live_idea_bench.strategy.policy_rl import PolicyRLStrategy
 from live_idea_bench.strategy.predictor_llm import PredictorLLMStrategy
+from live_idea_bench.strategy.retrieval_prompting import RetrievalPromptingStrategy
+from live_idea_bench.strategy.summary_prompting import SummaryPromptingStrategy
 from live_idea_bench.strategy.topic_trend import TopicTrendStrategy
 
 
@@ -52,9 +54,9 @@ def create_strategy(
 
         return ForecasterStrategy(
             model_name=model_name,
-            memory_path=str(legacy_params.get("memory_path") or ""),
-            prior_checkpoint=str(legacy_params.get("prior_checkpoint") or ""),
-            realization_checkpoint=str(legacy_params.get("realization_checkpoint") or ""),
+            memory_path=str(legacy_params["memory_path"]) if legacy_params.get("memory_path") else None,
+            prior_checkpoint=str(legacy_params["prior_checkpoint"]) if legacy_params.get("prior_checkpoint") else None,
+            realization_checkpoint=str(legacy_params["realization_checkpoint"]) if legacy_params.get("realization_checkpoint") else None,
             inference_config_path=str(legacy_params.get("inference_config_path") or "inference.yaml"),
             realization_config_path=str(legacy_params.get("realization_config_path") or "realization.yaml"),
         )
@@ -71,6 +73,22 @@ def create_strategy(
         resolved_model = model_name or legacy_params.get("model_id")
         return MemoryPromptingStrategy(
             model_name=str(resolved_model) if resolved_model else None,
+            temperature=temperature,
+            reasoning_effort=reasoning_effort,
+        )
+    if normalized == SummaryPromptingStrategy.name:
+        resolved_model = model_name or legacy_params.get("model_id")
+        return SummaryPromptingStrategy(
+            model_name=str(resolved_model) if resolved_model else None,
+            temperature=temperature,
+            reasoning_effort=reasoning_effort,
+        )
+    if normalized == RetrievalPromptingStrategy.name:
+        resolved_model = model_name or legacy_params.get("model_id")
+        retrieval_top_n = legacy_params.get("retrieval_top_n")
+        return RetrievalPromptingStrategy(
+            model_name=str(resolved_model) if resolved_model else None,
+            retrieval_top_n=int(retrieval_top_n) if retrieval_top_n else 20,
             temperature=temperature,
             reasoning_effort=reasoning_effort,
         )

@@ -143,21 +143,28 @@ class ForecasterPipeline:
 
         Returns path to checkpoint.
         """
+        resolved_config = config_override or self.sft_config
+        max_mem = resolved_config.max_memory_entries
         logger.info(
-            "Building SFT dataset from %d hindsight samples.", len(hindsight_samples)
+            "Building SFT dataset from %d hindsight samples (max_memory_entries=%d).",
+            len(hindsight_samples),
+            max_mem,
         )
         if memory_snapshots_by_cutoff is None:
-            sft_samples = build_sft_samples(hindsight_samples)
+            sft_samples = build_sft_samples(
+                hindsight_samples,
+                max_memory_entries=max_mem,
+            )
         else:
             sft_samples = build_sft_samples(
                 hindsight_samples,
+                max_memory_entries=max_mem,
                 memory_snapshots_by_cutoff=memory_snapshots_by_cutoff,
             )
 
         prior_output_dir = self.output_dir / output_subdir
         prior_output_dir.mkdir(parents=True, exist_ok=True)
         save_sft_dataset(sft_samples, prior_output_dir / "dataset.jsonl")
-        resolved_config = config_override or self.sft_config
         logger.info("Training prior SFT model; output dir: %s", prior_output_dir)
 
         checkpoint_path = train_prior(
@@ -295,23 +302,18 @@ class ForecasterPipeline:
         from forecaster.realization.config import (
             load_episode_build_config,
             load_candidate_generation_config,
+            load_grpo_train_config,
             load_reward_config,
             load_selection_config,
         )
-        from forecaster.realization.trainers import create_trainer_runner
 
+        del strict_mode  # strict_mode is no longer plumbed through training
         realization_output_dir = str(self.output_dir / "realization_grpo")
         resolved_model = model_name or "gpt-4o-mini"
-        use_strict_mode = (
-            self.inference_config.runtime_mode == "strict_eval"
-            if strict_mode is None
-            else strict_mode
-        )
 
         logger.info(
-            "Starting realization GRPO training (dry_run=%s, strict_mode=%s, model=%s).",
+            "Starting realization GRPO training (dry_run=%s, model=%s).",
             dry_run,
-            use_strict_mode,
             resolved_model,
         )
 
@@ -321,10 +323,10 @@ class ForecasterPipeline:
             candidate_config = load_candidate_generation_config()
             reward_config = load_reward_config()
             selection_config = load_selection_config()
+            grpo_config = load_grpo_train_config()
 
             manifest = run_policy_rl_pipeline(
                 self.papers,
-                trainer="grpo",
                 model_name=resolved_model,
                 output_dir=realization_output_dir,
                 episode_config=episode_config,
@@ -332,12 +334,11 @@ class ForecasterPipeline:
                 realization_config=self.realization_config,
                 reward_config=reward_config,
                 selection_config=selection_config,
-                trainer_config=None,
-                trainer_config_path="grpo.yaml",
+                trainer_config=grpo_config,
+                trainer_config_path="grpo_train.yaml",
                 selection_config_path="selection.yaml",
-                strict_mode=use_strict_mode,
                 prepare_only=dry_run,
-                skip_alignment_check=(dry_run or not use_strict_mode),
+                skip_alignment_check=dry_run,
                 hindsight_samples=hindsight_samples,
             )
             manifest_path = str(
@@ -347,7 +348,7 @@ class ForecasterPipeline:
             return manifest_path
         except Exception as exc:
             logger.warning("Realization training failed: %s", exc)
-            if use_strict_mode and not dry_run:
+            if not dry_run:
                 raise
             return None
 

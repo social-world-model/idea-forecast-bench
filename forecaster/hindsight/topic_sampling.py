@@ -511,6 +511,39 @@ def select_preview_targets(
     return targets
 
 
+def expand_all_targets(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    """Expand ALL selected papers from the manifest into target dicts.
+
+    Same target dict format as :func:`select_preview_targets` but without any
+    count limit — every ``selected_future_paper_id`` in every
+    ``topic_episode_row`` is included.
+    """
+    rows = sorted(
+        list(manifest.get("topic_episode_rows", [])),
+        key=lambda row: (str(row.get("episode_id", "")), str(row.get("topic_id", ""))),
+    )
+    targets: list[dict[str, Any]] = []
+    for row in rows:
+        paper_ids = list(row.get("selected_future_paper_ids", []))
+        source_paths = list(row.get("selected_future_source_paths", []))
+        for position, paper_id in enumerate(paper_ids):
+            targets.append(
+                {
+                    "topic_id": row["topic_id"],
+                    "topic_name": row["topic_name"],
+                    "episode_id": row["episode_id"],
+                    "cutoff_date": row["cutoff_date"],
+                    "cutoff_month": row["cutoff_month"],
+                    "future_start_date": row["future_start_date"],
+                    "future_end_date": row["future_end_date"],
+                    "future_paper_id": paper_id,
+                    "future_source_path": source_paths[position] if position < len(source_paths) else "",
+                    "selection_rank": position + 1,
+                }
+            )
+    return targets
+
+
 def write_json(path: str | Path, payload: dict[str, Any]) -> Path:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)

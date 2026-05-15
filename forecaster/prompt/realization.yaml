@@ -9,6 +9,8 @@ system_prompt: |
   - Why this direction is promising given recent trends
   - Expected contributions and outcomes
 
+  Think step-by-step about which evidence to cite and which operator best addresses the gap before writing the proposal. After closing your reasoning, output the proposal as plain text (title on first line, then the body).
+
 user_template: |
   Innovation to realize:
   - Base direction: {base_direction}

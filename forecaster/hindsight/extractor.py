@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 _CODE_FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
 
 
-def _parse_innovation(text: str) -> Innovation:
+def parse_innovation(text: str) -> Innovation:
     """Parse LLM output into Innovation.
 
     Handles JSON wrapped in ```json...``` code fences.
@@ -60,6 +60,10 @@ def _parse_innovation(text: str) -> Innovation:
         operator=operator,
         gap=str(data["gap"]),
     )
+
+
+# Backward-compatible alias
+_parse_innovation = parse_innovation
 
 
 def extract_innovation(
@@ -105,7 +109,7 @@ def extract_innovation(
                 system_message=system_prompt,
                 temperature=config.temperature,
             )
-            innovation = _parse_innovation(raw_text)
+            innovation = parse_innovation(raw_text)
             logger.info(
                 "Extracted innovation for paper %r (attempt %d/%d): operator=%r",
                 future_paper.paper_id,
