@@ -133,12 +133,27 @@ def _is_together_model(model: str) -> bool:
     return any(lower.startswith(v) for v in _TOGETHER_VENDORS)
 
 
+# DeepSeek official API uses bare ids (no vendor prefix) like
+# `deepseek-chat`, `deepseek-reasoner`, `deepseek-v4-pro`.  Detection rule:
+# id starts with "deepseek-" AND has no "/" (which would make it a HF id
+# routed to Together or the local backend).  Gated by DEEPSEEK_API_KEY so
+# `deepseek-r1:70b` style strings on a machine without the key fall through
+# to the local backend.
+def _is_deepseek_official_model(model: str) -> bool:
+    if "/" in model:
+        return False
+    if not os.environ.get("DEEPSEEK_API_KEY"):
+        return False
+    return model.lower().startswith("deepseek-")
+
+
 def _is_local_model(model: str) -> bool:
     if (
         _is_openai_model(model)
         or _is_anthropic_model(model)
         or _is_gemini_model(model)
         or _is_together_model(model)
+        or _is_deepseek_official_model(model)
     ):
         return False
     return resolve_model_reference(model) is not None
@@ -163,6 +178,15 @@ def create_client(model: str) -> tuple[Any, str]:
         api_key = _require_api_key("TOGETHER_API_KEY", model)
         return (
             openai.OpenAI(api_key=api_key, base_url="https://api.together.xyz/v1"),
+            model,
+        )
+
+    if _is_deepseek_official_model(model):
+        import openai
+
+        api_key = _require_api_key("DEEPSEEK_API_KEY", model)
+        return (
+            openai.OpenAI(api_key=api_key, base_url="https://api.deepseek.com/v1"),
             model,
         )
 
@@ -295,7 +319,7 @@ def get_response_from_llm(
         response = client.chat.completions.create(**request_kwargs)
         content = response.choices[0].message.content or ""
         new_msg_history = new_msg_history + [{"role": "assistant", "content": content}]
-    elif _is_together_model(model):
+    elif _is_together_model(model) or _is_deepseek_official_model(model):
         new_msg_history = msg_history + [{"role": "user", "content": msg}]
         request_kwargs = {
             "model": model,
