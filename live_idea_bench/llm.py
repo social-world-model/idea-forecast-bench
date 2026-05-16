@@ -91,6 +91,7 @@ def _unsupported_model_error(model: str) -> ValueError:
     return ValueError(
         "Unsupported model "
         f"'{model}'. Supported model families: claude-*, gpt-4o*, gpt-5*, *gemini*, "
+        "Together AI hosted (deepseek-ai/*, Qwen/*), "
         "or a local/Hugging Face model reference such as Qwen/Qwen3.5-2B."
     )
 
@@ -117,8 +118,28 @@ def _is_gemini_model(model: str) -> bool:
     return "gemini" in model
 
 
+# Together AI hosts the DeepSeek and Qwen API baselines we use.
+# Detection rule: route to Together iff the model id is a HF-style "vendor/model"
+# string AND TOGETHER_API_KEY is set in the environment. This lets the local
+# (transformers) backend still pick up vendor/model ids when TOGETHER_API_KEY
+# is not configured.
+_TOGETHER_VENDORS = ("deepseek-ai/", "qwen/")
+
+
+def _is_together_model(model: str) -> bool:
+    if not os.environ.get("TOGETHER_API_KEY"):
+        return False
+    lower = model.lower()
+    return any(lower.startswith(v) for v in _TOGETHER_VENDORS)
+
+
 def _is_local_model(model: str) -> bool:
-    if _is_openai_model(model) or _is_anthropic_model(model) or _is_gemini_model(model):
+    if (
+        _is_openai_model(model)
+        or _is_anthropic_model(model)
+        or _is_gemini_model(model)
+        or _is_together_model(model)
+    ):
         return False
     return resolve_model_reference(model) is not None
 
@@ -135,6 +156,15 @@ def create_client(model: str) -> tuple[Any, str]:
 
         api_key = _require_api_key("OPENAI_API_KEY", model)
         return openai.OpenAI(api_key=api_key), model
+
+    if _is_together_model(model):
+        import openai
+
+        api_key = _require_api_key("TOGETHER_API_KEY", model)
+        return (
+            openai.OpenAI(api_key=api_key, base_url="https://api.together.xyz/v1"),
+            model,
+        )
 
     if _is_gemini_model(model):
         import google.generativeai as genai
@@ -264,6 +294,31 @@ def get_response_from_llm(
 
         response = client.chat.completions.create(**request_kwargs)
         content = response.choices[0].message.content or ""
+        new_msg_history = new_msg_history + [{"role": "assistant", "content": content}]
+    elif _is_together_model(model):
+        new_msg_history = msg_history + [{"role": "user", "content": msg}]
+        request_kwargs = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_message},
+                *new_msg_history,
+            ],
+            "temperature": temperature,
+            "max_tokens": MAX_NUM_TOKENS,
+        }
+        if top_p is not None:
+            request_kwargs["top_p"] = top_p
+        if seed is not None:
+            request_kwargs["seed"] = seed
+        response = client.chat.completions.create(**request_kwargs)
+        content = response.choices[0].message.content or ""
+        # DeepSeek-R1 / Qwen thinking variants leak chain-of-thought inside
+        # <think>...</think>; strip it so downstream JSON parsing isn't fooled.
+        if "<think>" in content:
+            import re
+            content = re.sub(
+                r"<think>.*?</think>", "", content, flags=re.DOTALL | re.IGNORECASE
+            ).strip()
         new_msg_history = new_msg_history + [{"role": "assistant", "content": content}]
     elif _is_gemini_model(model):
         from google.generativeai.types import GenerationConfig
