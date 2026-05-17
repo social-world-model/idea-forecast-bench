@@ -346,13 +346,25 @@ def get_response_from_llm(
             ],
             "temperature": temperature,
             "max_tokens": MAX_NUM_TOKENS,
+            # Together AI rejects non-streaming for some reasoning/thinking
+            # models (e.g. Qwen 3.6 Plus -> 400 streaming_required). Stream
+            # and reassemble; pairs with the httpx read=120s timeout set on
+            # the client so server-side stream hangs raise APITimeoutError.
+            "stream": True,
         }
         if top_p is not None:
             request_kwargs["top_p"] = top_p
         if seed is not None:
             request_kwargs["seed"] = seed
-        response = client.chat.completions.create(**request_kwargs)
-        content = response.choices[0].message.content or ""
+        stream = client.chat.completions.create(**request_kwargs)
+        chunks: list[str] = []
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+            piece = getattr(chunk.choices[0].delta, "content", None)
+            if piece:
+                chunks.append(piece)
+        content = "".join(chunks)
         # DeepSeek-R1 / Qwen thinking variants leak chain-of-thought inside
         # <think>...</think>; strip it so downstream JSON parsing isn't fooled.
         if "<think>" in content:
