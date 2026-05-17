@@ -173,20 +173,37 @@ def create_client(model: str) -> tuple[Any, str]:
         return openai.OpenAI(api_key=api_key), model
 
     if _is_together_model(model):
+        import httpx
         import openai
 
         api_key = _require_api_key("TOGETHER_API_KEY", model)
+        # Stream-idle hard timeout: with stream=True the OpenAI SDK never
+        # surfaces an APITimeoutError on long server hangs unless we set
+        # per-phase timeouts on the underlying httpx client.
+        timeout = httpx.Timeout(connect=30.0, read=120.0, write=60.0, pool=60.0)
         return (
-            openai.OpenAI(api_key=api_key, base_url="https://api.together.xyz/v1"),
+            openai.OpenAI(
+                api_key=api_key,
+                base_url="https://api.together.xyz/v1",
+                timeout=timeout,
+                max_retries=2,
+            ),
             model,
         )
 
     if _is_deepseek_official_model(model):
+        import httpx
         import openai
 
         api_key = _require_api_key("DEEPSEEK_API_KEY", model)
+        timeout = httpx.Timeout(connect=30.0, read=120.0, write=60.0, pool=60.0)
         return (
-            openai.OpenAI(api_key=api_key, base_url="https://api.deepseek.com/v1"),
+            openai.OpenAI(
+                api_key=api_key,
+                base_url="https://api.deepseek.com/v1",
+                timeout=timeout,
+                max_retries=2,
+            ),
             model,
         )
 
