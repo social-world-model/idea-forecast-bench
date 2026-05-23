@@ -99,6 +99,25 @@ class OnlineRLTrainConfig:
     lora_dropout: float = 0.05
     reward_alignment_threshold: float = 0.5
     dry_run: bool = False
+    # Phase-4 switch: "legacy" preserves the existing composite reward via
+    # forecaster.realization.verl.reward_fn.compute_score; "foresight" routes
+    # rewards through forecaster.foresight.reward.compute_score_v2.
+    reward_mode: str = "legacy"
+    # When reward_mode == "foresight", load CutoffIndexBundles + rubrics from this dir.
+    foresight_artifact_dir: str = ""
+    # When reward_mode == "foresight", which embedder + judge backend to use.
+    foresight_embedder: str = "sentence-transformer:all-MiniLM-L6-v2"
+    foresight_judge_mode: str = "live"   # "live" | "stub" (stub used only in tests)
+    # Phase-5: in-group dedup penalty. Subtracted from each rollout's reward
+    # for every near-duplicate sibling within its group (Jaccard >= threshold).
+    dedup_penalty: float = 0.0
+    dedup_jaccard_threshold: float = 0.85
+    # Phase-5: enforce (cutoff_t, z) grouping invariant in the reward callback.
+    # Set False only for debug; production training must keep this on.
+    grouping_assert: bool = True
+    # Phase-6: rubric refresh interval (in trainer steps). 0 = disabled.
+    rubric_refresh_every: int = 0
+    rubric_refresh_auc_min: float = 0.70
 
 
 @dataclass

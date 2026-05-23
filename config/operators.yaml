@@ -1,0 +1,44 @@
+# Closed operator inventory for the Foresight RL plan (Phase 1.1a).
+# The hindsight extractor still emits free-text operators drawn from
+# ALLOWED_INNOVATION_OPERATORS (forecaster/models.py). This file is the
+# downstream closed mapping that the rubric, reward gate, and prior SFT
+# label cleaner all read.
+#
+# `unmappable_bucket` controls what happens to free-text operators that
+# do not have a mapping below. They get tagged `other` and surface in the
+# M1 spot-check ratio. Per the locked design decision: drop/merge `other`
+# rows from training only after the ratio is observed and approved.
+
+version: 1
+unmappable_bucket: other
+
+operators:
+  - id: limitation_extension
+    one_line: "Extend an existing method to overcome a stated limitation in prior work."
+    example: "Lift the fixed-context-length restriction in Transformer-XL by adding a hierarchical retrieval cache."
+
+  - id: cross_domain_transfer
+    one_line: "Adapt a method/idea proven in one domain to a different domain or modality."
+    example: "Apply contrastive language-image pretraining ideas from CLIP to satellite-imagery captioning."
+
+  - id: benchmark_proposal
+    one_line: "Propose a new evaluation benchmark, dataset, or protocol that exposes an unmeasured capability."
+    example: "Introduce a long-horizon agentic-tool-use benchmark that scores credit assignment across 50+ steps."
+
+  - id: method_composition
+    one_line: "Compose two or more existing methods into a new system that addresses a gap neither solves alone."
+    example: "Combine retrieval-augmented generation with chain-of-thought verifiers to reduce hallucinations on math QA."
+
+# Mapping from the existing free-text operator vocabulary
+# (ALLOWED_INNOVATION_OPERATORS in forecaster/models.py) to the closed 4-set.
+# Anything not listed maps to `other`.
+free_text_mapping:
+  extend: limitation_extension
+  transfer: cross_domain_transfer
+  adapt: cross_domain_transfer
+  compose: method_composition
+  simplify: method_composition
+  benchmark: benchmark_proposal
+  # Intentionally unmapped → become `other`, surfaced in the M1 ratio report:
+  analyze: other
+  scale: other

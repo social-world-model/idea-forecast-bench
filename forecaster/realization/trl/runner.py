@@ -157,27 +157,23 @@ def train_with_trl(
     training_model_name = str(init_policy_path or model_name)
 
     # --- Build reward function closure ---
-    from forecaster.realization.verl.reward_fn import compute_score
+    # Routed through forecaster.foresight.trainer_wiring; switches between
+    # the legacy composite reward and the Phase-4 foresight reward via
+    # config.reward_mode ("legacy" | "foresight"). Keeping the call in
+    # one place lets ablation runs flip a single field.
+    from forecaster.foresight.trainer_wiring import make_reward_fn
 
-    def reward_fn(completions: list[str], **kwargs: Any) -> list[float]:
-        """TRL-compatible reward function wrapping the existing compute_score."""
-        prompts = kwargs.get("prompts", [""] * len(completions))
-        extra_infos = kwargs.get("extra_info", ["{}"] * len(completions))
-        scores = []
-        for completion, extra_info in zip(completions, extra_infos):
-            score = compute_score(
-                data_source=f"live_idea_bench::{trainer_name}",
-                solution_str=completion,
-                ground_truth="",
-                extra_info=extra_info,
-                reward_config_path=reward_config_path,
-                realization_config_path=realization_config_path,
-                similarity_config_path=similarity_config_path,
-                runtime_config_path=runtime_config_path,
-                model_name=model_name,
-            )
-            scores.append(score)
-        return scores
+    reward_fn = make_reward_fn(
+        config,
+        trainer_name=trainer_name,
+        reward_config_path=reward_config_path,
+        realization_config_path=realization_config_path,
+        similarity_config_path=similarity_config_path,
+        runtime_config_path=runtime_config_path,
+        model_name=model_name,
+    )
+    logger.info("reward backend: %s (mode=%s)", reward_fn.__name__,
+                getattr(config, "reward_mode", "legacy"))
 
     # --- Build dataset ---
     # TRL 1.0 expects conversational format (list of message dicts) for proper
