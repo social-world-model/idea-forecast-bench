@@ -164,6 +164,9 @@ def train_prior(
         torch_dtype="auto",
         device_map="auto",
     )
+    # Gradient checkpointing is required to fit Qwen3.5-9B SFT on a single
+    # ~48GB card (otherwise ~47GB activations at seq=4096 -> OOM).
+    base_model.config.use_cache = False
 
     lora_config = LoraConfig(
         r=config.lora_r,
@@ -174,6 +177,7 @@ def train_prior(
         bias="none",
     )
     model = get_peft_model(base_model, lora_config)
+    model.enable_input_require_grads()  # needed for grad checkpointing w/ frozen base
     model.print_trainable_parameters()
 
     system_prompt = _load_system_prompt()
@@ -192,7 +196,9 @@ def train_prior(
         logging_steps=10,
         save_strategy="epoch",
         report_to="none",
-        fp16=torch.cuda.is_available(),
+        bf16=torch.cuda.is_available(),
+        gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
     )
 
     data_collator = DataCollatorForSeq2Seq(

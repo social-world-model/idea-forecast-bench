@@ -153,6 +153,10 @@ def make_live_scorer(
                     {"role": "user", "content": user_prompt},
                 ],
                 temperature=temperature,
+                max_tokens=256,
+                # Reasoning judges (Qwen3.5) would otherwise spend the budget on
+                # a <think> block; disabling keeps Score/Reasoning parseable+fast.
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
             )
             return response.choices[0].message.content or ""
 

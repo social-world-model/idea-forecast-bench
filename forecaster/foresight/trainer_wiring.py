@@ -42,6 +42,45 @@ def _load_indices(indices_dir: Path):
     return future_indices, history_indices
 
 
+def _build_paper_to_topic(hindsight_path: str | Path | None = None) -> dict[str, str]:
+    """Map future_paper_id -> topic_id from the hindsight/dz artifacts.
+
+    The GRPO dataset's extra_info drops topic_id (HindsightSample has no such
+    field), but the foresight reward needs it to select the rubric. We recover
+    it from target_future_paper_id at reward time via this map.
+    """
+    candidates: list[Path] = []
+    if hindsight_path:
+        candidates.append(Path(hindsight_path))
+    candidates += [
+        Path("output/hindsight_samples.jsonl"),
+        Path("data/topic_hindsight/dz.jsonl"),
+    ]
+    mapping: dict[str, str] = {}
+    for p in candidates:
+        if not p.exists():
+            continue
+        with p.open() as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    d = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                pid = d.get("future_paper_id") or d.get("source_future_id")
+                tid = d.get("topic_id")
+                if pid and tid and str(pid) not in mapping:
+                    mapping[str(pid)] = str(tid)
+        if mapping:
+            logger.info("paper_to_topic: %d entries from %s", len(mapping), p)
+            break
+    if not mapping:
+        logger.warning("paper_to_topic map is EMPTY — rubric lookup will fail")
+    return mapping
+
+
 def _build_embedder(name: str):
     from forecaster.foresight.indices import HashingEmbedder, SentenceTransformerEmbedder
     if name.startswith("hashing:"):
@@ -74,6 +113,7 @@ def build_foresight_context(
     *,
     embedder_name: str = "sentence-transformer:all-MiniLM-L6-v2",
     judge_mode: str = "live",
+    hindsight_path: str | Path | None = None,
 ):
     """Construct a ForesightContext from a saved artifact directory."""
     from forecaster.foresight.indices import CutoffIndexBundle
@@ -91,12 +131,14 @@ def build_foresight_context(
     rubrics = load_rubrics_dir(rubrics_dir)
     embedder = _build_embedder(embedder_name)
     judge = _build_judge(judge_mode)
+    paper_to_topic = _build_paper_to_topic(hindsight_path)
     return ForesightContext(
         embedder=embedder,
         judge=judge,
         future_indices=future_indices,
         history_indices=history_indices,
         rubrics=rubrics,
+        paper_to_topic=paper_to_topic,
     )
 
 
@@ -136,6 +178,8 @@ def make_reward_fn(
             embedder_name=getattr(config, "foresight_embedder",
                                   "sentence-transformer:all-MiniLM-L6-v2"),
             judge_mode=getattr(config, "foresight_judge_mode", "live"),
+            hindsight_path=getattr(config, "foresight_hindsight_path", None)
+                           or getattr(config, "hindsight_path", None),
         )
         logger.info(
             "reward_mode=foresight loaded ctx: future_indices=%d history_indices=%d rubrics=%d",
@@ -164,10 +208,19 @@ def make_reward_fn(
 
             out: list[float] = []
             for completion, extra in zip(completions, extra_infos):
+                # TRL returns conversational completions as a list of message
+                # dicts ([{"role":"assistant","content":...}]); the foresight
+                # reward/gates expect a plain string. Flatten to the text.
+                if isinstance(completion, list):
+                    sol = "\n".join(
+                        str(m.get("content", "")) for m in completion if isinstance(m, dict)
+                    )
+                else:
+                    sol = completion
                 try:
                     out.append(compute_score_v2(
                         data_source=f"live_idea_bench::{trainer_name}",
-                        solution_str=completion,
+                        solution_str=sol,
                         ground_truth="",
                         extra_info=extra,
                         ctx=ctx,

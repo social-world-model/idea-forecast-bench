@@ -2,7 +2,7 @@ per_device_batch_size: 1
 gradient_accumulation_steps: 2
 num_train_epochs: 1
 learning_rate: 0.000002
-num_generations: 8
+num_generations: 4
 max_prompt_length: 4096
 max_completion_length: 1024
 kl_coef: 0.001
@@ -14,3 +14,9 @@ lora_alpha: 32
 lora_dropout: 0.05
 reward_alignment_threshold: 0.5
 dry_run: false
+# Phase-4 foresight reward (this branch's feature): route rewards through the
+# rubric + soft-must_not Qwen judge instead of the legacy composite.
+reward_mode: foresight
+foresight_artifact_dir: output/foresight_artifacts
+foresight_embedder: sentence-transformer:sentence-transformers/allenai-specter
+foresight_judge_mode: live

@@ -207,7 +207,15 @@ def generate_rubric_via_llm(
         negative_examples=negative_examples,
     )
 
-    resolved_base = (base_url or os.environ.get("JUDGE_BASE_URL", "")).strip() or None
+    # Rubric author can differ from the AUC judge: set RUBRIC_MODEL to an
+    # OpenAI model (e.g. gpt-5.4) to author rubrics via OpenAI while the judge
+    # stays local. Otherwise the judge endpoint authors the rubric (self-consistent).
+    rubric_model_override = os.environ.get("RUBRIC_MODEL", "").strip()
+    if rubric_model_override:
+        resolved_base = None
+        model_name = rubric_model_override
+    else:
+        resolved_base = (base_url or os.environ.get("JUDGE_BASE_URL", "")).strip() or None
     if resolved_base:
         import openai
 

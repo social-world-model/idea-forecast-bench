@@ -42,6 +42,8 @@ from forecaster.models import Innovation
 
 logger = logging.getLogger(__name__)
 
+_DBG_N = 0  # TEMP: throttle counter for gate diagnostics
+
 
 # --------------------------------------------------------------------------- context
 
@@ -75,6 +77,9 @@ class ForesightContext:
     history_indices: dict[str, HistoryIndex]
     # Topic-keyed rubric library (Phase 2 outputs).
     rubrics: dict[str, Rubric]
+    # future_paper_id -> topic_id, used to recover topic_id when the dataset's
+    # extra_info doesn't carry it (HindsightSample drops topic_id upstream).
+    paper_to_topic: dict[str, str] = field(default_factory=dict)
     inventory: OperatorInventory = field(default_factory=load_operator_inventory)
     config: ForesightRewardConfig = field(default_factory=ForesightRewardConfig)
 
@@ -139,6 +144,7 @@ class RewardPayload:
         rollout_text: str,
         extra_info: dict[str, Any],
         inventory: OperatorInventory,
+        paper_to_topic: dict[str, str] | None = None,
     ) -> "RewardPayload":
         inno_raw = extra_info.get("innovation") or {}
         innovation = Innovation(
@@ -147,13 +153,16 @@ class RewardPayload:
             gap=str(inno_raw.get("gap") or ""),
         )
         op_closed = map_free_text_operator(innovation.operator, inventory)
-        # `topic_id` may be present at top-level or under metadata; fall back
-        # to a derived bucket if absent so callers don't have to plumb it.
+        # `topic_id` may be present at top-level or under metadata; otherwise
+        # recover it from target_future_paper_id via the context's map (the
+        # dataset's extra_info drops topic_id because HindsightSample does).
         topic_id = (
             str(extra_info.get("topic_id") or "")
             or str(extra_info.get("topic") or "")
-            or ""
         )
+        if not topic_id and paper_to_topic:
+            tfpid = str(extra_info.get("target_future_paper_id") or "")
+            topic_id = str(paper_to_topic.get(tfpid) or "")
         return cls(
             rollout_text=rollout_text,
             cutoff_date=str(extra_info.get("cutoff_date") or ""),
@@ -293,8 +302,19 @@ def compute_score_v2(
         rollout_text=solution_str or "",
         extra_info=extra,
         inventory=ctx.inventory,
+        paper_to_topic=ctx.paper_to_topic,
     )
     reward, _diag = compute_foresight_reward(payload, ctx)
+    # --- TEMP DEBUG: surface which gate fired (throttled to first N calls) ---
+    global _DBG_N
+    if _DBG_N < 24:
+        _DBG_N += 1
+        logger.warning(
+            "[foresight-diag #%d] reward=%.3f gate=%s reason=%s | cutoff=%s topic=%r op=%r len=%d head=%r",
+            _DBG_N, reward, _diag.get("gate"), _diag.get("reason"),
+            payload.cutoff_date, payload.topic_id, payload.operator_closed,
+            len(payload.rollout_text), payload.rollout_text[:200],
+        )
     return float(reward)
 
 

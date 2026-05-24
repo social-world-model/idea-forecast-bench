@@ -208,9 +208,10 @@ def train_with_trl(
         bf16=torch.cuda.is_available(),
         gradient_checkpointing=True,
         report_to="none",
-        # vLLM for fast generation (requires Qwen3 + transformers <5 env)
-        use_vllm=_vllm_available(),
-        vllm_gpu_memory_utilization=0.5,
+        # vLLM disabled for 9B on a single 47GB card: colocate needs TWO 9B copies
+        # (trainer + vLLM) -> OOM; server mode deadlocks (Qwen3.5 NCCL sync) + needs
+        # a 3rd GPU. So in-process HF generation — slower but the only reliable path.
+        use_vllm=False,
     )
 
     lora_config = LoraConfig(
@@ -228,14 +229,33 @@ def train_with_trl(
     # Force AutoModelForCausalLM to get the text-only CausalLM head, avoiding
     # the VLM's 3D position embedding code path that breaks on text-only input.
     from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    # SFT->GRPO: if init_policy_path points at a PEFT adapter (the SFT output),
+    # load the real base model and CONTINUE that adapter through GRPO instead of
+    # starting a fresh LoRA from base. Detection = adapter_config.json present.
+    sft_adapter_dir = None
+    if init_policy_path and (Path(init_policy_path) / "adapter_config.json").exists():
+        sft_adapter_dir = init_policy_path
+        load_from = model_name  # base weights; SFT adapter applied below
+    else:
+        load_from = training_model_name
+
     model = AutoModelForCausalLM.from_pretrained(
-        training_model_name,
+        load_from,
         torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
         attn_implementation="sdpa",
     )
-    tokenizer = AutoTokenizer.from_pretrained(training_model_name)
+    tokenizer = AutoTokenizer.from_pretrained(load_from)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+
+    peft_config_arg = lora_config
+    if sft_adapter_dir:
+        from peft import PeftModel
+        model = PeftModel.from_pretrained(model, sft_adapter_dir, is_trainable=True)
+        model.enable_input_require_grads()  # required for gradient checkpointing
+        peft_config_arg = None  # train the existing SFT adapter; don't add a new one
+        logger.info("SFT->GRPO: continuing trainable SFT adapter from %s", sft_adapter_dir)
 
     # --- Train ---
     trainer = GRPOTrainer(
@@ -243,7 +263,7 @@ def train_with_trl(
         reward_funcs=reward_fn,
         args=grpo_config,
         train_dataset=dataset,
-        peft_config=lora_config,
+        peft_config=peft_config_arg,
         processing_class=tokenizer,
     )
 
