@@ -202,7 +202,13 @@ class PolicyRLStrategy(IdeaStrategy):
                 else 0.8
             )
         )
+        import os as _os
         checkpoint_path = str(manifest.get("checkpoint_path") or "").strip()
+        # When LIBENCH_POLICY_RL_REMOTE=1 bypass the local-checkpoint path so
+        # generation goes through the OpenAI-compatible client (routed to a
+        # vLLM server serving the LoRA-adapted model via OPENAI_BASE_URL).
+        if _os.environ.get("LIBENCH_POLICY_RL_REMOTE", "") == "1":
+            checkpoint_path = ""
         if checkpoint_path and Path(checkpoint_path).expanduser().exists():
             candidates = self._generate_from_local_checkpoint(
                 train_papers=train_papers,

@@ -42,6 +42,9 @@ def build_grpo_dataset_rows(
             "evidence_papers": row.get("evidence_papers", []),
             "train_papers": row.get("train_papers", []),
             "future_papers": row.get("future_papers", []),
+            # Capped per-episode samples for the soft/coverage/novelty rewards.
+            "metric_train_papers": row.get("metric_train_papers", []),
+            "metric_future_papers": row.get("metric_future_papers", []),
         }
         rows.append(
             {

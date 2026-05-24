@@ -192,10 +192,14 @@ def train_grpo_with_unsloth(
             )
 
     # ----- Build dataset (chat template + thinking-mode rendering) -----
-    # Pre-render with enable_thinking=True so GRPO rollouts emit
-    # "<think>...</think>title\nbody" — the DeepSeek-R1-Zero recipe GRPO was
-    # designed for. Passing the rendered string column prevents TRL from
-    # re-templating with default kwargs.
+    # Default: disable thinking mode. Qwen3.5 with thinking enabled
+    # produces "<think>...</think>" reasoning blocks that consume most of
+    # the completion length budget, leaving little room for the actual
+    # idea JSON the reward function needs to score — bad GRPO advantage
+    # estimation. Set LIB_TRAIN_ENABLE_THINKING=1 to opt back in (the
+    # DeepSeek-R1-Zero recipe).
+    import os as _os_thinking
+    _enable_thinking = _os_thinking.environ.get("LIB_TRAIN_ENABLE_THINKING", "") == "1"
     ds_records: list[dict[str, Any]] = []
     for row in dataset_rows:
         try:
@@ -203,7 +207,7 @@ def train_grpo_with_unsloth(
                 [{"role": "user", "content": row["prompt"]}],
                 tokenize=False,
                 add_generation_prompt=True,
-                enable_thinking=True,
+                enable_thinking=_enable_thinking,
             )
         except TypeError:
             # Tokenizer doesn't support enable_thinking — fall back to plain.

@@ -132,9 +132,18 @@ def create_client(model: str) -> tuple[Any, str]:
 
     if _is_openai_model(model):
         import openai
+        import os as _os
 
-        api_key = _require_api_key("OPENAI_API_KEY", model)
-        return openai.OpenAI(api_key=api_key), model
+        # When OPENAI_BASE_URL is set, route to that endpoint (used for local
+        # vLLM-served LoRA-merged models in evaluation pipelines). The
+        # OPENAI_API_KEY is required by the client but vLLM ignores its
+        # value, so allow any non-empty string when a base_url is provided.
+        base_url = _os.environ.get("OPENAI_BASE_URL") or None
+        if base_url:
+            api_key = _os.environ.get("OPENAI_API_KEY", "EMPTY") or "EMPTY"
+        else:
+            api_key = _require_api_key("OPENAI_API_KEY", model)
+        return openai.OpenAI(api_key=api_key, base_url=base_url), model
 
     if _is_gemini_model(model):
         import google.generativeai as genai
@@ -241,6 +250,7 @@ def get_response_from_llm(
             }
         ]
     elif _is_openai_model(model):
+        import os as _os
         new_msg_history = msg_history + [{"role": "user", "content": msg}]
         request_kwargs: dict[str, Any] = {
             "model": model,
@@ -249,7 +259,24 @@ def get_response_from_llm(
                 *new_msg_history,
             ],
         }
-        if model.startswith("gpt-5"):
+        # When routed to a local vLLM via OPENAI_BASE_URL, we serve a
+        # LoRA-adapted Qwen3 that defaults to thinking mode (<think>...
+        # </think>). The eval predictor expects clean JSON, so disable
+        # thinking via the chat template kwarg (vLLM-specific extra body).
+        # Also use temperature/top_p/seed even for "gpt-5*" aliases since
+        # this is our LoRA endpoint, not real GPT-5.
+        _local_route = bool(_os.environ.get("OPENAI_BASE_URL"))
+        if _local_route:
+            request_kwargs["max_tokens"] = MAX_NUM_TOKENS
+            request_kwargs["temperature"] = temperature
+            if top_p is not None:
+                request_kwargs["top_p"] = top_p
+            if seed is not None:
+                request_kwargs["seed"] = seed
+            request_kwargs["extra_body"] = {
+                "chat_template_kwargs": {"enable_thinking": False},
+            }
+        elif model.startswith("gpt-5"):
             request_kwargs["max_completion_tokens"] = MAX_NUM_TOKENS
             if reasoning_effort is not None:
                 request_kwargs["reasoning_effort"] = reasoning_effort
