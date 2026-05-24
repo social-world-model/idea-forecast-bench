@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -194,6 +195,21 @@ def train_with_trl(
     # With larger batch sizes, drop gradient accumulation to minimize steps
     grad_accum = max(1, config.gradient_accumulation_steps // (batch_size // num_gen))
 
+    # vLLM is env-gated. On a single 47GB A6000 it OOMs (colocate needs TWO 9B
+    # copies; server mode deadlocks on Qwen3.5 NCCL sync) so default OFF → HF
+    # generate (slow but reliable). On a 96GB card (e.g. RTX Pro 6000) export
+    # USE_VLLM=1 for colocate vLLM — ~10x faster generation. Tune memory via
+    # VLLM_GPU_MEM_UTIL (fraction left to the vLLM engine after the trainer copy).
+    if os.environ.get("USE_VLLM", "0") == "1":
+        vllm_kwargs = dict(
+            use_vllm=True,
+            vllm_mode=os.environ.get("VLLM_MODE", "colocate"),
+            vllm_gpu_memory_utilization=float(os.environ.get("VLLM_GPU_MEM_UTIL", "0.45")),
+        )
+        logger.info("vLLM ENABLED: %s", vllm_kwargs)
+    else:
+        vllm_kwargs = dict(use_vllm=False)
+
     grpo_config = GRPOConfig(
         output_dir=str(target_dir / "checkpoints"),
         num_train_epochs=config.num_train_epochs,
@@ -208,10 +224,7 @@ def train_with_trl(
         bf16=torch.cuda.is_available(),
         gradient_checkpointing=True,
         report_to="none",
-        # vLLM disabled for 9B on a single 47GB card: colocate needs TWO 9B copies
-        # (trainer + vLLM) -> OOM; server mode deadlocks (Qwen3.5 NCCL sync) + needs
-        # a 3rd GPU. So in-process HF generation — slower but the only reliable path.
-        use_vllm=False,
+        **vllm_kwargs,
     )
 
     lora_config = LoraConfig(
