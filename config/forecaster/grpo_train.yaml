@@ -1,8 +1,8 @@
 per_device_batch_size: 1
 gradient_accumulation_steps: 2
-num_train_epochs: 1
-learning_rate: 0.000002
-num_generations: 4
+num_train_epochs: 3
+learning_rate: 0.00001
+num_generations: 8
 max_prompt_length: 4096
 max_completion_length: 1024
 kl_coef: 0.001

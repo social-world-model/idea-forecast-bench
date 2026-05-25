@@ -54,6 +54,13 @@ def _auto_batch_size(num_generations: int, max_completion_length: int, model_nam
     import os
     import torch
 
+    # Explicit override: BATCH_SIZE env wins over memory-based auto-sizing.
+    # (Auto-sizing measures free VRAM *before* the colocate vLLM reserves its
+    # share, so it over-commits when USE_VLLM=1. Allow a hard cap.)
+    _bs_env = os.environ.get("BATCH_SIZE", "").strip()
+    if _bs_env.isdigit() and int(_bs_env) > 0:
+        return max(num_generations, (int(_bs_env) // num_generations) * num_generations)
+
     if not torch.cuda.is_available():
         return num_generations
 
@@ -205,6 +212,13 @@ def train_with_trl(
             use_vllm=True,
             vllm_mode=os.environ.get("VLLM_MODE", "colocate"),
             vllm_gpu_memory_utilization=float(os.environ.get("VLLM_GPU_MEM_UTIL", "0.45")),
+            # Cap the colocate vLLM context to what we actually use
+            # (max_prompt_length + max_completion_length). The Qwen3.5 default
+            # max_model_len is 262144, whose KV cache (~8GB) won't fit at low
+            # gpu_memory_utilization -> "available KV cache memory" ValueError.
+            vllm_max_model_length=int(
+                os.environ.get("VLLM_MAX_LEN", str(config.max_prompt_length + config.max_completion_length + 1024))
+            ),
         )
         logger.info("vLLM ENABLED: %s", vllm_kwargs)
     else:

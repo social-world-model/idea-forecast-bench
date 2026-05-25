@@ -267,10 +267,24 @@ def compute_foresight_reward(
         cand_text = _candidate_text_from_index(future, paper_id)
         res = ctx.judge.score(payload.rollout_text, cand_text, rubric)
         judge_scores.append(res.score)
+    best_judge = float(max(judge_scores))
+    # Dense shaping (env REWARD_SIM_SHAPING; default 0.0 = original judge-only).
+    # The retrieval cosine-sim to the nearest future paper is a continuous signal
+    # available even when the judge scores 0 (idea matched no future paper). The
+    # rubric judge is near-binary (0 or 0.6-1.0), so all-zero groups have no
+    # advantage variance and GRPO learns nothing. Adding lambda*sim gives
+    # within-group gradient toward the future-idea distribution. hits are sorted
+    # desc, so hits[0][1] is the closest cosine sim.
+    import os
+    _sim_w = float(os.environ.get("REWARD_SIM_SHAPING", "0.0") or 0.0)
+    best_sim = float(hits[0][1]) if hits else 0.0
+    reward = best_judge + _sim_w * max(0.0, best_sim)
     diag["retrieval_hits"] = hits
     diag["judge_scores"] = judge_scores
+    diag["retrieval_sim"] = best_sim
+    diag["sim_shaping_w"] = _sim_w
     diag["gate"] = "passed"
-    return float(max(judge_scores)), diag
+    return float(reward), diag
 
 
 # --------------------------------------------------------------------------- compatibility wrapper
