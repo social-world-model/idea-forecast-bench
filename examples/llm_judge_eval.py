@@ -444,15 +444,21 @@ def _call_judge(
     )
     for attempt in range(MAX_JUDGE_RETRY):
         try:
-            resp = judge_client.chat.completions.create(
+            create_kwargs = dict(
                 model=judge_model,
                 messages=[
                     {"role": "system", "content": JUDGE_SYSTEM},
                     {"role": "user",   "content": user_msg},
                 ],
                 temperature=0.0,
-                max_tokens=120,
+                max_tokens=256,
             )
+            # Qwen3.5 judges default to "thinking" mode, which burns the token
+            # budget on <think> tokens before the PROBLEM_MATCH/... lines and
+            # makes SCORE_RE find nothing -> everything scores as no-match.
+            if "qwen" in judge_model.lower():
+                create_kwargs["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
+            resp = judge_client.chat.completions.create(**create_kwargs)
             content = resp.choices[0].message.content or ""
             scores: dict[str, int] = {}
             for m in SCORE_RE.finditer(content):
@@ -832,20 +838,56 @@ def main() -> int:
     parser.add_argument("--topics-config", default=None)
     args = parser.parse_args()
 
+    # Embedding backend selection:
+    #   * If VOYAGE_API_KEY is set, keep the original Voyage path for parity
+    #     with historical eval runs.
+    #   * Otherwise fall back to a local sentence-transformer (BGE) exposed
+    #     through a small OpenAI-shim so the rest of the pipeline is
+    #     unchanged. This lets the eval and the GRPO reward path share the
+    #     same embedding geometry.
     voyage_key = os.environ.get("VOYAGE_API_KEY")
-    openai_key = os.environ.get("OPENAI_API_KEY")
-    if not voyage_key:
-        print("ERROR: Set VOYAGE_API_KEY env var", file=sys.stderr)
-        return 1
-    if not openai_key:
-        print("ERROR: Set OPENAI_API_KEY env var", file=sys.stderr)
-        return 1
+    if voyage_key:
+        embed_client = openai.OpenAI(api_key=voyage_key, base_url=VOYAGE_BASE_URL)
+    else:
+        from forecaster.embedding import get_default_embedder
 
-    embed_client = openai.OpenAI(api_key=voyage_key, base_url=VOYAGE_BASE_URL)
+        class _LocalEmbedShim:
+            """Mimics `client.embeddings.create(...)` against a local model."""
+
+            def __init__(self) -> None:
+                self._embedder = get_default_embedder()
+                self.embeddings = self  # so client.embeddings.create works
+
+            def create(self, *, model: str, input):
+                texts = input if isinstance(input, list) else [input]
+                vecs = self._embedder.embed(texts)
+                class _Item:
+                    def __init__(self, idx, embedding):
+                        self.index = idx
+                        self.embedding = embedding
+                class _Resp:
+                    def __init__(self, items):
+                        self.data = items
+                return _Resp([_Item(i, v) for i, v in enumerate(vecs)])
+
+        embed_client = _LocalEmbedShim()  # type: ignore[assignment]
+
+    # Judge client: prefer env-var endpoint so we can target a local
+    # vLLM OpenAI-compatible server when OPENAI_API_KEY is absent.
+    judge_base_url = args.judge_base_url or os.environ.get("JUDGE_BASE_URL")
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    judge_api_key = os.environ.get("JUDGE_API_KEY", openai_key or "EMPTY")
+    if not judge_base_url and not openai_key:
+        print(
+            "ERROR: Set OPENAI_API_KEY (for hosted judge) or "
+            "JUDGE_BASE_URL/--judge-base-url (for local vLLM judge).",
+            file=sys.stderr,
+        )
+        return 1
     judge_client = openai.OpenAI(
-        api_key=openai_key,
-        base_url=args.judge_base_url or None,
-        timeout=30.0,
+        api_key=judge_api_key,
+        base_url=judge_base_url or None,
+        timeout=60.0,
     )
 
     out_path   = Path(args.output)

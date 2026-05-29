@@ -59,6 +59,9 @@ def main() -> int:
     parser.add_argument("--min-train-papers", type=int, default=2)
     parser.add_argument("--start-month", type=str, default="2024-01")
     parser.add_argument("--end-month", type=str, default="2025-06")
+    parser.add_argument("--min-cutoff-month", type=str, default=None,
+                        help="Earliest cutoff to EVALUATE (>= this). Lets start-month load "
+                             "earlier papers as context while only scoring test-period cutoffs.")
     parser.add_argument("--similarity-config", type=str, default="similarity.yaml")
     parser.add_argument(
         "--similarity-engine",
@@ -181,6 +184,7 @@ def main() -> int:
         min_train_papers=args.min_train_papers,
         start_month=args.start_month,
         end_month=args.end_month,
+        min_cutoff_month=args.min_cutoff_month,
         similarity_config=args.similarity_config,
         candidate_limit=args.candidate_limit,
     )

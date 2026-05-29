@@ -7,15 +7,12 @@ specificity_rationale_weight: 0.4
 specificity_approach_weight: 0.4
 rank_decay: 0.15
 benchmark_score_weight: 0.0
-# When `mode` is one of {soft, coverage, novelty} the trainer replaces the
-# composite weights below with a single eval-metric reward. `composite`
-# (default) preserves the legacy METHOD §3.3 mixed reward.
-mode: composite
+mode: coverage
 judge_top_r: 10
 cluster_k: 5
 weights:
-  future_match: 0.7
-  novelty: 0.05
-  specificity: 0.1
-  lead_time: 0.15
+  future_match: 0.0
+  novelty: 0.0
+  specificity: 0.0
+  lead_time: 0.0
   duplicate_penalty: 0.0
