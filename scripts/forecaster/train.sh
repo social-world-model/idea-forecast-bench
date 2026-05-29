@@ -2,8 +2,8 @@
 # ============================================================================
 #  Single-GPU training (no vLLM).
 #
-#  Runs Phase 1 (Prior SFT, METHOD §3.2) → Phase 2 (dataset prep) →
-#  Phase 3 (Realization GRPO, METHOD §3.3) using Unsloth + the latest TRL,
+#  Runs Phase 1 (Prior SFT) → Phase 2 (dataset prep) →
+#  Phase 3 (Realization GRPO) using Unsloth + the latest TRL,
 #  with `fast_inference=False` (Unsloth's documented Qwen3.5 GRPO path).
 #
 #  Generation runs through HF generate (~50-100 tok/s on 2B) — slow but

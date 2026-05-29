@@ -9,7 +9,7 @@ rank_decay: 0.15
 benchmark_score_weight: 0.0
 # When `mode` is one of {soft, coverage, novelty} the trainer replaces the
 # composite weights below with a single eval-metric reward. `composite`
-# (default) preserves the legacy METHOD §3.3 mixed reward.
+# (default) preserves the legacy mixed reward.
 mode: composite
 judge_top_r: 10
 cluster_k: 5

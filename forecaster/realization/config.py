@@ -34,7 +34,7 @@ class RewardConfig:
     weights: RewardWeights = field(default_factory=RewardWeights)
     # When set, completely replaces the composite reward with a single
     # eval metric for GRPO training: "soft" | "coverage" | "novelty".
-    # Default "composite" keeps the legacy METHOD §3.3 mixed reward.
+    # Default "composite" keeps the legacy mixed reward.
     mode: str = "composite"
     judge_top_r: int = 10
     cluster_k: int = 5

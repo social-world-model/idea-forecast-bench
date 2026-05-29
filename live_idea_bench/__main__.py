@@ -1,29 +1,29 @@
 """LiveIdeaBench unified command-line entrypoint.
 
-This is the single front door to the repository. It maps the paper's four pieces
-to a handful of subcommands and forwards all remaining arguments to the underlying
-script's ``main()`` unchanged, so every flag documented on the individual scripts
-keeps working.
+This is the single front door to the repository. It groups the project's work
+into a handful of subcommands and forwards all remaining arguments to the
+underlying script's ``main()`` unchanged, so every flag documented on the
+individual scripts keeps working.
 
     python -m live_idea_bench <command> [args...]
 
 Commands
 --------
-Benchmark (paper §3 — LiveIdeaBench):
+Benchmark:
     benchmark        Run a domain-separated backtest of a forecasting strategy.
     judge-eval       Score saved predictions with the retrieve-then-judge LLM judge.
 
-MDF forecaster — main experiment (paper §4):
+MDF forecaster:
     hindsight        Extract latent-innovation training labels from future papers.
     train-prior      SFT the memory-conditioned innovation prior.
     train            GRPO-train the realization policy.
-    infer            Joint inference (Algorithm 1): prior -> realization -> select.
+    infer            Joint inference: sample from the prior -> realize -> select.
     eval             Evaluate a trained forecaster on a held-out test window.
 
-Single-metric GRPO (paper §4.3 ablation):
+Single-metric ablation:
     ablate           Train the soft / coverage / novelty single-metric GRPO variants.
 
-Supplementary analysis:
+Analysis:
     analysis         Evaluation-validity analyses (citation / coauthor / leakage).
 
 Run ``python -m live_idea_bench <command> --help`` to see a command's own flags.
@@ -42,18 +42,18 @@ _EXAMPLES = _REPO_ROOT / "examples"
 # command -> (relative script path, one-line help). The script is executed as
 # __main__ with sys.argv rewritten, so its existing argparse handles the flags.
 _COMMANDS: dict[str, tuple[str, str]] = {
-    # §3 benchmark
-    "benchmark": ("benchmark/run_domain_backtest.py", "Run a domain-separated backtest (paper §3)."),
-    "judge-eval": ("benchmark/llm_judge_eval.py", "Retrieve-then-judge LLM evaluation of predictions (§3)."),
-    # §4 MDF forecaster
-    "hindsight": ("forecaster/run_topic_hindsight.py", "Extract latent-innovation training labels (§4)."),
-    "train-prior": ("forecaster/run_prior_sft.py", "SFT the innovation prior (§4)."),
-    "train": ("forecaster/run_policy_rl_training.py", "GRPO-train the realization policy (§4)."),
-    "infer": ("forecaster/run_joint_inference.py", "Joint inference / Algorithm 1 (§4)."),
-    "eval": ("forecaster/eval.py", "Evaluate a trained forecaster (§4)."),
-    # §4.3 ablation
-    "ablate": ("forecaster/train_grpo_metric.py", "Single-metric GRPO: soft/coverage/novelty (§4.3)."),
-    # supplementary
+    # benchmark
+    "benchmark": ("benchmark/run_domain_backtest.py", "Run a domain-separated backtest."),
+    "judge-eval": ("benchmark/llm_judge_eval.py", "Retrieve-then-judge LLM evaluation of predictions."),
+    # MDF forecaster
+    "hindsight": ("forecaster/run_topic_hindsight.py", "Extract latent-innovation training labels."),
+    "train-prior": ("forecaster/run_prior_sft.py", "SFT the innovation prior."),
+    "train": ("forecaster/run_policy_rl_training.py", "GRPO-train the realization policy."),
+    "infer": ("forecaster/run_joint_inference.py", "Joint inference: prior -> realize -> select."),
+    "eval": ("forecaster/eval.py", "Evaluate a trained forecaster."),
+    # single-metric ablation
+    "ablate": ("forecaster/train_grpo_metric.py", "Single-metric GRPO: soft/coverage/novelty."),
+    # analysis
     "analysis": ("analysis/analysis_leakage.py", "Evaluation-validity analyses (citation/coauthor/leakage)."),
 }
 

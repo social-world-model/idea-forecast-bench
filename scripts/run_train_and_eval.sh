@@ -65,14 +65,14 @@ MODEL_FAMILY=$(echo "$ENV_INFO" | tail -1 | cut -d'|' -f2)
 ENV_DETAIL=$(echo "$ENV_INFO" | tail -1 | cut -d'|' -f3-)
 
 echo "=============================================="
-echo " Full Pipeline (Paper §3.2–3.4)"
+echo " Full Pipeline (prior SFT -> realization GRPO -> eval)"
 echo "  Model:  ${MODEL} (${BASE_MODEL_ID})"
 echo "  Family: ${MODEL_FAMILY} | ${ENV_DETAIL}"
 echo "  Output: ${OUT}"
 echo "  Dates:  ${START_MONTH} ~ ${END_MONTH}"
 echo "=============================================="
 
-# ---- Phase 2: Prior SFT (§3.2) ----
+# ---- Phase 2: Prior SFT ----
 PRIOR_CKPT="${OUT}/prior_sft/final_checkpoint"
 
 if [ -d "$PRIOR_CKPT" ] && [ -f "${OUT}/prior_sft/train_result.json" ]; then
@@ -87,7 +87,7 @@ fi
 
 PRIOR_CKPT=$(python3 -c "import json; print(json.load(open('${OUT}/prior_sft/train_result.json'))['checkpoint_path'])")
 
-# ---- Phase 3: Realization GRPO (§3.3) ----
+# ---- Phase 3: Realization GRPO ----
 GRPO_DIR="${OUT}/realization_grpo"
 GRPO_MANIFEST="${GRPO_DIR}/grpo/policy_manifest.json"
 

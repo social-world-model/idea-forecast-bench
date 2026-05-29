@@ -2,8 +2,8 @@
 # ============================================================================
 #  Multi-GPU vLLM-accelerated training.
 #
-#  Runs Phase 1 (Prior SFT, METHOD §3.2) → Phase 2 (dataset prep) →
-#  Phase 3 (Realization GRPO, METHOD §3.3) using Unsloth + TRL with vLLM
+#  Runs Phase 1 (Prior SFT) → Phase 2 (dataset prep) →
+#  Phase 3 (Realization GRPO) using Unsloth + TRL with vLLM
 #  server-mode generation. Generation throughput goes from ~80 tok/s (HF
 #  generate) to ~500-1000 tok/s (vLLM colocated KV-cache) — ~5-10x faster
 #  on the generation phase, ~3-5x faster overall per training step.

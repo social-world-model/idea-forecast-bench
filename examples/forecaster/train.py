@@ -1,16 +1,15 @@
-"""Single forecaster training entry point (METHOD §3.2 + §3.3, Unsloth + TRL).
+"""Single forecaster training entry point (prior SFT + realization GRPO, Unsloth + TRL).
 
-Phase 1 — Prior SFT (METHOD §3.2): trains ``p_θ(z | M_t)`` via SFT on the
-hindsight dataset, using the memory module ``M_t`` from
-``forecaster.prior.memory``.
+Phase 1 — Prior SFT: trains ``p_θ(z | M_t)`` via SFT on the hindsight dataset,
+using the memory module ``M_t`` from ``forecaster.prior.memory``.
 
 Phase 2 — Dataset prep: builds the realization GRPO prompt rows and writes
 ``trainer_dataset.jsonl``.
 
-Phase 3 — Realization GRPO (METHOD §3.3): trains ``p_ψ(y | z, X_{≤t})`` via
-GRPO with the three METHOD §3.3 verifiable rewards (evidence accuracy,
-operator adherence, scientific coherence). Warm-starts from the Phase 1
-adapter so the two phases compose into the factorized model from METHOD §3.1.
+Phase 3 — Realization GRPO: trains ``p_ψ(y | z, X_{≤t})`` via GRPO with the
+verifiable rewards (evidence accuracy, operator adherence, scientific
+coherence). Warm-starts from the Phase 1 adapter so the two phases compose into
+the factorized model.
 
 Usage:
     python examples/forecaster/train.py \\
@@ -114,7 +113,7 @@ def _phase1_prior_sft(args: argparse.Namespace, output_dir: Path) -> str:
     log.info("Loaded %d hindsight samples.", len(samples))
 
     sft_samples = build_sft_samples(samples, max_memory_entries=args.max_memory_entries)
-    log.info("Built %d SFT samples (memory-augmented per METHOD §3.2).", len(sft_samples))
+    log.info("Built %d SFT samples (memory-augmented).", len(sft_samples))
 
     sft_dir.mkdir(parents=True, exist_ok=True)
     save_sft_dataset(sft_samples, str(sft_dir / "dataset.jsonl"))

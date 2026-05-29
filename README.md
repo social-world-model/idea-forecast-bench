@@ -24,29 +24,29 @@ cd live-idea-bench
 # 2. Install (core = everything the benchmark needs)
 poetry install                       # deps for the benchmark + test suite
 #   ...add extras only when you train/run the forecaster locally:
-poetry install --with forecaster     # §4 MDF training stack (torch/transformers/trl/peft/...)
-poetry install --with eval           # §3 local-embedder retrieve-then-judge
+poetry install --with forecaster     # MDF forecaster training stack (torch/transformers/trl/peft/...)
+poetry install --with eval           # local-embedder for retrieve-then-judge scoring
 #   The repo runs in-place from the root via `python -m live_idea_bench` — no
 #   editable install needed (the package is poetry-managed, package-mode=false).
 
-# 3. Run — one front door, mapped to the paper's four pieces:
+# 3. Run — one front door:
 python -m live_idea_bench --help
 ```
 
 The CLI is the single entrypoint. Every command forwards its flags to the underlying
 script, so `python -m live_idea_bench <cmd> --help` shows that command's options.
 
-| Paper | Command | What it does |
-|-------|---------|--------------|
-| **§3 Benchmark** | `python -m live_idea_bench benchmark`   | Run a domain-separated backtest of a forecasting strategy |
-|                  | `python -m live_idea_bench judge-eval`  | Score saved predictions with the retrieve-then-judge LLM judge |
-| **§4 MDF forecaster** | `python -m live_idea_bench hindsight`   | Extract latent-innovation training labels from future papers |
-| (main experiment) | `python -m live_idea_bench train-prior` | SFT the memory-conditioned innovation prior |
-|                   | `python -m live_idea_bench train`       | GRPO-train the realization policy |
-|                   | `python -m live_idea_bench infer`       | Joint inference (Algorithm 1): prior → realization → select |
-|                   | `python -m live_idea_bench eval`        | Evaluate a trained forecaster on a held-out window |
-| **§4.3 Ablation** | `python -m live_idea_bench ablate`      | Single-metric GRPO (soft / coverage / novelty) |
-| **Supplementary** | `python -m live_idea_bench analysis`    | Evaluation-validity analyses (citation / coauthor / leakage) |
+| Area | Command | What it does |
+|------|---------|--------------|
+| **Benchmark** | `python -m live_idea_bench benchmark`   | Run a domain-separated backtest of a forecasting strategy |
+|               | `python -m live_idea_bench judge-eval`  | Score saved predictions with the retrieve-then-judge LLM judge |
+| **MDF forecaster** | `python -m live_idea_bench hindsight`   | Extract latent-innovation training labels from future papers |
+|                    | `python -m live_idea_bench train-prior` | SFT the memory-conditioned innovation prior |
+|                    | `python -m live_idea_bench train`       | GRPO-train the realization policy |
+|                    | `python -m live_idea_bench infer`       | Joint inference: sample from the prior → realize → select |
+|                    | `python -m live_idea_bench eval`        | Evaluate a trained forecaster on a held-out window |
+| **Single-metric ablation** | `python -m live_idea_bench ablate` | Single-metric GRPO (soft / coverage / novelty) |
+| **Analysis** | `python -m live_idea_bench analysis`    | Evaluation-validity analyses (citation / coauthor / leakage) |
 
 ### Minimal example — run the benchmark
 
@@ -67,7 +67,7 @@ python -m live_idea_bench benchmark \
   --output /tmp/backtest.json
 ```
 
-The benchmark baseline strategies map to the paper: `predictor_llm` (raw recent-abstract),
+Available baseline strategies: `predictor_llm` (raw recent-abstract prompting),
 `summary_prompting`, `retrieval_prompting`, `memory_prompting`, and `keyword_trend` /
 `topic_trend`. The MDF forecaster is the `forecaster` strategy.
 
@@ -80,9 +80,9 @@ live_idea_bench/      # Core package: benchmark + evaluation protocol
   __main__.py         #   the `python -m live_idea_bench` CLI front door
   backtest.py         #   rolling/domain backtest runner
   similarity.py       #   retrieve-then-judge evaluation
-  strategy/           #   pluggable forecasting strategies (the §3 baselines + MDF)
+  strategy/           #   pluggable forecasting strategies (the baselines + MDF)
   prompt/             #   predictor / similarity prompts
-forecaster/           # The MDF forecaster (paper §4)
+forecaster/           # The MDF forecaster
   hindsight/          #   latent-innovation label extraction
   prior/              #   memory-conditioned innovation prior (SFT)
   realization/        #   GRPO-trained realization policy (trl backend)
@@ -120,9 +120,9 @@ API keys (set as needed for the providers you use): `OPENAI_API_KEY`, `ANTHROPIC
 
 - **Tests:** `pytest` (green on a core install).
 - **MDF training pipeline:** `scripts/run_train_and_eval.sh` runs prior SFT → GRPO →
-  eval end to end; `scripts/forecaster/run_three_grpo.sh` drives the §4.3 single-metric
+  eval end to end; `scripts/forecaster/run_three_grpo.sh` drives the single-metric
   ablation (soft / coverage / novelty). Phase-by-phase smoke checks for the foresight method
-  are in `scripts/phase{1..8}_*.py` (documented in `forecaster/foresight/README.md`).
+  are in `scripts/phase*_*.py` (documented in `forecaster/foresight/README.md`).
 - **Web app:** `python backend/app.py` (API) and `cd frontend && npm install && npm start` (UI).
 
 ## Citation
