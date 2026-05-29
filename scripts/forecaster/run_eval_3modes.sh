@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Single-card (e.g. A100 80G) re-eval of the three single-metric GRPO adapters
+# Single-GPU re-eval of the three single-metric GRPO adapters
 # (soft / coverage / novelty): predictor generation + 9B-judge LLM eval, with
 # cutoffs covering the FULL test window 2024-10..2025-03 (4 windows:
 # cutoffs 2024-09/10/11/12). Runs one 9B model at a time, so one GPU is enough.
 #
-# Usage:  PYTHON_BIN=/path/to/env/bin/python scripts/forecaster/run_eval_3modes_a100.sh <gpu>
+# Usage:  PYTHON_BIN=/path/to/env/bin/python scripts/forecaster/run_eval_3modes.sh <gpu>
 #
-# Prereqs on this machine (see EVAL_A100.md):
+# Prereqs:
 #   - env built (vllm/transformers/trl/peft/sentence-transformers/openai)
 #   - data/csml_v2/raw_markdown present (the paper corpus)
 #   - the three adapters under outputs/grpo_{soft,coverage,novelty}_*/...
@@ -14,7 +14,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 
-GPU="${1:?usage: run_eval_3modes_a100.sh <gpu>}"
+GPU="${1:?usage: run_eval_3modes.sh <gpu>}"
 PYTHON_BIN="${PYTHON_BIN:-$(command -v python)}"
 export PATH="$(dirname "${PYTHON_BIN}"):${PATH}"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3.5-9B}"
