@@ -12,7 +12,7 @@ from forecaster.config import RealizationConfig
 from forecaster.models import Innovation, innovation_from_dict
 from forecaster.realization.config import RewardConfig
 from forecaster.realization.local_generation import _completion_to_text, parse_single_completion_prediction
-from forecaster.realization.proposal_generator import proposal_to_idea_prediction
+from forecaster.realization.proposal_generator import proposal_to_idea_prediction, strip_think_block
 from forecaster.realization.realization_reward import (
     StrictTrajectoryRewardBreakdown,
     evaluate_realization_reward,
@@ -219,7 +219,7 @@ def coerce_reward_prediction(
     innovation: Innovation | None = None,
 ) -> tuple[IdeaPrediction | None, str]:
     """Parse a reward-model completion into the shared single-idea contract."""
-    raw_text = _completion_to_text(raw_completion).strip()
+    raw_text = strip_think_block(_completion_to_text(raw_completion)).strip()
     if not raw_text:
         return None, ""
 
