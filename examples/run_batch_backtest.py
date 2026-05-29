@@ -61,9 +61,21 @@ from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
 
 MAX_BATCH_TOKENS = 4096
 
-# System-message prefixes used to distinguish the two LLM calls in memory_prompting
-_COMPRESS_SYS_PREFIX = "You are a research analyst."
+# System-message prefixes used to distinguish the two LLM calls in two-round strategies.
+# memory_prompting:  compress -> "You are a research analyst."
+#                    forecast -> "You are a research forecasting assistant with memory ..."
+# summary_prompting: compress -> "You are a research summarizer."
+#                    forecast -> "You are a research forecasting assistant working from a compressed historical summary."
+# Forecast prefix is shared across strategies — both forecast calls start with
+# "You are a research forecasting assistant", which is enough to separate them from compress calls.
+_MEMORY_COMPRESS_SYS_PREFIX = "You are a research analyst."
+_SUMMARY_COMPRESS_SYS_PREFIX = "You are a research summarizer."
 _FORECAST_SYS_PREFIX = "You are a research forecasting assistant"
+
+_TWO_ROUND_STRATEGIES = {
+    "memory_prompting": _MEMORY_COMPRESS_SYS_PREFIX,
+    "summary_prompting": _SUMMARY_COMPRESS_SYS_PREFIX,
+}
 
 
 # ── Paper loading ──────────────────────────────────────────────────────────────
@@ -619,9 +631,9 @@ def main() -> int:
         return cache
 
     # ── strategy dispatch ─────────────────────────────────────────────────────
-    is_memory_prompting = (args.strategy == "memory_prompting")
+    compress_prefix = _TWO_ROUND_STRATEGIES.get(args.strategy)
 
-    if not is_memory_prompting:
+    if compress_prefix is None:
         # Single-round: collect all LLM requests, batch them, replay
         full_cache = _run_batch_round(
             label="main",
@@ -635,7 +647,7 @@ def main() -> int:
         compress_cache = _run_batch_round(
             label="compress",
             replay_cache=None,
-            system_prefix=_COMPRESS_SYS_PREFIX,
+            system_prefix=compress_prefix,
         )
 
         # Round B — forecast (prompts depend on compress outputs)

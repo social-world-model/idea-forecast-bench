@@ -3,6 +3,8 @@ from live_idea_bench.strategy.keyword_trend import KeywordTrendStrategy
 from live_idea_bench.strategy.memory_prompting import MemoryPromptingStrategy
 from live_idea_bench.strategy.policy_rl import PolicyRLStrategy
 from live_idea_bench.strategy.predictor_llm import PredictorLLMStrategy
+from live_idea_bench.strategy.retrieval_prompting import RetrievalPromptingStrategy
+from live_idea_bench.strategy.summary_prompting import SummaryPromptingStrategy
 from live_idea_bench.strategy.topic_trend import TopicTrendStrategy
 
 
@@ -71,6 +73,22 @@ def create_strategy(
         resolved_model = model_name or legacy_params.get("model_id")
         return MemoryPromptingStrategy(
             model_name=str(resolved_model) if resolved_model else None,
+            temperature=temperature,
+            reasoning_effort=reasoning_effort,
+        )
+    if normalized == SummaryPromptingStrategy.name:
+        resolved_model = model_name or legacy_params.get("model_id")
+        return SummaryPromptingStrategy(
+            model_name=str(resolved_model) if resolved_model else None,
+            temperature=temperature,
+            reasoning_effort=reasoning_effort,
+        )
+    if normalized == RetrievalPromptingStrategy.name:
+        resolved_model = model_name or legacy_params.get("model_id")
+        retrieval_top_n = legacy_params.get("retrieval_top_n")
+        return RetrievalPromptingStrategy(
+            model_name=str(resolved_model) if resolved_model else None,
+            retrieval_top_n=int(retrieval_top_n) if retrieval_top_n else 20,
             temperature=temperature,
             reasoning_effort=reasoning_effort,
         )
