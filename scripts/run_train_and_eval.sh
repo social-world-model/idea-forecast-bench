@@ -79,7 +79,7 @@ if [ -d "$PRIOR_CKPT" ] && [ -f "${OUT}/prior_sft/train_result.json" ]; then
   echo ""; echo "===== Phase 2: Prior SFT — SKIPPED (checkpoint exists) ====="
 else
   echo ""; echo "===== Phase 2: Prior SFT ====="
-  python3 examples/run_prior_sft.py \
+  python3 examples/forecaster/run_prior_sft.py \
     --hindsight "$HINDSIGHT" \
     --output-dir "${OUT}/prior_sft" \
     --model "$MODEL"
@@ -95,7 +95,7 @@ if [ -f "$GRPO_MANIFEST" ]; then
   echo ""; echo "===== Phase 3: Realization GRPO — SKIPPED (manifest exists) ====="
 else
   echo ""; echo "===== Phase 3: Realization GRPO ====="
-  python3 examples/run_policy_rl_training.py \
+  python3 examples/forecaster/run_policy_rl_training.py \
     --input-dir "$PAPERS" \
     --output-dir "$GRPO_DIR" \
     --model-preset "$MODEL" \
@@ -143,7 +143,7 @@ if [ -f "$TRAINED_EVAL" ]; then
   echo ""; echo "===== Phase 4: Eval (trained) — SKIPPED (exists) ====="
 else
   echo ""; echo "===== Phase 4: Eval (trained forecaster) ====="
-  python3 examples/run_domain_backtest.py \
+  python3 examples/benchmark/run_domain_backtest.py \
     --strategy forecaster \
     --model-name "$BASE_MODEL_ID" \
     --prior-checkpoint "$PRIOR_CKPT" \
@@ -162,7 +162,7 @@ if [ -n "${VOYAGE_API_KEY:-}" ] && [ -f "$TRAINED_EVAL" ]; then
     echo ""; echo "===== Voyage Re-eval — SKIPPED (exists) ====="
   else
     echo ""; echo "===== Voyage Re-eval (threshold=0.80) ====="
-    VOYAGE_API_KEY="$VOYAGE_API_KEY" python3 examples/reeval_voyage.py \
+    VOYAGE_API_KEY="$VOYAGE_API_KEY" python3 examples/benchmark/reeval_voyage.py \
       --input-json "$TRAINED_EVAL" \
       --papers-dir "$PAPERS" \
       --output "$VOYAGE_EVAL" \

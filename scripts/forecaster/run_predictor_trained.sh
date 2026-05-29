@@ -99,7 +99,7 @@ done
 export OPENAI_BASE_URL="http://localhost:${PORT}/v1"
 export OPENAI_API_KEY="EMPTY"
 echo "[predict] running run_domain_backtest.py ..."
-"${PYTHON_BIN}" examples/run_domain_backtest.py \
+"${PYTHON_BIN}" examples/benchmark/run_domain_backtest.py \
   --strategy predictor_llm \
   --model-name "${ALIAS}" \
   --input-dir "${PAPERS}" \

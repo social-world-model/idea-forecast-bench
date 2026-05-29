@@ -74,7 +74,7 @@ run_strategy() {
   echo "  batch_dir        = $batch_dir"
   echo "========================================================================"
 
-  "$PYTHON_BIN" examples/run_batch_backtest.py \
+  "$PYTHON_BIN" examples/benchmark/run_batch_backtest.py \
     --input-dir "$INPUT_DIR" \
     --strategy "$strategy" \
     --model-name "$MODEL_NAME" \

@@ -2,4 +2,4 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-python "$ROOT_DIR/examples/research_idea_engine.py" "$@"
+python "$ROOT_DIR/examples/data/research_idea_engine.py" "$@"
