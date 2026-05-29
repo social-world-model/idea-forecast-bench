@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any, List, Optional
 
 from live_idea_bench.models import IdeaPrediction, PaperRecord
-from live_idea_bench.model_refs import resolve_model_reference
 from live_idea_bench.strategy.base import IdeaStrategy
 
 logger = logging.getLogger(__name__)
@@ -59,9 +58,6 @@ class ForecasterStrategy(IdeaStrategy):
 
     def _artifact_exists(self, raw_path: str | None) -> bool:
         return bool(raw_path and Path(str(raw_path)).exists())
-
-    def _resolve_model_reference(self, raw_path: str | None) -> str | None:
-        return resolve_model_reference(raw_path)
 
     def _resolve_runtime_mode(self, inference_config: Any) -> dict[str, Any]:
         requested_mode = str(getattr(inference_config, "runtime_mode", "demo") or "demo").strip().lower()
@@ -212,8 +208,16 @@ class ForecasterStrategy(IdeaStrategy):
         inference_config = self._load_inference_config()
         realization_config = self._load_realization_config()
 
-        prior_model_path = self._resolve_model_reference(self.prior_checkpoint)
-        realization_model_path = self._resolve_model_reference(self.realization_checkpoint)
+        prior_model_path = (
+            self.prior_checkpoint
+            if self.prior_checkpoint and Path(self.prior_checkpoint).exists()
+            else None
+        )
+        realization_model_path = (
+            self.realization_checkpoint
+            if self.realization_checkpoint and Path(self.realization_checkpoint).exists()
+            else None
+        )
 
         # Force flexible runtime when using local models — strict_eval requires
         # memory snapshots we don't have; demo mode falls back to LLM API.
@@ -223,9 +227,8 @@ class ForecasterStrategy(IdeaStrategy):
         # realization scorer to enable the batched fast path.
         import os
         replace_kwargs: dict[str, Any] = {"runtime_mode": "flexible"}
-        if os.environ.get("SGLANG_URL") or os.environ.get("SGLANG_PRIOR_URL"):
+        if os.environ.get("SGLANG_URL"):
             replace_kwargs["realization_score_method"] = "heuristic"
-            replace_kwargs["prior_score_method"] = "heuristic"
         inference_config = dataclasses.replace(inference_config, **replace_kwargs)
 
         fallback_events: list[dict[str, Any]] = []

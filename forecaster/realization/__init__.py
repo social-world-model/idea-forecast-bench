@@ -38,6 +38,14 @@ from forecaster.realization.reward import (
     spearman_correlation,
 )
 from forecaster.realization.selection import select_top_k_predictions
+from forecaster.realization.trainers import (
+    PreparedRLContext,
+    RLTrainerRunner,
+    PPOTrainerRunner,
+    RLOOTrainerRunner,
+    TrainerPreparedArtifacts,
+    create_trainer_runner,
+)
 
 _LAZY = {
     "CandidateListSample": ("forecaster.realization.candidates", "CandidateListSample"),
@@ -96,6 +104,13 @@ __all__ = [
     "spearman_correlation",
     # selection
     "select_top_k_predictions",
+    # trainers
+    "PreparedRLContext",
+    "RLTrainerRunner",
+    "PPOTrainerRunner",
+    "RLOOTrainerRunner",
+    "TrainerPreparedArtifacts",
+    "create_trainer_runner",
     # lazy (backtest dependency via episodes.py)
     "CandidateListSample",
     "EpisodeCandidateLists",
