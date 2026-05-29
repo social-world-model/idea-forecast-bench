@@ -165,9 +165,9 @@ except Exception as e:
     errors.append(f"sentence-transformers: {e}")
 
 try:
-    from forecaster.realization.unsloth_runner import train_grpo_with_unsloth  # noqa: F401
-    from forecaster.realization.dataset import build_grpo_dataset_rows  # noqa: F401
-    from forecaster.realization.reward_compute import compute_score  # noqa: F401
+    from forecaster.realization.trainers import create_trainer_runner  # noqa: F401
+    from forecaster.realization.trl.runner import prepare_trl_artifacts, train_with_trl  # noqa: F401
+    from forecaster.realization.verl.reward_fn import compute_score  # noqa: F401
     from forecaster.realization.model_zoo import resolve_small_model
     from forecaster.prior.trainer import train_prior  # noqa: F401
     spec = resolve_small_model("qwen3.5-2b")
