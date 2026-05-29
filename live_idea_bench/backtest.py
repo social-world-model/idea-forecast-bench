@@ -35,6 +35,11 @@ class BacktestConfig:
     min_train_papers: int = 6
     start_month: Optional[str] = None
     end_month: Optional[str] = None
+    # Earliest cutoff to EVALUATE. Decouples "earliest paper loaded" (start_month,
+    # which provides reading context) from "earliest cutoff scored". Needed so the
+    # first test cutoff has prior-month context instead of being skipped for an
+    # empty train set. None = behave as before (first eligible month is a cutoff).
+    min_cutoff_month: Optional[str] = None
     similarity_config: str = "similarity.yaml"
     popularity_cache_path: Optional[str] = None  # Path to popularity cache JSON
     candidate_limit: Optional[int] = None  # max future papers per prediction for LLM eval
@@ -217,6 +222,9 @@ def run_backtest(
     max_cutoff_idx = month_to_index(last_allowed_cutoff)
 
     eligible_cutoffs = [c for c in month_values if month_to_index(c) <= max_cutoff_idx]
+    if config.min_cutoff_month:
+        min_cutoff_idx = month_to_index(config.min_cutoff_month)
+        eligible_cutoffs = [c for c in eligible_cutoffs if month_to_index(c) >= min_cutoff_idx]
     window_results: List[BacktestWindowResult] = []
     for cutoff in tqdm(eligible_cutoffs, desc="windows", unit="win", leave=False):
         cutoff_date = month_start_date(cutoff)

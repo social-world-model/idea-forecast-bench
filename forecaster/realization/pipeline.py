@@ -164,6 +164,22 @@ def _resolve_episode_innovation(
     return _derive_episode_innovation(target_future_paper)
 
 
+_METRIC_SAMPLE_CAP = 30
+
+
+def _sample_for_metric(papers: list[PaperRecord], cap: int) -> list[PaperRecord]:
+    """Deterministic cap for the per-row metric-reward paper set.
+
+    Keeps the head of the list (already ordered by month/popularity upstream)
+    so per-row payload stays under ~60 KB even on large episodes. The cap
+    only affects what ships into ``extra_info`` for the
+    soft/coverage/novelty rewards; the composite reward path is unchanged.
+    """
+    if cap <= 0 or len(papers) <= cap:
+        return list(papers)
+    return list(papers[:cap])
+
+
 def _serialize_episode_prompt_row(
     *,
     episode: RLEpisode,
@@ -181,6 +197,12 @@ def _serialize_episode_prompt_row(
     # 31GB+ prompts.jsonl and OOM). The reward function uses evidence_papers
     # for the dense reward (evidence accuracy, operator adherence, coherence)
     # and the target paper for future matching.
+    #
+    # For the single-metric GRPO rewards (soft / coverage / novelty) we
+    # additionally ship a capped sample of train + future papers so the
+    # reward has enough signal — coverage clustering and novelty cosine
+    # both degenerate with only one paper per side. The cap keeps each row
+    # well under ~100 KB so 6-episode runs still produce small JSONL.
     return {
         "episode": asdict(episode),
         "prompt_mode": "z_conditioned_realization",
@@ -193,6 +215,12 @@ def _serialize_episode_prompt_row(
         "future_end_date": episode.future_end_date,
         "train_papers": _serialize_papers(evidence_papers),
         "future_papers": _serialize_papers([target_future_paper]),
+        "metric_train_papers": _serialize_papers(
+            _sample_for_metric(train_papers, _METRIC_SAMPLE_CAP)
+        ),
+        "metric_future_papers": _serialize_papers(
+            _sample_for_metric(future_papers, _METRIC_SAMPLE_CAP)
+        ),
         "target_future_paper": asdict(target_future_paper),
         "target_future_paper_id": target_future_paper.paper_id,
         "innovation": innovation_to_dict(innovation),

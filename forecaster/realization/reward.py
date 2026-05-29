@@ -371,6 +371,97 @@ def evaluate_strict_rl_reward(
     )
 
 
+def _evaluate_single_metric_reward(
+    *,
+    mode: str,
+    predictions: list[IdeaPrediction],
+    train_papers: list[PaperRecord],
+    future_papers: list[PaperRecord],
+    reward_config: RewardConfig,
+) -> RLRewardEvaluation:
+    """Replace the composite reward with one of {soft, coverage, novelty}.
+
+    Used for the three GRPO ablations: each run optimizes a single eval
+    metric in isolation. ``predictions`` is the per-rollout list (length 1
+    in the realization pipeline); we score the top prediction directly
+    against the supplied train/future paper sets.
+    """
+    from forecaster.embedding import get_default_embedder
+    from forecaster.realization.judge_rewards import (
+        compute_coverage_reward,
+        compute_novelty_reward,
+        compute_soft_reward,
+        get_default_judge_client,
+        get_default_judge_model,
+    )
+
+    prediction = predictions[0] if predictions else IdeaPrediction(
+        rank=1, title="", rationale="", approach=""
+    )
+    embedder = get_default_embedder()
+
+    component_value = 0.0
+    if mode == "novelty":
+        component_value = compute_novelty_reward(
+            prediction, train_papers, embedder=embedder
+        )
+    elif mode == "coverage":
+        component_value = compute_coverage_reward(
+            prediction,
+            future_papers,
+            embedder=embedder,
+            k=reward_config.cluster_k,
+        )
+    elif mode == "soft":
+        component_value = compute_soft_reward(
+            prediction,
+            future_papers,
+            embedder=embedder,
+            judge_client=get_default_judge_client(),
+            judge_model=get_default_judge_model(),
+            top_r=reward_config.judge_top_r,
+        )
+    else:
+        raise ValueError(f"Unsupported single-metric reward mode: {mode!r}")
+
+    final_reward = float(max(0.0, min(1.0, component_value)))
+    empty_eval = _empty_evaluation()
+    return RLRewardEvaluation(
+        benchmark_evaluation=empty_eval,
+        benchmark_score=0.0,
+        list_reward=round(final_reward, 4),
+        invalid_completion=False,
+        per_idea_rewards=[
+            PerIdeaReward(
+                rank=prediction.rank,
+                title=prediction.title,
+                matched_paper_id=None,
+                evidence_quality=0.0,
+                operator_adherence=0.0,
+                coherence=0.0,
+                benchmark_match=0.0,
+                duplicate_penalty=0.0,
+                total=round(final_reward, 4),
+            )
+        ],
+        reward_breakdown={
+            "dense_reward": round(final_reward, 4),
+            f"single_metric::{mode}": round(final_reward, 4),
+            "evidence_quality": 0.0,
+            "operator_adherence": 0.0,
+            "coherence": 0.0,
+            "benchmark_match": 0.0,
+            "benchmark_score": 0.0,
+            "lead_time": 0.0,
+            "duplicate_rate": 0.0,
+            "invalid_completion": 0.0,
+            "parse_failure": 0.0,
+            "invalid_completion_reward": round(reward_config.invalid_completion_reward, 4),
+        },
+        match_details=[],
+    )
+
+
 def evaluate_rl_reward(
     predictions: list[IdeaPrediction],
     train_papers: list[PaperRecord],
@@ -387,6 +478,16 @@ def evaluate_rl_reward(
     cutoff_date: str | None = None,
     future_end_date: str | None = None,
 ) -> RLRewardEvaluation:
+    mode = str(getattr(reward_config, "mode", "composite") or "composite").lower()
+    if mode in {"soft", "coverage", "novelty"}:
+        return _evaluate_single_metric_reward(
+            mode=mode,
+            predictions=predictions,
+            train_papers=train_papers,
+            future_papers=future_papers,
+            reward_config=reward_config,
+        )
+
     scored = score_prediction_list(
         predictions=predictions,
         train_papers=train_papers,

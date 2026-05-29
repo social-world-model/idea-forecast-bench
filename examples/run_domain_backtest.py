@@ -59,6 +59,9 @@ def main() -> int:
     parser.add_argument("--min-train-papers", type=int, default=2)
     parser.add_argument("--start-month", type=str, default="2024-01")
     parser.add_argument("--end-month", type=str, default="2025-06")
+    parser.add_argument("--min-cutoff-month", type=str, default=None,
+                        help="Earliest cutoff to EVALUATE (>= this). Lets start-month load "
+                             "earlier papers as context while only scoring test-period cutoffs.")
     parser.add_argument("--similarity-config", type=str, default="similarity.yaml")
     parser.add_argument(
         "--similarity-engine",
@@ -181,6 +184,7 @@ def main() -> int:
         min_train_papers=args.min_train_papers,
         start_month=args.start_month,
         end_month=args.end_month,
+        min_cutoff_month=args.min_cutoff_month,
         similarity_config=args.similarity_config,
         candidate_limit=args.candidate_limit,
     )
@@ -248,11 +252,27 @@ def main() -> int:
             "aggregate_summary": weighted,
             "topic_results": topic_results,
         }
+        # PaperRecord / IdeaPrediction are dataclasses, not JSON-native.
+        # default=_jsonable handles them (and any other dataclass) by falling
+        # back to asdict, so a single non-serializable value can't silently
+        # kill every checkpoint write.
+        import dataclasses
+        def _jsonable(obj):
+            if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+                return dataclasses.asdict(obj)
+            if hasattr(obj, "model_dump"):  # pydantic v2 escape hatch
+                return obj.model_dump()
+            if hasattr(obj, "__dict__"):
+                return vars(obj)
+            raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
         try:
-            output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-        except TypeError as _e:
+            output_path.write_text(
+                json.dumps(payload, indent=2, ensure_ascii=False, default=_jsonable),
+                encoding="utf-8",
+            )
+        except Exception as _e:
             import traceback
-            print(f"[checkpoint ERROR] JSON serialization failed: {_e}", flush=True)
+            print(f"[checkpoint ERROR] write failed: {_e}", flush=True)
             traceback.print_exc()
             raise
 
@@ -293,7 +313,19 @@ def main() -> int:
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = {pool.submit(_process_topic, t): t for t in topics}
         for fut in as_completed(futures):
-            res = fut.result()
+            topic = futures[fut]
+            try:
+                res = fut.result()
+            except Exception as _topic_exc:
+                # Isolate one topic's failure from the whole run. Common
+                # cause: openai.APITimeoutError on a stuck stream.
+                print(
+                    f"  [{topic.id}] FAILED: {type(_topic_exc).__name__}: {_topic_exc}",
+                    flush=True,
+                )
+                import traceback
+                traceback.print_exc()
+                continue
             if res is None:
                 continue
             tid, entry = res

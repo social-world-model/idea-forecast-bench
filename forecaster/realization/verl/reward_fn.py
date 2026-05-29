@@ -58,6 +58,12 @@ def compute_score(
         train_papers = [PaperRecord(**row) for row in payload.get("train_papers", [])]
         future_papers = [PaperRecord(**row) for row in payload.get("future_papers", [])]
         evidence_papers = [PaperRecord(**row) for row in payload.get("evidence_papers", [])]
+        metric_train_papers = [
+            PaperRecord(**row) for row in payload.get("metric_train_papers", [])
+        ]
+        metric_future_papers = [
+            PaperRecord(**row) for row in payload.get("metric_future_papers", [])
+        ]
     except (TypeError, KeyError):
         return build_invalid_reward_evaluation(reward_config).list_reward
     try:
@@ -95,10 +101,22 @@ def compute_score(
     )
     if prediction is None:
         return build_invalid_reward_evaluation(reward_config).list_reward
+    # For single-metric reward modes (soft/coverage/novelty) the broader
+    # `metric_*_papers` samples carry the signal the rewards actually need
+    # (clustering, retrieval, novelty against a larger reference set). The
+    # composite reward keeps using train_papers/future_papers as before.
+    mode = str(getattr(reward_config, "mode", "composite") or "composite").lower()
+    use_metric_papers = mode in {"soft", "coverage", "novelty"}
+    train_for_reward = (
+        metric_train_papers if use_metric_papers and metric_train_papers else train_papers
+    )
+    future_for_reward = (
+        metric_future_papers if use_metric_papers and metric_future_papers else future_papers
+    )
     evaluation = evaluate_rl_reward(
         predictions=[prediction],
-        train_papers=train_papers,
-        future_papers=future_papers,
+        train_papers=train_for_reward,
+        future_papers=future_for_reward,
         reward_config=reward_config,
         innovation=innovation,
         evidence_papers=evidence_papers,

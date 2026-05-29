@@ -1,0 +1,18 @@
+top_k: 1
+candidate_limit:
+duplicate_similarity_threshold: 0.8
+invalid_completion_reward: -0.05
+specificity_title_weight: 0.2
+specificity_rationale_weight: 0.4
+specificity_approach_weight: 0.4
+rank_decay: 0.15
+benchmark_score_weight: 0.0
+mode: soft
+judge_top_r: 8
+cluster_k: 5
+weights:
+  future_match: 0.0
+  novelty: 0.0
+  specificity: 0.0
+  lead_time: 0.0
+  duplicate_penalty: 0.0

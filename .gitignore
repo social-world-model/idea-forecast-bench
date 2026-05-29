@@ -169,3 +169,6 @@ backend/strategies/*.json
 frontend/build/
 frontend/node_modules/
 .worktrees/
+
+# Evaluation / judge result dumps (do not commit)
+outputs/
