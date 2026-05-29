@@ -27,15 +27,34 @@ flask-cors = ">=4,<7"
 openreview-py = "*"
 pandas = "^2.2.0"
 
-[tool.poetry.group.sft]
+# --- Optional extras ------------------------------------------------------
+# Core deps above are all the benchmark needs (LLM-API baselines + the
+# retrieve-then-judge protocol against a hosted judge). The groups below pull
+# the heavy ML stack only when you train or run the MDF forecaster locally.
+#
+#   poetry install --with forecaster   # train/run the MDF forecaster (§4)
+#   poetry install --with eval         # local-embedder retrieve-then-judge (§3)
+
+# §4 MDF forecaster: SFT the prior + GRPO-train the realization policy locally.
+[tool.poetry.group.forecaster]
 optional = true
 
-[tool.poetry.group.sft.dependencies]
+[tool.poetry.group.forecaster.dependencies]
 torch = ">=2.0"
 transformers = ">=4.40"
+trl = ">=0.9"
 peft = ">=0.10"
 datasets = ">=2.18"
 accelerate = ">=0.27"
+sentence-transformers = ">=2.7"
+
+# §3 evaluation: local sentence-transformer embedder fallback for the
+# retrieve-then-judge protocol when no hosted embedding API is configured.
+[tool.poetry.group.eval]
+optional = true
+
+[tool.poetry.group.eval.dependencies]
+sentence-transformers = ">=2.7"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.6.0"
