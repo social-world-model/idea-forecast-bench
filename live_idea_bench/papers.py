@@ -555,11 +555,19 @@ def load_papers_from_markdown(
             yy = (idx // 12) % 100
             mm = (idx % 12) + 1
             prefixes.add(f"{yy:02d}{mm:02d}")
-        # Single listdir (1-2s for 239k entries) + in-memory filter (~0.02s)
+        # Single listdir (1-2s for 239k entries) + in-memory filter (~0.02s).
+        # Accept both the legacy arXiv "YYMM" prefix layout (e.g. "2603") and the
+        # canonical "YYYY-MM" month-directory layout (e.g. "2026-03").
         all_names = os.listdir(input_dir)
         dir_args: List[tuple] = []
         for name in all_names:
-            if len(name) >= 4 and name[:4] in prefixes:
+            keep = len(name) >= 4 and name[:4] in prefixes
+            if not keep and re.match(r"^\d{4}-\d{2}$", name):
+                try:
+                    keep = s_idx <= month_to_index(name) <= e_idx
+                except ValueError:
+                    keep = False
+            if keep:
                 dir_args.append((str(input_dir / name), name))
         print(f"[papers] Found {len(dir_args)} dirs, discovering .md files ({workers} workers)...")
         effective_disc = min(max(1, workers), len(dir_args)) if dir_args else 1

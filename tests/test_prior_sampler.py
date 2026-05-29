@@ -179,7 +179,9 @@ class TestSampleInnovationsLoRAPath:
             )
 
         ml["peft_cls"].from_pretrained.assert_called_once_with(
-            ml["auto_model_cls"].from_pretrained.return_value, str(tmp_path)
+            ml["auto_model_cls"].from_pretrained.return_value,
+            str(tmp_path),
+            torch_dtype=ml["auto_model_cls"].from_pretrained.return_value.dtype,
         )
 
     def test_auto_model_loaded_directly_when_no_adapter_config(self, tmp_path: Path) -> None:

@@ -14,7 +14,7 @@ def test_load_predictor_config_happy_path() -> None:
 
 def test_load_similarity_config_happy_path() -> None:
     cfg = load_similarity_config("similarity.yaml")
-    assert cfg.engine == "embedding"
+    assert cfg.engine == "heuristic"
     assert cfg.semantic_threshold == pytest.approx(0.5)
     assert "similarity" in cfg.system_prompt.lower()
 

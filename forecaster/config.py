@@ -75,7 +75,7 @@ class RealizationConfig:
 @dataclass
 class InferenceConfig:
     runtime_mode: str = "strict_eval"
-    num_candidates: int = 8
+    num_candidates: int = 16
     prior_weight: float = 0.4
     realization_weight: float = 0.6
     top_k: int = 5

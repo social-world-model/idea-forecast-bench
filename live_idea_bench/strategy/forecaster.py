@@ -208,6 +208,13 @@ class ForecasterStrategy(IdeaStrategy):
         inference_config = self._load_inference_config()
         realization_config = self._load_realization_config()
 
+        # Resolve the runtime-mode boundary from the ORIGINAL config (before the
+        # forced "flexible" override below). In strict_eval mode with all
+        # artifacts present, prior failures must propagate instead of silently
+        # falling back to the heuristic.
+        runtime_contract = self._resolve_runtime_mode(inference_config)
+        strict_mode = runtime_contract["effective_mode"] == "strict_eval"
+
         prior_model_path = (
             self.prior_checkpoint
             if self.prior_checkpoint and Path(self.prior_checkpoint).exists()
@@ -231,7 +238,7 @@ class ForecasterStrategy(IdeaStrategy):
             replace_kwargs["realization_score_method"] = "heuristic"
         inference_config = dataclasses.replace(inference_config, **replace_kwargs)
 
-        fallback_events: list[dict[str, Any]] = []
+        fallback_events: list[dict[str, Any]] = list(runtime_contract["fallback_events"])
         memory_store = self._load_memory_store(
             train_papers=train_papers,
             cutoff_month=cutoff_month,
@@ -240,7 +247,16 @@ class ForecasterStrategy(IdeaStrategy):
 
         # Sample innovations from trained prior, or fall back to heuristic
         innovations: list
-        if prior_model_path:
+        if strict_mode:
+            # Strict evaluation must not swallow prior-sampling errors.
+            sampled = sample_innovations(prior_model_path, memory_store, inference_config)
+            if not sampled:
+                raise RuntimeError(
+                    "Strict forecaster serving requires non-empty prior samples."
+                )
+            innovations = sampled
+            logger.info("Sampled %d innovations from trained prior.", len(innovations))
+        elif prior_model_path:
             try:
                 sampled = sample_innovations(
                     prior_model_path, memory_store, inference_config
@@ -305,7 +321,8 @@ class ForecasterStrategy(IdeaStrategy):
                     "joint_score": proposal.joint_score,
                     "strategy": self.name,
                     "runtime_surface": self.runtime_surface,
-                    "effective_runtime_mode": "flexible",
+                    "requested_runtime_mode": runtime_contract["requested_mode"],
+                    "effective_runtime_mode": runtime_contract["effective_mode"],
                     "fallback_events": list(fallback_events),
                 },
             )
