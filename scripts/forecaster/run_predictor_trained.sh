@@ -31,8 +31,14 @@ PYTHON_BIN="${PYTHON_BIN:-/home/max7/.conda/envs/idea-grpo/bin/python}"
 export PATH="$(dirname "${PYTHON_BIN}"):${PATH}"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3.5-9B}"
 PAPERS="${PAPERS:-data/csml_v2/raw_markdown}"
-EVAL_START="${EVAL_START:-2024-10}"
+# Load papers from 2024-06 so the first test cutoff has prior-month reading
+# context, but only EVALUATE cutoffs >= MIN_CUTOFF. With MIN_CUTOFF=2024-09 the
+# evaluated cutoffs are 2024-09/10/11/12, whose 3-month futures span the full
+# test window 2024-10..2025-03 (fixes the earlier 2-window run that started
+# loading at 2024-10 and dropped the first cutoff for an empty train set).
+EVAL_START="${EVAL_START:-2024-06}"
 EVAL_END="${EVAL_END:-2025-03}"
+MIN_CUTOFF="${MIN_CUTOFF:-2024-09}"
 TOP_K="${TOP_K:-5}"
 HORIZON="${HORIZON:-3}"
 WORKERS="${WORKERS:-4}"
@@ -98,6 +104,7 @@ echo "[predict] running run_domain_backtest.py ..."
   --model-name "${ALIAS}" \
   --input-dir "${PAPERS}" \
   --start-month "${EVAL_START}" --end-month "${EVAL_END}" \
+  --min-cutoff-month "${MIN_CUTOFF}" \
   --top-k "${TOP_K}" --horizon-months "${HORIZON}" \
   --similarity-engine heuristic --workers "${WORKERS}" \
   --output "${OUT}"
