@@ -68,7 +68,7 @@ def main() -> int:
         type=str,
         default=None,
         help="Override the similarity engine at runtime (e.g. heuristic, embedding, llm). "
-             "Useful when you want to skip API calls and re-evaluate later with reeval_from_json.py.",
+             "Useful when you want to skip API calls and re-evaluate later with reeval_voyage.py.",
     )
     parser.add_argument(
         "--eval-model",

@@ -36,9 +36,9 @@ rsync -avP "$OLD/data/topic_hindsight/dz.jsonl"                              "$D
 - Qwen3.5-9B base weights: auto-downloaded from HF on first run.
 
 > Alternative if you'd rather regenerate the indices than transfer them:
-> edit the hardcoded `/home/max7/...` paths in `build_indices.py` +
-> `build_one_index.py`, then run both (≈30–60 min on a Pro 6000). You still
-> need the rubrics + SFT adapter transferred.
+> edit the hardcoded `/home/max7/...` paths in `build_indices.py`, then run it
+> (≈30–60 min on a Pro 6000). You still need the rubrics + SFT adapter
+> transferred.
 
 ## 3. Start the judge (own GPU)
 ```bash
