@@ -10,7 +10,7 @@ jobs:
     strategy:
       max-parallel: 5
       matrix:
-        python-version: ["3.9", "3.10"]
+        python-version: ["3.10", "3.11"]
 
     steps:
       - uses: actions/checkout@v2
@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           curl -sSL https://install.python-poetry.org | python3
-          poetry install --all-extras
+          poetry install --with forecaster,eval,test
       - name: Test with pytest
         env: # Or as an environment variable
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

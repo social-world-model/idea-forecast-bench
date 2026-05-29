@@ -45,7 +45,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from live_idea_bench.backtest import BacktestConfig, backtest  # noqa: E402
@@ -462,7 +462,7 @@ def main() -> int:
         description="Batch-mode domain backtest (OpenAI Batch API, 50% cheaper).",
     )
     # ── same args as run_domain_backtest.py ───────────────────────────────────
-    parser.add_argument("--input-dir", type=str, default="data/arxiv_csml/raw_markdown")
+    parser.add_argument("--input-dir", type=str, default="data/csml_v2/raw_markdown")
     parser.add_argument("--strategy", type=str, default="predictor_llm")
     parser.add_argument("--recent-months", type=int, default=3)
     parser.add_argument("--min-keyword-freq", type=int, default=1)

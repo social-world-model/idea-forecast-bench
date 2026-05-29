@@ -140,13 +140,13 @@ def main() -> None:
     parser.add_argument(
         "--input-jsonl",
         type=Path,
-        default=Path("data/arxiv_csml/papers.jsonl"),
+        default=Path("data/csml_v2/papers.jsonl"),
         help="Path to canonical papers JSONL",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("data/arxiv_csml/time_slices"),
+        default=Path("data/csml_v2/time_slices"),
         help="Output directory for split JSON files",
     )
     parser.add_argument(

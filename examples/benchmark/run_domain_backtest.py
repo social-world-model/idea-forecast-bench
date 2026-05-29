@@ -7,7 +7,7 @@ persisted strategy JSON file.
 Usage::
 
     python examples/run_domain_backtest.py \
-        --input-dir data/arxiv_csml/raw_markdown \
+        --input-dir data/csml_v2/raw_markdown \
         --strategy keyword_trend \
         --start-month 2024-01 --end-month 2025-06 \
         --output /tmp/domain_backtest.json
@@ -22,7 +22,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from live_idea_bench.backtest import BacktestConfig, backtest  # noqa: E402
@@ -39,7 +39,7 @@ def main() -> int:
     parser.add_argument(
         "--input-dir",
         type=str,
-        default="data/arxiv_csml/raw_markdown",
+        default="data/csml_v2/raw_markdown",
         help="Directory with markdown papers.",
     )
     parser.add_argument("--strategy", type=str, default="keyword_trend")

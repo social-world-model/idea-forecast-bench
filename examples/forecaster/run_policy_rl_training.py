@@ -4,7 +4,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
 from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
@@ -22,7 +22,7 @@ from forecaster.realization.pipeline import run_policy_rl_pipeline  # noqa: E402
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Prepare and train RL policy checkpoints for LiveIdeaBench.")
-    parser.add_argument("--input-dir", type=str, default="data/arxiv_csml/raw_markdown", help="Directory with markdown papers.")
+    parser.add_argument("--input-dir", type=str, default="data/csml_v2/raw_markdown", help="Directory with markdown papers.")
     parser.add_argument("--output-dir", type=str, default="data/rl_runs/policy_rl", help="Directory for RL artifacts.")
     parser.add_argument("--model-name", type=str, help="Hugging Face model id or local checkpoint path.")
     parser.add_argument("--model-preset", type=str, help="Shortcut alias from the built-in 3B/4B model registry.")

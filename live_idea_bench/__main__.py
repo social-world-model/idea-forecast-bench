@@ -84,10 +84,20 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if command == "analysis":
-        # `analysis <variant> [args]`; default variant is leakage.
+        # `analysis <variant> [args]`; default variant is leakage. A leading
+        # non-flag token must be a known variant (reject typos rather than
+        # silently running the wrong analysis).
         variant = "leakage"
-        if rest and rest[0] in _ANALYSIS_VARIANTS:
-            variant, rest = rest[0], rest[1:]
+        if rest and not rest[0].startswith("-"):
+            if rest[0] in _ANALYSIS_VARIANTS:
+                variant, rest = rest[0], rest[1:]
+            else:
+                print(
+                    f"Unknown analysis variant {rest[0]!r}; "
+                    f"choose one of: {', '.join(_ANALYSIS_VARIANTS)}",
+                    file=sys.stderr,
+                )
+                return 2
         script_rel = _ANALYSIS_VARIANTS[variant]
     else:
         script_rel = _COMMANDS[command][0]

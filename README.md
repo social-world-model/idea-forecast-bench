@@ -22,10 +22,12 @@ git clone https://github.com/ulab-uiuc/live-idea-bench.git
 cd live-idea-bench
 
 # 2. Install (core = everything the benchmark needs)
-poetry install                       # or: pip install -e .
+poetry install                       # deps for the benchmark + test suite
 #   ...add extras only when you train/run the forecaster locally:
 poetry install --with forecaster     # §4 MDF training stack (torch/transformers/trl/peft/...)
 poetry install --with eval           # §3 local-embedder retrieve-then-judge
+#   The repo runs in-place from the root via `python -m live_idea_bench` — no
+#   editable install needed (the package is poetry-managed, package-mode=false).
 
 # 3. Run — one front door, mapped to the paper's four pieces:
 python -m live_idea_bench --help
@@ -48,9 +50,17 @@ script, so `python -m live_idea_bench <cmd> --help` shows that command's options
 
 ### Minimal example — run the benchmark
 
+First get the arXiv CS.ML corpus (downloads to `data/csml_v2/raw_markdown`):
+
+```bash
+bash scripts/forecaster/download_dataset.sh
+```
+
+Then run a backtest against it:
+
 ```bash
 python -m live_idea_bench benchmark \
-  --input-dir data/arxiv_csml/raw_markdown \
+  --input-dir data/csml_v2/raw_markdown \
   --strategy summary_prompting \
   --eval-model gpt-5.4 \
   --start-month 2024-10 --end-month 2025-03 \

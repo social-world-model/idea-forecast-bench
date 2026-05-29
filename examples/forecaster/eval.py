@@ -101,8 +101,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--voyage", action="store_true",
-        help="After main eval, also run examples/reeval_voyage.py to produce paper-comparable "
-             "scores. Requires VOYAGE_API_KEY in environment.",
+        help="After main eval, also run examples/benchmark/reeval_voyage.py to produce "
+             "paper-comparable scores. Requires VOYAGE_API_KEY in environment.",
     )
     p.add_argument(
         "--no-vllm-server", action="store_true",
@@ -384,7 +384,7 @@ def main() -> int:
             log.info("Running Voyage re-eval -> %s", voyage_path)
             cmd = [
                 sys.executable,
-                str(PROJECT_ROOT / "examples" / "reeval_voyage.py"),
+                str(PROJECT_ROOT / "examples" / "benchmark" / "reeval_voyage.py"),
                 "--input-json", str(output_path),
                 "--papers-dir", str(papers_dir),
                 "--output", str(voyage_path),

@@ -55,7 +55,7 @@ PAPERS=data/csml_v2/raw_markdown          # adjust to where the corpus is
 
 USE_VLLM=1 VLLM_GPU_MEM_UTIL=0.45 BATCH_SIZE=8 CUDA_VISIBLE_DEVICES=0 \
 JUDGE_MODEL=qwen3.5-9b-instruct JUDGE_API_KEY=EMPTY JUDGE_BASE_URL=http://localhost:8767/v1 \
-nohup python examples/run_policy_rl_training.py \
+nohup python examples/forecaster/run_policy_rl_training.py \
   --input-dir "$PAPERS" \
   --output-dir output/forecaster_qwen3.5-9b/realization_grpo \
   --model-preset qwen3.5-9b --trainer grpo \

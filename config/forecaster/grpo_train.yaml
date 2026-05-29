@@ -11,9 +11,13 @@ lora_alpha: 32
 lora_dropout: 0.05
 reward_alignment_threshold: 0.5
 dry_run: false
-# Phase-4 foresight reward (this branch's feature): route rewards through the
-# rubric + soft-must_not Qwen judge instead of the legacy composite.
-reward_mode: foresight
-foresight_artifact_dir: output/foresight_artifacts
-foresight_embedder: sentence-transformer:sentence-transformers/allenai-specter
-foresight_judge_mode: live
+# Default to the fixed-weight verifiable reward used in the paper's reported runs
+# (weights in config/forecaster/reward.yaml). This runs on a fresh clone without
+# any prebuilt artifacts.
+reward_mode: legacy
+# Opt-in alternative — the rubric + soft-must_not Qwen judge reward (an earlier
+# design, NOT used in the reported runs). To enable, set reward_mode: foresight
+# and build the artifact dir first (see forecaster/foresight/README.md):
+#   foresight_artifact_dir: output/foresight_artifacts
+#   foresight_embedder: sentence-transformer:sentence-transformers/allenai-specter
+#   foresight_judge_mode: live
