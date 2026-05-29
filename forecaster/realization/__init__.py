@@ -10,17 +10,13 @@ from forecaster.realization.config import (
     CandidateGenerationConfig,
     EpisodeBuildConfig,
     GRPOTrainConfig,
-    PPOTrainConfig,
-    RLOOTrainConfig,
     RewardConfig,
     RewardWeights,
     SelectionConfig,
     load_candidate_generation_config,
     load_episode_build_config,
     load_grpo_train_config,
-    load_ppo_train_config,
     load_reward_config,
-    load_rloo_train_config,
     load_selection_config,
 )
 from forecaster.realization.local_generation import (
@@ -45,8 +41,6 @@ from forecaster.realization.selection import select_top_k_predictions
 from forecaster.realization.trainers import (
     PreparedRLContext,
     RLTrainerRunner,
-    PPOTrainerRunner,
-    RLOOTrainerRunner,
     TrainerPreparedArtifacts,
     create_trainer_runner,
 )
@@ -83,17 +77,13 @@ __all__ = [
     "CandidateGenerationConfig",
     "EpisodeBuildConfig",
     "GRPOTrainConfig",
-    "PPOTrainConfig",
-    "RLOOTrainConfig",
     "RewardConfig",
     "RewardWeights",
     "SelectionConfig",
     "load_candidate_generation_config",
     "load_episode_build_config",
     "load_grpo_train_config",
-    "load_ppo_train_config",
     "load_reward_config",
-    "load_rloo_train_config",
     "load_selection_config",
     # local_generation
     "build_prediction_prompt",
@@ -115,8 +105,6 @@ __all__ = [
     # trainers
     "PreparedRLContext",
     "RLTrainerRunner",
-    "PPOTrainerRunner",
-    "RLOOTrainerRunner",
     "TrainerPreparedArtifacts",
     "create_trainer_runner",
     # lazy (backtest dependency via episodes.py)

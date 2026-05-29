@@ -1324,7 +1324,7 @@ def run_online_alignment_gate(
 def run_policy_rl_pipeline(
     papers: list[PaperRecord],
     *,
-    trainer: str,
+    trainer: str = "grpo",
     model_name: str,
     output_dir: str,
     episode_config: EpisodeBuildConfig,
@@ -1375,7 +1375,7 @@ def run_policy_rl_pipeline(
     )
 
     diagnostics: dict[str, Any] = {}
-    if runner.trainer_name in {"ppo", "grpo", "rloo"} and not skip_alignment_check and not prepare_only:
+    if runner.trainer_name == "grpo" and not skip_alignment_check and not prepare_only:
         diagnostics = run_online_alignment_gate(
             common_context,
             model_name=model_name,
