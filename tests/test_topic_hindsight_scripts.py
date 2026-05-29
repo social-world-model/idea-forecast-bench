@@ -110,7 +110,7 @@ def test_topics_v2_default_loader_has_52_topics() -> None:
 def test_prepare_topic_hindsight_manifest_enforces_fixed_windows_and_sampling(
     tmp_path: Path,
 ) -> None:
-    from examples.prepare_topic_hindsight_manifest import prepare_topic_hindsight_manifest
+    from examples.data.prepare_topic_hindsight_manifest import prepare_topic_hindsight_manifest
 
     data_dir = _build_sample_corpus(tmp_path)
     output_dir = tmp_path / "manifest_out"
@@ -190,7 +190,7 @@ def test_run_topic_hindsight_preview_generates_10_rows_with_valid_innovations(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    from examples import run_topic_hindsight_preview as preview_module
+    from examples.forecaster import run_topic_hindsight as preview_module
 
     data_dir = _build_sample_corpus(tmp_path)
     output_dir = tmp_path / "preview_out"
@@ -210,14 +210,15 @@ def test_run_topic_hindsight_preview_generates_10_rows_with_valid_innovations(
 
     monkeypatch.setattr(preview_module, "extract_innovation", _fake_extract_innovation)
 
-    rows, summary = preview_module.run_topic_hindsight_preview(
+    rows, summary = preview_module.run_topic_hindsight(
         input_dir=data_dir,
         output_dir=output_dir,
+        mode="preview",
     )
 
     assert summary["manifest_loaded_from_disk"] is False
     assert summary["requested_preview_count"] == 10
-    assert summary["generated_preview_count"] == 10
+    assert summary["extracted_count"] == 10
     assert len(rows) == 10
     assert (output_dir / "preview_hindsight_samples.jsonl").exists()
     assert (output_dir / "preview_summary.json").exists()
@@ -250,8 +251,8 @@ def test_preview_uses_existing_manifest_when_present(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    from examples.prepare_topic_hindsight_manifest import prepare_topic_hindsight_manifest
-    from examples import run_topic_hindsight_preview as preview_module
+    from examples.data.prepare_topic_hindsight_manifest import prepare_topic_hindsight_manifest
+    from examples.forecaster import run_topic_hindsight as preview_module
 
     data_dir = _build_sample_corpus(tmp_path)
     output_dir = tmp_path / "preview_existing_manifest"
@@ -268,14 +269,15 @@ def test_preview_uses_existing_manifest_when_present(
         ),
     )
 
-    _rows, summary = preview_module.run_topic_hindsight_preview(
+    _rows, summary = preview_module.run_topic_hindsight(
         input_dir=data_dir,
         output_dir=output_dir,
+        mode="preview",
         preview_count=4,
     )
 
     assert summary["manifest_loaded_from_disk"] is True
-    assert summary["generated_preview_count"] == 4
+    assert summary["extracted_count"] == 4
 
 
 def test_sample_markdown_parser_round_trip_for_preview_fixture(tmp_path: Path) -> None:
