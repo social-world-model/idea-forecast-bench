@@ -10,6 +10,20 @@
 #    MODEL=qwen3-1.7b bash scripts/run_train_and_eval.sh
 #    MODEL=qwen3.5-2b bash scripts/run_train_and_eval.sh
 #
+#  Reward (GRPO Phase 3):
+#    REWARD_MODE=foresight (default) — the gated, future-grounded reward used
+#      for the reported results. Needs a prebuilt artifact dir (per-cutoff
+#      future/history indices + validated rubrics). Build it first:
+#        1. provide the paper corpus at $PAPERS
+#        2. run the hindsight pipeline to produce data/topic_hindsight/dz.jsonl
+#        3. python build_indices.py --papers-dir "$PAPERS" \
+#               --dz data/topic_hindsight/dz.jsonl --art output/foresight_artifacts
+#        4. generate validated rubrics (see forecaster/foresight/README.md)
+#    REWARD_MODE=legacy — fixed-weight composite reward, NO artifacts required.
+#      Use it to run the whole pipeline end to end on a fresh clone, or while
+#      the foresight artifacts are still being built:
+#        REWARD_MODE=legacy bash scripts/run_train_and_eval.sh
+#
 #  Environment setup (run once per model family):
 #    bash scripts/setup_rl_env.sh qwen3      # vLLM + transformers <5
 #    bash scripts/setup_rl_env.sh qwen3.5    # transformers >=5, no vLLM
@@ -24,6 +38,8 @@ OUT="output/forecaster_${MODEL}"
 THRESHOLD="${THRESHOLD:-0.80}"
 START_MONTH="${START_MONTH:-2023-01}"
 END_MONTH="${END_MONTH:-2025-03}"
+REWARD_MODE="${REWARD_MODE:-foresight}"
+FORESIGHT_ARTIFACT_DIR="${FORESIGHT_ARTIFACT_DIR:-output/foresight_artifacts}"
 
 # ---- Auto-detect model family and validate environment ----
 ENV_INFO=$(python3 -c "
@@ -91,15 +107,43 @@ PRIOR_CKPT=$(python3 -c "import json; print(json.load(open('${OUT}/prior_sft/tra
 GRPO_DIR="${OUT}/realization_grpo"
 GRPO_MANIFEST="${GRPO_DIR}/grpo/policy_manifest.json"
 
+# Pick the trainer config by reward mode. The foresight reward (default, paper
+# results) needs prebuilt artifacts; the legacy composite reward needs none.
+case "$REWARD_MODE" in
+  foresight)
+    GRPO_CONFIG="grpo_train.yaml"
+    if [ ! -d "${FORESIGHT_ARTIFACT_DIR}/indices" ] || [ ! -d "${FORESIGHT_ARTIFACT_DIR}/rubrics" ]; then
+      echo "ERROR: REWARD_MODE=foresight but the artifact dir is missing or incomplete:" >&2
+      echo "         ${FORESIGHT_ARTIFACT_DIR}/{indices,rubrics}" >&2
+      echo "       The gated foresight reward needs per-cutoff indices + validated rubrics." >&2
+      echo "       Build them first:" >&2
+      echo "         python build_indices.py --papers-dir \"${PAPERS}\" \\" >&2
+      echo "             --dz data/topic_hindsight/dz.jsonl --art \"${FORESIGHT_ARTIFACT_DIR}\"" >&2
+      echo "         (then generate validated rubrics — see forecaster/foresight/README.md)" >&2
+      echo "       Or run the whole pipeline with the no-artifacts reward:" >&2
+      echo "         REWARD_MODE=legacy bash scripts/run_train_and_eval.sh" >&2
+      exit 1
+    fi
+    ;;
+  legacy)
+    GRPO_CONFIG="grpo_train_legacy.yaml"
+    ;;
+  *)
+    echo "ERROR: REWARD_MODE must be 'foresight' or 'legacy' (got: ${REWARD_MODE})" >&2
+    exit 1
+    ;;
+esac
+
 if [ -f "$GRPO_MANIFEST" ]; then
   echo ""; echo "===== Phase 3: Realization GRPO — SKIPPED (manifest exists) ====="
 else
-  echo ""; echo "===== Phase 3: Realization GRPO ====="
+  echo ""; echo "===== Phase 3: Realization GRPO (reward=${REWARD_MODE}, config=${GRPO_CONFIG}) ====="
   python3 examples/forecaster/run_policy_rl_training.py \
     --input-dir "$PAPERS" \
     --output-dir "$GRPO_DIR" \
     --model-preset "$MODEL" \
     --trainer grpo \
+    --trainer-config "$GRPO_CONFIG" \
     --hindsight "$HINDSIGHT" \
     --start-month "$START_MONTH" \
     --end-month "$END_MONTH" \

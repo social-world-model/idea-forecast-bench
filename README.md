@@ -58,7 +58,20 @@ The benchmark runs over the arXiv CS.ML corpus. Place the paper markdown under
 python -m live_idea_bench benchmark \
   --input-dir data/csml/raw_markdown \
   --strategy summary_prompting \
-  --eval-model gpt-5.4 \
+  --start-month 2024-10 --end-month 2025-03 \
+  --output /tmp/backtest.json
+```
+
+This uses the default `heuristic` matcher to decide whether a forecast hit a
+future paper — no API key needed. To score matches with an LLM judge instead,
+add `--similarity-engine llm` and name the judge with `--eval-model` (the
+`--eval-model` value is ignored unless the engine is `llm`):
+
+```bash
+python -m live_idea_bench benchmark \
+  --input-dir data/csml/raw_markdown \
+  --strategy summary_prompting \
+  --similarity-engine llm --eval-model gpt-5.4 \
   --start-month 2024-10 --end-month 2025-03 \
   --output /tmp/backtest.json
 ```
@@ -102,8 +115,12 @@ deploy/  docs/        # Deployment manifests + ops notes
   (`pytest`) passes on a core install.
 - **`--with forecaster`**: the local training/inference stack for the MDF method —
   `torch, transformers, trl, peft, datasets, accelerate, sentence-transformers`. Linux + a
-  recent NVIDIA GPU recommended for non-dry-run training. See `NEW_MACHINE_SETUP.md` and
-  `scripts/setup_rl_env.sh` for a turnkey training environment.
+  recent NVIDIA GPU recommended for non-dry-run training. **Install torch from the setup
+  scripts, not from `poetry install`** — `poetry install --with forecaster` pulls a
+  default-index torch whose CUDA build may not match your driver (it can resolve to a
+  too-new wheel and leave `torch.cuda.is_available()` False). `scripts/setup_rl_env.sh`,
+  `scripts/setup_rl_env_qwen3_5.sh`, and `scripts/setup_new_machine.sh` pin the correct
+  `+cuXXX` wheel via `--index-url` for your GPU. See also `NEW_MACHINE_SETUP.md`.
 - **`--with eval`**: a local sentence-transformer embedder so the retrieve-then-judge step
   works without a hosted embedding API.
 
@@ -116,8 +133,17 @@ API keys (set as needed for the providers you use): `OPENAI_API_KEY`, `ANTHROPIC
 
 - **Tests:** `pytest` (green on a core install).
 - **MDF training pipeline:** `scripts/run_train_and_eval.sh` runs prior SFT → GRPO →
-  eval end to end; `scripts/forecaster/run_three_grpo.sh` drives the single-metric
-  ablation (soft / coverage / novelty). Phase-by-phase smoke checks for the foresight method
+  eval end to end. The GRPO step defaults to the gated foresight reward used for the
+  reported results, which needs a prebuilt artifact dir (`output/foresight_artifacts/{indices,rubrics}`):
+  provide a paper corpus, run the hindsight pipeline to produce `data/topic_hindsight/dz.jsonl`,
+  build the indices with `build_indices.py`, then generate validated rubrics
+  (`forecaster/foresight/README.md` has the full sequence). If those artifacts are
+  missing the script stops before training with the build instructions. To run the
+  whole pipeline end to end on a fresh clone without that prerequisite, use the
+  fixed-weight composite reward instead: `REWARD_MODE=legacy bash scripts/run_train_and_eval.sh`.
+- **Single-metric ablation:** `scripts/forecaster/run_three_grpo.sh` drives the
+  single-metric GRPO runs (soft / coverage / novelty); it uses its own reward and
+  needs no foresight artifacts. Phase-by-phase smoke checks for the foresight method
   are in `scripts/phase*_*.py` (documented in `forecaster/foresight/README.md`).
 - **Web app:** `python backend/app.py` (API) and `cd frontend && npm install && npm start` (UI).
 

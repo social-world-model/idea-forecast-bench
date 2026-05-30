@@ -1,0 +1,20 @@
+gradient_accumulation_steps: 2
+num_train_epochs: 3
+learning_rate: 0.00001
+num_generations: 8
+max_prompt_length: 4096
+max_completion_length: 1024
+kl_coef: 0.001
+logging_steps: 1
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+reward_alignment_threshold: 0.5
+dry_run: false
+# Legacy fixed-weight composite reward. Unlike the foresight reward in
+# grpo_train.yaml, this path needs no prebuilt artifacts (no per-cutoff indices,
+# no validated rubrics), so the full pipeline runs end to end on a fresh clone
+# once you have a paper corpus. Use it for a quick end-to-end smoke run, or while
+# the foresight artifacts are still being built. The reported paper results use
+# the foresight reward (grpo_train.yaml), not this one.
+reward_mode: legacy
