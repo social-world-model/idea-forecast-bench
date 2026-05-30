@@ -87,8 +87,8 @@ PY
 ```yaml
 # config/forecaster/grpo_train.yaml
 reward_mode: foresight
-foresight_artifact_dir: output/foresight_artifact
-foresight_embedder: "sentence-transformer:all-MiniLM-L6-v2"
+foresight_artifact_dir: output/foresight_artifacts
+foresight_embedder: "sentence-transformer:sentence-transformers/allenai-specter"
 foresight_judge_mode: live
 grouping_assert: true
 dedup_penalty: 0.0           # try 0.05–0.1 if collapse appears

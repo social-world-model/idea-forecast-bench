@@ -3,7 +3,7 @@ num_train_epochs: 3
 learning_rate: 0.00001
 num_generations: 8
 max_prompt_length: 4096
-max_completion_length: 2048
+max_completion_length: 1024
 kl_coef: 0.001
 logging_steps: 1
 lora_r: 16
@@ -11,13 +11,12 @@ lora_alpha: 32
 lora_dropout: 0.05
 reward_alignment_threshold: 0.5
 dry_run: false
-# Default to the fixed-weight verifiable reward used in the paper's reported runs
-# (weights in config/forecaster/reward.yaml). This runs on a fresh clone without
-# any prebuilt artifacts.
-reward_mode: legacy
-# Opt-in alternative — the rubric + soft-must_not Qwen judge reward (an earlier
-# design, NOT used in the reported runs). To enable, set reward_mode: foresight
-# and build the artifact dir first (see forecaster/foresight/README.md):
-#   foresight_artifact_dir: output/foresight_artifacts
-#   foresight_embedder: sentence-transformer:sentence-transformers/allenai-specter
-#   foresight_judge_mode: live
+# The realization-policy reward: the gated foresight reward (three hard gates +
+# a rubric-conditioned Qwen judge with the soft must-not penalty). This is the
+# reward used for the reported results. It needs a prebuilt artifact dir
+# (per-cutoff future/history indices + validated rubrics) — build it first with
+# build_indices.py and the rubric generator (see forecaster/foresight/README.md).
+reward_mode: foresight
+foresight_artifact_dir: output/foresight_artifacts
+foresight_embedder: sentence-transformer:sentence-transformers/allenai-specter
+foresight_judge_mode: live

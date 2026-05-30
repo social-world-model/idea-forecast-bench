@@ -91,7 +91,7 @@ def _build_embedder(name: str):
         return HashingEmbedder(dim=dim)
     if name.startswith("sentence-transformer:"):
         return SentenceTransformerEmbedder(model_name=name.split(":", 1)[1])
-    return SentenceTransformerEmbedder(model_name="all-MiniLM-L6-v2")
+    return SentenceTransformerEmbedder(model_name="sentence-transformers/allenai-specter")
 
 
 def _build_judge(mode: str):
@@ -111,7 +111,7 @@ def _build_judge(mode: str):
 def build_foresight_context(
     artifact_dir: str | Path,
     *,
-    embedder_name: str = "sentence-transformer:all-MiniLM-L6-v2",
+    embedder_name: str = "sentence-transformer:sentence-transformers/allenai-specter",
     judge_mode: str = "live",
     hindsight_path: str | Path | None = None,
 ):
@@ -123,10 +123,17 @@ def build_foresight_context(
     root = Path(artifact_dir)
     indices_dir = root / "indices"
     rubrics_dir = root / "rubrics"
+    _hint = (
+        "reward_mode=foresight needs prebuilt artifacts under "
+        f"{root}/ (per-cutoff future/history indices + validated rubrics). "
+        "Build them first — see forecaster/foresight/README.md and build_indices.py "
+        "— or set reward_mode: legacy in config/forecaster/grpo_train.yaml to use "
+        "the fixed-weight composite reward instead."
+    )
     if not indices_dir.exists():
-        raise FileNotFoundError(f"missing indices dir: {indices_dir}")
+        raise FileNotFoundError(f"missing foresight indices dir: {indices_dir}\n{_hint}")
     if not rubrics_dir.exists():
-        raise FileNotFoundError(f"missing rubrics dir: {rubrics_dir}")
+        raise FileNotFoundError(f"missing foresight rubrics dir: {rubrics_dir}\n{_hint}")
     future_indices, history_indices = _load_indices(indices_dir)
     rubrics = load_rubrics_dir(rubrics_dir)
     embedder = _build_embedder(embedder_name)
@@ -176,7 +183,7 @@ def make_reward_fn(
         ctx = build_foresight_context(
             artifact_dir,
             embedder_name=getattr(config, "foresight_embedder",
-                                  "sentence-transformer:all-MiniLM-L6-v2"),
+                                  "sentence-transformer:sentence-transformers/allenai-specter"),
             judge_mode=getattr(config, "foresight_judge_mode", "live"),
             hindsight_path=getattr(config, "foresight_hindsight_path", None)
                            or getattr(config, "hindsight_path", None),
