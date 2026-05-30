@@ -51,7 +51,7 @@ CUDA_VISIBLE_DEVICES=1 nohup python -m vllm.entrypoints.openai.api_server \
 
 ## 4. Launch the full foresight GRPO (vLLM ON, SFT-init)
 ```bash
-PAPERS=data/csml_v2/raw_markdown          # adjust to where the corpus is
+PAPERS=data/csml/raw_markdown          # adjust to where the corpus is
 
 USE_VLLM=1 VLLM_GPU_MEM_UTIL=0.45 BATCH_SIZE=8 CUDA_VISIBLE_DEVICES=0 \
 JUDGE_MODEL=qwen3.5-9b-instruct JUDGE_API_KEY=EMPTY JUDGE_BASE_URL=http://localhost:8767/v1 \

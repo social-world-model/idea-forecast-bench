@@ -50,17 +50,13 @@ script, so `python -m live_idea_bench <cmd> --help` shows that command's options
 
 ### Minimal example — run the benchmark
 
-First get the arXiv CS.ML corpus (downloads to `data/csml_v2/raw_markdown`):
-
-```bash
-bash scripts/forecaster/download_dataset.sh
-```
-
-Then run a backtest against it:
+The benchmark runs over the arXiv CS.ML corpus. Place the paper markdown under
+`data/csml/raw_markdown/` in the layout `load_papers_from_markdown` expects
+(`<paper_id>/auto/<paper_id>.md`), then point `--input-dir` at it:
 
 ```bash
 python -m live_idea_bench benchmark \
-  --input-dir data/csml_v2/raw_markdown \
+  --input-dir data/csml/raw_markdown \
   --strategy summary_prompting \
   --eval-model gpt-5.4 \
   --start-month 2024-10 --end-month 2025-03 \

@@ -10,7 +10,7 @@
 #
 # Env overrides:
 #   MODEL_ALIAS=qwen3.5-9b
-#   PAPERS_DIR=data/csml_v2/raw_markdown
+#   PAPERS_DIR=data/csml/raw_markdown
 #   START_MONTH=2023-01  END_MONTH=2024-09
 #   PER_RUN_TIMEOUT=14400   (seconds; 4h default)
 #   GPUS=0,1,2,3,4,5,6,7
@@ -28,7 +28,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 MODEL_ALIAS="${MODEL_ALIAS:-qwen3.5-9b}"
-PAPERS_DIR="${PAPERS_DIR:-data/csml_v2/raw_markdown}"
+PAPERS_DIR="${PAPERS_DIR:-data/csml/raw_markdown}"
 START_MONTH="${START_MONTH:-2023-01}"
 END_MONTH="${END_MONTH:-2024-09}"
 PER_RUN_TIMEOUT="${PER_RUN_TIMEOUT:-14400}"

@@ -3,7 +3,7 @@ Local embedder (sentence-transformer allenai-specter). Run on one GPU.
 
 Usage:
     python build_indices.py \
-        --papers-dir data/csml_v2/raw_markdown \
+        --papers-dir data/csml/raw_markdown \
         --dz data/topic_hindsight/dz.jsonl \
         --art output/foresight_artifacts
 """
@@ -15,7 +15,7 @@ from live_idea_bench.papers import load_papers_from_markdown
 from forecaster.foresight.indices import SentenceTransformerEmbedder, build_cutoff_indices
 
 _p = argparse.ArgumentParser(description="Build foresight cutoff indices.")
-_p.add_argument("--papers-dir", default=os.environ.get("LIVE_IDEA_BENCH_PAPERS_DIR", "data/csml_v2/raw_markdown"))
+_p.add_argument("--papers-dir", default=os.environ.get("LIVE_IDEA_BENCH_PAPERS_DIR", "data/csml/raw_markdown"))
 _p.add_argument("--dz", default="data/topic_hindsight/dz.jsonl")
 _p.add_argument("--art", default="output/foresight_artifacts")
 _p.add_argument("--start-month", default="2022-06")
@@ -31,7 +31,7 @@ EMBEDDER_MODEL = _args.embedder_model  # AI2 scientific paper embedder
 if not Path(DZ).is_file():
     raise SystemExit(f"[idx] dz file not found: {DZ} (generate it first; see forecaster/foresight/README.md)")
 if not Path(PAPERS_DIR).is_dir():
-    raise SystemExit(f"[idx] papers dir not found: {PAPERS_DIR} (run scripts/forecaster/download_dataset.sh)")
+    raise SystemExit(f"[idx] papers dir not found: {PAPERS_DIR} (provide the corpus at this path, or pass --papers-dir)")
 
 import datetime
 # The GRPO episode dataset keys cutoffs as the FIRST day of the next period

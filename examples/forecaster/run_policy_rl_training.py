@@ -22,7 +22,7 @@ from forecaster.realization.pipeline import run_policy_rl_pipeline  # noqa: E402
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Prepare and train RL policy checkpoints for LiveIdeaBench.")
-    parser.add_argument("--input-dir", type=str, default="data/csml_v2/raw_markdown", help="Directory with markdown papers.")
+    parser.add_argument("--input-dir", type=str, default="data/csml/raw_markdown", help="Directory with markdown papers.")
     parser.add_argument("--output-dir", type=str, default="data/rl_runs/policy_rl", help="Directory for RL artifacts.")
     parser.add_argument("--model-name", type=str, help="Hugging Face model id or local checkpoint path.")
     parser.add_argument("--model-preset", type=str, help="Shortcut alias from the built-in 3B/4B model registry.")

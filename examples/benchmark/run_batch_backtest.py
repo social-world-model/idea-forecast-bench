@@ -24,7 +24,7 @@ are skipped via a state.json checkpoint).
 Usage
 -----
   python examples/run_batch_backtest.py \\
-      --input-dir data/csml_v2/raw_markdown \\
+      --input-dir data/csml/raw_markdown \\
       --strategy predictor_llm \\
       --model-name gpt-5.4 --reasoning-effort medium \\
       --start-month 2023-01 --end-month 2025-06 \\
@@ -462,7 +462,7 @@ def main() -> int:
         description="Batch-mode domain backtest (OpenAI Batch API, 50% cheaper).",
     )
     # ── same args as run_domain_backtest.py ───────────────────────────────────
-    parser.add_argument("--input-dir", type=str, default="data/csml_v2/raw_markdown")
+    parser.add_argument("--input-dir", type=str, default="data/csml/raw_markdown")
     parser.add_argument("--strategy", type=str, default="predictor_llm")
     parser.add_argument("--recent-months", type=int, default=3)
     parser.add_argument("--min-keyword-freq", type=int, default=1)

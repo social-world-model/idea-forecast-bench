@@ -11,7 +11,7 @@ Usage:
         --prior-checkpoint output/prior_sft/final_checkpoint \
         --realization-checkpoint output/realization_grpo/grpo \
         --hindsight output/hindsight_samples.jsonl \
-        --papers-dir data/csml_v2/raw_markdown \
+        --papers-dir data/csml/raw_markdown \
         --output-dir output/joint_inference
 """
 from __future__ import annotations

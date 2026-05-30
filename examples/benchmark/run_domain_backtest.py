@@ -7,7 +7,7 @@ persisted strategy JSON file.
 Usage::
 
     python examples/run_domain_backtest.py \
-        --input-dir data/csml_v2/raw_markdown \
+        --input-dir data/csml/raw_markdown \
         --strategy keyword_trend \
         --start-month 2024-01 --end-month 2025-06 \
         --output /tmp/domain_backtest.json
@@ -39,7 +39,7 @@ def main() -> int:
     parser.add_argument(
         "--input-dir",
         type=str,
-        default="data/csml_v2/raw_markdown",
+        default="data/csml/raw_markdown",
         help="Directory with markdown papers.",
     )
     parser.add_argument("--strategy", type=str, default="keyword_trend")

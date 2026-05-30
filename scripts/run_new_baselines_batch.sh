@@ -14,7 +14,7 @@
 #   MODEL_NAME           default: gpt-5.4
 #   REASONING_EFFORT     default: medium
 #   SIMILARITY_ENGINE    default: hybrid
-#   INPUT_DIR            default: data/csml_v2/raw_markdown
+#   INPUT_DIR            default: data/csml/raw_markdown
 #   OUTPUT_DIR           default: data/baselines
 #   BATCH_ROOT           default: logs/batch
 #   POLL_INTERVAL        default: 60
@@ -42,7 +42,7 @@ fi
 MODEL_NAME="${MODEL_NAME:-gpt-5.4}"
 REASONING_EFFORT="${REASONING_EFFORT:-medium}"
 SIMILARITY_ENGINE="${SIMILARITY_ENGINE:-hybrid}"
-INPUT_DIR="${INPUT_DIR:-data/csml_v2/raw_markdown}"
+INPUT_DIR="${INPUT_DIR:-data/csml/raw_markdown}"
 OUTPUT_DIR="${OUTPUT_DIR:-data/baselines}"
 BATCH_ROOT="${BATCH_ROOT:-logs/batch}"
 POLL_INTERVAL="${POLL_INTERVAL:-60}"

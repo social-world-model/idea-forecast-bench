@@ -8,7 +8,7 @@
 #
 # Prereqs:
 #   - env built (vllm/transformers/trl/peft/sentence-transformers/openai)
-#   - data/csml_v2/raw_markdown present (the paper corpus)
+#   - data/csml/raw_markdown present (the paper corpus)
 #   - the three adapters under outputs/grpo_{soft,coverage,novelty}_*/...
 #   - VOYAGE_API_KEY exported (else the eval falls back to a local embedder)
 set -uo pipefail
@@ -57,7 +57,7 @@ for mode in "${MODES[@]}"; do
   JUDGE_BASE_URL="http://localhost:${JUDGE_PORT}/v1" JUDGE_API_KEY=EMPTY \
   "$PYTHON_BIN" examples/benchmark/llm_judge_eval.py \
     --input-json "outputs/predict_${mode}_${TS}.json" \
-    --papers-dir data/csml_v2/raw_markdown \
+    --papers-dir data/csml/raw_markdown \
     --output "outputs/llm_judge_${mode}9b_${TS}.json" \
     --judge-model qwen3.5-9b-instruct --judge-base-url "http://localhost:${JUDGE_PORT}/v1" \
     --workers 8 --topic-workers 2 \

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 5-step GRPO smoke test on a small model (qwen3.5-2b) and the novelty reward
 # (the cheapest of the three — no LLM-judge calls). Verifies:
-#   * dataset loads from data/csml_v2/raw_markdown
+#   * dataset loads from data/csml/raw_markdown
 #   * episodes are built for the 2023-01 -> 2024-09 window
 #   * the embedder lazy-loads BGE
 #   * the reward callable returns non-NaN floats in [0, 1]
@@ -28,7 +28,7 @@ set +e
 CUDA_VISIBLE_DEVICES="${SMOKE_GPU}" timeout "${SMOKE_TIMEOUT}" \
   "${PYTHON_BIN}" examples/forecaster/train_grpo_metric.py \
   --model "${SMOKE_MODEL}" \
-  --papers data/csml_v2/raw_markdown \
+  --papers data/csml/raw_markdown \
   --output-dir "${SMOKE_OUT}" \
   --reward-mode "${SMOKE_MODE}" \
   --start-month 2023-01 --end-month 2024-09 \

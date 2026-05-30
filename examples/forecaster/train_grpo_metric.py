@@ -9,7 +9,7 @@ Usage::
 
     python examples/forecaster/train_grpo_metric.py \\
         --model qwen3.5-9b \\
-        --papers data/csml_v2/raw_markdown \\
+        --papers data/csml/raw_markdown \\
         --start-month 2023-01 --end-month 2024-09 \\
         --reward-mode soft \\
         --output-dir output/grpo_soft \\

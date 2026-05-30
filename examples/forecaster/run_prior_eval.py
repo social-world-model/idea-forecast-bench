@@ -5,14 +5,14 @@ Usage (trained checkpoint):
     python examples/run_prior_eval.py \
         --model-path output/prior_sft/final_checkpoint \
         --hindsight output/hindsight_samples.jsonl \
-        --papers-dir data/csml_v2/raw_markdown \
+        --papers-dir data/csml/raw_markdown \
         --output-dir output/prior_sft/eval
 
 Usage (untrained base model by HF id):
     python examples/run_prior_eval.py \
         --model-path Qwen/Qwen3.5-2B \
         --hindsight output/hindsight_samples.jsonl \
-        --papers-dir data/csml_v2/raw_markdown \
+        --papers-dir data/csml/raw_markdown \
         --output-dir output/prior_baseline/eval
 """
 from __future__ import annotations

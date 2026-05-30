@@ -26,7 +26,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 MODEL="${MODEL:-qwen3.5-0.8b}"
-PAPERS="${PAPERS:-data/csml_v2/raw_markdown}"
+PAPERS="${PAPERS:-data/csml/raw_markdown}"
 OUT="output/forecaster_${MODEL}"
 EVAL_START="${EVAL_START:-2024-10}"
 EVAL_END="${EVAL_END:-2025-03}"

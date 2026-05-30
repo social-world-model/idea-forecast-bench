@@ -15,7 +15,7 @@ Usage:
     python examples/forecaster/train.py \\
         --model qwen3.5-2b \\
         --hindsight output/hindsight_samples.jsonl \\
-        --papers data/csml_v2/raw_markdown \\
+        --papers data/csml/raw_markdown \\
         --output-dir output/forecaster_qwen3.5-2b
 """
 from __future__ import annotations

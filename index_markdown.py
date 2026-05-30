@@ -184,19 +184,19 @@ def main() -> None:
     parser.add_argument(
         "--input-dir",
         type=Path,
-        default=Path("data/csml_v2/raw_markdown"),
+        default=Path("data/csml/raw_markdown"),
         help="Directory containing markdown files",
     )
     parser.add_argument(
         "--output-jsonl",
         type=Path,
-        default=Path("data/csml_v2/papers.jsonl"),
+        default=Path("data/csml/papers.jsonl"),
         help="Path to output JSONL file",
     )
     parser.add_argument(
         "--validation-log",
         type=Path,
-        default=Path("data/csml_v2/validation.log"),
+        default=Path("data/csml/validation.log"),
         help="Path to validation log report",
     )
     parser.add_argument(

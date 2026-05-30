@@ -11,13 +11,13 @@ Implements a retrieve → embed → LLM-judge pipeline:
 Usage:
     python examples/llm_judge_eval.py \\
         --input-json logs/baselines/memory_prompting_raw.json \\
-        --papers-dir data/csml_v2/raw_markdown \\
+        --papers-dir data/csml/raw_markdown \\
         --output logs/baselines/memory_prompting_llmjudge.json
 
     # Quick test on one topic (2 windows):
     python examples/llm_judge_eval.py \\
         --input-json logs/baselines/memory_prompting_raw.json \\
-        --papers-dir data/csml_v2/raw_markdown \\
+        --papers-dir data/csml/raw_markdown \\
         --output /tmp/mp_judge_test.json \\
         --topics llm_pretraining --max-windows 2
 """

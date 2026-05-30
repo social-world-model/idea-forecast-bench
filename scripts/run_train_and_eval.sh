@@ -19,7 +19,7 @@ cd "$(dirname "$0")/.."
 
 MODEL="${MODEL:-qwen3-1.7b}"
 HINDSIGHT="${HINDSIGHT:-output/hindsight_samples.jsonl}"
-PAPERS="${PAPERS:-data/csml_v2/raw_markdown}"
+PAPERS="${PAPERS:-data/csml/raw_markdown}"
 OUT="output/forecaster_${MODEL}"
 THRESHOLD="${THRESHOLD:-0.80}"
 START_MONTH="${START_MONTH:-2023-01}"

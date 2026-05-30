@@ -30,7 +30,7 @@ lightweight.
 
 ```bash
 export LIVE_IDEA_ADMIN_TOKEN="change-me"
-export LIVE_IDEA_BENCH_DATA_DIR="$(pwd)/data/csml_v2/raw_markdown"
+export LIVE_IDEA_BENCH_DATA_DIR="$(pwd)/data/csml/raw_markdown"
 export PORT=5000
 export FLASK_DEBUG=0
 ```
@@ -133,7 +133,7 @@ docker run --rm -p 5000:5000 \
 
 ## 7. Default paths
 
-- Paper directory: `data/csml_v2/raw_markdown`
+- Paper directory: `data/csml/raw_markdown`
 - Strategy store: `backend/strategies/`
 - Backend port: `5000`
 
