@@ -1,31 +1,32 @@
-[tool.poetry]
+[project]
 name = "live-idea-bench"
 version = "0.0.1"
-description = "Live Idea Bench"
-authors = ["Haofei Yu <yuhaofei44@gmail.com>"]
-license = "Apache 2.0 License"
+description = "LiveIdeaBench: forecasting emerging research ideas against future literature."
+authors = [{ name = "Haofei Yu", email = "yuhaofei44@gmail.com" }]
+license = "Apache-2.0"
 readme = "README.md"
+requires-python = ">=3.10,<3.12"
+dependencies = [
+    # Core data and config
+    "pydantic>=2.8.2,<3",
+    "pyyaml>=6.0",
+    # LLM API clients
+    "anthropic",
+    "openai>=1.0.0",
+    "google-generativeai",
+    # Utilities
+    "beartype",
+    "requests>=2.28.0",
+    "backoff",
+    "rich",
+    "flask>=3.0.0",
+    "flask-cors>=4,<7",
+    "openreview-py",
+    "pandas>=2.2.0",
+]
+
+[tool.poetry]
 package-mode = false
-
-
-[tool.poetry.dependencies]
-python = ">=3.10, <3.12"
-# Core data and config
-pydantic = "^2.8.2"
-pyyaml = "^6.0"
-# LLM API clients
-anthropic = "*"
-openai = "^1.0.0"
-google-generativeai = "*"
-# Utilities
-beartype = "*"
-requests = "^2.28.0"
-backoff = "*"
-rich = "*"
-flask = "^3.0.0"
-flask-cors = ">=4,<7"
-openreview-py = "*"
-pandas = "^2.2.0"
 
 # --- Optional extras ------------------------------------------------------
 # Core deps above are all the benchmark needs (LLM-API baselines + the
@@ -62,6 +63,7 @@ nbmake = "^1.5.0"
 types-setuptools = "^69.0.0.0"
 ruff = "^0.3.0"
 commitizen = "^3.14.1"
+matplotlib = ">=3.10.8"
 # Removed black and isort since we're using ruff
 
 [tool.poetry.group.test.dependencies]
@@ -74,11 +76,6 @@ hypothesis = "^6.98.0"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
-
-[dependency-groups]
-dev = [
-    "matplotlib>=3.10.8",
-]
 
 [tool.mypy]
 ignore_missing_imports = true
