@@ -47,6 +47,8 @@ class EpisodeBuildConfig:
     horizon_months: int = 3
     step_months: int = 3
     min_train_papers: int = 6
+    # None = no bound (use the whole corpus / auto-split). The concrete
+    # experiment window is set in config/forecaster/episode_build.yaml.
     start_month: str | None = None
     end_month: str | None = None
     validation_start_month: str | None = None
@@ -90,9 +92,9 @@ class SelectionConfig:
 @dataclass
 class OnlineRLTrainConfig:
     per_device_batch_size: int = 1
-    gradient_accumulation_steps: int = 1
-    num_train_epochs: int = 1
-    learning_rate: float = 2e-6
+    gradient_accumulation_steps: int = 2
+    num_train_epochs: int = 3
+    learning_rate: float = 1e-5
     num_generations: int = 8
     max_prompt_length: int = 4096
     max_completion_length: int = 1024
@@ -110,7 +112,10 @@ class OnlineRLTrainConfig:
     # the reported results; "legacy" preserves the older fixed-weight composite
     # reward via forecaster.realization.verl.reward_fn.compute_score.
     reward_mode: str = "foresight"
-    # When reward_mode == "foresight", load CutoffIndexBundles + rubrics from this dir.
+    # When reward_mode == "foresight", load CutoffIndexBundles + rubrics from this
+    # dir. Empty by default on purpose: it forces an explicit path (make_reward_fn
+    # errors if foresight is requested without one). The path is set in
+    # config/forecaster/grpo_train.yaml (output/foresight_artifacts).
     foresight_artifact_dir: str = ""
     # When reward_mode == "foresight", which embedder + judge backend to use.
     foresight_embedder: str = "sentence-transformer:sentence-transformers/allenai-specter"
