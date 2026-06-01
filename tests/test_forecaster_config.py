@@ -71,7 +71,7 @@ class TestRealizationConfigDefaults:
         assert cfg.context_top_k == 5
         assert cfg.evidence_top_k == 5
         assert cfg.evidence_similarity_threshold == pytest.approx(0.3)
-        assert cfg.proposal_max_tokens == 1024
+        assert cfg.proposal_max_tokens == 256
         assert cfg.allow_artifact_fallback_to_llm is False
         assert cfg.evidence_accuracy_weight == pytest.approx(0.2)
         assert cfg.operator_adherence_weight == pytest.approx(0.3)
@@ -171,7 +171,7 @@ class TestLoadRealizationConfig:
         cfg = load_realization_config("realization.yaml")
         assert isinstance(cfg, RealizationConfig)
         assert cfg.evidence_top_k == 5
-        assert cfg.proposal_max_tokens == 1024
+        assert cfg.proposal_max_tokens == 3072
 
     def test_weights_sum_to_one_from_yaml(self) -> None:
         cfg = load_realization_config("realization.yaml")

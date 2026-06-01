@@ -34,7 +34,7 @@ class RewardConfig:
     weights: RewardWeights = field(default_factory=RewardWeights)
     # When set, completely replaces the composite reward with a single
     # eval metric for GRPO training: "soft" | "coverage" | "novelty".
-    # Default "composite" keeps the legacy METHOD §3.3 mixed reward.
+    # Default "composite" keeps the legacy mixed reward.
     mode: str = "composite"
     judge_top_r: int = 10
     cluster_k: int = 5
@@ -47,6 +47,8 @@ class EpisodeBuildConfig:
     horizon_months: int = 3
     step_months: int = 3
     min_train_papers: int = 6
+    # None = no bound (use the whole corpus / auto-split). The concrete
+    # experiment window is set in config/forecaster/episode_build.yaml.
     start_month: str | None = None
     end_month: str | None = None
     validation_start_month: str | None = None
@@ -90,9 +92,9 @@ class SelectionConfig:
 @dataclass
 class OnlineRLTrainConfig:
     per_device_batch_size: int = 1
-    gradient_accumulation_steps: int = 1
-    num_train_epochs: int = 1
-    learning_rate: float = 2e-6
+    gradient_accumulation_steps: int = 2
+    num_train_epochs: int = 3
+    learning_rate: float = 1e-5
     num_generations: int = 8
     max_prompt_length: int = 4096
     max_completion_length: int = 1024
@@ -105,14 +107,18 @@ class OnlineRLTrainConfig:
     lora_dropout: float = 0.05
     reward_alignment_threshold: float = 0.5
     dry_run: bool = False
-    # Phase-4 switch: "legacy" preserves the existing composite reward via
-    # forecaster.realization.verl.reward_fn.compute_score; "foresight" routes
-    # rewards through forecaster.foresight.reward.compute_score_v2.
-    reward_mode: str = "legacy"
-    # When reward_mode == "foresight", load CutoffIndexBundles + rubrics from this dir.
+    # Reward routing: "foresight" (default) routes through the gated foresight
+    # reward (forecaster.foresight.reward.compute_score_v2) — the reward used for
+    # the reported results; "legacy" preserves the older fixed-weight composite
+    # reward via forecaster.realization.verl.reward_fn.compute_score.
+    reward_mode: str = "foresight"
+    # When reward_mode == "foresight", load CutoffIndexBundles + rubrics from this
+    # dir. Empty by default on purpose: it forces an explicit path (make_reward_fn
+    # errors if foresight is requested without one). The path is set in
+    # config/forecaster/grpo_train.yaml (output/foresight_artifacts).
     foresight_artifact_dir: str = ""
     # When reward_mode == "foresight", which embedder + judge backend to use.
-    foresight_embedder: str = "sentence-transformer:all-MiniLM-L6-v2"
+    foresight_embedder: str = "sentence-transformer:sentence-transformers/allenai-specter"
     foresight_judge_mode: str = "live"   # "live" | "stub" (stub used only in tests)
     # Phase-5: in-group dedup penalty. Subtracted from each rollout's reward
     # for every near-duplicate sibling within its group (Jaccard >= threshold).
@@ -127,24 +133,8 @@ class OnlineRLTrainConfig:
 
 
 @dataclass
-class PPOTrainConfig(OnlineRLTrainConfig):
-    critic_learning_rate: float = 1e-5
-    critic_micro_batch_size: int = 1
-    gamma: float = 1.0
-    lam: float = 0.95
-
-
-@dataclass
 class GRPOTrainConfig(OnlineRLTrainConfig):
     pass
-
-
-@dataclass
-class RLOOTrainConfig(OnlineRLTrainConfig):
-    beta: float = 0.04
-    num_iterations: int = 1
-    epsilon: float = 0.2
-    normalize_advantages: bool = True
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
@@ -210,13 +200,5 @@ def load_selection_config(name_or_path: str = "selection.yaml") -> SelectionConf
     return _load_model_config(name_or_path, SelectionConfig)
 
 
-def load_ppo_train_config(name_or_path: str = "ppo_train.yaml") -> PPOTrainConfig:
-    return _load_model_config(name_or_path, PPOTrainConfig)
-
-
 def load_grpo_train_config(name_or_path: str = "grpo_train.yaml") -> GRPOTrainConfig:
     return _load_model_config(name_or_path, GRPOTrainConfig)
-
-
-def load_rloo_train_config(name_or_path: str = "rloo_train.yaml") -> RLOOTrainConfig:
-    return _load_model_config(name_or_path, RLOOTrainConfig)

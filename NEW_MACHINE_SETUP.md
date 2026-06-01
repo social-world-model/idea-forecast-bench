@@ -36,9 +36,9 @@ rsync -avP "$OLD/data/topic_hindsight/dz.jsonl"                              "$D
 - Qwen3.5-9B base weights: auto-downloaded from HF on first run.
 
 > Alternative if you'd rather regenerate the indices than transfer them:
-> edit the hardcoded `/home/max7/...` paths in `build_indices.py` +
-> `build_one_index.py`, then run both (≈30–60 min on a Pro 6000). You still
-> need the rubrics + SFT adapter transferred.
+> edit the hardcoded `/home/max7/...` paths in `build_indices.py`, then run it
+> (≈30–60 min on a Pro 6000). You still need the rubrics + SFT adapter
+> transferred.
 
 ## 3. Start the judge (own GPU)
 ```bash
@@ -51,11 +51,11 @@ CUDA_VISIBLE_DEVICES=1 nohup python -m vllm.entrypoints.openai.api_server \
 
 ## 4. Launch the full foresight GRPO (vLLM ON, SFT-init)
 ```bash
-PAPERS=data/csml_v2/raw_markdown          # adjust to where the corpus is
+PAPERS=data/csml/raw_markdown          # adjust to where the corpus is
 
 USE_VLLM=1 VLLM_GPU_MEM_UTIL=0.45 BATCH_SIZE=8 CUDA_VISIBLE_DEVICES=0 \
 JUDGE_MODEL=qwen3.5-9b-instruct JUDGE_API_KEY=EMPTY JUDGE_BASE_URL=http://localhost:8767/v1 \
-nohup python examples/run_policy_rl_training.py \
+nohup python examples/forecaster/run_policy_rl_training.py \
   --input-dir "$PAPERS" \
   --output-dir output/forecaster_qwen3.5-9b/realization_grpo \
   --model-preset qwen3.5-9b --trainer grpo \

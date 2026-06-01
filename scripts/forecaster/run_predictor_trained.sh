@@ -15,7 +15,7 @@
 # Env overrides:
 #   PYTHON_BIN   /home/max7/.conda/envs/idea-grpo/bin/python
 #   BASE_MODEL   Qwen/Qwen3.5-9B
-#   PAPERS       data/csml_v2/raw_markdown
+#   PAPERS       data/csml/raw_markdown
 #   EVAL_START   2024-10   EVAL_END 2025-03   (held-out window; train was 2023-01..2024-09)
 #   TOP_K 5   HORIZON 3   WORKERS 4
 #   OUT          outputs/predict_<mode>_<ts>.json
@@ -30,7 +30,7 @@ PORT="${4:?need port}"
 PYTHON_BIN="${PYTHON_BIN:-/home/max7/.conda/envs/idea-grpo/bin/python}"
 export PATH="$(dirname "${PYTHON_BIN}"):${PATH}"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3.5-9B}"
-PAPERS="${PAPERS:-data/csml_v2/raw_markdown}"
+PAPERS="${PAPERS:-data/csml/raw_markdown}"
 # Load papers from 2024-06 so the first test cutoff has prior-month reading
 # context, but only EVALUATE cutoffs >= MIN_CUTOFF. With MIN_CUTOFF=2024-09 the
 # evaluated cutoffs are 2024-09/10/11/12, whose 3-month futures span the full
@@ -99,7 +99,7 @@ done
 export OPENAI_BASE_URL="http://localhost:${PORT}/v1"
 export OPENAI_API_KEY="EMPTY"
 echo "[predict] running run_domain_backtest.py ..."
-"${PYTHON_BIN}" examples/run_domain_backtest.py \
+"${PYTHON_BIN}" examples/benchmark/run_domain_backtest.py \
   --strategy predictor_llm \
   --model-name "${ALIAS}" \
   --input-dir "${PAPERS}" \

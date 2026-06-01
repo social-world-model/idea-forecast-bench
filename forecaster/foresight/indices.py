@@ -41,9 +41,10 @@ class Embedder(Protocol):
 
 
 class SentenceTransformerEmbedder:
-    """Default local embedder; mirrors live_idea_bench/similarity.py default."""
+    """Local embedder for the foresight indices (SPECTER, the scientific-paper
+    embedder used for the per-cutoff future/history indices)."""
 
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+    def __init__(self, model_name: str = "sentence-transformers/allenai-specter"):
         from sentence_transformers import SentenceTransformer  # local import; heavy
 
         self._model = SentenceTransformer(model_name)

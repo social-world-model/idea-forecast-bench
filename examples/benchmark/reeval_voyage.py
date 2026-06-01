@@ -4,7 +4,7 @@
 Usage:
     python examples/reeval_voyage.py \
         --input-json logs/baselines/keyword_trend_raw.json \
-        --papers-dir data/csml_v2/raw_markdown \
+        --papers-dir data/csml/raw_markdown \
         --output logs/baselines/keyword_trend_voyage.json
 
 Loads predictions from a previous run_domain_backtest.py output, batch-embeds
@@ -26,7 +26,7 @@ from typing import Any
 
 import openai
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from live_idea_bench.backtest import split_train_future_by_cutoff  # noqa: E402
@@ -233,7 +233,7 @@ def _process_topic(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Re-evaluate backtest predictions with Voyage embeddings.")
     parser.add_argument("--input-json",  required=True, help="Path to run_domain_backtest.py output JSON")
-    parser.add_argument("--papers-dir",  required=True, help="Papers directory (data/csml_v2/raw_markdown)")
+    parser.add_argument("--papers-dir",  required=True, help="Papers directory (data/csml/raw_markdown)")
     parser.add_argument("--output",      default="/tmp/reeval_voyage.json")
     parser.add_argument("--model",       default=DEFAULT_MODEL, help="Voyage embedding model")
     parser.add_argument("--threshold",   type=float, default=DEFAULT_THRESHOLD, help="Cosine similarity match threshold")

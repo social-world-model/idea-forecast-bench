@@ -12,7 +12,7 @@ What this does:
 
 It does NOT call train_prior() — that needs a real GPU + ~minutes per row.
 Run the dedicated SFT script (scripts/run_prior_sft.sh or the runner in
-examples/run_prior_sft.py) when you want to actually train.
+examples/forecaster/run_prior_sft.py) when you want to actually train.
 """
 from __future__ import annotations
 

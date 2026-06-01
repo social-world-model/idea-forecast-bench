@@ -41,8 +41,6 @@ from forecaster.realization.selection import select_top_k_predictions
 from forecaster.realization.trainers import (
     PreparedRLContext,
     RLTrainerRunner,
-    PPOTrainerRunner,
-    RLOOTrainerRunner,
     TrainerPreparedArtifacts,
     create_trainer_runner,
 )
@@ -107,8 +105,6 @@ __all__ = [
     # trainers
     "PreparedRLContext",
     "RLTrainerRunner",
-    "PPOTrainerRunner",
-    "RLOOTrainerRunner",
     "TrainerPreparedArtifacts",
     "create_trainer_runner",
     # lazy (backtest dependency via episodes.py)

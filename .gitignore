@@ -170,5 +170,12 @@ frontend/build/
 frontend/node_modules/
 .worktrees/
 
-# Evaluation / judge result dumps (do not commit)
+# Evaluation / judge result dumps + training artifacts (do not commit)
 outputs/
+output/
+*.safetensors
+*.pt
+**/checkpoint-*/
+
+# Phase-validation test output
+reports/

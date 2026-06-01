@@ -1,15 +1,37 @@
 """Build foresight future/history indices for all dz cutoffs → artifact dir.
-Local embedder (sentence-transformer all-MiniLM-L6-v2). Run on one GPU.
+Local embedder (sentence-transformer allenai-specter). Run on one GPU.
+
+Usage:
+    python build_indices.py \
+        --papers-dir data/csml/raw_markdown \
+        --dz data/topic_hindsight/dz.jsonl \
+        --art output/foresight_artifacts
 """
-import json, sys
+import argparse
+import json
+import os
 from pathlib import Path
 from live_idea_bench.papers import load_papers_from_markdown
 from forecaster.foresight.indices import SentenceTransformerEmbedder, build_cutoff_indices
 
-PAPERS_DIR = "/home/max7/live_idea_bench_fenghai/live-idea-bench/data/csml_v2/raw_markdown"
-DZ = "data/topic_hindsight/dz.jsonl"
-ART = Path("output/foresight_artifacts")
-EMBEDDER_MODEL = "sentence-transformers/allenai-specter"  # AI2 scientific paper embedder
+_p = argparse.ArgumentParser(description="Build foresight cutoff indices.")
+_p.add_argument("--papers-dir", default=os.environ.get("LIVE_IDEA_BENCH_PAPERS_DIR", "data/csml/raw_markdown"))
+_p.add_argument("--dz", default="data/topic_hindsight/dz.jsonl")
+_p.add_argument("--art", default="output/foresight_artifacts")
+_p.add_argument("--start-month", default="2022-06")
+_p.add_argument("--end-month", default="2024-12")
+_p.add_argument("--embedder-model", default="sentence-transformers/allenai-specter")
+_args = _p.parse_args()
+
+PAPERS_DIR = _args.papers_dir
+DZ = _args.dz
+ART = Path(_args.art)
+EMBEDDER_MODEL = _args.embedder_model  # AI2 scientific paper embedder
+
+if not Path(DZ).is_file():
+    raise SystemExit(f"[idx] dz file not found: {DZ} (generate it first; see forecaster/foresight/README.md)")
+if not Path(PAPERS_DIR).is_dir():
+    raise SystemExit(f"[idx] papers dir not found: {PAPERS_DIR} (provide the corpus at this path, or pass --papers-dir)")
 
 import datetime
 # The GRPO episode dataset keys cutoffs as the FIRST day of the next period
@@ -19,7 +41,7 @@ _dz_cutoffs = sorted({json.loads(l)["cutoff_t"] for l in open(DZ) if l.strip()})
 cutoffs = [(datetime.date.fromisoformat(c) + datetime.timedelta(days=1)).isoformat() for c in _dz_cutoffs]
 print(f"[idx] dz_cutoffs={_dz_cutoffs}", flush=True)
 print(f"[idx] dataset-aligned cutoffs (dz+1day)={cutoffs}", flush=True)
-papers = load_papers_from_markdown(Path(PAPERS_DIR), start_month="2022-06", end_month="2024-12")
+papers = load_papers_from_markdown(Path(PAPERS_DIR), start_month=_args.start_month, end_month=_args.end_month)
 print(f"[idx] loaded {len(papers)} papers", flush=True)
 emb = SentenceTransformerEmbedder(model_name=EMBEDDER_MODEL)
 (ART / "indices").mkdir(parents=True, exist_ok=True)

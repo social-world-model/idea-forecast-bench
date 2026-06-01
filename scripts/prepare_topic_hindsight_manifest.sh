@@ -7,7 +7,7 @@ OUTPUT_DIR="${OUTPUT_DIR:-data/topic_hindsight}"
 TOPICS_CONFIG="${TOPICS_CONFIG:-config/topics_v2.yaml}"
 PER_TOPIC_PER_EPISODE="${PER_TOPIC_PER_EPISODE:-2}"
 
-python "$ROOT_DIR/examples/prepare_topic_hindsight_manifest.py" \
+python "$ROOT_DIR/examples/data/prepare_topic_hindsight_manifest.py" \
   --input-dir "$INPUT_DIR" \
   --output-dir "$OUTPUT_DIR" \
   --topics-config "$TOPICS_CONFIG" \

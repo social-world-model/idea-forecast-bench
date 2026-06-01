@@ -8,6 +8,11 @@ from typing import Any
 
 from live_idea_bench.model_refs import resolve_model_reference
 
+try:  # google-generativeai is an optional provider dependency
+    from google.generativeai.types import GenerationConfig
+except ImportError:  # pragma: no cover - exercised only when the dep is absent
+    GenerationConfig = None  # type: ignore[assignment,misc]
+
 logger = logging.getLogger(__name__)
 
 # ── Batch-mode state (thread-local) ────────────────────────────────────────────
@@ -401,8 +406,6 @@ def get_response_from_llm(
             ).strip()
         new_msg_history = new_msg_history + [{"role": "assistant", "content": content}]
     elif _is_gemini_model(model):
-        from google.generativeai.types import GenerationConfig
-
         new_msg_history = msg_history + [{"role": "user", "content": msg}]
         gemini_contents = [{"role": "system", "parts": system_message}]
         for history_msg in new_msg_history:

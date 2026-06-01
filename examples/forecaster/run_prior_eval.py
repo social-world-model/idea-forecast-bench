@@ -5,14 +5,14 @@ Usage (trained checkpoint):
     python examples/run_prior_eval.py \
         --model-path output/prior_sft/final_checkpoint \
         --hindsight output/hindsight_samples.jsonl \
-        --papers-dir data/csml_v2/raw_markdown \
+        --papers-dir data/csml/raw_markdown \
         --output-dir output/prior_sft/eval
 
 Usage (untrained base model by HF id):
     python examples/run_prior_eval.py \
         --model-path Qwen/Qwen3.5-2B \
         --hindsight output/hindsight_samples.jsonl \
-        --papers-dir data/csml_v2/raw_markdown \
+        --papers-dir data/csml/raw_markdown \
         --output-dir output/prior_baseline/eval
 """
 from __future__ import annotations
@@ -23,7 +23,7 @@ import logging
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from forecaster.config import InferenceConfig

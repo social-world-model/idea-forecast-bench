@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, Mapping, cast
 
 # Add project root to sys.path
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
 from live_idea_bench.backtest import (  # noqa: E402

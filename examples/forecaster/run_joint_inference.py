@@ -11,7 +11,7 @@ Usage:
         --prior-checkpoint output/prior_sft/final_checkpoint \
         --realization-checkpoint output/realization_grpo/grpo \
         --hindsight output/hindsight_samples.jsonl \
-        --papers-dir data/csml_v2/raw_markdown \
+        --papers-dir data/csml/raw_markdown \
         --output-dir output/joint_inference
 """
 from __future__ import annotations
@@ -22,7 +22,7 @@ import logging
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from forecaster.config import InferenceConfig, RealizationConfig
