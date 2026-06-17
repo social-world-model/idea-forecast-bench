@@ -62,10 +62,25 @@ python -m live_idea_bench benchmark \
   --output /tmp/backtest.json
 ```
 
-This uses the default `heuristic` matcher to decide whether a forecast hit a
-future paper — no API key needed. To score matches with an LLM judge instead,
-add `--similarity-engine llm` and name the judge with `--eval-model` (the
-`--eval-model` value is ignored unless the engine is `llm`):
+The **default matcher is the Voyage embedding engine** (`engine: embedding` in
+`live_idea_bench/prompt/similarity.yaml`), which requires `VOYAGE_API_KEY` — by
+design there is no local/lexical fallback, so a misconfigured embedding endpoint
+fails loud rather than silently degrading and corrupting score comparability. For
+a quick, key-free smoke run, switch to the lexical matcher with
+`--similarity-engine heuristic`:
+
+```bash
+python -m live_idea_bench benchmark \
+  --input-dir data/csml/raw_markdown \
+  --strategy summary_prompting \
+  --similarity-engine heuristic \
+  --start-month 2024-10 --end-month 2025-03 \
+  --output /tmp/backtest.json
+```
+
+To score matches with an LLM judge instead, add `--similarity-engine llm` and
+name the judge with `--eval-model` (the `--eval-model` value is ignored unless
+the engine is `llm`):
 
 ```bash
 python -m live_idea_bench benchmark \

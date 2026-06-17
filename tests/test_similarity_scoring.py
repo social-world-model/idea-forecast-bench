@@ -1,9 +1,27 @@
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
+import live_idea_bench.similarity as similarity_module
+from live_idea_bench.config import load_similarity_config
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.similarity import evaluate_predictions, score_prediction_list
+
+
+@pytest.fixture(autouse=True)
+def _force_hybrid_engine(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests exercise the lexical matcher and metric math, not the
+    embedding engine. The shipped default is ``engine: embedding`` (Voyage,
+    needs a key), so pin the engine to ``hybrid`` to keep them hermetic and
+    key-free regardless of the default in similarity.yaml."""
+
+    def _hybrid_config(*args, **kwargs):
+        cfg = load_similarity_config(*args, **kwargs)
+        return dataclasses.replace(cfg, engine="hybrid")
+
+    monkeypatch.setattr(similarity_module, "load_similarity_config", _hybrid_config)
 
 
 def _paper(

@@ -1,10 +1,26 @@
+import dataclasses
 from pathlib import Path
 from typing import List
 
 import pytest
 
+import live_idea_bench.similarity as similarity_module
 from live_idea_bench.backtest import BacktestConfig, backtest, evaluate, generate, load_papers_from_markdown
+from live_idea_bench.config import load_similarity_config
 from live_idea_bench.strategy import create_strategy
+
+
+@pytest.fixture(autouse=True)
+def _force_hybrid_engine(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the backtest tests hermetic: the shipped default engine is
+    ``embedding`` (Voyage, needs a key), but these tests run offline and only
+    exercise the rolling/metric machinery, so pin the matcher to ``hybrid``."""
+
+    def _hybrid_config(*args, **kwargs):
+        cfg = load_similarity_config(*args, **kwargs)
+        return dataclasses.replace(cfg, engine="hybrid")
+
+    monkeypatch.setattr(similarity_module, "load_similarity_config", _hybrid_config)
 
 
 def _setup_mock_data(tmp_path: Path) -> Path:

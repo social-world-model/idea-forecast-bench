@@ -12,13 +12,11 @@ embedding:
   introduction_weight: 0.2
   method_weight: 0.2
   conclusion_weight: 0.2
-  # Embedding endpoint (OpenAI-compatible):
-  #   "http://localhost:8000/v1" → local vllm/sglang
-  #   "https://some-provider.com/v1" → third-party
-  #   "" (empty) → official OpenAI API
-  # Leave unset to use local sentence-transformers (with a warning).
+  # Voyage embedding endpoint. Empty → Voyage default URL
+  # (https://api.voyageai.com/v1). Embedding is Voyage-only: requires
+  # VOYAGE_API_KEY and fails loud — no local/lexical fallback.
   embedding_base_url: ""
-  api_model: "text-embedding-3-small"
+  api_model: "voyage-4-large"
 
 topics:
 

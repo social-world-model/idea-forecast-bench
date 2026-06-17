@@ -23,17 +23,11 @@ from live_idea_bench.papers import (
     get_paper_published_date,
 )
 
-try:
-    from sentence_transformers import SentenceTransformer
-    from sklearn.metrics.pairwise import cosine_similarity
-
-    _EMBEDDING_AVAILABLE = True
-except ImportError:  # pragma: no cover
-    _EMBEDDING_AVAILABLE = False
-    logger.warning(
-        "sentence-transformers not installed; embedding engine will fall back to hybrid. "
-        "Run `pip install sentence-transformers` to enable real semantic similarity."
-    )
+# Embedding engine is Voyage-only by design — no local/hybrid fallback. Mixing
+# Voyage cosine, local cosine, and lexical hybrid under one threshold within a
+# run destroys cross-run comparability, so a misconfigured/unavailable Voyage
+# endpoint must fail loud rather than silently degrade.
+VOYAGE_BASE_URL = "https://api.voyageai.com/v1"
 
 
 def _tokenize(text: str) -> list[str]:
@@ -116,41 +110,42 @@ def _llm_similarity(
     )
 
 
-_EMBEDDING_MODEL: SentenceTransformer | None = None
-
-
 def _sanitize(text: str) -> str:
     """Remove null bytes and non-printable control characters that break JSON serialization."""
     return "".join(ch for ch in text if ch == "\n" or ch == "\t" or (ord(ch) >= 32 and ord(ch) != 127))
 
 
-def _api_embed_pair(idea: str, context: str, runtime_config: Config) -> MatchResult | None:
-    """Try embedding via OpenAI-compatible API with retry + exponential backoff. Returns None on failure."""
+def _embedding_similarity(
+    idea: str,
+    context: str,
+    runtime_config: Config,
+) -> MatchResult:
+    """Score an (idea, context) pair via the Voyage embedding API.
+
+    Voyage-only by design: there is no local or lexical fallback. A missing key
+    or an unreachable endpoint raises rather than silently degrading to a weaker
+    engine (which would corrupt cross-run score comparability).
+    """
     import math
     import os
     import time
+
     import openai
 
-    base_url = runtime_config.embedding.embedding_base_url or None
-    _is_voyage = base_url and ("voyageai.com" in base_url or "voyageai" in base_url.lower())
-    if _is_voyage:
-        api_key = os.environ.get("VOYAGE_API_KEY") or os.environ.get("OPENAI_API_KEY") or "no-key"
-        endpoint = "voyage"
-    elif base_url and ("localhost" in base_url or "127.0.0.1" in base_url):
-        api_key = os.environ.get("OPENAI_API_KEY") or "no-key"
-        endpoint = "local"
-    elif base_url:
-        api_key = os.environ.get("OPENAI_API_KEY") or "no-key"
-        endpoint = "third-party"
-    else:
-        api_key = os.environ.get("OPENAI_API_KEY") or "no-key"
-        endpoint = "openai"
+    api_key = os.environ.get("VOYAGE_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "Embedding engine requires VOYAGE_API_KEY (Voyage-only, no fallback). "
+            "Set it, or switch the engine in similarity.yaml."
+        )
+    base_url = runtime_config.embedding.embedding_base_url or VOYAGE_BASE_URL
     model = runtime_config.embedding.api_model
     client = openai.OpenAI(api_key=api_key, base_url=base_url)
-    truncated_context = _sanitize(context[: runtime_config.embedding.max_context_chars])
     clean_idea = _sanitize(idea)
+    truncated_context = _sanitize(context[: runtime_config.embedding.max_context_chars])
 
     max_retries = 7
+    last_exc: Exception | None = None
     for attempt in range(max_retries):
         try:
             resp = client.embeddings.create(model=model, input=[clean_idea, truncated_context])
@@ -159,50 +154,19 @@ def _api_embed_pair(idea: str, context: str, runtime_config: Config) -> MatchRes
             na = math.sqrt(sum(x * x for x in a))
             nb = math.sqrt(sum(x * x for x in b))
             score = max(0.0, min(1.0, dot / (na * nb))) if na and nb else 0.0
-            return MatchResult(score=score, engine_name=f"embedding-api:{endpoint}:{model}")
-        except Exception as e:
+            return MatchResult(score=score, engine_name=f"embedding:voyage:{model}")
+        except Exception as exc:  # noqa: BLE001 — retried below, re-raised on exhaustion
+            last_exc = exc
             wait = 2 ** attempt  # 1, 2, 4, 8, 16, 32, 64 seconds
             if attempt < max_retries - 1:
-                logger.warning(f"Embedding API call failed (attempt {attempt+1}/{max_retries}, {endpoint}), retrying in {wait}s. Error: {e}")
+                logger.warning(
+                    f"Voyage embedding call failed (attempt {attempt+1}/{max_retries}), retrying in {wait}s. Error: {exc}"
+                )
                 time.sleep(wait)
-            else:
-                logger.warning(f"Embedding API call failed after {max_retries} attempts ({endpoint}), falling back to local. Error: {e}")
-    return None
-
-
-def _embedding_similarity(
-    idea: str,
-    context: str,
-    runtime_config: Config,
-) -> MatchResult:
-    # If embedding_base_url is explicitly configured (even as ""), try the API first.
-    if runtime_config.embedding.embedding_base_url is not None:
-        result = _api_embed_pair(idea, context, runtime_config)
-        if result is not None:
-            return result
-        # API failed — fall through to local model below
-
-    # Local sentence-transformers fallback
-    global _EMBEDDING_MODEL
-    if not _EMBEDDING_AVAILABLE:
-        logger.warning(
-            "No embedding API configured and sentence-transformers not installed; "
-            "falling back to hybrid text similarity. "
-            "Configure embedding_base_url in config.yaml or install sentence-transformers."
-        )
-        return MatchResult(score=_hybrid_similarity(idea, context), engine_name="hybrid-fallback")
-
-    if _EMBEDDING_MODEL is None:
-        _EMBEDDING_MODEL = SentenceTransformer(runtime_config.embedding.model_name)
-
-    idea_vec = _EMBEDDING_MODEL.encode(idea, convert_to_numpy=True, normalize_embeddings=True)
-    context_vec = _EMBEDDING_MODEL.encode(
-        context[: runtime_config.embedding.max_context_chars],
-        convert_to_numpy=True,
-        normalize_embeddings=True,
+    raise RuntimeError(
+        f"Voyage embedding call failed after {max_retries} attempts; refusing to fall back "
+        f"to a weaker engine (would corrupt comparability). Last error: {last_exc}"
     )
-    score = float(cosine_similarity(idea_vec.reshape(1, -1), context_vec.reshape(1, -1))[0, 0])
-    return MatchResult(score=max(0.0, min(1.0, score)), engine_name=f"embedding:local:{runtime_config.embedding.model_name}")
 
 
 def compute_similarity(

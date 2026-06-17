@@ -1,13 +1,29 @@
 from __future__ import annotations
 
+import dataclasses
 import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
+import live_idea_bench.similarity as similarity_module
 from backend import strategy_store
 from backend.services import daily_pipeline
+from live_idea_bench.config import load_similarity_config
+
+
+@pytest.fixture(autouse=True)
+def _force_hybrid_engine(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The daily pipeline scores via the similarity engine; the shipped default
+    is ``embedding`` (Voyage, needs a key). These tests run offline, so pin the
+    matcher to the key-free ``hybrid`` engine."""
+
+    def _hybrid_config(*args, **kwargs):
+        cfg = load_similarity_config(*args, **kwargs)
+        return dataclasses.replace(cfg, engine="hybrid")
+
+    monkeypatch.setattr(similarity_module, "load_similarity_config", _hybrid_config)
 
 
 def _isolate_strategy_store(monkeypatch, tmp_path: Path) -> None:

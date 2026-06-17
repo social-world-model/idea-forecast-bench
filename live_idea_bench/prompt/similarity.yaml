@@ -1,4 +1,6 @@
-engine: heuristic
+# Default engine: Voyage embedding (requires VOYAGE_API_KEY; no fallback).
+# Switch to heuristic for a key-free lexical run, or llm for the LLM judge.
+engine: embedding
 embedding_threshold: 0.4
 semantic_threshold: 0.5
 keyword_threshold: 0.3

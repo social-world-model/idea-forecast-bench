@@ -54,7 +54,7 @@ from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
 # Constants
 # ---------------------------------------------------------------------------
 VOYAGE_BASE_URL  = "https://api.voyageai.com/v1"
-EMBED_MODEL      = "voyage-3-large"
+EMBED_MODEL      = "voyage-4-large"
 DEFAULT_JUDGE    = "gpt-4.1-mini"
 DEFAULT_TOP_R    = 10
 DEFAULT_CLUSTER_K = 5
@@ -838,39 +838,18 @@ def main() -> int:
     parser.add_argument("--topics-config", default=None)
     args = parser.parse_args()
 
-    # Embedding backend selection:
-    #   * If VOYAGE_API_KEY is set, keep the original Voyage path for parity
-    #     with historical eval runs.
-    #   * Otherwise fall back to a local sentence-transformer (BGE) exposed
-    #     through a small OpenAI-shim so the rest of the pipeline is
-    #     unchanged. This lets the eval and the GRPO reward path share the
-    #     same embedding geometry.
+    # Embedding backend: Voyage-only, no fallback. A missing key fails loud
+    # rather than silently swapping in a different embedding geometry (which
+    # would make scores incomparable to Voyage-embedded runs).
     voyage_key = os.environ.get("VOYAGE_API_KEY")
-    if voyage_key:
-        embed_client = openai.OpenAI(api_key=voyage_key, base_url=VOYAGE_BASE_URL)
-    else:
-        from forecaster.embedding import get_default_embedder
-
-        class _LocalEmbedShim:
-            """Mimics `client.embeddings.create(...)` against a local model."""
-
-            def __init__(self) -> None:
-                self._embedder = get_default_embedder()
-                self.embeddings = self  # so client.embeddings.create works
-
-            def create(self, *, model: str, input):
-                texts = input if isinstance(input, list) else [input]
-                vecs = self._embedder.embed(texts)
-                class _Item:
-                    def __init__(self, idx, embedding):
-                        self.index = idx
-                        self.embedding = embedding
-                class _Resp:
-                    def __init__(self, items):
-                        self.data = items
-                return _Resp([_Item(i, v) for i, v in enumerate(vecs)])
-
-        embed_client = _LocalEmbedShim()  # type: ignore[assignment]
+    if not voyage_key:
+        print(
+            "ERROR: Set VOYAGE_API_KEY — the judge embeds with Voyage and has no "
+            "local fallback (mixing embedding models corrupts score comparability).",
+            file=sys.stderr,
+        )
+        return 1
+    embed_client = openai.OpenAI(api_key=voyage_key, base_url=VOYAGE_BASE_URL)
 
     # Judge client: prefer env-var endpoint so we can target a local
     # vLLM OpenAI-compatible server when OPENAI_API_KEY is absent.
