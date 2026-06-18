@@ -362,7 +362,13 @@ def score_prediction_list(
         )
 
     hit_at_k = 1.0 if matched_ranks else 0.0
-    recall_at_k = (len(matched_paper_ids) / len(future_papers)) if future_papers else 0.0
+    # coverage_at_k: matched / |future_papers| (old recall_at_k formula). Bounded
+    # above by min(k, |future|)/|future|; cannot reach 1.0 when |future| > k.
+    coverage_at_k = (len(matched_paper_ids) / len(future_papers)) if future_papers else 0.0
+    # recall_at_k: true recall — matched / min(k, |future_papers|). Denominator is
+    # the max number of distinct future papers the top-k predictions could match.
+    recall_denominator = min(k, len(future_papers))
+    recall_at_k = (len(matched_paper_ids) / recall_denominator) if recall_denominator > 0 else 0.0
     precision_at_k = (len(matched_paper_ids) / max(1, min(k, len(top_preds)))) if top_preds else 0.0
     mrr = (1.0 / min(matched_ranks)) if matched_ranks else 0.0
     novelty = _novelty_at_k(top_preds, [paper_text(paper) for paper in train_papers], k)
@@ -397,6 +403,7 @@ def score_prediction_list(
         evaluation=EvaluationResult(
             hit_at_k=round(hit_at_k, 4),
             recall_at_k=round(recall_at_k, 4),
+            coverage_at_k=round(coverage_at_k, 4),
             precision_at_k=round(precision_at_k, 4),
             mrr=round(mrr, 4),
             novelty=round(novelty, 4),

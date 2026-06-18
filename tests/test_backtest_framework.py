@@ -88,6 +88,7 @@ def test_evaluate_at_cutoff_metric_bounds(tmp_path: Path) -> None:
     )
     assert 0.0 <= result.hit_at_k <= 1.0
     assert 0.0 <= result.recall_at_k <= 1.0
+    assert 0.0 <= result.coverage_at_k <= 1.0
     assert 0.0 <= result.precision_at_k <= 1.0
     assert 0.0 <= result.mrr <= 1.0
     assert 0.0 <= result.novelty <= 1.0

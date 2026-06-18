@@ -87,6 +87,33 @@ def test_evaluate_predictions_uses_one_to_one_matching_for_duplicate_future_hits
     assert 0.0 < result.lead_time <= 1.0
 
 
+def test_coverage_and_recall_diverge_when_future_exceeds_k() -> None:
+    """coverage_at_k uses |future| as denominator; recall_at_k uses min(k,|future|).
+    With |future| > k they must diverge: coverage is depressed by the large pool,
+    recall is a true [0,1] hit-rate over what the top-k could reach."""
+    train = [_paper("train-1", "2024-01", "Old", "old text", published_date="2024-01-01")]
+    # 4 future papers, only 1 lexically matchable; k=1.
+    future = [
+        _paper("f-1", "2024-02", "Neural retrieval", "neural retrieval methods", published_date="2024-02-15"),
+        _paper("f-2", "2024-02", "Protein folding", "protein folding simulation", published_date="2024-02-16"),
+        _paper("f-3", "2024-02", "Climate model", "climate ocean modeling", published_date="2024-02-17"),
+        _paper("f-4", "2024-02", "Robotics grasp", "robot grasp planning", published_date="2024-02-18"),
+    ]
+    predictions = [_prediction(1, "Neural retrieval", "neural retrieval methods")]
+
+    scored = score_prediction_list(
+        predictions=predictions, train_papers=train, future_papers=future, k=1,
+        cutoff_date="2024-02-01", future_end_date="2024-03-31",
+    )
+    ev = scored.evaluation
+    assert ev.matched_paper_ids == ["f-1"]
+    assert ev.coverage_at_k == pytest.approx(1 / 4)        # matched / |future|
+    assert ev.recall_at_k == pytest.approx(1 / 1)          # matched / min(k, |future|)
+    assert ev.coverage_at_k < ev.recall_at_k
+    assert 0.0 <= ev.coverage_at_k <= 1.0
+    assert 0.0 <= ev.recall_at_k <= 1.0
+
+
 def test_weighted_metrics_without_popularity_weights_default_to_zero() -> None:
     """When no popularity_weights passed, weighted metrics default to 0.0 (opt-in)."""
     train = [_paper("train-1", "2024-01", "Old paper", "old paper text", published_date="2024-01-01")]

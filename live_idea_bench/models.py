@@ -41,6 +41,11 @@ class EvaluationResult:
     diversity: float
     matched_prediction_ranks: List[int]
     matched_paper_ids: List[str]
+    # coverage_at_k = matched / len(future_papers): fraction of ALL future papers
+    # hit by the top-k predictions. Upper-bounded by min(k, |future|)/|future|, so
+    # it is NOT a true recall when |future| > k (it cannot reach 1.0). Kept for
+    # backward comparability with earlier runs that stored this under recall_at_k.
+    coverage_at_k: float = 0.0
     lead_time: float = 0.0
     duplicate_rate: float = 0.0
     # Popularity-weighted metrics (opt-in; 0.0 when no popularity_weights provided)
