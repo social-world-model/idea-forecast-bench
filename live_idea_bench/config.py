@@ -129,7 +129,6 @@ class PredictorConfig:
     default_temperature: float | None = None
     max_context_papers: int = 20
     parser: str = "json"
-    fallback_mode: str = "heuristic"
 
 
 @dataclass
@@ -324,7 +323,6 @@ def load_predictor_config(
         ),
         max_context_papers=int(payload.get("max_context_papers", 20)),
         parser=str(payload.get("parser", "json")).strip() or "json",
-        fallback_mode=str(payload.get("fallback_mode", "heuristic")).strip() or "heuristic",
     )
 
 
