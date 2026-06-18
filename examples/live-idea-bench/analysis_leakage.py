@@ -15,7 +15,7 @@ fixed horizon for every window, collapsing everything into one bucket so the
 Mann-Whitney test never fired.
 
 Usage:
-    python examples/analysis/analysis_leakage.py \\
+    python examples/live-idea-bench/analysis_leakage.py \\
         --input memory_prompting_backtest.json predictor_llm_backtest.json \\
         --output leakage_report.json
 """

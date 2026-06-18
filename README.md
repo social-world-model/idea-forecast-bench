@@ -113,8 +113,10 @@ forecaster/           # The MDF forecaster
   foresight/          #   future-grounded reward, soft must_not judge, rubric, indices
   inference/          #   joint inference (Algorithm 1)
 examples/             # Entrypoint scripts (the CLI dispatches to these)
-  benchmark/  forecaster/  analysis/  data/
+  live-idea-bench/    #   benchmark backtests + retrieve-then-judge + validity analyses
+  forecaster/  data/  #   MDF training/inference + data prep
 scripts/              # Shell wrappers + dev/reproduction helpers
+  live-idea-bench/    #   benchmark run wrappers
 config/               # YAML configs (config/, config/forecaster/)
 tests/                # Test suite (pytest) — green out of the box
 backend/  frontend/   # Optional web app (Flask API + React UI)

@@ -12,7 +12,7 @@ llm_judge_eval.py now serializes — NOT a global union of future candidates,
 which any real arXiv paper would almost certainly cite (no discriminative power).
 
 Usage:
-    python examples/analysis/analysis_citation.py \\
+    python examples/live-idea-bench/analysis_citation.py \\
         --input memory_prompting_llmjudge.json \\
         --output citation_report.json \\
         [--s2-key YOUR_SEMANTIC_SCHOLAR_API_KEY]

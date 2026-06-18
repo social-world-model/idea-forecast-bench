@@ -1,9 +1,9 @@
 """Tests for the evaluation-validity analysis scripts (A5-A8 fixes).
 
-The scripts live under examples/analysis/ (not an importable package), so they
-are loaded by path. These tests cover the schema guard, the leakage bucketing
-fix (by per-match lead_time, not the constant horizon), and the co-author
-self-author exclusion — without hitting the Semantic Scholar API.
+The scripts live under examples/live-idea-bench/ (not an importable package), so
+they are loaded by path. These tests cover the schema guard, the leakage
+bucketing fix (by per-match lead_time, not the constant horizon), and the
+co-author self-author exclusion — without hitting the Semantic Scholar API.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-_ANALYSIS_DIR = Path(__file__).resolve().parents[1] / "examples" / "analysis"
+_ANALYSIS_DIR = Path(__file__).resolve().parents[1] / "examples" / "live-idea-bench"
 
 
 def _load(name: str):
