@@ -193,6 +193,8 @@ def compute_similarity(
         score=max(semantic, keyword),
         reasoning=f"hybrid semantic={semantic:.3f}, keyword={keyword:.3f}",
         engine_name="hybrid",
+        semantic=semantic,
+        keyword=keyword,
     )
 
 
@@ -207,9 +209,11 @@ def is_match(
         return result.score >= similarity_config.llm_match_threshold
     if engine == "embedding":
         return result.score >= similarity_config.embedding_threshold
-    # hybrid (default)
-    semantic = _hybrid_similarity(idea, context)
-    keyword = _keyword_overlap(idea, context)
+    # hybrid (default) — reuse the components computed in compute_similarity so
+    # the match decision and the sort score (max(semantic, keyword)) are derived
+    # from the exact same numbers; no recompute, no greedy-selection drift.
+    semantic = result.semantic if result.semantic is not None else _hybrid_similarity(idea, context)
+    keyword = result.keyword if result.keyword is not None else _keyword_overlap(idea, context)
     return (
         semantic >= similarity_config.semantic_threshold
         or keyword >= similarity_config.keyword_threshold
@@ -371,8 +375,10 @@ def score_prediction_list(
     recall_at_k = (len(matched_paper_ids) / recall_denominator) if recall_denominator > 0 else 0.0
     precision_at_k = (len(matched_paper_ids) / max(1, min(k, len(top_preds)))) if top_preds else 0.0
     mrr = (1.0 / min(matched_ranks)) if matched_ranks else 0.0
-    novelty = _novelty_at_k(top_preds, [paper_text(paper) for paper in train_papers], k)
-    diversity = _diversity_at_k(top_preds, k)
+    # Novelty/diversity are intentionally lexical and engine-independent (the
+    # match engine above may be Voyage/LLM; these stay free + deterministic).
+    novelty = lexical_novelty_at_k(top_preds, [paper_text(paper) for paper in train_papers], k)
+    diversity = lexical_diversity_at_k(top_preds, k)
     lead_time = sum(matched_lead_times) / len(matched_lead_times) if matched_lead_times else 0.0
     duplicate_rate = (duplicate_blocked / len(top_preds)) if top_preds else 0.0
 
@@ -450,11 +456,21 @@ def best_paper_match(
     return best
 
 
-def _novelty_at_k(
+def lexical_novelty_at_k(
     predictions: list[IdeaPrediction],
     reference_pool: list[str],
     k: int,
 ) -> float:
+    """Novelty@k as 1 - max lexical similarity to the train pool, averaged over the top-k.
+
+    INTENTIONALLY ENGINE-INDEPENDENT: this metric always uses the lexical
+    ``_hybrid_similarity`` (token Jaccard + SequenceMatcher) and does NOT honor
+    ``similarity_config.engine``. Match selection may use Voyage embedding or the
+    LLM judge, but novelty stays lexical because routing it through the
+    configured engine would cost O(k * |train|) embedding/LLM calls per window
+    for a secondary diagnostic. Keep this lexical so it is free, deterministic,
+    and key-free regardless of the match engine.
+    """
     if not predictions or k <= 0:
         return 0.0
     if not reference_pool:
@@ -467,7 +483,14 @@ def _novelty_at_k(
     return sum(scores) / len(scores)
 
 
-def _diversity_at_k(predictions: list[IdeaPrediction], k: int) -> float:
+def lexical_diversity_at_k(predictions: list[IdeaPrediction], k: int) -> float:
+    """Diversity@k as mean pairwise (1 - lexical similarity) over the top-k predictions.
+
+    INTENTIONALLY ENGINE-INDEPENDENT (see ``lexical_novelty_at_k``): always uses
+    the lexical ``_hybrid_similarity`` and ignores ``similarity_config.engine``.
+    Routing the O(k^2) pairwise comparisons through Voyage/LLM would make every
+    window pay for a diagnostic metric, so this stays lexical and key-free.
+    """
     top_preds = predictions[:k]
     if len(top_preds) < 2:
         return 0.0

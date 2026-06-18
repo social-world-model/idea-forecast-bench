@@ -5,9 +5,9 @@ import dataclasses
 import pytest
 
 import live_idea_bench.similarity as similarity_module
-from live_idea_bench.config import load_similarity_config
-from live_idea_bench.models import IdeaPrediction, PaperRecord
-from live_idea_bench.similarity import evaluate_predictions, score_prediction_list
+from live_idea_bench.config import SimilarityConfig, load_similarity_config
+from live_idea_bench.models import IdeaPrediction, MatchResult, PaperRecord
+from live_idea_bench.similarity import compute_similarity, evaluate_predictions, is_match, score_prediction_list
 
 
 @pytest.fixture(autouse=True)
@@ -85,6 +85,28 @@ def test_evaluate_predictions_uses_one_to_one_matching_for_duplicate_future_hits
     assert result.mrr == 1.0
     assert result.duplicate_rate == 0.5
     assert 0.0 < result.lead_time <= 1.0
+
+
+def test_hybrid_is_match_reuses_match_result_components() -> None:
+    """is_match (hybrid) must read MatchResult.semantic/keyword rather than
+    recompute, so the match decision and the sort score use the same numbers.
+    A result whose keyword>=threshold but semantic<threshold must still match,
+    and a result missing the components must fall back to recompute."""
+    cfg = SimilarityConfig(engine="hybrid", semantic_threshold=0.5, keyword_threshold=0.3)
+
+    # compute_similarity populates semantic+keyword on the result.
+    res = compute_similarity("graph retrieval agents", "graph retrieval agents for planning", cfg)
+    assert res.semantic is not None and res.keyword is not None
+
+    # Stored-component path: keyword above threshold, semantic below -> match.
+    forced = MatchResult(score=0.9, engine_name="hybrid", semantic=0.1, keyword=0.4)
+    assert is_match(forced, "x", "y", cfg) is True
+    # Both below threshold -> no match, even with a high (irrelevant) score.
+    forced_low = MatchResult(score=0.9, engine_name="hybrid", semantic=0.1, keyword=0.1)
+    assert is_match(forced_low, "x", "y", cfg) is False
+    # Missing components -> recompute fallback still works (identical strings match).
+    legacy = MatchResult(score=0.0, engine_name="hybrid")
+    assert is_match(legacy, "same text here", "same text here", cfg) is True
 
 
 def test_coverage_and_recall_diverge_when_future_exceeds_k() -> None:

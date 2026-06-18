@@ -74,6 +74,11 @@ class MatchResult:
     reasoning: Optional[str] = None
     engine_name: str = "hybrid"
     paper_id: Optional[str] = None
+    # Hybrid-engine component scores, populated only by the hybrid branch of
+    # compute_similarity. is_match (hybrid) reads these so the match decision
+    # uses the exact same numbers as the sort score (no recompute / no drift).
+    semantic: Optional[float] = None
+    keyword: Optional[float] = None
 
 
 @dataclass
