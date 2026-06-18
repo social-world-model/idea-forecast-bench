@@ -92,12 +92,23 @@ def parse_score(raw: str) -> tuple[float, str]:
     Returns (clamped_score, reasoning). Score defaults to 0.0 if missing.
     """
     score = 0.0
-    m = re.search(r"Score:\s*([0-1](?:\.\d+)?)", raw)
+    m = re.search(r"(?im)\**\s*score\s*\**\s*:?\s*\**\s*(0?\.\d+|[01](?:\.\d+)?)", raw)
     if m:
         try:
             score = float(m.group(1))
         except ValueError:
             score = 0.0
+    else:
+        # This is the training-reward / M2 path: a hard raise here would
+        # crash the GRPO reward loop on a single malformed judge reply.
+        # Warn + count via the log instead of silently passing, but keep
+        # the 0.0 default (the documented contract; see
+        # test_parse_score_extracts_clamped).
+        logger.warning(
+            "judge.parse_score: no parseable 'Score:' line in model output; "
+            "defaulting to 0.0. Raw: %r",
+            raw[:500],
+        )
     score = max(0.0, min(1.0, score))
     reasoning = ""
     r = re.search(r"Reasoning:\s*(.*)", raw, re.IGNORECASE | re.DOTALL)

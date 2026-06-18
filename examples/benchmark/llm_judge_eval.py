@@ -190,8 +190,16 @@ SCORE_RE = re.compile(r"(PROBLEM_MATCH|METHOD_MATCH|SPECIFICITY)\s*:\s*([0123])"
 class RunState:
     """Persists embeddings and judge decisions across runs."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(
+        self,
+        path: Path,
+        *,
+        judge_fingerprint: str,
+        embed_fingerprint: str,
+    ) -> None:
         self.path = path
+        self.judge_fp = judge_fingerprint
+        self.embed_fp = embed_fingerprint
         # Split-flush: embeddings live in a sidecar file because they grow to
         # ~99% of state bytes but only change during the embedding phase. The
         # main state (decisions + windows, ~30MB) flushes every 30s; the
@@ -214,6 +222,37 @@ class RunState:
         self._data.setdefault("judge_decisions", {})
         self._data.setdefault("completed_windows", [])
         self._data.setdefault("window_outputs", {})
+        # Fingerprint guard: a resumed state file must have been produced under
+        # the same judge config (model + rubric) and embedding model, otherwise
+        # cached decisions / vectors are stale and incomparable. Fail loud
+        # rather than silently serving them. A fresh file (no fingerprints key)
+        # is stamped with the current fingerprints.
+        stored_fp = self._data.get("fingerprints")
+        if stored_fp is None:
+            self._data["fingerprints"] = {
+                "judge": self.judge_fp,
+                "embed": self.embed_fp,
+            }
+        else:
+            mismatches = []
+            if stored_fp.get("judge") != self.judge_fp:
+                mismatches.append(
+                    f"judge ({stored_fp.get('judge')} != {self.judge_fp}): "
+                    f"--judge-model or JUDGE_SYSTEM changed"
+                )
+            if stored_fp.get("embed") != self.embed_fp:
+                mismatches.append(
+                    f"embed ({stored_fp.get('embed')} != {self.embed_fp}): "
+                    f"--embed-model changed"
+                )
+            if mismatches:
+                raise ValueError(
+                    "State file "
+                    f"{path} was produced under a different config:\n  - "
+                    + "\n  - ".join(mismatches)
+                    + "\nUse a fresh --state-file (or delete the existing one) "
+                    "so decisions/embeddings are not silently reused."
+                )
         # If a sidecar exists, merge its embeddings in (authoritative when
         # both sources have the same key — sidecar is written more recently).
         if self.embeddings_path.exists():
@@ -224,30 +263,30 @@ class RunState:
     # ---- embeddings --------------------------------------------------------
     def get_paper_vec(self, paper_id: str) -> list[float] | None:
         with self._lock:
-            return self._data["paper_embeddings"].get(paper_id)
+            return self._data["paper_embeddings"].get(f"{self.embed_fp}__{paper_id}")
 
     def set_paper_vecs(self, id_vec_pairs: list[tuple[str, list[float]]]) -> None:
         with self._lock:
             for paper_id, vec in id_vec_pairs:
-                self._data["paper_embeddings"][paper_id] = vec
+                self._data["paper_embeddings"][f"{self.embed_fp}__{paper_id}"] = vec
             self._flush_embeddings()
 
     def get_pred_vec(self, pred_hash: str) -> list[float] | None:
         with self._lock:
-            return self._data["pred_embeddings"].get(pred_hash)
+            return self._data["pred_embeddings"].get(f"{self.embed_fp}__{pred_hash}")
 
     def set_pred_vec(self, pred_hash: str, vec: list[float]) -> None:
         with self._lock:
-            self._data["pred_embeddings"][pred_hash] = vec
+            self._data["pred_embeddings"][f"{self.embed_fp}__{pred_hash}"] = vec
             self._flush_embeddings()
 
     # ---- judge decisions ---------------------------------------------------
     def get_decision(self, pred_hash: str, paper_id: str) -> dict | None:
-        key = f"{pred_hash}__{paper_id}"
+        key = f"{self.judge_fp}__{pred_hash}__{paper_id}"
         return self._data["judge_decisions"].get(key)
 
     def set_decision(self, pred_hash: str, paper_id: str, decision: dict) -> None:
-        key = f"{pred_hash}__{paper_id}"
+        key = f"{self.judge_fp}__{pred_hash}__{paper_id}"
         with self._lock:
             self._data["judge_decisions"][key] = decision
             self._flush()
@@ -284,6 +323,7 @@ class RunState:
             return
         main = {
             "version": self._data.get("version", 2),
+            "fingerprints": self._data.get("fingerprints", {}),
             "judge_decisions": self._data["judge_decisions"],
             "completed_windows": self._data["completed_windows"],
             "window_outputs": self._data["window_outputs"],
@@ -335,6 +375,27 @@ def _pred_text(p: IdeaPrediction) -> str:
 
 def _pred_hash(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()[:16]
+
+
+def _judge_fingerprint(judge_model: str) -> str:
+    """12-hex fingerprint of the judge config that affects decisions.
+
+    Namespaces the judge-decision cache so that changing --judge-model or the
+    JUDGE_SYSTEM rubric does not silently reuse decisions made under the old
+    config when an existing state file is resumed."""
+    h = hashlib.sha256()
+    h.update(judge_model.encode())
+    h.update(b"\x00")
+    h.update(JUDGE_SYSTEM.encode())
+    return h.hexdigest()[:12]
+
+
+def _embed_fingerprint(embed_model: str) -> str:
+    """12-hex fingerprint of the embedding model.
+
+    Namespaces the prediction/paper vector caches so a state file embedded with
+    one model is never mixed with vectors from another (incomparable geometry)."""
+    return hashlib.sha256(embed_model.encode()).hexdigest()[:12]
 
 
 def _embed_batch(
@@ -873,7 +934,9 @@ def main() -> int:
     state_path = Path(args.state_file) if args.state_file else out_path.with_suffix(".state.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    state = RunState(state_path)
+    judge_fp = _judge_fingerprint(args.judge_model)
+    embed_fp = _embed_fingerprint(args.embed_model)
+    state = RunState(state_path, judge_fingerprint=judge_fp, embed_fingerprint=embed_fp)
     atexit.register(state.force_flush)
 
     saved = json.loads(Path(args.input_json).read_text(encoding="utf-8"))

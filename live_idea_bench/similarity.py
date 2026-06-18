@@ -98,11 +98,18 @@ def _llm_similarity(
         reasoning_effort=reasoning_effort,
     )
 
-    score = 0.0
     reasoning = raw.strip()
-    score_match = re.search(r"Score:\s*([0-1](?:\.\d+)?)", raw)
-    if score_match:
-        score = float(score_match.group(1))
+    # Fail loud on a parse miss: silently scoring 0.0 marks a genuinely
+    # high-similarity pair as a non-match and corrupts the benchmark
+    # metrics. No-fallback policy — surface the malformed judge output.
+    score_match = re.search(r"(?im)\**\s*score\s*\**\s*:?\s*\**\s*(0?\.\d+|[01](?:\.\d+)?)", raw)
+    if not score_match:
+        raise ValueError(
+            f"LLM judge ({resolved_model}) returned no parseable 'Score:' line; "
+            f"refusing to silently score 0.0 (would mark a real match as a miss). "
+            f"Raw response: {reasoning[:500]!r}"
+        )
+    score = float(score_match.group(1))
     return MatchResult(
         score=max(0.0, min(1.0, score)),
         reasoning=reasoning,

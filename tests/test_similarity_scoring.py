@@ -87,6 +87,30 @@ def test_evaluate_predictions_uses_one_to_one_matching_for_duplicate_future_hits
     assert 0.0 < result.lead_time <= 1.0
 
 
+def test_llm_judge_raises_on_unparseable_score(monkeypatch) -> None:
+    """The LLM-judge eval path must fail loud on a score it cannot parse rather
+    than silently scoring 0.0 (which marks a real match as a miss). It must also
+    parse bold/lowercase/leading-dot score formats."""
+    from live_idea_bench.config import Config
+
+    monkeypatch.setattr(similarity_module, "create_client", lambda m: (object(), m))
+    cfg = SimilarityConfig(engine="llm", llm_match_threshold=0.7,
+                           system_prompt="s", user_prompt_template="{idea}|{context}")
+    rt = Config()
+
+    def _reply(text):
+        monkeypatch.setattr(similarity_module, "get_response_from_llm", lambda **_k: (text, []))
+        return similarity_module._llm_similarity("idea", "ctx", cfg, rt)
+
+    # Broadened parsing: bold / lowercase / leading dot all succeed.
+    assert _reply("**Score:** 0.9\nReasoning: x").score == pytest.approx(0.9)
+    assert _reply("score: 0.42").score == pytest.approx(0.42)
+    assert _reply("Score: .8").score == pytest.approx(0.8)
+    # No parseable score -> raise, not silent 0.0.
+    with pytest.raises(ValueError, match="no parseable"):
+        _reply("I think these are quite related but won't give a number.")
+
+
 def test_hybrid_is_match_reuses_match_result_components() -> None:
     """is_match (hybrid) must read MatchResult.semantic/keyword rather than
     recompute, so the match decision and the sort score use the same numbers.

@@ -143,8 +143,12 @@ def test_parse_score_extracts_clamped():
     assert s == pytest.approx(0.83)
     s, _ = parse_score("Score: 1.5\nReasoning: too high")
     assert s == 1.0
+    # Training path keeps the 0.0 default on a parse miss (does NOT raise).
     s, _ = parse_score("no score here")
     assert s == 0.0
+    # Broadened regex also handles bold / lowercase / leading-dot formats.
+    assert parse_score("**Score:** 0.42")[0] == pytest.approx(0.42)
+    assert parse_score("score: .9")[0] == pytest.approx(0.9)
 
 
 def test_stub_scorer_round_trip():
