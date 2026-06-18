@@ -437,32 +437,6 @@ def score_prediction_list(
     )
 
 
-def best_paper_match(
-    prediction: IdeaPrediction,
-    future_papers: Iterable[PaperRecord],
-    similarity_config: SimilarityConfig | None = None,
-    runtime_config: Config | None = None,
-    *,
-    model_name: str | None = None,
-) -> MatchResult | None:
-    resolved_similarity = similarity_config or load_similarity_config()
-    resolved_runtime = runtime_config or load_runtime_config()
-    pred_text = idea_text(prediction)
-    best: MatchResult | None = None
-    for paper in _prefilter_future_papers(pred_text, future_papers, candidate_limit=None):
-        result = compute_similarity(
-            pred_text,
-            paper_text(paper),
-            resolved_similarity,
-            resolved_runtime,
-            model_name=model_name,
-        )
-        if best is None or result.score > best.score:
-            from dataclasses import replace as _dc_replace
-            best = _dc_replace(result, paper_id=paper.paper_id)
-    return best
-
-
 def lexical_novelty_at_k(
     predictions: list[IdeaPrediction],
     reference_pool: list[str],
@@ -521,6 +495,7 @@ def evaluate_predictions(
     future_end_date: str | None = None,
     candidate_limit: int | None = None,
     popularity_weights: dict[str, float] | None = None,
+    reasoning_effort: str | None = None,
 ) -> EvaluationResult:
     return score_prediction_list(
         predictions=predictions,
@@ -534,6 +509,7 @@ def evaluate_predictions(
         future_end_date=future_end_date,
         candidate_limit=candidate_limit,
         popularity_weights=popularity_weights,
+        reasoning_effort=reasoning_effort,
     ).evaluation
 
 

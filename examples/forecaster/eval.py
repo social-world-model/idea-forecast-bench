@@ -37,7 +37,11 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from live_idea_bench.backtest import BacktestConfig, backtest  # noqa: E402
+from live_idea_bench.backtest import (  # noqa: E402
+    BacktestConfig,
+    backtest,
+    weighted_mean_over_topics,
+)
 from live_idea_bench.config import load_topics  # noqa: E402
 from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
 from live_idea_bench.strategy import create_strategy  # noqa: E402
@@ -184,24 +188,14 @@ def _load_papers_and_topics(
 
 
 def _aggregate(topic_results: dict) -> dict:
-    """Weighted aggregate across topics. Same metric set as run_domain_backtest.py:309-323."""
-    out = {}
-    for metric in (
-        "avg_hit_at_k", "avg_recall_at_k", "avg_precision_at_k", "avg_mrr",
-        "avg_novelty", "avg_diversity",
-    ):
-        num, den = 0.0, 0
-        for tr in topic_results.values():
-            bt = tr.get("backtest")
-            if not bt:
-                continue
-            s = bt.get("summary", {})
-            w = s.get("windows", 0)
-            if w > 0:
-                num += float(s.get(metric, 0)) * w
-                den += w
-        out[metric] = round(num / den, 4) if den else 0.0
-    return out
+    """Weighted aggregate across topics (same metric set as run_domain_backtest.py)."""
+    return weighted_mean_over_topics(
+        topic_results,
+        (
+            "avg_hit_at_k", "avg_recall_at_k", "avg_precision_at_k", "avg_mrr",
+            "avg_novelty", "avg_diversity",
+        ),
+    )
 
 
 def _save_payload(

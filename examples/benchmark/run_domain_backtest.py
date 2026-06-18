@@ -25,7 +25,11 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from live_idea_bench.backtest import BacktestConfig, backtest  # noqa: E402
+from live_idea_bench.backtest import (  # noqa: E402
+    BacktestConfig,
+    backtest,
+    weighted_mean_over_topics,
+)
 from live_idea_bench.config import load_topics  # noqa: E402
 from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
 from live_idea_bench.strategy import create_strategy  # noqa: E402
@@ -220,19 +224,10 @@ def main() -> int:
             _pc = load_predictor_config()
             _rc = load_runtime_config()
             resolved = args.model_name or _pc.default_model or _rc.model_name
-        weighted: dict[str, float] = {}
-        for metric in ("avg_hit_at_k", "avg_recall_at_k", "avg_precision_at_k", "avg_mrr", "avg_novelty", "avg_diversity"):
-            num, den = 0.0, 0
-            for tr in topic_results.values():
-                bt = tr.get("backtest")
-                if not bt:
-                    continue
-                s = bt.get("summary", {})
-                w = s.get("windows", 0)
-                if w > 0:
-                    num += float(s.get(metric, 0)) * w
-                    den += w
-            weighted[metric] = round(num / den, 4) if den else 0.0
+        weighted = weighted_mean_over_topics(
+            topic_results,
+            ("avg_hit_at_k", "avg_recall_at_k", "avg_precision_at_k", "avg_mrr", "avg_novelty", "avg_diversity"),
+        )
         payload = {
             "mode": "domain_backtest",
             "strategy": args.strategy,
@@ -339,20 +334,10 @@ def main() -> int:
                     print(f"[checkpoint WARN] could not write checkpoint: {_ckpt_e}", flush=True)
 
     # Weighted-average summary across topics
-    weighted_metrics: dict[str, float] = {}
-    for metric in ("avg_hit_at_k", "avg_recall_at_k", "avg_precision_at_k", "avg_mrr", "avg_novelty", "avg_diversity"):
-        numerator = 0.0
-        denominator = 0
-        for tid, tr in topic_results.items():
-            bt = tr.get("backtest")
-            if not bt:
-                continue
-            s = bt.get("summary", {})
-            w = s.get("windows", 0)
-            if w > 0:
-                numerator += float(s.get(metric, 0)) * w
-                denominator += w
-        weighted_metrics[metric] = round(numerator / denominator, 4) if denominator else 0.0
+    weighted_metrics = weighted_mean_over_topics(
+        topic_results,
+        ("avg_hit_at_k", "avg_recall_at_k", "avg_precision_at_k", "avg_mrr", "avg_novelty", "avg_diversity"),
+    )
 
     print(f"\n{'='*60}")
     print(f"Aggregate: {total_windows} windows across {len(topics)} topics")

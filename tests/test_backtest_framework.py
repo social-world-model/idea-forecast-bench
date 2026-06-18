@@ -120,3 +120,25 @@ def test_backtest_returns_windows_and_summary(tmp_path: Path) -> None:
 def test_create_strategy_invalid_name() -> None:
     with pytest.raises(ValueError):
         create_strategy("not_a_strategy")
+
+
+def test_weighted_mean_over_topics_window_weighted_and_tolerant() -> None:
+    from live_idea_bench.backtest import weighted_mean_over_topics
+
+    topic_results = {
+        "a": {"backtest": {"summary": {"windows": 2, "avg_hit_at_k": 0.5}}},
+        "b": {"backtest": {"summary": {"windows": 6, "avg_hit_at_k": 1.0}}},
+        "c": {"backtest": None},  # skipped
+    }
+    out = weighted_mean_over_topics(topic_results, ("avg_hit_at_k", "avg_absent"))
+    assert out["avg_hit_at_k"] == pytest.approx((0.5 * 2 + 1.0 * 6) / 8)
+    assert out["avg_absent"] == 0.0  # missing keys treated as 0, no KeyError
+    assert weighted_mean_over_topics({}, ("avg_hit_at_k",))["avg_hit_at_k"] == 0.0
+
+
+def test_to_yymm_roundtrip() -> None:
+    from live_idea_bench.papers import to_yymm
+
+    assert to_yymm("2024-01") == "2401"
+    assert to_yymm("2025-12") == "2512"
+    assert to_yymm("2401") == "2401"  # already-YYMM input is normalized

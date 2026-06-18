@@ -43,11 +43,14 @@ import openai
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from live_idea_bench.backtest import split_train_future_by_cutoff  # noqa: E402
+from live_idea_bench.backtest import (  # noqa: E402
+    split_train_future_by_cutoff,
+    weighted_mean_over_topics,
+)
 from live_idea_bench.config import load_topics  # noqa: E402
 from live_idea_bench.models import IdeaPrediction  # noqa: E402
 from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
-from live_idea_bench.similarity import paper_text, _sanitize  # noqa: E402
+from live_idea_bench.similarity import idea_text, paper_text, _sanitize  # noqa: E402
 from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -363,14 +366,8 @@ class RunState:
 # Embedding helpers
 # ---------------------------------------------------------------------------
 def _pred_text(p: IdeaPrediction) -> str:
-    parts = [p.title]
-    if p.rationale:
-        parts.append(p.rationale)
-    if p.approach:
-        parts.append(p.approach)
-    if p.key_terms:
-        parts.append(", ".join(p.key_terms))
-    return _sanitize(" ".join(parts))
+    # Canonical prediction serialization shared with the benchmark matcher.
+    return _sanitize(idea_text(p))
 
 
 def _pred_hash(text: str) -> str:
@@ -1016,24 +1013,13 @@ def main() -> int:
 
 
 def _compute_aggregate(topic_results: dict) -> dict[str, float]:
-    metrics = (
-        "avg_hit_at_k", "avg_mrr", "avg_precision_at_k",
-        "avg_soft_score", "avg_cluster_coverage", "avg_novelty",
+    return weighted_mean_over_topics(
+        topic_results,
+        (
+            "avg_hit_at_k", "avg_mrr", "avg_precision_at_k",
+            "avg_soft_score", "avg_cluster_coverage", "avg_novelty",
+        ),
     )
-    out: dict[str, float] = {}
-    for metric in metrics:
-        num, den = 0.0, 0
-        for tr in topic_results.values():
-            bt = tr.get("backtest")
-            if not bt:
-                continue
-            s = bt["summary"]
-            w = s.get("windows", 0)
-            if w > 0:
-                num += s[metric] * w
-                den += w
-        out[metric] = round(num / den, 4) if den else 0.0
-    return out
 
 
 def _write_output(
