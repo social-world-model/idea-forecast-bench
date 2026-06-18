@@ -408,7 +408,7 @@ def generate_predictions(
     temperature: float | None = None,
     top_p: float | None = None,
     seed: int | None = None,
-    fallback_to_heuristic: bool = True,
+    fallback_to_heuristic: bool = False,
     reasoning_effort: str | None = None,
 ) -> list[IdeaPrediction]:
     if not train_papers or top_k <= 0:
