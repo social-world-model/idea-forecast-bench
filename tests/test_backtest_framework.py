@@ -112,6 +112,9 @@ def test_backtest_returns_windows_and_summary(tmp_path: Path) -> None:
     assert "avg_mrr" in summary
     assert "cutoff_date" in windows[0]
     assert "future_end_date" in windows[0]
+    # train_paper_ids must be serialized for the citation/coauthor validity checks.
+    assert "train_paper_ids" in windows[0]
+    assert isinstance(windows[0]["train_paper_ids"], list)
 
 
 def test_create_strategy_invalid_name() -> None:

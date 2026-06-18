@@ -1,12 +1,22 @@
 #!/usr/bin/env python3
-"""Data leakage check: compare hit@k across time-since-cutoff buckets.
+"""Data leakage check: compare match rate across within-window lead-time buckets.
 
-If a model has seen future data, papers published shortly after the cutoff
-should have systematically higher hit rates than papers published much later.
+Each backtest window spans [cutoff, cutoff+horizon]. For every TOP-K prediction
+the canonical output records a per-match ``lead_time`` fraction in [0, 1]:
+0.0 = matched paper published right at the cutoff, 1.0 = published at the far
+edge of the horizon. If a model leaked future knowledge, predictions matching
+papers published *close* to the cutoff (small lead_time) should hit at a higher
+rate than predictions matching papers published *late* in the horizon.
+
+This reads the CANONICAL backtest schema produced by run_domain_backtest.py:
+  topic_results[*].backtest.windows[*].matches[*] -> {is_match, lead_time, ...}
+The old version bucketed by (future_end_month - cutoff_month), which equals the
+fixed horizon for every window, collapsing everything into one bucket so the
+Mann-Whitney test never fired.
 
 Usage:
-    python examples/analysis_leakage.py \\
-        --input memory_prompting_llmjudge.json predictor_llm_llmjudge.json \\
+    python examples/analysis/analysis_leakage.py \\
+        --input memory_prompting_backtest.json predictor_llm_backtest.json \\
         --output leakage_report.json
 """
 from __future__ import annotations
@@ -17,77 +27,102 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+# lead_time is a fraction of the horizon in [0, 1]. These thirds correspond,
+# for a 3-month horizon, to papers published in roughly month 1 / 2 / 3.
+_EARLY_MAX = 1.0 / 3.0
+_MID_MAX = 2.0 / 3.0
+_BUCKET_ORDER = ["early", "mid", "late"]
 
-def _month_diff(a: str, b: str) -> int:
-    """Return (b - a) in months. Both strings are 'YYYY-MM'."""
-    ay, am = int(a[:4]), int(a[5:7])
-    by, bm = int(b[:4]), int(b[5:7])
-    return (by - ay) * 12 + (bm - am)
 
-
-def _bucket(gap_months: int) -> str:
-    if gap_months <= 3:
-        return "1-3mo"
-    elif gap_months <= 6:
-        return "4-6mo"
-    else:
-        return "7+mo"
+def _bucket(lead_time: float) -> str:
+    if lead_time <= _EARLY_MAX:
+        return "early"
+    if lead_time <= _MID_MAX:
+        return "mid"
+    return "late"
 
 
 def _analyze(data: dict, label: str) -> dict:
+    # One observation per TOP-K prediction across all windows/topics: 1.0 if it
+    # matched a paper in its lead-time bucket, 0.0 otherwise. Bucketing is by the
+    # canonical per-match ``lead_time`` fraction, NOT by the (constant) horizon.
     bucket_hits: dict[str, list[float]] = defaultdict(list)
+    saw_matches_key = False
 
-    for topic_id, tr in data.get("topic_results", {}).items():
+    for _topic_id, tr in data.get("topic_results", {}).items():
         bt = tr.get("backtest")
         if not bt:
             continue
         for w in bt.get("windows", []):
-            cutoff = w.get("cutoff_month", "")
-            future_end = w.get("future_end_month", "")
-            if not cutoff or not future_end:
+            matches = w.get("matches")
+            if matches is None:
                 continue
-            gap = _month_diff(cutoff, future_end)
-            bucket = _bucket(gap)
-            hit = w["evaluation"].get("hit_at_k", 0.0)
-            bucket_hits[bucket].append(hit)
+            saw_matches_key = True
+            for m in matches:
+                lead_time = float(m.get("lead_time", 0.0))
+                is_match = bool(m.get("is_match", False))
+                bucket_hits[_bucket(lead_time)].append(1.0 if is_match else 0.0)
+
+    if not saw_matches_key:
+        raise SystemExit(
+            f"[leakage] '{label}': no window carried a 'matches' list. This "
+            "script reads the CANONICAL backtest schema (run_domain_backtest.py "
+            "output with per-match lead_time), not llm_judge_eval output."
+        )
 
     result: dict = {"label": label, "buckets": {}}
-    for b in ["1-3mo", "4-6mo", "7+mo"]:
+    for b in _BUCKET_ORDER:
         vals = bucket_hits.get(b, [])
         result["buckets"][b] = {
-            "n_windows": len(vals),
-            "hit_at_k_mean": round(sum(vals) / len(vals), 4) if vals else None,
+            "n_predictions": len(vals),
+            "match_rate": round(sum(vals) / len(vals), 4) if vals else None,
         }
 
-    # Simple leakage indicator: is hit rate for 1-3mo significantly higher?
-    early = bucket_hits.get("1-3mo", [])
-    late  = bucket_hits.get("7+mo",  [])
+    # Leakage indicator: do early (near-cutoff) matches hit more than late ones?
+    early = bucket_hits.get("early", [])
+    late = bucket_hits.get("late", [])
+    non_empty = [b for b in _BUCKET_ORDER if bucket_hits.get(b)]
+    if len(non_empty) < 2:
+        # Guard against the original silent no-op: a single populated bucket
+        # cannot support a comparison, so say so loudly instead of pretending.
+        result["leakage_test"] = {
+            "test": "skipped",
+            "reason": (
+                f"only {len(non_empty)} lead-time bucket(s) populated "
+                f"({non_empty}); need >=2 to compare. Check the horizon / data."
+            ),
+        }
+        return result
+
     if early and late:
         try:
             from scipy.stats import mannwhitneyu
+
             stat, pval = mannwhitneyu(early, late, alternative="greater")
             result["leakage_test"] = {
-                "test": "Mann-Whitney U (early > late)",
+                "test": "Mann-Whitney U (early match-rate > late)",
                 "statistic": round(float(stat), 4),
                 "p_value": round(float(pval), 4),
                 "significant_at_05": float(pval) < 0.05,
             }
         except ImportError:
             early_mean = sum(early) / len(early)
-            late_mean  = sum(late)  / len(late)
+            late_mean = sum(late) / len(late)
             result["leakage_test"] = {
                 "test": "mean comparison (scipy not available)",
                 "early_mean": round(early_mean, 4),
-                "late_mean":  round(late_mean, 4),
-                "delta":      round(early_mean - late_mean, 4),
+                "late_mean": round(late_mean, 4),
+                "delta": round(early_mean - late_mean, 4),
             }
     return result
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input",  nargs="+", required=True,
-                        help="llmjudge output JSON files")
+    parser.add_argument(
+        "--input", nargs="+", required=True,
+        help="canonical run_domain_backtest.py output JSON files",
+    )
     parser.add_argument("--output", default="leakage_report.json")
     args = parser.parse_args()
 
@@ -99,10 +134,9 @@ def main() -> int:
         results.append(r)
         print(f"\n=== {label} ===")
         for b, v in r["buckets"].items():
-            print(f"  {b}: n={v['n_windows']}  hit@k={v['hit_at_k_mean']}")
+            print(f"  {b}: n={v['n_predictions']}  match_rate={v['match_rate']}")
         if "leakage_test" in r:
-            lt = r["leakage_test"]
-            print(f"  Leakage test: {lt}")
+            print(f"  Leakage test: {r['leakage_test']}")
 
     Path(args.output).write_text(
         json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8"

@@ -66,6 +66,10 @@ class BacktestWindowResult:
     predictions: List[IdeaPrediction]
     evaluation: EvaluationResult
     matches: List["PredictionMatchDetail"] = field(default_factory=list)
+    # arXiv IDs of the training-window papers (date <= cutoff). Stored so the
+    # citation/co-author validity analyses can target the train community
+    # instead of a global candidate union. train_papers (the int count) is kept.
+    train_paper_ids: List[str] = field(default_factory=list)
 
 
 @dataclass

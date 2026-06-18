@@ -735,6 +735,9 @@ def _process_window(
         "cutoff_date":     window_data.get("cutoff_date", ""),
         "future_end_month": window_data.get("future_end_month", ""),
         "train_papers":    window_data.get("train_papers", 0),
+        # arXiv IDs of the training-window papers, so the citation/coauthor
+        # validity analyses can target the train community (not a global union).
+        "train_paper_ids": list(train_paper_ids),
         "future_papers":   len(future_papers),
         "evaluation": {
             "hit_at_k":         round(hit_at_k, 4),

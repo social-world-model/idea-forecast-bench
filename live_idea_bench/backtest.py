@@ -278,6 +278,7 @@ def run_backtest(
                 future_end_date=future_end_date,
                 train_papers=len(train),
                 future_papers=len(future),
+                train_paper_ids=[paper.paper_id for paper in train],
                 predictions=predictions,
                 evaluation=scored.evaluation,
                 matches=scored.matches,
