@@ -8,7 +8,7 @@ Usage:
         --output logs/baselines/keyword_trend_voyage.json
 
 Loads predictions from a previous run_domain_backtest.py output, batch-embeds
-all relevant papers and predictions with voyage-4-large (one API call per 128
+all relevant papers and predictions with voyage-3-large (one API call per 128
 texts), then computes cosine similarity locally — no per-pair API calls.
 """
 from __future__ import annotations
@@ -40,7 +40,7 @@ from live_idea_bench.similarity import idea_text, paper_text, _sanitize  # noqa:
 from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
 
 VOYAGE_BASE_URL = "https://api.voyageai.com/v1"
-DEFAULT_MODEL   = "voyage-4-large"
+DEFAULT_MODEL   = "voyage-3-large"
 DEFAULT_THRESHOLD = 0.80
 BATCH_SIZE   = 128
 MAX_CHARS    = 4000

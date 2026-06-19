@@ -57,7 +57,7 @@ from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
 # Constants
 # ---------------------------------------------------------------------------
 VOYAGE_BASE_URL  = "https://api.voyageai.com/v1"
-EMBED_MODEL      = "voyage-4-large"
+EMBED_MODEL      = "voyage-3-large"
 DEFAULT_JUDGE    = "gpt-4.1-mini"
 DEFAULT_TOP_R    = 10
 DEFAULT_CLUSTER_K = 5

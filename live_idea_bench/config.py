@@ -110,7 +110,7 @@ class EmbeddingConfig:
     # URL is used. There is NO local/lexical fallback: the embedding engine
     # requires VOYAGE_API_KEY and fails loud if the call cannot be made.
     embedding_base_url: str = ""
-    api_model: str = "voyage-4-large"
+    api_model: str = "voyage-3-large"
 
 
 @dataclass

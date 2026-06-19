@@ -16,7 +16,7 @@ embedding:
   # (https://api.voyageai.com/v1). Embedding is Voyage-only: requires
   # VOYAGE_API_KEY and fails loud — no local/lexical fallback.
   embedding_base_url: ""
-  api_model: "voyage-4-large"
+  api_model: "voyage-3-large"
 
 topics:
 
