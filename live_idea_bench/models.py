@@ -41,6 +41,11 @@ class EvaluationResult:
     diversity: float
     matched_prediction_ranks: List[int]
     matched_paper_ids: List[str]
+    # coverage_at_k = matched / len(future_papers): fraction of ALL future papers
+    # hit by the top-k predictions. Upper-bounded by min(k, |future|)/|future|, so
+    # it is NOT a true recall when |future| > k (it cannot reach 1.0). Kept for
+    # backward comparability with earlier runs that stored this under recall_at_k.
+    coverage_at_k: float = 0.0
     lead_time: float = 0.0
     duplicate_rate: float = 0.0
     # Popularity-weighted metrics (opt-in; 0.0 when no popularity_weights provided)
@@ -61,6 +66,10 @@ class BacktestWindowResult:
     predictions: List[IdeaPrediction]
     evaluation: EvaluationResult
     matches: List["PredictionMatchDetail"] = field(default_factory=list)
+    # arXiv IDs of the training-window papers (date <= cutoff). Stored so the
+    # citation/co-author validity analyses can target the train community
+    # instead of a global candidate union. train_papers (the int count) is kept.
+    train_paper_ids: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -69,6 +78,11 @@ class MatchResult:
     reasoning: Optional[str] = None
     engine_name: str = "hybrid"
     paper_id: Optional[str] = None
+    # Hybrid-engine component scores, populated only by the hybrid branch of
+    # compute_similarity. is_match (hybrid) reads these so the match decision
+    # uses the exact same numbers as the sort score (no recompute / no drift).
+    semantic: Optional[float] = None
+    keyword: Optional[float] = None
 
 
 @dataclass

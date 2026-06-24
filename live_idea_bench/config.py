@@ -106,14 +106,11 @@ class EmbeddingConfig:
     introduction_weight: float = 0.2
     method_weight: float = 0.2
     conclusion_weight: float = 0.2
-    # OpenAI-compatible embedding endpoint.
-    # "http://localhost:8000/v1" → local vllm/sglang deployment
-    # "https://some-provider.com/v1" → third-party API
-    # "" (empty, default) → official OpenAI API
-    # If not configured at all, falls back to local sentence-transformers
-    # with a warning.
+    # Voyage embedding endpoint (OpenAI-compatible). Empty → the Voyage default
+    # URL is used. There is NO local/lexical fallback: the embedding engine
+    # requires VOYAGE_API_KEY and fails loud if the call cannot be made.
     embedding_base_url: str = ""
-    api_model: str = "text-embedding-3-small"
+    api_model: str = "voyage-3-large"
 
 
 @dataclass
@@ -132,7 +129,6 @@ class PredictorConfig:
     default_temperature: float | None = None
     max_context_papers: int = 20
     parser: str = "json"
-    fallback_mode: str = "heuristic"
 
 
 @dataclass
@@ -327,7 +323,6 @@ def load_predictor_config(
         ),
         max_context_papers=int(payload.get("max_context_papers", 20)),
         parser=str(payload.get("parser", "json")).strip() or "json",
-        fallback_mode=str(payload.get("fallback_mode", "heuristic")).strip() or "heuristic",
     )
 
 
@@ -341,6 +336,7 @@ def load_similarity_config(
         engine=str(payload.get("engine", "hybrid")).strip() or "hybrid",
         semantic_threshold=float(payload.get("semantic_threshold", 0.5)),
         keyword_threshold=float(payload.get("keyword_threshold", 0.3)),
+        embedding_threshold=float(payload.get("embedding_threshold", 0.4)),
         llm_match_threshold=float(payload.get("llm_match_threshold", 0.7)),
         system_prompt=str(payload.get("system_prompt", "")).strip(),
         user_prompt_template=str(payload.get("user_prompt_template", "")).strip(),

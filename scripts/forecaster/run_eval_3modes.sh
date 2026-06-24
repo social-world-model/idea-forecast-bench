@@ -55,7 +55,7 @@ done
 for mode in "${MODES[@]}"; do
   echo "--- eval $mode ---"
   JUDGE_BASE_URL="http://localhost:${JUDGE_PORT}/v1" JUDGE_API_KEY=EMPTY \
-  "$PYTHON_BIN" examples/benchmark/llm_judge_eval.py \
+  "$PYTHON_BIN" examples/live-idea-bench/llm_judge_eval.py \
     --input-json "outputs/predict_${mode}_${TS}.json" \
     --papers-dir data/csml/raw_markdown \
     --output "outputs/llm_judge_${mode}9b_${TS}.json" \

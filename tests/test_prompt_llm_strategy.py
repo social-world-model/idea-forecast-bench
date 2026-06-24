@@ -80,6 +80,35 @@ def test_predictor_llm_strategy_generate_happy_path(monkeypatch) -> None:
     assert generate_kwargs["temperature"] is None
     assert generate_kwargs["cutoff_month"] == "2024-06"
     assert generate_kwargs["top_k"] == 2
+    # fail-loud: the strategy must disable the heuristic template fallback.
+    assert generate_kwargs["fallback_to_heuristic"] is False
+
+
+def test_generate_predictions_fails_empty_not_heuristic_by_default(monkeypatch) -> None:
+    """When the LLM never yields parseable ideas, generate_predictions must
+    default to returning [] (fail-loud) — NOT silently fabricate lexical
+    template ideas via the heuristic generator."""
+    import live_idea_bench.predictor as predictor_module
+
+    def _empty_llm(**_kwargs):  # type: ignore[no-untyped-def]
+        raise RuntimeError("predictor LLM output could not be parsed")
+
+    heuristic_called = {"hit": False}
+
+    def _track_heuristic(*_args, **_kwargs):  # type: ignore[no-untyped-def]
+        heuristic_called["hit"] = True
+        return [IdeaPrediction(rank=1, title="lexical", rationale="r")]
+
+    monkeypatch.setattr(predictor_module, "_llm_predictions", _empty_llm)
+    monkeypatch.setattr(predictor_module, "_heuristic_predictions", _track_heuristic)
+
+    predictions = predictor_module.generate_predictions(
+        train_papers=[_paper("p1", "2024-04", "Title A", ["a"])],
+        cutoff_month="2024-06",
+        top_k=3,
+    )
+    assert predictions == []
+    assert heuristic_called["hit"] is False
 
 
 def test_predictor_llm_strategy_generate_malformed_output_returns_empty(monkeypatch) -> None:

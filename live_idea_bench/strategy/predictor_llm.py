@@ -30,6 +30,9 @@ class PredictorLLMStrategy(IdeaStrategy):
         cutoff_month: str,
         top_k: int,
     ) -> List[IdeaPrediction]:
+        # fail-loud: on LLM failure return an empty prediction set rather than
+        # fabricating lexical-template ideas (consistent with the no-fallback
+        # embedding policy). The benchmark records the empty/partial set.
         return generate_predictions(
             train_papers=train_papers,
             cutoff_month=cutoff_month,
@@ -38,4 +41,5 @@ class PredictorLLMStrategy(IdeaStrategy):
             predictor_config_path=self.predictor_config,
             temperature=self.temperature,
             reasoning_effort=self.reasoning_effort,
+            fallback_to_heuristic=False,
         )

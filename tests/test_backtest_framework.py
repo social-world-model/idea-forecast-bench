@@ -1,10 +1,26 @@
+import dataclasses
 from pathlib import Path
 from typing import List
 
 import pytest
 
+import live_idea_bench.similarity as similarity_module
 from live_idea_bench.backtest import BacktestConfig, backtest, evaluate, generate, load_papers_from_markdown
+from live_idea_bench.config import load_similarity_config
 from live_idea_bench.strategy import create_strategy
+
+
+@pytest.fixture(autouse=True)
+def _force_hybrid_engine(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the backtest tests hermetic: the shipped default engine is
+    ``embedding`` (Voyage, needs a key), but these tests run offline and only
+    exercise the rolling/metric machinery, so pin the matcher to ``hybrid``."""
+
+    def _hybrid_config(*args, **kwargs):
+        cfg = load_similarity_config(*args, **kwargs)
+        return dataclasses.replace(cfg, engine="hybrid")
+
+    monkeypatch.setattr(similarity_module, "load_similarity_config", _hybrid_config)
 
 
 def _setup_mock_data(tmp_path: Path) -> Path:
@@ -72,6 +88,7 @@ def test_evaluate_at_cutoff_metric_bounds(tmp_path: Path) -> None:
     )
     assert 0.0 <= result.hit_at_k <= 1.0
     assert 0.0 <= result.recall_at_k <= 1.0
+    assert 0.0 <= result.coverage_at_k <= 1.0
     assert 0.0 <= result.precision_at_k <= 1.0
     assert 0.0 <= result.mrr <= 1.0
     assert 0.0 <= result.novelty <= 1.0
@@ -95,8 +112,33 @@ def test_backtest_returns_windows_and_summary(tmp_path: Path) -> None:
     assert "avg_mrr" in summary
     assert "cutoff_date" in windows[0]
     assert "future_end_date" in windows[0]
+    # train_paper_ids must be serialized for the citation/coauthor validity checks.
+    assert "train_paper_ids" in windows[0]
+    assert isinstance(windows[0]["train_paper_ids"], list)
 
 
 def test_create_strategy_invalid_name() -> None:
     with pytest.raises(ValueError):
         create_strategy("not_a_strategy")
+
+
+def test_weighted_mean_over_topics_window_weighted_and_tolerant() -> None:
+    from live_idea_bench.backtest import weighted_mean_over_topics
+
+    topic_results = {
+        "a": {"backtest": {"summary": {"windows": 2, "avg_hit_at_k": 0.5}}},
+        "b": {"backtest": {"summary": {"windows": 6, "avg_hit_at_k": 1.0}}},
+        "c": {"backtest": None},  # skipped
+    }
+    out = weighted_mean_over_topics(topic_results, ("avg_hit_at_k", "avg_absent"))
+    assert out["avg_hit_at_k"] == pytest.approx((0.5 * 2 + 1.0 * 6) / 8)
+    assert out["avg_absent"] == 0.0  # missing keys treated as 0, no KeyError
+    assert weighted_mean_over_topics({}, ("avg_hit_at_k",))["avg_hit_at_k"] == 0.0
+
+
+def test_to_yymm_roundtrip() -> None:
+    from live_idea_bench.papers import to_yymm
+
+    assert to_yymm("2024-01") == "2401"
+    assert to_yymm("2025-12") == "2512"
+    assert to_yymm("2401") == "2401"  # already-YYMM input is normalized

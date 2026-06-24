@@ -8,7 +8,7 @@ Usage:
         --output logs/baselines/keyword_trend_voyage.json
 
 Loads predictions from a previous run_domain_backtest.py output, batch-embeds
-all relevant papers and predictions with voyage-4-large (one API call per 128
+all relevant papers and predictions with voyage-3-large (one API call per 128
 texts), then computes cosine similarity locally — no per-pair API calls.
 """
 from __future__ import annotations
@@ -29,15 +29,18 @@ import openai
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from live_idea_bench.backtest import split_train_future_by_cutoff  # noqa: E402
+from live_idea_bench.backtest import (  # noqa: E402
+    split_train_future_by_cutoff,
+    weighted_mean_over_topics,
+)
 from live_idea_bench.config import load_topics  # noqa: E402
 from live_idea_bench.models import IdeaPrediction  # noqa: E402
 from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
-from live_idea_bench.similarity import paper_text, _sanitize  # noqa: E402
+from live_idea_bench.similarity import idea_text, paper_text, _sanitize  # noqa: E402
 from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
 
 VOYAGE_BASE_URL = "https://api.voyageai.com/v1"
-DEFAULT_MODEL   = "voyage-4-large"
+DEFAULT_MODEL   = "voyage-3-large"
 DEFAULT_THRESHOLD = 0.80
 BATCH_SIZE   = 128
 MAX_CHARS    = 4000
@@ -77,12 +80,10 @@ def _cosine(a: list[float], b: list[float]) -> float:
 
 
 def _pred_text(p: IdeaPrediction) -> str:
-    parts = [p.title]
-    if p.rationale:
-        parts.append(p.rationale)
-    if p.key_terms:
-        parts.append(", ".join(p.key_terms))
-    return _sanitize(" ".join(parts))
+    # Canonical prediction serialization (title + rationale + approach + terms),
+    # shared with the benchmark matcher so the embedded text matches what the
+    # library scored. The previous local copy dropped `approach`.
+    return _sanitize(idea_text(p))
 
 
 def _load_predictions(raw: list[dict]) -> list[IdeaPrediction]:
@@ -288,19 +289,10 @@ def main() -> int:
             total_windows += bt["summary"]["windows"]
 
     # Weighted aggregate
-    weighted: dict[str, float] = {}
-    for metric in ("avg_hit_at_k", "avg_recall_at_k", "avg_precision_at_k", "avg_mrr"):
-        num, den = 0.0, 0
-        for tr in topic_results.values():
-            bt = tr.get("backtest")
-            if not bt:
-                continue
-            s = bt["summary"]
-            w = s.get("windows", 0)
-            if w > 0:
-                num += s[metric] * w
-                den += w
-        weighted[metric] = round(num / den, 4) if den else 0.0
+    weighted = weighted_mean_over_topics(
+        topic_results,
+        ("avg_hit_at_k", "avg_recall_at_k", "avg_precision_at_k", "avg_mrr"),
+    )
 
     print(f"\n{'='*60}")
     print(f"Aggregate: {total_windows} windows | model={args.model} | threshold={args.threshold}")

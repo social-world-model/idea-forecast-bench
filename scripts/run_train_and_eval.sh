@@ -187,7 +187,7 @@ if [ -f "$TRAINED_EVAL" ]; then
   echo ""; echo "===== Phase 4: Eval (trained) — SKIPPED (exists) ====="
 else
   echo ""; echo "===== Phase 4: Eval (trained forecaster) ====="
-  python3 examples/benchmark/run_domain_backtest.py \
+  python3 examples/live-idea-bench/run_domain_backtest.py \
     --strategy forecaster \
     --model-name "$BASE_MODEL_ID" \
     --prior-checkpoint "$PRIOR_CKPT" \
@@ -206,7 +206,7 @@ if [ -n "${VOYAGE_API_KEY:-}" ] && [ -f "$TRAINED_EVAL" ]; then
     echo ""; echo "===== Voyage Re-eval — SKIPPED (exists) ====="
   else
     echo ""; echo "===== Voyage Re-eval (threshold=0.80) ====="
-    VOYAGE_API_KEY="$VOYAGE_API_KEY" python3 examples/benchmark/reeval_voyage.py \
+    VOYAGE_API_KEY="$VOYAGE_API_KEY" python3 examples/live-idea-bench/reeval_voyage.py \
       --input-json "$TRAINED_EVAL" \
       --papers-dir "$PAPERS" \
       --output "$VOYAGE_EVAL" \

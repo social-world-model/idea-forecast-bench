@@ -14,8 +14,11 @@ def test_load_predictor_config_happy_path() -> None:
 
 def test_load_similarity_config_happy_path() -> None:
     cfg = load_similarity_config("similarity.yaml")
-    assert cfg.engine == "heuristic"
+    # Default engine is the Voyage embedding matcher (see similarity.yaml).
+    assert cfg.engine == "embedding"
     assert cfg.semantic_threshold == pytest.approx(0.5)
+    # embedding_threshold must be read from YAML, not silently defaulted.
+    assert cfg.embedding_threshold == pytest.approx(0.4)
     assert "similarity" in cfg.system_prompt.lower()
 
 

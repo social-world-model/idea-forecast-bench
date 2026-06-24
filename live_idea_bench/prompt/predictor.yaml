@@ -2,7 +2,6 @@ default_model: gpt-4o
 default_temperature: 0.4
 max_context_papers: 20
 parser: json
-fallback_mode: heuristic
 system_prompt: |
   You are a research forecasting assistant.
   Generate concrete, next-stage ideas that can be tested in the near term.

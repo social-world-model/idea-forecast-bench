@@ -48,7 +48,11 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from live_idea_bench.backtest import BacktestConfig, backtest  # noqa: E402
+from live_idea_bench.backtest import (  # noqa: E402
+    BacktestConfig,
+    backtest,
+    weighted_mean_over_topics,
+)
 from live_idea_bench.config import load_topics  # noqa: E402
 from live_idea_bench.llm import (  # noqa: E402
     batch_clear,
@@ -408,22 +412,13 @@ def _save_output(
         rc = load_runtime_config()
         resolved = args.model_name or pc.default_model or rc.model_name
 
-    weighted: dict = {}
-    for metric in (
-        "avg_hit_at_k", "avg_recall_at_k", "avg_precision_at_k",
-        "avg_mrr", "avg_novelty", "avg_diversity",
-    ):
-        num, den = 0.0, 0
-        for tr in topic_results.values():
-            bt = tr.get("backtest")
-            if not bt:
-                continue
-            s = bt.get("summary", {})
-            w = s.get("windows", 0)
-            if w > 0:
-                num += float(s.get(metric, 0)) * w
-                den += w
-        weighted[metric] = round(num / den, 4) if den else 0.0
+    weighted = weighted_mean_over_topics(
+        topic_results,
+        (
+            "avg_hit_at_k", "avg_recall_at_k", "avg_precision_at_k",
+            "avg_mrr", "avg_novelty", "avg_diversity",
+        ),
+    )
 
     payload = {
         "mode": "domain_backtest",

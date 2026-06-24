@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import shlex
 import subprocess
+import sys
 import time
 from dataclasses import asdict, dataclass, replace as _dc_replace
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from tqdm import tqdm
 
@@ -22,6 +23,7 @@ from live_idea_bench.papers import (
     month_to_index,
     normalize_date,
     normalize_month,
+    to_yymm,
 )
 from live_idea_bench.popularity import enrich_papers_with_popularity
 from live_idea_bench.similarity import evaluate_predictions, score_prediction_list
@@ -169,6 +171,7 @@ def _summarize_windows(windows: list[BacktestWindowResult]) -> dict[str, float]:
             "windows": 0,
             "avg_hit_at_k": 0.0,
             "avg_recall_at_k": 0.0,
+            "avg_coverage_at_k": 0.0,
             "avg_precision_at_k": 0.0,
             "avg_mrr": 0.0,
             "avg_novelty": 0.0,
@@ -188,6 +191,7 @@ def _summarize_windows(windows: list[BacktestWindowResult]) -> dict[str, float]:
         "windows": len(windows),
         "avg_hit_at_k": _avg("hit_at_k"),
         "avg_recall_at_k": _avg("recall_at_k"),
+        "avg_coverage_at_k": _avg("coverage_at_k"),
         "avg_precision_at_k": _avg("precision_at_k"),
         "avg_mrr": _avg("mrr"),
         "avg_novelty": _avg("novelty"),
@@ -199,6 +203,35 @@ def _summarize_windows(windows: list[BacktestWindowResult]) -> dict[str, float]:
         "avg_weighted_mrr": _avg("weighted_mrr"),
         "avg_popularity_recall_at_k": _avg("popularity_recall_at_k"),
     }
+
+
+def weighted_mean_over_topics(
+    topic_results: Dict[str, Any],
+    metrics: Iterable[str],
+) -> Dict[str, float]:
+    """Window-count-weighted mean of each named summary metric across topics.
+
+    ``topic_results`` maps topic_id -> {"backtest": {"summary": {...}}, ...}.
+    For each metric the value is sum(summary[metric] * windows) / sum(windows)
+    over all topics that have a non-empty backtest, rounded to 4 dp; 0.0 when
+    no windows exist. Missing metric keys are treated as 0 so callers with
+    different metric lists (novelty/diversity vs soft_score/cluster_coverage)
+    can share this helper without KeyError on absent keys.
+    """
+    out: Dict[str, float] = {}
+    for metric in metrics:
+        num, den = 0.0, 0
+        for tr in topic_results.values():
+            bt = tr.get("backtest")
+            if not bt:
+                continue
+            summary = bt.get("summary", {})
+            windows = summary.get("windows", 0)
+            if windows > 0:
+                num += float(summary.get(metric, 0)) * windows
+                den += windows
+        out[metric] = round(num / den, 4) if den else 0.0
+    return out
 
 
 def run_backtest(
@@ -239,11 +272,10 @@ def run_backtest(
 
         predictions = strategy.generate(train_papers=train, cutoff_month=cutoff, top_k=config.top_k)
         if len(predictions) < config.top_k:
-            import sys as _sys
             print(
                 f"[backtest WARNING] cutoff={cutoff}: got {len(predictions)}/{config.top_k} predictions "
                 f"(strategy={strategy.__class__.__name__})",
-                file=_sys.stderr, flush=True,
+                file=sys.stderr, flush=True,
             )
         popularity_weights = None
         if config.popularity_cache_path:
@@ -276,6 +308,7 @@ def run_backtest(
                 future_end_date=future_end_date,
                 train_papers=len(train),
                 future_papers=len(future),
+                train_paper_ids=[paper.paper_id for paper in train],
                 predictions=predictions,
                 evaluation=scored.evaluation,
                 matches=scored.matches,
@@ -344,9 +377,6 @@ def _index_to_month(value: int) -> str:
     return f"{year:04d}-{month:02d}"
 
 
-def _to_yymm(month: str) -> str:
-    year_str, month_str = month.split("-", maxsplit=1)
-    return f"{int(year_str) % 100:02d}{month_str}"
 
 
 def generate_windows(
@@ -439,8 +469,8 @@ class BacktestRunner:
             "window_index": window.index,
             "window_start": window.start,
             "window_end": window.end,
-            "window_start_yymm": _to_yymm(window.start),
-            "window_end_yymm": _to_yymm(window.end),
+            "window_start_yymm": to_yymm(window.start),
+            "window_end_yymm": to_yymm(window.end),
             "artifacts_dir": str(self.artifacts_dir),
             "window_dir": str(window_dir),
         }

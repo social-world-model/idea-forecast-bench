@@ -1,9 +1,27 @@
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
-from live_idea_bench.models import IdeaPrediction, PaperRecord
-from live_idea_bench.similarity import evaluate_predictions, score_prediction_list
+import live_idea_bench.similarity as similarity_module
+from live_idea_bench.config import SimilarityConfig, load_similarity_config
+from live_idea_bench.models import IdeaPrediction, MatchResult, PaperRecord
+from live_idea_bench.similarity import compute_similarity, evaluate_predictions, is_match, score_prediction_list
+
+
+@pytest.fixture(autouse=True)
+def _force_hybrid_engine(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests exercise the lexical matcher and metric math, not the
+    embedding engine. The shipped default is ``engine: embedding`` (Voyage,
+    needs a key), so pin the engine to ``hybrid`` to keep them hermetic and
+    key-free regardless of the default in similarity.yaml."""
+
+    def _hybrid_config(*args, **kwargs):
+        cfg = load_similarity_config(*args, **kwargs)
+        return dataclasses.replace(cfg, engine="hybrid")
+
+    monkeypatch.setattr(similarity_module, "load_similarity_config", _hybrid_config)
 
 
 def _paper(
@@ -67,6 +85,79 @@ def test_evaluate_predictions_uses_one_to_one_matching_for_duplicate_future_hits
     assert result.mrr == 1.0
     assert result.duplicate_rate == 0.5
     assert 0.0 < result.lead_time <= 1.0
+
+
+def test_llm_judge_raises_on_unparseable_score(monkeypatch) -> None:
+    """The LLM-judge eval path must fail loud on a score it cannot parse rather
+    than silently scoring 0.0 (which marks a real match as a miss). It must also
+    parse bold/lowercase/leading-dot score formats."""
+    from live_idea_bench.config import Config
+
+    monkeypatch.setattr(similarity_module, "create_client", lambda m: (object(), m))
+    cfg = SimilarityConfig(engine="llm", llm_match_threshold=0.7,
+                           system_prompt="s", user_prompt_template="{idea}|{context}")
+    rt = Config()
+
+    def _reply(text):
+        monkeypatch.setattr(similarity_module, "get_response_from_llm", lambda **_k: (text, []))
+        return similarity_module._llm_similarity("idea", "ctx", cfg, rt)
+
+    # Broadened parsing: bold / lowercase / leading dot all succeed.
+    assert _reply("**Score:** 0.9\nReasoning: x").score == pytest.approx(0.9)
+    assert _reply("score: 0.42").score == pytest.approx(0.42)
+    assert _reply("Score: .8").score == pytest.approx(0.8)
+    # No parseable score -> raise, not silent 0.0.
+    with pytest.raises(ValueError, match="no parseable"):
+        _reply("I think these are quite related but won't give a number.")
+
+
+def test_hybrid_is_match_reuses_match_result_components() -> None:
+    """is_match (hybrid) must read MatchResult.semantic/keyword rather than
+    recompute, so the match decision and the sort score use the same numbers.
+    A result whose keyword>=threshold but semantic<threshold must still match,
+    and a result missing the components must fall back to recompute."""
+    cfg = SimilarityConfig(engine="hybrid", semantic_threshold=0.5, keyword_threshold=0.3)
+
+    # compute_similarity populates semantic+keyword on the result.
+    res = compute_similarity("graph retrieval agents", "graph retrieval agents for planning", cfg)
+    assert res.semantic is not None and res.keyword is not None
+
+    # Stored-component path: keyword above threshold, semantic below -> match.
+    forced = MatchResult(score=0.9, engine_name="hybrid", semantic=0.1, keyword=0.4)
+    assert is_match(forced, "x", "y", cfg) is True
+    # Both below threshold -> no match, even with a high (irrelevant) score.
+    forced_low = MatchResult(score=0.9, engine_name="hybrid", semantic=0.1, keyword=0.1)
+    assert is_match(forced_low, "x", "y", cfg) is False
+    # Missing components -> recompute fallback still works (identical strings match).
+    legacy = MatchResult(score=0.0, engine_name="hybrid")
+    assert is_match(legacy, "same text here", "same text here", cfg) is True
+
+
+def test_coverage_and_recall_diverge_when_future_exceeds_k() -> None:
+    """coverage_at_k uses |future| as denominator; recall_at_k uses min(k,|future|).
+    With |future| > k they must diverge: coverage is depressed by the large pool,
+    recall is a true [0,1] hit-rate over what the top-k could reach."""
+    train = [_paper("train-1", "2024-01", "Old", "old text", published_date="2024-01-01")]
+    # 4 future papers, only 1 lexically matchable; k=1.
+    future = [
+        _paper("f-1", "2024-02", "Neural retrieval", "neural retrieval methods", published_date="2024-02-15"),
+        _paper("f-2", "2024-02", "Protein folding", "protein folding simulation", published_date="2024-02-16"),
+        _paper("f-3", "2024-02", "Climate model", "climate ocean modeling", published_date="2024-02-17"),
+        _paper("f-4", "2024-02", "Robotics grasp", "robot grasp planning", published_date="2024-02-18"),
+    ]
+    predictions = [_prediction(1, "Neural retrieval", "neural retrieval methods")]
+
+    scored = score_prediction_list(
+        predictions=predictions, train_papers=train, future_papers=future, k=1,
+        cutoff_date="2024-02-01", future_end_date="2024-03-31",
+    )
+    ev = scored.evaluation
+    assert ev.matched_paper_ids == ["f-1"]
+    assert ev.coverage_at_k == pytest.approx(1 / 4)        # matched / |future|
+    assert ev.recall_at_k == pytest.approx(1 / 1)          # matched / min(k, |future|)
+    assert ev.coverage_at_k < ev.recall_at_k
+    assert 0.0 <= ev.coverage_at_k <= 1.0
+    assert 0.0 <= ev.recall_at_k <= 1.0
 
 
 def test_weighted_metrics_without_popularity_weights_default_to_zero() -> None:

@@ -161,6 +161,13 @@ def add_months(month: str, delta: int) -> str:
     return index_to_month(month_to_index(month) + delta)
 
 
+def to_yymm(month: str) -> str:
+    """Convert a YYYY-MM month string to the 4-char arXiv YYMM form (e.g. 2401)."""
+    normalized = normalize_month(month)
+    year_str, month_str = normalized.split("-", maxsplit=1)
+    return f"{int(year_str) % 100:02d}{month_str}"
+
+
 def month_start_date(month: str) -> str:
     normalized = normalize_month(month)
     return f"{normalized}-01"

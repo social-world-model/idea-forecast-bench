@@ -43,11 +43,14 @@ import openai
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from live_idea_bench.backtest import split_train_future_by_cutoff  # noqa: E402
+from live_idea_bench.backtest import (  # noqa: E402
+    split_train_future_by_cutoff,
+    weighted_mean_over_topics,
+)
 from live_idea_bench.config import load_topics  # noqa: E402
 from live_idea_bench.models import IdeaPrediction  # noqa: E402
 from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
-from live_idea_bench.similarity import paper_text, _sanitize  # noqa: E402
+from live_idea_bench.similarity import idea_text, paper_text, _sanitize  # noqa: E402
 from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -90,7 +93,7 @@ SPECIFICITY -- Does the paper realize the specific novelty described in the pred
   1 = Prediction is generic enough to loosely fit, or paper addresses adjacent specifics
   0 = Prediction is keyword-only or meta-analytic, or paper entirely ignores the predicted novelty
 
-A prediction MATCHES if (PROBLEM_MATCH + METHOD_MATCH >= 5) AND (SPECIFICITY >= 2).
+Score each dimension independently on its own merits; do not infer or optimize toward any overall verdict.
 Do NOT score based on shared topic or keyword overlap alone.
 
 Here are four reference examples ordered from clear non-match to clear match:
@@ -181,7 +184,23 @@ Abstract: {paper_abstract}
 Score this prediction-paper pair on PROBLEM_MATCH, METHOD_MATCH, and SPECIFICITY (0-3 each), then give REASONING.
 """
 
-SCORE_RE = re.compile(r"(PROBLEM_MATCH|METHOD_MATCH|SPECIFICITY)\s*:\s*([0123])", re.IGNORECASE)
+# Decode config for the judge. Lifted to module constants so they can be folded
+# into the judge fingerprint (a state file produced with thinking on / a smaller
+# max_tokens is NOT comparable to one without).
+JUDGE_TEMPERATURE = 0.0
+JUDGE_MAX_TOKENS = 256
+
+# Anchored to start-of-line + word boundary so a stray "...: 3" inside REASONING
+# prose (or an injected line from the abstract) is not captured, and so
+# "METHOD_MATCH: 2/3" is not misread as 2. The three score lines are required;
+# a partial parse is treated as a failure (see _call_judge), never silently
+# backfilled to 1.
+SCORE_RE = re.compile(
+    r"^\s*(PROBLEM_MATCH|METHOD_MATCH|SPECIFICITY)\s*:\s*([0-3])(?![0-9/.])",
+    re.IGNORECASE | re.MULTILINE,
+)
+_REQUIRED_DIMS = ("PROBLEM_MATCH", "METHOD_MATCH", "SPECIFICITY")
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------
@@ -190,8 +209,16 @@ SCORE_RE = re.compile(r"(PROBLEM_MATCH|METHOD_MATCH|SPECIFICITY)\s*:\s*([0123])"
 class RunState:
     """Persists embeddings and judge decisions across runs."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(
+        self,
+        path: Path,
+        *,
+        judge_fingerprint: str,
+        embed_fingerprint: str,
+    ) -> None:
         self.path = path
+        self.judge_fp = judge_fingerprint
+        self.embed_fp = embed_fingerprint
         # Split-flush: embeddings live in a sidecar file because they grow to
         # ~99% of state bytes but only change during the embedding phase. The
         # main state (decisions + windows, ~30MB) flushes every 30s; the
@@ -214,6 +241,37 @@ class RunState:
         self._data.setdefault("judge_decisions", {})
         self._data.setdefault("completed_windows", [])
         self._data.setdefault("window_outputs", {})
+        # Fingerprint guard: a resumed state file must have been produced under
+        # the same judge config (model + rubric) and embedding model, otherwise
+        # cached decisions / vectors are stale and incomparable. Fail loud
+        # rather than silently serving them. A fresh file (no fingerprints key)
+        # is stamped with the current fingerprints.
+        stored_fp = self._data.get("fingerprints")
+        if stored_fp is None:
+            self._data["fingerprints"] = {
+                "judge": self.judge_fp,
+                "embed": self.embed_fp,
+            }
+        else:
+            mismatches = []
+            if stored_fp.get("judge") != self.judge_fp:
+                mismatches.append(
+                    f"judge ({stored_fp.get('judge')} != {self.judge_fp}): "
+                    f"--judge-model or JUDGE_SYSTEM changed"
+                )
+            if stored_fp.get("embed") != self.embed_fp:
+                mismatches.append(
+                    f"embed ({stored_fp.get('embed')} != {self.embed_fp}): "
+                    f"--embed-model changed"
+                )
+            if mismatches:
+                raise ValueError(
+                    "State file "
+                    f"{path} was produced under a different config:\n  - "
+                    + "\n  - ".join(mismatches)
+                    + "\nUse a fresh --state-file (or delete the existing one) "
+                    "so decisions/embeddings are not silently reused."
+                )
         # If a sidecar exists, merge its embeddings in (authoritative when
         # both sources have the same key — sidecar is written more recently).
         if self.embeddings_path.exists():
@@ -224,30 +282,30 @@ class RunState:
     # ---- embeddings --------------------------------------------------------
     def get_paper_vec(self, paper_id: str) -> list[float] | None:
         with self._lock:
-            return self._data["paper_embeddings"].get(paper_id)
+            return self._data["paper_embeddings"].get(f"{self.embed_fp}__{paper_id}")
 
     def set_paper_vecs(self, id_vec_pairs: list[tuple[str, list[float]]]) -> None:
         with self._lock:
             for paper_id, vec in id_vec_pairs:
-                self._data["paper_embeddings"][paper_id] = vec
+                self._data["paper_embeddings"][f"{self.embed_fp}__{paper_id}"] = vec
             self._flush_embeddings()
 
     def get_pred_vec(self, pred_hash: str) -> list[float] | None:
         with self._lock:
-            return self._data["pred_embeddings"].get(pred_hash)
+            return self._data["pred_embeddings"].get(f"{self.embed_fp}__{pred_hash}")
 
     def set_pred_vec(self, pred_hash: str, vec: list[float]) -> None:
         with self._lock:
-            self._data["pred_embeddings"][pred_hash] = vec
+            self._data["pred_embeddings"][f"{self.embed_fp}__{pred_hash}"] = vec
             self._flush_embeddings()
 
     # ---- judge decisions ---------------------------------------------------
     def get_decision(self, pred_hash: str, paper_id: str) -> dict | None:
-        key = f"{pred_hash}__{paper_id}"
+        key = f"{self.judge_fp}__{pred_hash}__{paper_id}"
         return self._data["judge_decisions"].get(key)
 
     def set_decision(self, pred_hash: str, paper_id: str, decision: dict) -> None:
-        key = f"{pred_hash}__{paper_id}"
+        key = f"{self.judge_fp}__{pred_hash}__{paper_id}"
         with self._lock:
             self._data["judge_decisions"][key] = decision
             self._flush()
@@ -284,6 +342,7 @@ class RunState:
             return
         main = {
             "version": self._data.get("version", 2),
+            "fingerprints": self._data.get("fingerprints", {}),
             "judge_decisions": self._data["judge_decisions"],
             "completed_windows": self._data["completed_windows"],
             "window_outputs": self._data["window_outputs"],
@@ -323,18 +382,47 @@ class RunState:
 # Embedding helpers
 # ---------------------------------------------------------------------------
 def _pred_text(p: IdeaPrediction) -> str:
-    parts = [p.title]
-    if p.rationale:
-        parts.append(p.rationale)
-    if p.approach:
-        parts.append(p.approach)
-    if p.key_terms:
-        parts.append(", ".join(p.key_terms))
-    return _sanitize(" ".join(parts))
+    # Canonical prediction serialization shared with the benchmark matcher.
+    return _sanitize(idea_text(p))
 
 
 def _pred_hash(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()[:16]
+
+
+def _judge_enable_thinking(judge_model: str) -> bool:
+    """Whether the judge call disables 'thinking' mode for this model.
+
+    Mirrors the per-model branch in _call_judge (Qwen judges run with thinking
+    disabled). Folded into the fingerprint because a state file produced with
+    thinking on is not comparable to one with it off."""
+    return not ("qwen" in judge_model.lower())
+
+
+def _judge_fingerprint(judge_model: str) -> str:
+    """12-hex fingerprint of the judge config that affects decisions.
+
+    Namespaces the judge-decision cache so that changing --judge-model, the
+    JUDGE_SYSTEM rubric, or the decode config (max_tokens / temperature /
+    thinking) does not silently reuse decisions made under the old config when
+    an existing state file is resumed."""
+    h = hashlib.sha256()
+    h.update(judge_model.encode())
+    h.update(b"\x00")
+    h.update(JUDGE_SYSTEM.encode())
+    h.update(b"\x00")
+    # Decode config: different max_tokens / temperature / thinking produce
+    # non-comparable decisions, so they must change the cache namespace.
+    h.update(repr((JUDGE_MAX_TOKENS, JUDGE_TEMPERATURE, _judge_enable_thinking(judge_model))).encode())
+    return h.hexdigest()[:12]
+
+
+def _embed_fingerprint(embed_model: str) -> str:
+    """12-hex fingerprint of the embedding model.
+
+    Namespaces the prediction/paper vector caches so a state file embedded with
+    one model is never mixed with vectors from another (incomparable geometry)."""
+    return hashlib.sha256(embed_model.encode()).hexdigest()[:12]
 
 
 def _embed_batch(
@@ -442,6 +530,7 @@ def _call_judge(
         paper_title   = paper_title,
         paper_abstract= paper_abstract[:800],
     )
+    last_problem = ""
     for attempt in range(MAX_JUDGE_RETRY):
         try:
             create_kwargs = dict(
@@ -450,27 +539,49 @@ def _call_judge(
                     {"role": "system", "content": JUDGE_SYSTEM},
                     {"role": "user",   "content": user_msg},
                 ],
-                temperature=0.0,
-                max_tokens=256,
+                temperature=JUDGE_TEMPERATURE,
+                max_tokens=JUDGE_MAX_TOKENS,
             )
             # Qwen3.5 judges default to "thinking" mode, which burns the token
-            # budget on <think> tokens before the PROBLEM_MATCH/... lines and
-            # makes SCORE_RE find nothing -> everything scores as no-match.
+            # budget on <think> tokens before the PROBLEM_MATCH/... lines.
             if "qwen" in judge_model.lower():
                 create_kwargs["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
             resp = judge_client.chat.completions.create(**create_kwargs)
             content = resp.choices[0].message.content or ""
+            # Strip any chain-of-thought block before parsing so a reasoning
+            # model's <think> ... </think> can't shadow the real score lines.
+            parse_target = _THINK_RE.sub("", content)
             scores: dict[str, int] = {}
-            for m in SCORE_RE.finditer(content):
+            for m in SCORE_RE.finditer(parse_target):
                 scores[m.group(1).upper()] = int(m.group(2))
 
-            problem = scores.get("PROBLEM_MATCH", 1)
-            method  = scores.get("METHOD_MATCH",  1)
-            specificity = scores.get("SPECIFICITY", 1)
+            missing = [d for d in _REQUIRED_DIMS if d not in scores]
+            if missing:
+                # Do NOT silently backfill to 1 — that would mark a truncated or
+                # malformed response as a real low score. Treat as a parse
+                # failure and retry; only after retries give up explicitly.
+                last_problem = f"missing dims {missing}"
+                if attempt < MAX_JUDGE_RETRY - 1:
+                    print(f"\n  [judge parse-retry {attempt+1}] {last_problem}", flush=True)
+                    continue
+                print(f"\n  [judge PARSE-FAILED] {last_problem} — recording parse_failed", flush=True)
+                return {
+                    "match": False,
+                    "problem_score": None,
+                    "method_score": None,
+                    "specificity_score": None,
+                    "reasoning": "",
+                    "raw": content,
+                    "parse_failed": True,
+                }
+
+            problem = scores["PROBLEM_MATCH"]
+            method  = scores["METHOD_MATCH"]
+            specificity = scores["SPECIFICITY"]
             match_val = (problem + method >= MATCH_PM_THRESHOLD) and (specificity >= MATCH_S_THRESHOLD)
 
             reasoning = ""
-            for line in content.splitlines():
+            for line in parse_target.splitlines():
                 if line.strip().upper().startswith("REASONING"):
                     reasoning = line.split(":", 1)[-1].strip()
                     break
@@ -482,6 +593,7 @@ def _call_judge(
                 "specificity_score": specificity,
                 "reasoning": reasoning,
                 "raw": content,
+                "parse_failed": False,
             }
         except Exception as exc:
             wait = 2 ** attempt
@@ -497,14 +609,16 @@ def _call_judge(
                     "specificity_score": 0,
                     "reasoning": f"error: {exc}",
                     "raw": "",
+                    "parse_failed": True,
                 }
     return {
         "match": False,
-        "problem_score": 0,
-        "method_score": 0,
-        "specificity_score": 0,
+        "problem_score": None,
+        "method_score": None,
+        "specificity_score": None,
         "reasoning": "max retries exhausted",
         "raw": "",
+        "parse_failed": True,
     }
 
 
@@ -549,6 +663,8 @@ def _process_window(
     per_pred_out: list[dict] = []
     used_paper_ids: set[str] = set()
     pred_vecs_for_novelty: list[tuple[list[float], bool]] = []  # (vec, is_match)
+    judge_calls = 0
+    judge_parse_failures = 0
 
     for pred in predictions:
         pt = _sanitize(_pred_text(pred))[:MAX_CHARS]
@@ -593,6 +709,9 @@ def _process_window(
             for fut in as_completed(futs):
                 pid, score, decision = fut.result()
                 judge_results[pid] = (score, decision)
+                judge_calls += 1
+                if decision.get("parse_failed"):
+                    judge_parse_failures += 1
 
         # Find first non-duplicate match (process in rank order)
         matched_paper_id = None
@@ -648,13 +767,15 @@ def _process_window(
     mrr       = 1.0 / matched_ranks[0] if matched_ranks else 0.0
     precision = len(matched_ranks) / top_k if top_k else 0.0
 
-    # Soft score: average (problem + method + specificity) / 9 across matched predictions
+    # Soft score: average (problem + method + specificity) / 9 across matched
+    # predictions. A matched prediction always has integer scores (parse_failed
+    # decisions are match=False), but coerce None->0 defensively.
     matched_preds = [p for p in per_pred_out if p["is_match"]]
     soft_score = 0.0
     if matched_preds:
         soft_score = round(
             sum(
-                (p.get("problem_score", 0) + p.get("method_score", 0) + p.get("specificity_score", 0)) / 9.0
+                ((p.get("problem_score") or 0) + (p.get("method_score") or 0) + (p.get("specificity_score") or 0)) / 9.0
                 for p in matched_preds
             ) / len(matched_preds),
             4,
@@ -674,7 +795,16 @@ def _process_window(
         "cutoff_date":     window_data.get("cutoff_date", ""),
         "future_end_month": window_data.get("future_end_month", ""),
         "train_papers":    window_data.get("train_papers", 0),
+        # arXiv IDs of the training-window papers, so the citation/coauthor
+        # validity analyses can target the train community (not a global union).
+        "train_paper_ids": list(train_paper_ids),
         "future_papers":   len(future_papers),
+        # Telemetry: fraction of judge calls whose score lines could not be
+        # parsed (and were recorded as parse_failed rather than silently scored).
+        # A high value invalidates the window — surfaced so it isn't hidden.
+        "judge_calls":         judge_calls,
+        "judge_parse_failures": judge_parse_failures,
+        "judge_parse_failure_rate": round(judge_parse_failures / judge_calls, 4) if judge_calls else 0.0,
         "evaluation": {
             "hit_at_k":         round(hit_at_k, 4),
             "mrr":              round(mrr, 4),
@@ -838,39 +968,18 @@ def main() -> int:
     parser.add_argument("--topics-config", default=None)
     args = parser.parse_args()
 
-    # Embedding backend selection:
-    #   * If VOYAGE_API_KEY is set, keep the original Voyage path for parity
-    #     with historical eval runs.
-    #   * Otherwise fall back to a local sentence-transformer (BGE) exposed
-    #     through a small OpenAI-shim so the rest of the pipeline is
-    #     unchanged. This lets the eval and the GRPO reward path share the
-    #     same embedding geometry.
+    # Embedding backend: Voyage-only, no fallback. A missing key fails loud
+    # rather than silently swapping in a different embedding geometry (which
+    # would make scores incomparable to Voyage-embedded runs).
     voyage_key = os.environ.get("VOYAGE_API_KEY")
-    if voyage_key:
-        embed_client = openai.OpenAI(api_key=voyage_key, base_url=VOYAGE_BASE_URL)
-    else:
-        from forecaster.embedding import get_default_embedder
-
-        class _LocalEmbedShim:
-            """Mimics `client.embeddings.create(...)` against a local model."""
-
-            def __init__(self) -> None:
-                self._embedder = get_default_embedder()
-                self.embeddings = self  # so client.embeddings.create works
-
-            def create(self, *, model: str, input):
-                texts = input if isinstance(input, list) else [input]
-                vecs = self._embedder.embed(texts)
-                class _Item:
-                    def __init__(self, idx, embedding):
-                        self.index = idx
-                        self.embedding = embedding
-                class _Resp:
-                    def __init__(self, items):
-                        self.data = items
-                return _Resp([_Item(i, v) for i, v in enumerate(vecs)])
-
-        embed_client = _LocalEmbedShim()  # type: ignore[assignment]
+    if not voyage_key:
+        print(
+            "ERROR: Set VOYAGE_API_KEY — the judge embeds with Voyage and has no "
+            "local fallback (mixing embedding models corrupts score comparability).",
+            file=sys.stderr,
+        )
+        return 1
+    embed_client = openai.OpenAI(api_key=voyage_key, base_url=VOYAGE_BASE_URL)
 
     # Judge client: prefer env-var endpoint so we can target a local
     # vLLM OpenAI-compatible server when OPENAI_API_KEY is absent.
@@ -894,7 +1003,9 @@ def main() -> int:
     state_path = Path(args.state_file) if args.state_file else out_path.with_suffix(".state.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    state = RunState(state_path)
+    judge_fp = _judge_fingerprint(args.judge_model)
+    embed_fp = _embed_fingerprint(args.embed_model)
+    state = RunState(state_path, judge_fingerprint=judge_fp, embed_fingerprint=embed_fp)
     atexit.register(state.force_flush)
 
     saved = json.loads(Path(args.input_json).read_text(encoding="utf-8"))
@@ -971,24 +1082,13 @@ def main() -> int:
 
 
 def _compute_aggregate(topic_results: dict) -> dict[str, float]:
-    metrics = (
-        "avg_hit_at_k", "avg_mrr", "avg_precision_at_k",
-        "avg_soft_score", "avg_cluster_coverage", "avg_novelty",
+    return weighted_mean_over_topics(
+        topic_results,
+        (
+            "avg_hit_at_k", "avg_mrr", "avg_precision_at_k",
+            "avg_soft_score", "avg_cluster_coverage", "avg_novelty",
+        ),
     )
-    out: dict[str, float] = {}
-    for metric in metrics:
-        num, den = 0.0, 0
-        for tr in topic_results.values():
-            bt = tr.get("backtest")
-            if not bt:
-                continue
-            s = bt["summary"]
-            w = s.get("windows", 0)
-            if w > 0:
-                num += s[metric] * w
-                den += w
-        out[metric] = round(num / den, 4) if den else 0.0
-    return out
 
 
 def _write_output(

@@ -23,17 +23,11 @@ from live_idea_bench.papers import (
     get_paper_published_date,
 )
 
-try:
-    from sentence_transformers import SentenceTransformer
-    from sklearn.metrics.pairwise import cosine_similarity
-
-    _EMBEDDING_AVAILABLE = True
-except ImportError:  # pragma: no cover
-    _EMBEDDING_AVAILABLE = False
-    logger.warning(
-        "sentence-transformers not installed; embedding engine will fall back to hybrid. "
-        "Run `pip install sentence-transformers` to enable real semantic similarity."
-    )
+# Embedding engine is Voyage-only by design — no local/hybrid fallback. Mixing
+# Voyage cosine, local cosine, and lexical hybrid under one threshold within a
+# run destroys cross-run comparability, so a misconfigured/unavailable Voyage
+# endpoint must fail loud rather than silently degrade.
+VOYAGE_BASE_URL = "https://api.voyageai.com/v1"
 
 
 def _tokenize(text: str) -> list[str]:
@@ -104,11 +98,18 @@ def _llm_similarity(
         reasoning_effort=reasoning_effort,
     )
 
-    score = 0.0
     reasoning = raw.strip()
-    score_match = re.search(r"Score:\s*([0-1](?:\.\d+)?)", raw)
-    if score_match:
-        score = float(score_match.group(1))
+    # Fail loud on a parse miss: silently scoring 0.0 marks a genuinely
+    # high-similarity pair as a non-match and corrupts the benchmark
+    # metrics. No-fallback policy — surface the malformed judge output.
+    score_match = re.search(r"(?im)\**\s*score\s*\**\s*:?\s*\**\s*(0?\.\d+|[01](?:\.\d+)?)", raw)
+    if not score_match:
+        raise ValueError(
+            f"LLM judge ({resolved_model}) returned no parseable 'Score:' line; "
+            f"refusing to silently score 0.0 (would mark a real match as a miss). "
+            f"Raw response: {reasoning[:500]!r}"
+        )
+    score = float(score_match.group(1))
     return MatchResult(
         score=max(0.0, min(1.0, score)),
         reasoning=reasoning,
@@ -116,41 +117,42 @@ def _llm_similarity(
     )
 
 
-_EMBEDDING_MODEL: SentenceTransformer | None = None
-
-
 def _sanitize(text: str) -> str:
     """Remove null bytes and non-printable control characters that break JSON serialization."""
     return "".join(ch for ch in text if ch == "\n" or ch == "\t" or (ord(ch) >= 32 and ord(ch) != 127))
 
 
-def _api_embed_pair(idea: str, context: str, runtime_config: Config) -> MatchResult | None:
-    """Try embedding via OpenAI-compatible API with retry + exponential backoff. Returns None on failure."""
+def _embedding_similarity(
+    idea: str,
+    context: str,
+    runtime_config: Config,
+) -> MatchResult:
+    """Score an (idea, context) pair via the Voyage embedding API.
+
+    Voyage-only by design: there is no local or lexical fallback. A missing key
+    or an unreachable endpoint raises rather than silently degrading to a weaker
+    engine (which would corrupt cross-run score comparability).
+    """
     import math
     import os
     import time
+
     import openai
 
-    base_url = runtime_config.embedding.embedding_base_url or None
-    _is_voyage = base_url and ("voyageai.com" in base_url or "voyageai" in base_url.lower())
-    if _is_voyage:
-        api_key = os.environ.get("VOYAGE_API_KEY") or os.environ.get("OPENAI_API_KEY") or "no-key"
-        endpoint = "voyage"
-    elif base_url and ("localhost" in base_url or "127.0.0.1" in base_url):
-        api_key = os.environ.get("OPENAI_API_KEY") or "no-key"
-        endpoint = "local"
-    elif base_url:
-        api_key = os.environ.get("OPENAI_API_KEY") or "no-key"
-        endpoint = "third-party"
-    else:
-        api_key = os.environ.get("OPENAI_API_KEY") or "no-key"
-        endpoint = "openai"
+    api_key = os.environ.get("VOYAGE_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "Embedding engine requires VOYAGE_API_KEY (Voyage-only, no fallback). "
+            "Set it, or switch the engine in similarity.yaml."
+        )
+    base_url = runtime_config.embedding.embedding_base_url or VOYAGE_BASE_URL
     model = runtime_config.embedding.api_model
     client = openai.OpenAI(api_key=api_key, base_url=base_url)
-    truncated_context = _sanitize(context[: runtime_config.embedding.max_context_chars])
     clean_idea = _sanitize(idea)
+    truncated_context = _sanitize(context[: runtime_config.embedding.max_context_chars])
 
     max_retries = 7
+    last_exc: Exception | None = None
     for attempt in range(max_retries):
         try:
             resp = client.embeddings.create(model=model, input=[clean_idea, truncated_context])
@@ -159,50 +161,19 @@ def _api_embed_pair(idea: str, context: str, runtime_config: Config) -> MatchRes
             na = math.sqrt(sum(x * x for x in a))
             nb = math.sqrt(sum(x * x for x in b))
             score = max(0.0, min(1.0, dot / (na * nb))) if na and nb else 0.0
-            return MatchResult(score=score, engine_name=f"embedding-api:{endpoint}:{model}")
-        except Exception as e:
+            return MatchResult(score=score, engine_name=f"embedding:voyage:{model}")
+        except Exception as exc:  # noqa: BLE001 — retried below, re-raised on exhaustion
+            last_exc = exc
             wait = 2 ** attempt  # 1, 2, 4, 8, 16, 32, 64 seconds
             if attempt < max_retries - 1:
-                logger.warning(f"Embedding API call failed (attempt {attempt+1}/{max_retries}, {endpoint}), retrying in {wait}s. Error: {e}")
+                logger.warning(
+                    f"Voyage embedding call failed (attempt {attempt+1}/{max_retries}), retrying in {wait}s. Error: {exc}"
+                )
                 time.sleep(wait)
-            else:
-                logger.warning(f"Embedding API call failed after {max_retries} attempts ({endpoint}), falling back to local. Error: {e}")
-    return None
-
-
-def _embedding_similarity(
-    idea: str,
-    context: str,
-    runtime_config: Config,
-) -> MatchResult:
-    # If embedding_base_url is explicitly configured (even as ""), try the API first.
-    if runtime_config.embedding.embedding_base_url is not None:
-        result = _api_embed_pair(idea, context, runtime_config)
-        if result is not None:
-            return result
-        # API failed — fall through to local model below
-
-    # Local sentence-transformers fallback
-    global _EMBEDDING_MODEL
-    if not _EMBEDDING_AVAILABLE:
-        logger.warning(
-            "No embedding API configured and sentence-transformers not installed; "
-            "falling back to hybrid text similarity. "
-            "Configure embedding_base_url in config.yaml or install sentence-transformers."
-        )
-        return MatchResult(score=_hybrid_similarity(idea, context), engine_name="hybrid-fallback")
-
-    if _EMBEDDING_MODEL is None:
-        _EMBEDDING_MODEL = SentenceTransformer(runtime_config.embedding.model_name)
-
-    idea_vec = _EMBEDDING_MODEL.encode(idea, convert_to_numpy=True, normalize_embeddings=True)
-    context_vec = _EMBEDDING_MODEL.encode(
-        context[: runtime_config.embedding.max_context_chars],
-        convert_to_numpy=True,
-        normalize_embeddings=True,
+    raise RuntimeError(
+        f"Voyage embedding call failed after {max_retries} attempts; refusing to fall back "
+        f"to a weaker engine (would corrupt comparability). Last error: {last_exc}"
     )
-    score = float(cosine_similarity(idea_vec.reshape(1, -1), context_vec.reshape(1, -1))[0, 0])
-    return MatchResult(score=max(0.0, min(1.0, score)), engine_name=f"embedding:local:{runtime_config.embedding.model_name}")
 
 
 def compute_similarity(
@@ -229,6 +200,8 @@ def compute_similarity(
         score=max(semantic, keyword),
         reasoning=f"hybrid semantic={semantic:.3f}, keyword={keyword:.3f}",
         engine_name="hybrid",
+        semantic=semantic,
+        keyword=keyword,
     )
 
 
@@ -243,9 +216,11 @@ def is_match(
         return result.score >= similarity_config.llm_match_threshold
     if engine == "embedding":
         return result.score >= similarity_config.embedding_threshold
-    # hybrid (default)
-    semantic = _hybrid_similarity(idea, context)
-    keyword = _keyword_overlap(idea, context)
+    # hybrid (default) — reuse the components computed in compute_similarity so
+    # the match decision and the sort score (max(semantic, keyword)) are derived
+    # from the exact same numbers; no recompute, no greedy-selection drift.
+    semantic = result.semantic if result.semantic is not None else _hybrid_similarity(idea, context)
+    keyword = result.keyword if result.keyword is not None else _keyword_overlap(idea, context)
     return (
         semantic >= similarity_config.semantic_threshold
         or keyword >= similarity_config.keyword_threshold
@@ -398,11 +373,19 @@ def score_prediction_list(
         )
 
     hit_at_k = 1.0 if matched_ranks else 0.0
-    recall_at_k = (len(matched_paper_ids) / len(future_papers)) if future_papers else 0.0
+    # coverage_at_k: matched / |future_papers| (old recall_at_k formula). Bounded
+    # above by min(k, |future|)/|future|; cannot reach 1.0 when |future| > k.
+    coverage_at_k = (len(matched_paper_ids) / len(future_papers)) if future_papers else 0.0
+    # recall_at_k: true recall — matched / min(k, |future_papers|). Denominator is
+    # the max number of distinct future papers the top-k predictions could match.
+    recall_denominator = min(k, len(future_papers))
+    recall_at_k = (len(matched_paper_ids) / recall_denominator) if recall_denominator > 0 else 0.0
     precision_at_k = (len(matched_paper_ids) / max(1, min(k, len(top_preds)))) if top_preds else 0.0
     mrr = (1.0 / min(matched_ranks)) if matched_ranks else 0.0
-    novelty = _novelty_at_k(top_preds, [paper_text(paper) for paper in train_papers], k)
-    diversity = _diversity_at_k(top_preds, k)
+    # Novelty/diversity are intentionally lexical and engine-independent (the
+    # match engine above may be Voyage/LLM; these stay free + deterministic).
+    novelty = lexical_novelty_at_k(top_preds, [paper_text(paper) for paper in train_papers], k)
+    diversity = lexical_diversity_at_k(top_preds, k)
     lead_time = sum(matched_lead_times) / len(matched_lead_times) if matched_lead_times else 0.0
     duplicate_rate = (duplicate_blocked / len(top_preds)) if top_preds else 0.0
 
@@ -433,6 +416,7 @@ def score_prediction_list(
         evaluation=EvaluationResult(
             hit_at_k=round(hit_at_k, 4),
             recall_at_k=round(recall_at_k, 4),
+            coverage_at_k=round(coverage_at_k, 4),
             precision_at_k=round(precision_at_k, 4),
             mrr=round(mrr, 4),
             novelty=round(novelty, 4),
@@ -453,37 +437,21 @@ def score_prediction_list(
     )
 
 
-def best_paper_match(
-    prediction: IdeaPrediction,
-    future_papers: Iterable[PaperRecord],
-    similarity_config: SimilarityConfig | None = None,
-    runtime_config: Config | None = None,
-    *,
-    model_name: str | None = None,
-) -> MatchResult | None:
-    resolved_similarity = similarity_config or load_similarity_config()
-    resolved_runtime = runtime_config or load_runtime_config()
-    pred_text = idea_text(prediction)
-    best: MatchResult | None = None
-    for paper in _prefilter_future_papers(pred_text, future_papers, candidate_limit=None):
-        result = compute_similarity(
-            pred_text,
-            paper_text(paper),
-            resolved_similarity,
-            resolved_runtime,
-            model_name=model_name,
-        )
-        if best is None or result.score > best.score:
-            from dataclasses import replace as _dc_replace
-            best = _dc_replace(result, paper_id=paper.paper_id)
-    return best
-
-
-def _novelty_at_k(
+def lexical_novelty_at_k(
     predictions: list[IdeaPrediction],
     reference_pool: list[str],
     k: int,
 ) -> float:
+    """Novelty@k as 1 - max lexical similarity to the train pool, averaged over the top-k.
+
+    INTENTIONALLY ENGINE-INDEPENDENT: this metric always uses the lexical
+    ``_hybrid_similarity`` (token Jaccard + SequenceMatcher) and does NOT honor
+    ``similarity_config.engine``. Match selection may use Voyage embedding or the
+    LLM judge, but novelty stays lexical because routing it through the
+    configured engine would cost O(k * |train|) embedding/LLM calls per window
+    for a secondary diagnostic. Keep this lexical so it is free, deterministic,
+    and key-free regardless of the match engine.
+    """
     if not predictions or k <= 0:
         return 0.0
     if not reference_pool:
@@ -496,7 +464,14 @@ def _novelty_at_k(
     return sum(scores) / len(scores)
 
 
-def _diversity_at_k(predictions: list[IdeaPrediction], k: int) -> float:
+def lexical_diversity_at_k(predictions: list[IdeaPrediction], k: int) -> float:
+    """Diversity@k as mean pairwise (1 - lexical similarity) over the top-k predictions.
+
+    INTENTIONALLY ENGINE-INDEPENDENT (see ``lexical_novelty_at_k``): always uses
+    the lexical ``_hybrid_similarity`` and ignores ``similarity_config.engine``.
+    Routing the O(k^2) pairwise comparisons through Voyage/LLM would make every
+    window pay for a diagnostic metric, so this stays lexical and key-free.
+    """
     top_preds = predictions[:k]
     if len(top_preds) < 2:
         return 0.0
@@ -520,6 +495,7 @@ def evaluate_predictions(
     future_end_date: str | None = None,
     candidate_limit: int | None = None,
     popularity_weights: dict[str, float] | None = None,
+    reasoning_effort: str | None = None,
 ) -> EvaluationResult:
     return score_prediction_list(
         predictions=predictions,
@@ -533,6 +509,7 @@ def evaluate_predictions(
         future_end_date=future_end_date,
         candidate_limit=candidate_limit,
         popularity_weights=popularity_weights,
+        reasoning_effort=reasoning_effort,
     ).evaluation
 
 
