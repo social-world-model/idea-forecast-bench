@@ -50,6 +50,6 @@ print("vllm", vllm.__version__, "transformers", transformers.__version__, "trl",
 PYEOF
 
 echo
-echo "=== DONE. Next: transfer artifacts + launch (see NEW_MACHINE_SETUP.md) ==="
+echo "=== DONE. Next: transfer artifacts + launch (see docs/new-machine-setup.md) ==="
 echo "FALLBACK: if you see 'no kernel image for device sm_120', reinstall torch from"
 echo "  --index-url https://download.pytorch.org/whl/nightly/cu130   (then rebuild vllm to match)"
