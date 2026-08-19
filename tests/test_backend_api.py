@@ -9,7 +9,7 @@ def test_protected_strategy_write_requires_admin_token(monkeypatch, tmp_path) ->
 
     monkeypatch.setattr(strategy_store, "STRATEGIES_DIR", strategies_dir)
     monkeypatch.setenv("LIVE_IDEA_ADMIN_TOKEN", "secret-token")
-    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr(app_module.app, "testing", False)
 
     client = app_module.app.test_client()
     resp = client.post("/api/strategies", json={"strategy_name": "keyword_trend"})
@@ -26,7 +26,7 @@ def test_protected_strategy_write_accepts_valid_admin_token(monkeypatch, tmp_pat
 
     monkeypatch.setattr(strategy_store, "STRATEGIES_DIR", strategies_dir)
     monkeypatch.setenv("LIVE_IDEA_ADMIN_TOKEN", "secret-token")
-    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr(app_module.app, "testing", False)
 
     client = app_module.app.test_client()
     resp = client.post(

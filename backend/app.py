@@ -70,7 +70,11 @@ def _request_admin_token() -> str:
 
 
 def _auth_bypass_enabled() -> bool:
-    return app.testing or bool(os.environ.get("PYTEST_CURRENT_TEST"))
+    # Only Flask's own testing flag, which a test client sets explicitly.
+    # This used to also honour the PYTEST_CURRENT_TEST environment variable,
+    # which meant admin auth on every write endpoint could be switched off by
+    # anything able to set an env var in the server's process.
+    return bool(app.testing)
 
 
 def _is_protected_write_request() -> bool:

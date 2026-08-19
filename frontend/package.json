@@ -11,7 +11,6 @@
     "@types/node": "^16.18.126",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
-    "@types/react-router-dom": "^5.3.3",
     "axios": "^1.10.0",
     "chart.js": "^4.5.0",
     "react": "^19.1.0",
