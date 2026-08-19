@@ -23,7 +23,6 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -99,8 +98,6 @@ def _patch_vllm_client_group_port() -> None:
 
 _patch_vllm_client_group_port()
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT_ROOT))
 
 from forecaster.realization import (  # noqa: E402
     load_candidate_generation_config,

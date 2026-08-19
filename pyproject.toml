@@ -3,30 +3,52 @@ name = "live-idea-bench"
 version = "0.0.1"
 description = "LiveIdeaBench: forecasting emerging research ideas against future literature."
 authors = [{ name = "Haofei Yu", email = "yuhaofei44@gmail.com" }]
-license = "Apache-2.0"
+license = "MIT"
 readme = "README.md"
-requires-python = ">=3.10,<3.12"
+requires-python = ">=3.10,<3.13"
 dependencies = [
-    # Core data and config
-    "pydantic>=2.8.2,<3",
+    # Config
     "pyyaml>=6.0",
     # LLM API clients
     "anthropic",
     "openai>=1.0.0",
     "google-generativeai",
-    # Utilities
-    "beartype",
+    # HTTP
     "requests>=2.28.0",
-    "backoff",
-    "rich",
-    "flask>=3.0.0",
-    "flask-cors>=4,<7",
-    "openreview-py",
-    "pandas>=2.2.0",
+    # Imported at module top level by the core packages -- previously resolved
+    # only transitively through the optional torch stack:
+    #   tqdm  -> live_idea_bench/backtest.py
+    #   numpy -> forecaster/foresight/{gates,indices,metrics,reward}.py,
+    #            forecaster/embedding/local_embedder.py
+    "tqdm>=4.66",
+    "numpy>=1.24",
 ]
 
+[project.scripts]
+live-idea-bench = "live_idea_bench.__main__:main"
+
 [tool.poetry]
-package-mode = false
+# The two packages are installed in EDITABLE mode (poetry's default for the
+# root project). That is deliberate and load-bearing: several modules resolve
+# repo-root assets that live OUTSIDE the packages via
+# `Path(__file__).resolve().parents[N]` --
+#
+#   live_idea_bench/config.py     -> config/config.yaml
+#   live_idea_bench/__main__.py   -> examples/          (CLI dispatch target)
+#   live_idea_bench/ingest.py     -> data/
+#   forecaster/config.py          -> config/forecaster/
+#   forecaster/realization/config.py, forecaster/foresight/operators.py,
+#   forecaster/hindsight/topic_sampling.py
+#
+# Under an editable install `__file__` still points into the repo, so those
+# resolve correctly. A built wheel would relocate the packages into
+# site-packages and every one of those paths would silently point at nothing.
+# Do not publish this as a wheel without first moving config/ and the CLI's
+# entry scripts inside the packages.
+packages = [
+    { include = "live_idea_bench" },
+    { include = "forecaster" },
+]
 
 # --- Optional extras ------------------------------------------------------
 # Core deps above are all the benchmark needs (LLM-API baselines + the
@@ -35,6 +57,7 @@ package-mode = false
 #
 #   poetry install --with forecaster   # train/run the MDF forecaster
 #   poetry install --with eval         # local-embedder retrieve-then-judge
+#   poetry install --with webapp       # the optional Flask API under backend/
 
 # MDF forecaster: SFT the prior + GRPO-train the realization policy locally.
 [tool.poetry.group.forecaster]
@@ -53,6 +76,8 @@ peft = ">=0.10"
 datasets = ">=2.18"
 accelerate = ">=0.27"
 sentence-transformers = ">=2.7"
+# Lazily imported by forecaster/realization/verl/dataset.py only.
+pandas = ">=2.2.0"
 
 # Evaluation extra: local sentence-transformer embedder fallback for the
 # retrieve-then-judge protocol when no hosted embedding API is configured.
@@ -62,14 +87,25 @@ optional = true
 [tool.poetry.group.eval.dependencies]
 sentence-transformers = ">=2.7"
 
+# Optional web app: the Flask API under backend/ (see backend/README.md).
+# Not needed to run the benchmark or the forecaster.
+[tool.poetry.group.webapp]
+optional = true
+
+[tool.poetry.group.webapp.dependencies]
+flask = ">=3.0.0"
+flask-cors = ">=4,<7"
+
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.6.0"
 nbmake = "^1.5.0"
 types-setuptools = "^69.0.0.0"
-ruff = "^0.3.0"
+# Keep ruff/mypy pinned in lockstep with .pre-commit-config.yaml -- CI runs
+# the pre-commit hooks, so a drift here means "green locally, red in CI".
+ruff = "^0.15.0"
+mypy = "^1.18.0"
 commitizen = "^3.14.1"
 matplotlib = ">=3.10.8"
-# Removed black and isort since we're using ruff
 
 [tool.poetry.group.test.dependencies]
 pytest = "^8.0.0"
@@ -83,11 +119,15 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.mypy]
+# Checked explicitly by path (see .github/workflows/ci.yml). Pointing mypy at
+# `.` makes it walk examples/ and scripts/, where two files can share a module
+# name and mypy aborts with "Source file found twice under different module
+# names" before checking anything.
+files = ["live_idea_bench", "forecaster", "backend"]
 ignore_missing_imports = true
 check_untyped_defs = true
 follow_imports = "normal"
 strict = true
-plugins = ["pydantic.mypy"]
 warn_redundant_casts = true
 warn_unused_ignores = true
 warn_return_any = true
@@ -100,26 +140,37 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 
 [tool.codespell]
-ignore-words-list = "dout, te, indicies, astroid"
+ignore-words-list = "dout, te, indicies, astroid, ehr, unparseable"
 skip = ["data"]
-
-[tool.isort]
-profile = "black"
-use_parentheses = true
-skip_gitignore = true
-multi_line_output = 3
-include_trailing_comma = true
-force_grid_wrap = 0
-line_length = 88
-
-[tool.black]
-line-length = 88
-target-version = ['py37', 'py38', 'py39', 'py310']
 
 [tool.ruff]
 line-length = 88
-fix = true
 target-version = "py310"
+# NOTE: no `fix = true` here. It applies to `ruff check` as well, which made
+# the lint job rewrite its own checkout in CI ("Found 155 errors (82 fixed,
+# 73 remaining)"). Use `ruff check --fix` explicitly when you want fixes.
 
 [tool.ruff.format]
 indent-style = "space"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # import sorting (replaces isort)
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    # Line length is the formatter's job; flagging it again in lint only
+    # produces noise on lines the formatter has deliberately left long
+    # (URLs, long string literals).
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Re-exports: __init__.py deliberately imports names it does not itself use.
+"__init__.py" = ["F401"]

@@ -1,13 +1,9 @@
 import json
 import os
 import shutil
-import sys
 from pathlib import Path
 import argparse
 
-# Add project root to sys.path
-project_root = Path(__file__).resolve().parents[2]
-sys.path.append(str(project_root))
 
 from live_idea_bench import group_by_keywords, load_json
 

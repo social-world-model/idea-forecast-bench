@@ -3,12 +3,8 @@ from __future__ import annotations
 from functools import lru_cache
 import json
 from pathlib import Path
-import sys
 from typing import Any
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(PROJECT_ROOT))
 
 from live_idea_bench.models import PaperRecord
 from forecaster.config import RealizationConfig, load_realization_config

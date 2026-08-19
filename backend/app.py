@@ -3,17 +3,12 @@ from __future__ import annotations
 import json
 import os
 import secrets
-import sys
 import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-
-# Add project root to path
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(project_root)
 
 from backend import config
 from backend.strategy_store import (
@@ -29,7 +24,8 @@ from backend.strategy_store import (
 
 app = Flask(__name__)
 
-VIEWS_FILE = os.path.join(project_root, "data", "views.json")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+VIEWS_FILE = os.path.join(PROJECT_ROOT, "data", "views.json")
 
 
 def _env_flag(name: str, default: bool) -> bool:

@@ -5,7 +5,6 @@ from dataclasses import replace
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.append(str(PROJECT_ROOT))
 
 from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
 from forecaster.realization import (  # noqa: E402

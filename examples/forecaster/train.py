@@ -23,12 +23,10 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import sys
 from dataclasses import replace
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT_ROOT))
 
 from forecaster.config import SFTTrainConfig  # noqa: E402
 from forecaster.hindsight.dataset_builder import load_hindsight_samples_jsonl  # noqa: E402
