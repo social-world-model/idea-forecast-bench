@@ -11,7 +11,6 @@ Elsewhere in the repo:
 
 - [`../README.md`](../README.md) — what the benchmark is and how to run it
 - [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — setup, what CI checks, commit conventions
-- [`../SECURITY.md`](../SECURITY.md) — reporting vulnerabilities, secret handling
 - [`../forecaster/foresight/README.md`](../forecaster/foresight/README.md) — the
   foresight reward: indices, rubrics, and the phase-by-phase smoke checks
 - [`../backend/README.md`](../backend/README.md) — running the API locally

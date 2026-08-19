@@ -7,7 +7,6 @@ foresight GRPO (SFT→GRPO) with **vLLM enabled** → ETA ~3–5h instead of ~26
 ```bash
 git clone https://github.com/ulab-uiuc/live-idea-bench.git
 cd live-idea-bench
-git checkout feature/foresight-judge-soft-mustnot   # has all the fixes (commit 2279092+)
 ```
 
 ## 1. Build the env
@@ -19,11 +18,11 @@ If `torch` errors with `no kernel image for sm_120` on a generation, see the
 FALLBACK note at the end of the script (switch to cu130/nightly torch).
 
 ## 2. Transfer the non-git artifacts (papers already present on the new box)
-Only the **expensive / paid** artifacts need to move (~1.3 G). Run FROM the old
-box (sn4622122392), or pull from the new box — fill in the host/path:
+Only the **expensive / paid** artifacts need to move (~1.3 G). Run this from
+the new box, pointing OLD at wherever the previous run lives:
 ```bash
-OLD=max7@sn4622122392:/home/max7/live_idea_bench_fenghai/live-idea-bench/.worktrees/foresight-judge
-DST=.                                       # = repo root on the new machine
+OLD=<user>@<old-host>:<path-to-old-checkout>   # e.g. alice@gpu-01:~/live-idea-bench
+DST=.                                          # = repo root on the new machine
 
 rsync -avP "$OLD/output/foresight_artifacts"                                 "$DST/output/"
 rsync -avP "$OLD/output/forecaster_qwen3.5-9b/prior_sft/final_checkpoint"     "$DST/output/forecaster_qwen3.5-9b/prior_sft/"
