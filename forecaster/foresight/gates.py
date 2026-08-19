@@ -7,17 +7,20 @@ Each gate is a small, side-effect-free predicate that the new
   * grounded(rollout_text, history_index, embedder, threshold) -> bool
   * operator_consistent(rollout_text, z_operator, threshold) -> bool
 """
-
 from __future__ import annotations
 
 import logging
 import re
+from typing import Sequence
 
-from forecaster.foresight.indices import Embedder, HistoryIndex
+import numpy as np
+
+from forecaster.foresight.indices import HistoryIndex, Embedder
 from forecaster.foresight.operators import (
     CLOSED_OPERATORS,
     UNMAPPABLE_BUCKET,
     OperatorInventory,
+    map_free_text_operator,
 )
 from forecaster.models import Innovation
 from forecaster.realization.realization_reward import compute_operator_adherence
@@ -37,9 +40,7 @@ def format_ok(
 ) -> bool:
     """Pass-through of the existing parser. False iff parsing produces None."""
     prediction, _proposal = coerce_reward_prediction(
-        rollout_text,
-        prompt_mode=prompt_mode,
-        innovation=innovation,
+        rollout_text, prompt_mode=prompt_mode, innovation=innovation,
     )
     return prediction is not None
 
@@ -52,7 +53,7 @@ _CITATION_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\barxiv[:\s\-]*([0-9]{4}\.[0-9]{4,6})\b", re.IGNORECASE),
     re.compile(r"\b([0-9]{4}\.[0-9]{4,6})\b"),
     re.compile(r"\[([A-Za-z0-9_]{4,40})\]"),
-    re.compile(r"\b(10\.\d{4,9}/[\w\.\-]+)\b"),  # DOI
+    re.compile(r"\b(10\.\d{4,9}/[\w\.\-]+)\b"),                # DOI
 )
 
 
@@ -108,18 +109,13 @@ def grounded(
         return True
     # Second pass: semantic retrieval for the rest.
     embs = embedder.encode(unresolved)
-    for cit, q in zip(unresolved, embs, strict=False):
+    for cit, q in zip(unresolved, embs):
         hits = history_index.search(q, top_k=top_k)
         if not hits:
             return False
         best = hits[0][1]
         if best < threshold:
-            logger.debug(
-                "grounding miss: citation=%s best=%.3f thresh=%.3f",
-                cit,
-                best,
-                threshold,
-            )
+            logger.debug("grounding miss: citation=%s best=%.3f thresh=%.3f", cit, best, threshold)
             return False
     return True
 
@@ -148,7 +144,7 @@ def operator_consistent(
     # operator vocabulary used by compute_operator_adherence).
     inv = inventory  # noqa: F841 (currently unused; kept for forward compatibility)
     op_for_adherence = expected_operator.strip().lower()
-    if op_for_adherence in set(CLOSED_OPERATORS):
+    if op_for_adherence in {op for op in CLOSED_OPERATORS}:
         # compute_operator_adherence expects the free-text operator. Map back:
         reverse = {
             "limitation_extension": "extend",

@@ -14,15 +14,16 @@ Output rows (D_z, written by `augment_hindsight_rows`):
    context_paper_ids: [...] | null,    # populated only if a corpus is supplied
    memory_text: str | null}            # populated only if a corpus is supplied
 """
-
 from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable, Sequence
+
+from live_idea_bench.backtest import split_train_future_by_cutoff
+from live_idea_bench.models import PaperRecord
 
 from forecaster.foresight.cutoffs import (
     FUTURE_WINDOW_HARD_LIMIT,
@@ -34,8 +35,6 @@ from forecaster.foresight.operators import (
     load_operator_inventory,
     map_free_text_operator,
 )
-from live_idea_bench.backtest import split_train_future_by_cutoff
-from live_idea_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +44,7 @@ class DZRow:
     cutoff_t: str
     topic_id: str
     episode_id: str
-    target_z: dict[str, str]  # {base_direction, operator, gap}
+    target_z: dict[str, str]            # {base_direction, operator, gap}
     operator_closed: str
     source_future_id: str
     future_paper_published_date: str
@@ -101,9 +100,7 @@ def _iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
             try:
                 yield json.loads(raw)
             except json.JSONDecodeError as exc:
-                logger.warning(
-                    "skipping malformed line %d in %s: %s", line_no, path, exc
-                )
+                logger.warning("skipping malformed line %d in %s: %s", line_no, path, exc)
 
 
 def augment_hindsight_rows(
@@ -141,7 +138,7 @@ def augment_hindsight_rows(
     hard_limit = _to_date(FUTURE_WINDOW_HARD_LIMIT)
 
     summary = AugmentationSummary()
-    counts: dict[str, int] = dict.fromkeys(inventory.closed_ids, 0)
+    counts: dict[str, int] = {op_id: 0 for op_id in inventory.closed_ids}
     counts[inventory.unmappable_bucket] = 0
 
     all_papers: list[PaperRecord] | None = None
@@ -219,10 +216,8 @@ def augment_hindsight_rows(
     logger.info(
         "augment_hindsight_rows: total=%d kept=%d dropped(test_window)=%d "
         "dropped(missing_cutoff)=%d other_ratio=%.3f",
-        summary.total_rows,
-        summary.train_window_rows,
-        summary.dropped_test_window,
-        summary.dropped_missing_cutoff,
+        summary.total_rows, summary.train_window_rows,
+        summary.dropped_test_window, summary.dropped_missing_cutoff,
         summary.other_ratio,
     )
     return summary

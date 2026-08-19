@@ -10,16 +10,14 @@ The rubric is consumed by:
 Generation is done by a frozen strong LLM. We keep the generation prompt
 in this file so test code can inspect it without touching live_idea_bench.
 """
-
 from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +32,7 @@ class Rubric:
     must_not: tuple[str, ...] = ()
     examples_positive: tuple[str, ...] = ()
     examples_negative: tuple[str, ...] = ()
-    operator_focus: tuple[
-        str, ...
-    ] = ()  # closed operator ids this rubric is tuned for, optional
+    operator_focus: tuple[str, ...] = ()      # closed operator ids this rubric is tuned for, optional
     version: int = 1
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -54,18 +50,14 @@ class Rubric:
         }
 
     @classmethod
-    def from_json(cls, payload: dict[str, Any]) -> Rubric:
+    def from_json(cls, payload: dict[str, Any]) -> "Rubric":
         return cls(
             topic_id=str(payload["topic_id"]),
             cutoff_t=str(payload.get("cutoff_t", "")),
             criteria=tuple(str(c) for c in payload.get("criteria") or ()),
             must_not=tuple(str(c) for c in payload.get("must_not") or ()),
-            examples_positive=tuple(
-                str(c) for c in payload.get("examples_positive") or ()
-            ),
-            examples_negative=tuple(
-                str(c) for c in payload.get("examples_negative") or ()
-            ),
+            examples_positive=tuple(str(c) for c in payload.get("examples_positive") or ()),
+            examples_negative=tuple(str(c) for c in payload.get("examples_negative") or ()),
             operator_focus=tuple(str(c) for c in payload.get("operator_focus") or ()),
             version=int(payload.get("version", 1)),
             metadata=dict(payload.get("metadata") or {}),
@@ -77,15 +69,11 @@ class Rubric:
         if self.operator_focus:
             lines.append("Operator focus: " + ", ".join(self.operator_focus))
         if self.criteria:
-            lines.append(
-                "Match criteria (an idea should satisfy these to count as a positive match):"
-            )
+            lines.append("Match criteria (an idea should satisfy these to count as a positive match):")
             for c in self.criteria:
                 lines.append(f"  - {c}")
         if self.must_not:
-            lines.append(
-                "Disqualifying criteria (presence of any of these is a hard no-match):"
-            )
+            lines.append("Disqualifying criteria (presence of any of these is a hard no-match):")
             for c in self.must_not:
                 lines.append(f"  - {c}")
         return "\n".join(lines)
@@ -94,9 +82,7 @@ class Rubric:
 def save_rubric(rubric: Rubric, path: str | Path) -> Path:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(
-        json.dumps(rubric.to_json(), indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    p.write_text(json.dumps(rubric.to_json(), indent=2, ensure_ascii=False), encoding="utf-8")
     return p
 
 
@@ -166,15 +152,9 @@ def parse_rubric_response(raw_text: str) -> tuple[tuple[str, ...], tuple[str, ..
         s = m.group(1).strip()
     data = json.loads(s)
     if not isinstance(data, dict):
-        raise ValueError(
-            f"rubric response must be a JSON object, got {type(data).__name__}"
-        )
-    criteria = tuple(
-        str(c).strip() for c in (data.get("criteria") or ()) if str(c).strip()
-    )
-    must_not = tuple(
-        str(c).strip() for c in (data.get("must_not") or ()) if str(c).strip()
-    )
+        raise ValueError(f"rubric response must be a JSON object, got {type(data).__name__}")
+    criteria = tuple(str(c).strip() for c in (data.get("criteria") or ()) if str(c).strip())
+    must_not = tuple(str(c).strip() for c in (data.get("must_not") or ()) if str(c).strip())
     if not criteria:
         raise ValueError("rubric must declare at least one criterion")
     return criteria, must_not

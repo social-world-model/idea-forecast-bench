@@ -1,5 +1,4 @@
 """Deduplication for joint inference candidates."""
-
 from __future__ import annotations
 
 from forecaster.models import JointCandidate
@@ -36,8 +35,7 @@ def deduplicate_proposals(
     kept: list[JointCandidate] = []
     for candidate in candidates:
         is_duplicate = any(
-            _jaccard_similarity(candidate.proposal_text, kept_candidate.proposal_text)
-            > threshold
+            _jaccard_similarity(candidate.proposal_text, kept_candidate.proposal_text) > threshold
             for kept_candidate in kept
         )
         if not is_duplicate:

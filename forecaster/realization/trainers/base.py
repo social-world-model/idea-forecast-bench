@@ -1,18 +1,15 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field, is_dataclass
+import hashlib
+import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
+from typing import Any
 
+from live_idea_bench.models import PaperRecord
 from forecaster.models import strict_runtime_manifest_contract
 from forecaster.realization.io import _write_json
-from live_idea_bench.models import PaperRecord
-
-if TYPE_CHECKING:  # pragma: no cover - typing-only helper alias
-    from _typeshed import DataclassInstance
 
 
 @dataclass
@@ -45,65 +42,34 @@ class TrainerPreparedArtifacts:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-#: The trainer-specific config dataclass a runner is parameterised by.
-TrainerConfigT = TypeVar("TrainerConfigT")
-
-
-class RLTrainerRunner(ABC, Generic[TrainerConfigT]):
-    """Base contract for an RL trainer backend.
-
-    The config keyword is part of the contract, not an optional extra. It used
-    to hide inside `**kwargs: Any`, which made every implementation that
-    actually required it an LSP violation and forced `# type: ignore[override]`
-    at each override site.
-    """
-
+class RLTrainerRunner(ABC):
     trainer_name: str
     default_config_filename: str
     backend_name: str = "unknown"
 
     @abstractmethod
-    def prepare(
-        self,
-        common_context: PreparedRLContext,
-        *,
-        trainer_config: TrainerConfigT,
-        **kwargs: Any,
-    ) -> TrainerPreparedArtifacts:
+    def prepare(self, common_context: PreparedRLContext, **kwargs: Any) -> TrainerPreparedArtifacts:
         raise NotImplementedError
 
     @abstractmethod
-    def train(
-        self,
-        prepared_artifacts: TrainerPreparedArtifacts,
-        *,
-        config: TrainerConfigT,
-        **kwargs: Any,
-    ) -> dict[str, Any]:
+    def train(self, prepared_artifacts: TrainerPreparedArtifacts, **kwargs: Any) -> dict[str, Any]:
         raise NotImplementedError
 
 
 def _serialize_for_fingerprint(value: Any) -> Any:
     if is_dataclass(value):
-        # `is_dataclass` also accepts dataclass *classes*; only instances ever
-        # reach here, and `asdict` would raise on a class anyway.
-        return asdict(cast("DataclassInstance", value))
+        return asdict(value)
     if isinstance(value, Path):
         return str(value.resolve())
     if isinstance(value, dict):
-        return {
-            str(key): _serialize_for_fingerprint(inner)
-            for key, inner in sorted(value.items(), key=lambda item: str(item[0]))
-        }
+        return {str(key): _serialize_for_fingerprint(inner) for key, inner in sorted(value.items(), key=lambda item: str(item[0]))}
     if isinstance(value, (list, tuple)):
         return [_serialize_for_fingerprint(item) for item in value]
     return value
 
 
 def build_config_fingerprint(payload: dict[str, Any]) -> str:
-    canonical = json.dumps(
-        _serialize_for_fingerprint(payload), ensure_ascii=False, sort_keys=True
-    )
+    canonical = json.dumps(_serialize_for_fingerprint(payload), ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -163,12 +129,8 @@ def build_policy_manifest(
         payload["prepared_parquet_path"] = str(prepared_parquet_path)
     if diagnostics:
         payload["diagnostics"] = diagnostics
-        payload["parse_failure_rate"] = float(
-            diagnostics.get("parse_failure_rate", 0.0)
-        )
-        payload["invalid_completion_rate"] = float(
-            diagnostics.get("invalid_completion_rate", 0.0)
-        )
+        payload["parse_failure_rate"] = float(diagnostics.get("parse_failure_rate", 0.0))
+        payload["invalid_completion_rate"] = float(diagnostics.get("invalid_completion_rate", 0.0))
     return payload
 
 

@@ -3,7 +3,6 @@
 All models are frozen (immutable) dataclasses representing the factorized
 latent variable model: p(Y|X) ≈ Π_j Σ_z p(y_j|z_j,X) p(z_j|X).
 """
-
 from __future__ import annotations
 
 import json
@@ -109,13 +108,9 @@ class SearchAction:
         if self.action_type == "search" and not self.query.strip():
             raise ValueError("SearchAction(type='search') requires a non-empty query.")
         if self.action_type == "select" and not self.paper_id.strip():
-            raise ValueError(
-                "SearchAction(type='select') requires a surfaced paper_id."
-            )
+            raise ValueError("SearchAction(type='select') requires a surfaced paper_id.")
         if self.action_type == "finish" and not self.proposal_text.strip():
-            raise ValueError(
-                "SearchAction(type='finish') requires a non-empty proposal_text."
-            )
+            raise ValueError("SearchAction(type='finish') requires a non-empty proposal_text.")
 
 
 @dataclass(frozen=True)
@@ -373,9 +368,7 @@ def search_action_from_dict(payload: dict[str, Any]) -> SearchAction:
     )
 
 
-def strict_realization_result_to_dict(
-    result: StrictRealizationResult,
-) -> dict[str, Any]:
+def strict_realization_result_to_dict(result: StrictRealizationResult) -> dict[str, Any]:
     """Serialize the strict realization completion contract."""
     return {
         "selected_evidence_ids": list(result.selected_evidence_ids),
@@ -384,32 +377,24 @@ def strict_realization_result_to_dict(
     }
 
 
-def strict_realization_result_from_dict(
-    payload: dict[str, Any],
-) -> StrictRealizationResult:
+def strict_realization_result_from_dict(payload: dict[str, Any]) -> StrictRealizationResult:
     """Deserialize the strict realization completion contract."""
     if not isinstance(payload, dict):
         raise ValueError("Strict realization result payload must decode to an object.")
     return StrictRealizationResult(
-        selected_evidence_ids=tuple(
-            str(item) for item in payload.get("selected_evidence_ids", [])
-        ),
+        selected_evidence_ids=tuple(str(item) for item in payload.get("selected_evidence_ids", [])),
         proposal_text=str(payload.get("proposal_text", "") or ""),
         search_queries=tuple(str(item) for item in payload.get("search_queries", [])),
     )
 
 
-def realization_trajectory_step_to_dict(
-    step: RealizationTrajectoryStep,
-) -> dict[str, Any]:
+def realization_trajectory_step_to_dict(step: RealizationTrajectoryStep) -> dict[str, Any]:
     """Serialize one rollout step."""
     return {
         "step_index": step.step_index,
         "prompt_system": step.prompt_system,
         "prompt_user": step.prompt_user,
-        "prior_observation": [
-            search_observation_to_dict(obs) for obs in step.prior_observation
-        ],
+        "prior_observation": [search_observation_to_dict(obs) for obs in step.prior_observation],
         "action": search_action_to_dict(step.action),
         "observation": [search_observation_to_dict(obs) for obs in step.observation],
         "surfaced_paper_ids": list(step.surfaced_paper_ids),
@@ -417,14 +402,10 @@ def realization_trajectory_step_to_dict(
     }
 
 
-def realization_trajectory_step_from_dict(
-    payload: dict[str, Any],
-) -> RealizationTrajectoryStep:
+def realization_trajectory_step_from_dict(payload: dict[str, Any]) -> RealizationTrajectoryStep:
     """Deserialize one rollout step."""
     if not isinstance(payload, dict):
-        raise ValueError(
-            "Realization trajectory step payload must decode to an object."
-        )
+        raise ValueError("Realization trajectory step payload must decode to an object.")
     return RealizationTrajectoryStep(
         action=search_action_from_dict(payload.get("action", {})),
         step_index=int(payload.get("step_index", 0) or 0),
@@ -440,12 +421,8 @@ def realization_trajectory_step_from_dict(
             for item in payload.get("observation", [])
             if isinstance(item, dict)
         ),
-        surfaced_paper_ids=tuple(
-            str(item) for item in payload.get("surfaced_paper_ids", [])
-        ),
-        selected_evidence_ids=tuple(
-            str(item) for item in payload.get("selected_evidence_ids", [])
-        ),
+        surfaced_paper_ids=tuple(str(item) for item in payload.get("surfaced_paper_ids", [])),
+        selected_evidence_ids=tuple(str(item) for item in payload.get("selected_evidence_ids", [])),
     )
 
 
@@ -454,9 +431,7 @@ def realization_trajectory_to_dict(trajectory: RealizationTrajectory) -> dict[st
     return {
         "schema_version": trajectory.schema_version,
         "innovation": innovation_to_dict(trajectory.innovation),
-        "steps": [
-            realization_trajectory_step_to_dict(step) for step in trajectory.steps
-        ],
+        "steps": [realization_trajectory_step_to_dict(step) for step in trajectory.steps],
         "result": (
             strict_realization_result_to_dict(trajectory.result)
             if trajectory.result is not None
@@ -483,11 +458,6 @@ def realization_trajectory_from_dict(payload: dict[str, Any]) -> RealizationTraj
             if isinstance(result_payload, dict)
             else None
         ),
-        invalid_reason=str(payload.get("invalid_reason"))
-        if payload.get("invalid_reason") is not None
-        else None,
-        schema_version=int(
-            payload.get("schema_version", STRICT_TRAJECTORY_SCHEMA_VERSION)
-            or STRICT_TRAJECTORY_SCHEMA_VERSION
-        ),
+        invalid_reason=str(payload.get("invalid_reason")) if payload.get("invalid_reason") is not None else None,
+        schema_version=int(payload.get("schema_version", STRICT_TRAJECTORY_SCHEMA_VERSION) or STRICT_TRAJECTORY_SCHEMA_VERSION),
     )

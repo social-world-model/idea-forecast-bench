@@ -1,5 +1,4 @@
 """Build the hindsight dataset D_z = {(X_<=t, z_tilde_{t+1})}."""
-
 from __future__ import annotations
 
 import json
@@ -7,11 +6,12 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from live_idea_bench.backtest import split_train_future_by_cutoff
+from live_idea_bench.models import PaperRecord
+
 from forecaster.config import HindsightConfig
 from forecaster.hindsight.extractor import extract_innovation
 from forecaster.models import HindsightSample, Innovation
-from live_idea_bench.backtest import split_train_future_by_cutoff
-from live_idea_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 
@@ -133,10 +133,6 @@ def load_hindsight_samples_jsonl(path: str | Path) -> list[HindsightSample]:
             )
         )
     samples.sort(
-        key=lambda s: (
-            s.cutoff_month,
-            s.future_paper_published_date,
-            s.future_paper_id,
-        ),
+        key=lambda s: (s.cutoff_month, s.future_paper_published_date, s.future_paper_id),
     )
     return samples

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import Any
 
@@ -18,9 +18,7 @@ class VerlDatasetArtifacts:
     parquet_engine: str | None
 
 
-def build_verl_dataset_rows(
-    prompt_rows: list[dict[str, Any]], *, data_source: str = "live_idea_bench"
-) -> list[dict[str, Any]]:
+def build_verl_dataset_rows(prompt_rows: list[dict[str, Any]], *, data_source: str = "live_idea_bench") -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for index, row in enumerate(prompt_rows):
         extra_info = {

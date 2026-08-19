@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import List
+
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.predictor import generate_predictions
 from live_idea_bench.strategy.base import IdeaStrategy
@@ -24,10 +26,10 @@ class PredictorLLMStrategy(IdeaStrategy):
 
     def generate(
         self,
-        train_papers: list[PaperRecord],
+        train_papers: List[PaperRecord],
         cutoff_month: str,
         top_k: int,
-    ) -> list[IdeaPrediction]:
+    ) -> List[IdeaPrediction]:
         # fail-loud: on LLM failure return an empty prediction set rather than
         # fabricating lexical-template ideas (consistent with the no-fallback
         # embedding policy). The benchmark records the empty/partial set.

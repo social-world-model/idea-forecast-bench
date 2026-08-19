@@ -1,5 +1,4 @@
 """Shared helpers for topic-based hindsight manifest and preview scripts."""
-
 from __future__ import annotations
 
 import concurrent.futures
@@ -277,7 +276,8 @@ def _load_papers_with_progress(
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
         future_to_path = {
-            executor.submit(_parse_markdown_path, path): path for path in files
+            executor.submit(_parse_markdown_path, path): path
+            for path in files
         }
         for future in concurrent.futures.as_completed(future_to_path):
             path = future_to_path[future]
@@ -303,12 +303,7 @@ def _load_papers_with_progress(
                     f"(kept={kept_count}, skipped={skipped_count})"
                 )
 
-    kept_records.sort(
-        key=lambda paper: (
-            date_to_ordinal(get_paper_published_date(paper)),
-            paper.paper_id,
-        )
-    )
+    kept_records.sort(key=lambda paper: (date_to_ordinal(get_paper_published_date(paper)), paper.paper_id))
     _print_progress(
         f"[topic-hindsight] finished loading papers: kept={len(kept_records)} "
         f"within {start_month}..{end_month}"
@@ -335,7 +330,8 @@ def load_topic_hindsight_context(
     )
     grouped_raw = classify_papers_by_topic(list(papers), list(topics))
     grouped = OrderedDict(
-        (topic.id, tuple(grouped_raw.get(topic.id, []))) for topic in topics
+        (topic.id, tuple(grouped_raw.get(topic.id, [])))
+        for topic in topics
     )
     _print_progress("[topic-hindsight] topic classification complete")
     return TopicHindsightContext(
@@ -403,21 +399,15 @@ def build_topic_hindsight_manifest(
         topic_papers = list(context.grouped_papers.get(topic.id, ()))
         for episode in FIXED_TOPIC_HINDSIGHT_EPISODES:
             window_index += 1
-            train_papers, future_papers, _future_end_month, _future_end_date = (
-                split_train_future_by_cutoff(
-                    papers=topic_papers,
-                    cutoff_date=episode.cutoff_date,
-                    horizon_months=TOPIC_HINDSIGHT_HORIZON_MONTHS,
-                )
+            train_papers, future_papers, _future_end_month, _future_end_date = split_train_future_by_cutoff(
+                papers=topic_papers,
+                cutoff_date=episode.cutoff_date,
+                horizon_months=TOPIC_HINDSIGHT_HORIZON_MONTHS,
             )
-            selected_future = (
-                sample_future_papers_deterministically(
-                    future_papers,
-                    limit=per_topic_per_episode,
-                )
-                if future_papers
-                else []
-            )
+            selected_future = sample_future_papers_deterministically(
+                future_papers,
+                limit=per_topic_per_episode,
+            ) if future_papers else []
             total_selected_samples += len(selected_future)
             rows.append(
                 {
@@ -430,12 +420,8 @@ def build_topic_hindsight_manifest(
                     "future_end_date": episode.future_end_date,
                     "train_paper_count": len(train_papers),
                     "future_paper_count": len(future_papers),
-                    "selected_future_paper_ids": [
-                        paper.paper_id for paper in selected_future
-                    ],
-                    "selected_future_source_paths": [
-                        paper.source_path for paper in selected_future
-                    ],
+                    "selected_future_paper_ids": [paper.paper_id for paper in selected_future],
+                    "selected_future_source_paths": [paper.source_path for paper in selected_future],
                 }
             )
             if window_index == total_windows or window_index % 50 == 0:
@@ -468,9 +454,7 @@ def build_topic_hindsight_manifest(
 def summarize_topic_hindsight_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
     rows = list(manifest.get("topic_episode_rows", []))
     selected_windows = sum(1 for row in rows if row.get("selected_future_paper_ids"))
-    empty_windows = sum(
-        1 for row in rows if int(row.get("future_paper_count", 0) or 0) == 0
-    )
+    empty_windows = sum(1 for row in rows if int(row.get("future_paper_count", 0) or 0) == 0)
     return {
         "topics_config_path": manifest.get("topics_config_path"),
         "input_dir": manifest.get("input_dir"),
@@ -493,7 +477,7 @@ def select_preview_targets(
         raise ValueError("preview_count must be positive")
 
     rows = sorted(
-        manifest.get("topic_episode_rows", []),
+        list(manifest.get("topic_episode_rows", [])),
         key=lambda row: (str(row.get("episode_id", "")), str(row.get("topic_id", ""))),
     )
     max_selected = max(
@@ -518,9 +502,7 @@ def select_preview_targets(
                     "future_start_date": row["future_start_date"],
                     "future_end_date": row["future_end_date"],
                     "future_paper_id": paper_ids[position],
-                    "future_source_path": source_paths[position]
-                    if position < len(source_paths)
-                    else "",
+                    "future_source_path": source_paths[position] if position < len(source_paths) else "",
                     "selection_rank": position + 1,
                 }
             )
@@ -537,7 +519,7 @@ def expand_all_targets(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     ``topic_episode_row`` is included.
     """
     rows = sorted(
-        manifest.get("topic_episode_rows", []),
+        list(manifest.get("topic_episode_rows", [])),
         key=lambda row: (str(row.get("episode_id", "")), str(row.get("topic_id", ""))),
     )
     targets: list[dict[str, Any]] = []
@@ -555,9 +537,7 @@ def expand_all_targets(manifest: dict[str, Any]) -> list[dict[str, Any]]:
                     "future_start_date": row["future_start_date"],
                     "future_end_date": row["future_end_date"],
                     "future_paper_id": paper_id,
-                    "future_source_path": source_paths[position]
-                    if position < len(source_paths)
-                    else "",
+                    "future_source_path": source_paths[position] if position < len(source_paths) else "",
                     "selection_rank": position + 1,
                 }
             )
@@ -567,7 +547,5 @@ def expand_all_targets(manifest: dict[str, Any]) -> list[dict[str, Any]]:
 def write_json(path: str | Path, payload: dict[str, Any]) -> Path:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(
-        json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    target.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return target

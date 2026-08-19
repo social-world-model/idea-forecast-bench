@@ -5,13 +5,13 @@ from __future__ import annotations
 # forecaster.realization.config — creating a circular import if these modules
 # were loaded eagerly when the package initializes.
 from importlib import import_module
-from typing import Any
 
 from forecaster.realization.config import (
     CandidateGenerationConfig,
     EpisodeBuildConfig,
     GRPOTrainConfig,
     RewardConfig,
+    RewardWeights,
     SelectionConfig,
     load_candidate_generation_config,
     load_episode_build_config,
@@ -47,47 +47,23 @@ from forecaster.realization.trainers import (
 
 _LAZY = {
     "CandidateListSample": ("forecaster.realization.candidates", "CandidateListSample"),
-    "EpisodeCandidateLists": (
-        "forecaster.realization.candidates",
-        "EpisodeCandidateLists",
-    ),
+    "EpisodeCandidateLists": ("forecaster.realization.candidates", "EpisodeCandidateLists"),
     "RLEpisode": ("forecaster.realization.episodes", "RLEpisode"),
     "build_rl_episodes": ("forecaster.realization.episodes", "build_rl_episodes"),
     "serialize_episodes": ("forecaster.realization.episodes", "serialize_episodes"),
     "RewardAlignmentReport": ("forecaster.realization.grpo", "RewardAlignmentReport"),
     "build_grpo_advantages": ("forecaster.realization.grpo", "build_grpo_advantages"),
-    "compute_reward_alignment": (
-        "forecaster.realization.grpo",
-        "compute_reward_alignment",
-    ),
-    "build_grpo_prompt_rows": (
-        "forecaster.realization.pipeline",
-        "build_grpo_prompt_rows",
-    ),
-    "build_strict_rl_prompt_rows": (
-        "forecaster.realization.pipeline",
-        "build_strict_rl_prompt_rows",
-    ),
-    "generate_episode_candidate_lists": (
-        "forecaster.realization.pipeline",
-        "generate_episode_candidate_lists",
-    ),
-    "prepare_common_rl_context": (
-        "forecaster.realization.pipeline",
-        "prepare_common_rl_context",
-    ),
-    "run_policy_rl_pipeline": (
-        "forecaster.realization.pipeline",
-        "run_policy_rl_pipeline",
-    ),
-    "serialize_episode_candidate_lists": (
-        "forecaster.realization.pipeline",
-        "serialize_episode_candidate_lists",
-    ),
+    "compute_reward_alignment": ("forecaster.realization.grpo", "compute_reward_alignment"),
+    "build_grpo_prompt_rows": ("forecaster.realization.pipeline", "build_grpo_prompt_rows"),
+    "build_strict_rl_prompt_rows": ("forecaster.realization.pipeline", "build_strict_rl_prompt_rows"),
+    "generate_episode_candidate_lists": ("forecaster.realization.pipeline", "generate_episode_candidate_lists"),
+    "prepare_common_rl_context": ("forecaster.realization.pipeline", "prepare_common_rl_context"),
+    "run_policy_rl_pipeline": ("forecaster.realization.pipeline", "run_policy_rl_pipeline"),
+    "serialize_episode_candidate_lists": ("forecaster.realization.pipeline", "serialize_episode_candidate_lists"),
 }
 
 
-def __getattr__(name: str) -> Any:
+def __getattr__(name: str):
     if name not in _LAZY:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     module_name, attr_name = _LAZY[name]
@@ -102,6 +78,7 @@ __all__ = [
     "EpisodeBuildConfig",
     "GRPOTrainConfig",
     "RewardConfig",
+    "RewardWeights",
     "SelectionConfig",
     "load_candidate_generation_config",
     "load_episode_build_config",

@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set -euo pipefail
 # ==========================================================================
 #  Check if a machine can run the trained forecaster eval.
 #  Usage: bash scripts/check_eval_env.sh

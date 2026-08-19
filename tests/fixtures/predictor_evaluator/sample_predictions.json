@@ -1,0 +1,56 @@
+[
+  {
+    "domain": "multimodal reasoning",
+    "horizon": "next 6 months",
+    "deterministic": true,
+    "seed": 1629681936,
+    "generation_mode": "heuristic",
+    "signal_terms": [
+      "aligns",
+      "annotations",
+      "answering",
+      "augmented",
+      "benchmark",
+      "chain",
+      "context",
+      "curriculum",
+      "document",
+      "efficient",
+      "event",
+      "evidence"
+    ],
+    "ideas": [
+      {
+        "title": "Benchmark-driven evidence generalization beyond static benchmark",
+        "rationale": "Recent abstracts in multimodal reasoning repeatedly emphasize evidence and benchmark; this suggests a likely next stage in next 6 months.",
+        "approach": "Build a shared training/evaluation pipeline that couples evidence modules with benchmark signals, then run ablations on compute cost, robustness, and transfer.",
+        "score": 0.375
+      },
+      {
+        "title": "Cross-modal event planning with verifier-guided annotations",
+        "rationale": "Recent abstracts in multimodal reasoning repeatedly emphasize event and annotations; this suggests a likely next stage in next 6 months.",
+        "approach": "Build a shared training/evaluation pipeline that couples event modules with annotations signals, then run ablations on compute cost, robustness, and transfer.",
+        "score": 0.3405585106382979
+      },
+      {
+        "title": "Data-centric curriculum pipelines with uncertainty-aware mixture",
+        "rationale": "Recent abstracts in multimodal reasoning repeatedly emphasize curriculum and mixture; this suggests a likely next stage in next 6 months.",
+        "approach": "Build a shared training/evaluation pipeline that couples curriculum modules with mixture signals, then run ablations on compute cost, robustness, and transfer.",
+        "score": 0.2999335106382979
+      },
+      {
+        "title": "Resource-efficient grounded with sparse hallucinations routing",
+        "rationale": "Recent abstracts in multimodal reasoning repeatedly emphasize grounded and hallucinations; this suggests a likely next stage in next 6 months.",
+        "approach": "Build a shared training/evaluation pipeline that couples grounded modules with hallucinations signals, then run ablations on compute cost, robustness, and transfer.",
+        "score": 0.294429347826087
+      },
+      {
+        "title": "Continual document adaptation for long-horizon planning",
+        "rationale": "Recent abstracts in multimodal reasoning repeatedly emphasize document and planning; this suggests a likely next stage in next 6 months.",
+        "approach": "Build a shared training/evaluation pipeline that couples document modules with planning signals, then run ablations on compute cost, robustness, and transfer.",
+        "score": 0.2924867021276596
+      }
+    ],
+    "generated_at": "2026-02-25T20:45:03.038715+00:00"
+  }
+]

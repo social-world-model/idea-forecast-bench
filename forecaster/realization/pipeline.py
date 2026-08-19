@@ -5,28 +5,23 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
+from live_idea_bench.llm import create_client
+from live_idea_bench.models import PaperRecord
 from forecaster.config import RealizationConfig, load_realization_config
 from forecaster.models import (
     HindsightSample,
     Innovation,
     innovation_to_dict,
     realization_trajectory_to_dict,
-    strict_runtime_manifest_contract,
     strict_search_contract,
+    strict_runtime_manifest_contract,
 )
 from forecaster.realization.candidates import CandidateListSample, EpisodeCandidateLists
-from forecaster.realization.config import (
-    CandidateGenerationConfig,
-    EpisodeBuildConfig,
-    RewardConfig,
-    SelectionConfig,
-)
-from forecaster.realization.episodes import (
-    RLEpisode,
-    build_rl_episodes,
-    serialize_episodes,
-)
+from forecaster.realization.config import CandidateGenerationConfig, EpisodeBuildConfig, RewardConfig, SelectionConfig
 from forecaster.realization.evidence import retrieve_evidence
+from forecaster.realization.episodes import RLEpisode, build_rl_episodes, serialize_episodes
 from forecaster.realization.grpo import compute_reward_alignment
 from forecaster.realization.io import _read_json, _read_jsonl, _write_json, _write_jsonl
 from forecaster.realization.model_zoo import list_small_model_payloads
@@ -48,34 +43,16 @@ from forecaster.realization.strict_runtime import (
     run_strict_realization_rollout,
     serialize_strict_rollout_completion,
 )
-from forecaster.realization.trainers import (
-    PreparedRLContext,
-    build_config_fingerprint,
-    create_trainer_runner,
-)
-from live_idea_bench.llm import create_client
-from live_idea_bench.models import PaperRecord
-
-logger = logging.getLogger(__name__)
+from forecaster.realization.trainers import PreparedRLContext, TrainerPreparedArtifacts, build_config_fingerprint, create_trainer_runner
 
 
 def _paper_lookup(papers: list[PaperRecord]) -> dict[str, PaperRecord]:
     return {paper.paper_id: paper for paper in papers}
 
 
-def _materialize_episode(
-    episode: RLEpisode, paper_lookup: dict[str, PaperRecord]
-) -> tuple[list[PaperRecord], list[PaperRecord]]:
-    train = [
-        paper_lookup[paper_id]
-        for paper_id in episode.train_paper_ids
-        if paper_id in paper_lookup
-    ]
-    future = [
-        paper_lookup[paper_id]
-        for paper_id in episode.future_paper_ids
-        if paper_id in paper_lookup
-    ]
+def _materialize_episode(episode: RLEpisode, paper_lookup: dict[str, PaperRecord]) -> tuple[list[PaperRecord], list[PaperRecord]]:
+    train = [paper_lookup[paper_id] for paper_id in episode.train_paper_ids if paper_id in paper_lookup]
+    future = [paper_lookup[paper_id] for paper_id in episode.future_paper_ids if paper_id in paper_lookup]
     return train, future
 
 
@@ -94,13 +71,8 @@ def _temperature_schedule(config: CandidateGenerationConfig) -> list[float]:
         return []
     if config.num_candidate_lists == 1:
         return [round((config.min_temperature + config.max_temperature) / 2.0, 4)]
-    step = (config.max_temperature - config.min_temperature) / (
-        config.num_candidate_lists - 1
-    )
-    return [
-        round(config.min_temperature + (idx * step), 4)
-        for idx in range(config.num_candidate_lists)
-    ]
+    step = (config.max_temperature - config.min_temperature) / (config.num_candidate_lists - 1)
+    return [round(config.min_temperature + (idx * step), 4) for idx in range(config.num_candidate_lists)]
 
 
 _ALLOWED_BACKENDS = frozenset({"auto", "api", "local_hf", "heuristic"})
@@ -142,23 +114,11 @@ def _infer_operator_from_future_paper(future_paper: PaperRecord) -> str:
 
 
 def _derive_episode_innovation(future_paper: PaperRecord) -> Innovation:
-    base_terms = (
-        future_paper.keywords[:3]
-        if future_paper.keywords
-        else future_paper.title.split()[:4]
-    )
-    base_direction = " ".join(
-        term.strip() for term in base_terms if str(term).strip()
-    ).strip()
+    base_terms = future_paper.keywords[:3] if future_paper.keywords else future_paper.title.split()[:4]
+    base_direction = " ".join(term.strip() for term in base_terms if str(term).strip()).strip()
     if not base_direction:
-        base_direction = (
-            " ".join(future_paper.title.split()[:4]).strip() or "emerging direction"
-        )
-    gap = (
-        future_paper.summary[:220].strip()
-        if future_paper.summary.strip()
-        else future_paper.title.strip()
-    )
+        base_direction = " ".join(future_paper.title.split()[:4]).strip() or "emerging direction"
+    gap = future_paper.summary[:220].strip() if future_paper.summary.strip() else future_paper.title.strip()
     return Innovation(
         base_direction=base_direction,
         operator=_infer_operator_from_future_paper(future_paper),
@@ -166,9 +126,7 @@ def _derive_episode_innovation(future_paper: PaperRecord) -> Innovation:
     )
 
 
-def _select_episode_target_future_paper(
-    future_papers: list[PaperRecord],
-) -> PaperRecord | None:
+def _select_episode_target_future_paper(future_papers: list[PaperRecord]) -> PaperRecord | None:
     if not future_papers:
         return None
     return sorted(
@@ -199,10 +157,7 @@ def _resolve_episode_innovation(
         ]
         if paper_matches:
             paper_matches.sort(
-                key=lambda sample: (
-                    sample.cutoff_month,
-                    sample.future_paper_published_date,
-                ),
+                key=lambda sample: (sample.cutoff_month, sample.future_paper_published_date),
                 reverse=True,
             )
             return paper_matches[0].innovation
@@ -381,9 +336,7 @@ def _build_strict_episode_prompt_row(
     )
 
 
-def _heuristic_proposal_text(
-    innovation: Innovation, evidence_papers: list[PaperRecord]
-) -> str:
+def _heuristic_proposal_text(innovation: Innovation, evidence_papers: list[PaperRecord]) -> str:
     title = f"{innovation.base_direction.title()} via {innovation.operator.title()}"
     evidence_clause = (
         f" It builds on evidence from {', '.join(paper.title for paper in evidence_papers[:2])}."
@@ -624,9 +577,7 @@ def _strict_prediction_from_completion(
     return [prediction]
 
 
-def _single_idea_candidate_config(
-    config: CandidateGenerationConfig,
-) -> CandidateGenerationConfig:
+def _single_idea_candidate_config(config: CandidateGenerationConfig) -> CandidateGenerationConfig:
     return replace(config, ideas_per_list=1)
 
 
@@ -645,6 +596,7 @@ def generate_episode_candidate_lists(
     base_model_name: str | None = None,
     fallback_to_heuristic: bool = False,
 ) -> list[EpisodeCandidateLists]:
+    paper_lookup = _paper_lookup(papers)
     single_config = _single_idea_candidate_config(candidate_config)
     temperatures = _temperature_schedule(single_config)
     resolved_realization_config = realization_config or load_realization_config()
@@ -666,14 +618,9 @@ def generate_episode_candidate_lists(
         train_papers = [PaperRecord(**paper) for paper in row.get("train_papers", [])]
         future_papers = [PaperRecord(**paper) for paper in row.get("future_papers", [])]
         innovation = Innovation(**dict(row.get("innovation", {})))
-        evidence_papers = [
-            PaperRecord(**paper) for paper in row.get("evidence_papers", [])
-        ]
+        evidence_papers = [PaperRecord(**paper) for paper in row.get("evidence_papers", [])]
         prompt = str(row.get("prompt", ""))
-        prompt_mode = str(
-            row.get("prompt_mode", "z_conditioned_realization")
-            or "z_conditioned_realization"
-        )
+        prompt_mode = str(row.get("prompt_mode", "z_conditioned_realization") or "z_conditioned_realization")
         candidates: list[CandidateListSample] = []
         for temperature in temperatures:
             try:
@@ -697,9 +644,7 @@ def generate_episode_candidate_lists(
                         realization_config=resolved_realization_config,
                     )
                 else:
-                    backend = _resolve_generation_backend(
-                        model_name, single_config.backend
-                    )
+                    backend = _resolve_generation_backend(model_name, single_config.backend)
                     predictions = _generate_realization_candidate_predictions(
                         row,
                         model_name,
@@ -762,26 +707,20 @@ def generate_episode_candidate_lists(
             ]
             if prompt_mode == "strict_interactive_realization":
                 policy_rollout = str(completion_text or "")
-                reward = (
-                    evaluate_strict_rl_reward(
-                        policy_rollout,
-                        innovation=innovation,
-                        train_papers=train_papers,
-                        future_papers=future_papers,
-                        reward_config=reward_config,
-                        realization_config=resolved_realization_config,
-                        search_env_payload=row.get("search_env")
-                        if isinstance(row.get("search_env"), dict)
-                        else None,
-                        similarity_config_path=similarity_config_path,
-                        runtime_config_path=runtime_config_path,
-                        model_name=model_name,
-                        cutoff_date=episode.cutoff_date,
-                        future_end_date=episode.future_end_date,
-                    )
-                    if policy_rollout
-                    else build_invalid_reward_evaluation(reward_config)
-                )
+                reward = evaluate_strict_rl_reward(
+                    policy_rollout,
+                    innovation=innovation,
+                    train_papers=train_papers,
+                    future_papers=future_papers,
+                    reward_config=reward_config,
+                    realization_config=resolved_realization_config,
+                    search_env_payload=row.get("search_env") if isinstance(row.get("search_env"), dict) else None,
+                    similarity_config_path=similarity_config_path,
+                    runtime_config_path=runtime_config_path,
+                    model_name=model_name,
+                    cutoff_date=episode.cutoff_date,
+                    future_end_date=episode.future_end_date,
+                ) if policy_rollout else build_invalid_reward_evaluation(reward_config)
             elif len(predictions) != 1:
                 reward = build_invalid_reward_evaluation(reward_config)
             else:
@@ -792,9 +731,7 @@ def generate_episode_candidate_lists(
                     reward_config=reward_config,
                     innovation=innovation,
                     evidence_papers=evidence_papers,
-                    proposal_text=str(
-                        predictions[0].metadata.get("proposal_text", "") or ""
-                    ),
+                    proposal_text=str(predictions[0].metadata.get("proposal_text", "") or ""),
                     realization_config=resolved_realization_config,
                     similarity_config_path=similarity_config_path,
                     runtime_config_path=runtime_config_path,
@@ -802,12 +739,8 @@ def generate_episode_candidate_lists(
                     cutoff_date=episode.cutoff_date,
                     future_end_date=episode.future_end_date,
                 )
-            candidates.append(
-                CandidateListSample(predictions=predictions, reward=reward)
-            )
-        episode_candidates = EpisodeCandidateLists(
-            episode=episode, prompt=prompt, candidates=candidates
-        )
+            candidates.append(CandidateListSample(predictions=predictions, reward=reward))
+        episode_candidates = EpisodeCandidateLists(episode=episode, prompt=prompt, candidates=candidates)
         outputs.append(episode_candidates)
         if episode.cache_artifact_path:
             _write_json(
@@ -823,10 +756,7 @@ def generate_episode_candidate_lists(
                     "realization_config": row.get("realization_config", {}),
                     "candidates": [
                         {
-                            "predictions": [
-                                asdict(prediction)
-                                for prediction in candidate.predictions
-                            ],
+                            "predictions": [asdict(prediction) for prediction in candidate.predictions],
                             "reward": serialize_reward_evaluation(candidate.reward),
                         }
                         for candidate in candidates
@@ -836,9 +766,7 @@ def generate_episode_candidate_lists(
     return outputs
 
 
-def serialize_episode_candidate_lists(
-    episodes: list[EpisodeCandidateLists],
-) -> list[dict[str, Any]]:
+def serialize_episode_candidate_lists(episodes: list[EpisodeCandidateLists]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for episode_batch in episodes:
         rows.append(
@@ -847,9 +775,7 @@ def serialize_episode_candidate_lists(
                 "prompt": episode_batch.prompt,
                 "candidates": [
                     {
-                        "predictions": [
-                            asdict(prediction) for prediction in candidate.predictions
-                        ],
+                        "predictions": [asdict(prediction) for prediction in candidate.predictions],
                         "reward": serialize_reward_evaluation(candidate.reward),
                     }
                     for candidate in episode_batch.candidates
@@ -873,7 +799,7 @@ def build_grpo_prompt_rows(
 
     # Index hindsight samples by future_paper_id for fast lookup
     hs_by_paper: dict[str, list[HindsightSample]] = {}
-    for sample in hindsight_samples or []:
+    for sample in (hindsight_samples or []):
         hs_by_paper.setdefault(sample.future_paper_id, []).append(sample)
 
     for i, episode in enumerate(episodes):
@@ -881,18 +807,15 @@ def build_grpo_prompt_rows(
         future_ids = {p.paper_id for p in future_papers}
 
         # Collect all hindsight samples whose future paper falls in this episode
-        episode_samples = [s for pid in future_ids for s in hs_by_paper.get(pid, [])]
+        episode_samples = [
+            s for pid in future_ids
+            for s in hs_by_paper.get(pid, [])
+        ]
 
         if episode_samples:
             # One training row per hindsight sample (each has a unique innovation z)
-            logger.info(
-                "Episode %d/%d: %d train papers, %d future papers, %d hindsight samples",
-                i + 1,
-                len(episodes),
-                len(train_papers),
-                len(future_papers),
-                len(episode_samples),
-            )
+            logger.info("Episode %d/%d: %d train papers, %d future papers, %d hindsight samples",
+                         i + 1, len(episodes), len(train_papers), len(future_papers), len(episode_samples))
             for sample in episode_samples:
                 target = paper_lookup.get(sample.future_paper_id)
                 if target is None:
@@ -908,13 +831,8 @@ def build_grpo_prompt_rows(
                     rows.append(row)
         else:
             # Fallback: single row from first future paper
-            logger.info(
-                "Episode %d/%d: %d train papers, %d future papers, 0 hindsight samples (fallback)",
-                i + 1,
-                len(episodes),
-                len(train_papers),
-                len(future_papers),
-            )
+            logger.info("Episode %d/%d: %d train papers, %d future papers, 0 hindsight samples (fallback)",
+                         i + 1, len(episodes), len(train_papers), len(future_papers))
             row = _build_episode_prompt_row(
                 episode,
                 train_papers,
@@ -955,16 +873,12 @@ def build_strict_rl_prompt_rows(
     return rows
 
 
-def _select_episodes(
-    episodes: list[RLEpisode], split: str, max_episodes: int | None
-) -> list[RLEpisode]:
+def _select_episodes(episodes: list[RLEpisode], split: str, max_episodes: int | None) -> list[RLEpisode]:
     normalized_split = split.strip().lower()
     if normalized_split == "all":
         selected = list(episodes)
     else:
-        selected = [
-            episode for episode in episodes if episode.split == normalized_split
-        ]
+        selected = [episode for episode in episodes if episode.split == normalized_split]
     if max_episodes is not None:
         return selected[: max(0, max_episodes)]
     return selected
@@ -1001,11 +915,7 @@ def _resolve_policy_source(
 def _average_metric(evaluations: list[Any], name: str) -> float:
     if not evaluations:
         return 0.0
-    return round(
-        sum(float(getattr(evaluation, name)) for evaluation in evaluations)
-        / len(evaluations),
-        4,
-    )
+    return round(sum(float(getattr(evaluation, name)) for evaluation in evaluations) / len(evaluations), 4)
 
 
 def _shared_fingerprint(
@@ -1065,11 +975,7 @@ def _load_cached_context(
     manifest_path = shared_dir / "shared_manifest.json"
     episodes_path = shared_dir / "episodes.json"
     prompt_rows_path = shared_dir / "prompts.jsonl"
-    if (
-        not manifest_path.exists()
-        or not episodes_path.exists()
-        or not prompt_rows_path.exists()
-    ):
+    if not manifest_path.exists() or not episodes_path.exists() or not prompt_rows_path.exists():
         return None
     payload = _read_json(manifest_path)
     if not isinstance(payload, dict):
@@ -1151,9 +1057,7 @@ def prepare_common_rl_context(
     episodes = build_rl_episodes(papers, episode_config, cache_root=episode_cache_root)
     selected_episodes = _select_episodes(episodes, split, max_episodes)
     if not selected_episodes:
-        raise ValueError(
-            "No RL episodes were selected. Adjust split, window, or date settings."
-        )
+        raise ValueError("No RL episodes were selected. Adjust split, window, or date settings.")
     prompt_rows = (
         build_strict_rl_prompt_rows(
             papers,
@@ -1190,9 +1094,7 @@ def prepare_common_rl_context(
             "similarity_config_path": similarity_config_path,
             "model_name": model_name,
             "fingerprint": fingerprint,
-            "prompt_mode": "strict_interactive_realization"
-            if strict_mode
-            else "z_conditioned_realization",
+            "prompt_mode": "strict_interactive_realization" if strict_mode else "z_conditioned_realization",
             "strict_mode": strict_mode,
             "strict_contract": strict_runtime_manifest_contract(),
         },
@@ -1219,11 +1121,7 @@ def prepare_common_rl_context(
 
 
 def _alignment_episodes(common_context: PreparedRLContext) -> list[RLEpisode]:
-    validation_episodes = [
-        episode
-        for episode in common_context.all_episodes
-        if getattr(episode, "split", "") == "validation"
-    ]
+    validation_episodes = [episode for episode in common_context.all_episodes if getattr(episode, "split", "") == "validation"]
     if not validation_episodes:
         raise ValueError("Validation episodes are required for the RL alignment gate.")
     return validation_episodes
@@ -1241,20 +1139,11 @@ def _prompt_baseline_evaluation(
     runtime_config_path: str | None,
 ) -> Any:
     single_config = _single_idea_candidate_config(candidate_config)
-    prompt_mode = str(
-        prompt_row.get("prompt_mode", "z_conditioned_realization")
-        or "z_conditioned_realization"
-    )
-    train_papers = [
-        PaperRecord(**paper) for paper in prompt_row.get("train_papers", [])
-    ]
-    future_papers = [
-        PaperRecord(**paper) for paper in prompt_row.get("future_papers", [])
-    ]
+    prompt_mode = str(prompt_row.get("prompt_mode", "z_conditioned_realization") or "z_conditioned_realization")
+    train_papers = [PaperRecord(**paper) for paper in prompt_row.get("train_papers", [])]
+    future_papers = [PaperRecord(**paper) for paper in prompt_row.get("future_papers", [])]
     innovation = Innovation(**dict(prompt_row.get("innovation", {})))
-    evidence_papers = [
-        PaperRecord(**paper) for paper in prompt_row.get("evidence_papers", [])
-    ]
+    evidence_papers = [PaperRecord(**paper) for paper in prompt_row.get("evidence_papers", [])]
     if prompt_mode == "strict_interactive_realization":
         completion_text, _ = _generate_strict_realization_completion(
             prompt_row,
@@ -1273,9 +1162,7 @@ def _prompt_baseline_evaluation(
             future_papers=future_papers,
             reward_config=reward_config,
             realization_config=realization_config,
-            search_env_payload=prompt_row.get("search_env")
-            if isinstance(prompt_row.get("search_env"), dict)
-            else None,
+            search_env_payload=prompt_row.get("search_env") if isinstance(prompt_row.get("search_env"), dict) else None,
             similarity_config_path=similarity_config_path,
             runtime_config_path=runtime_config_path,
             model_name=policy_model_name,
@@ -1359,9 +1246,7 @@ def run_online_alignment_gate(
         base_model_name=base_model_name,
         fallback_to_heuristic=False,
     )
-    evaluations = [
-        candidate.reward for batch in candidate_lists for candidate in batch.candidates
-    ]
+    evaluations = [candidate.reward for batch in candidate_lists for candidate in batch.candidates]
     report = compute_reward_alignment(evaluations, trainer_config)
     reward_selected = [
         max(batch.candidates, key=lambda candidate: candidate.reward.list_reward).reward
@@ -1382,9 +1267,7 @@ def run_online_alignment_gate(
                 runtime_config_path=common_context.runtime_config_path,
             )
         )
-    invalid_count = sum(
-        1 for evaluation in evaluations if evaluation.invalid_completion
-    )
+    invalid_count = sum(1 for evaluation in evaluations if evaluation.invalid_completion)
     parse_failure_count = sum(
         1
         for evaluation in evaluations
@@ -1392,11 +1275,7 @@ def run_online_alignment_gate(
     )
     zero_or_invalid_fraction = (
         round(
-            sum(
-                1
-                for evaluation in evaluations
-                if evaluation.invalid_completion or evaluation.list_reward <= 0.0
-            )
+            sum(1 for evaluation in evaluations if evaluation.invalid_completion or evaluation.list_reward <= 0.0)
             / len(evaluations),
             4,
         )
@@ -1431,17 +1310,11 @@ def run_online_alignment_gate(
         "reward_selected_avg_mrr": reward_selected_mrr,
         "prompt_baseline_avg_hit_at_1": prompt_baseline_hit,
         "prompt_baseline_avg_mrr": prompt_baseline_mrr,
-        "parse_failure_rate": round(parse_failure_count / len(evaluations), 4)
-        if evaluations
-        else 0.0,
-        "invalid_completion_rate": round(invalid_count / len(evaluations), 4)
-        if evaluations
-        else 0.0,
+        "parse_failure_rate": round(parse_failure_count / len(evaluations), 4) if evaluations else 0.0,
+        "invalid_completion_rate": round(invalid_count / len(evaluations), 4) if evaluations else 0.0,
         "zero_or_invalid_reward_fraction": zero_or_invalid_fraction,
         "sample_count": len(evaluations),
-        "alignment_threshold": float(
-            getattr(trainer_config, "reward_alignment_threshold", 0.0)
-        ),
+        "alignment_threshold": float(getattr(trainer_config, "reward_alignment_threshold", 0.0)),
     }
     _write_json(trainer_output_dir / "alignment_report.json", diagnostics)
     _write_json(trainer_output_dir / "alignment_summary.json", diagnostics)
@@ -1552,16 +1425,10 @@ def run_policy_rl_pipeline(
         "prompt_rows_path": str(common_context.prompt_rows_path),
         "trainer_dataset_path": str(prepared.dataset_path.resolve()),
         "trainer_output_dir": str(prepared.output_dir.resolve()),
-        "trainer_policy_manifest_path": str(
-            (prepared.output_dir / "policy_manifest.json").resolve()
-        )
-        if trainer_manifest
-        else "",
+        "trainer_policy_manifest_path": str((prepared.output_dir / "policy_manifest.json").resolve()) if trainer_manifest else "",
         "prepare_only": prepare_only,
         "selection_config_path": selection_config_path,
-        "prompt_mode": "strict_interactive_realization"
-        if strict_mode
-        else "z_conditioned_realization",
+        "prompt_mode": "strict_interactive_realization" if strict_mode else "z_conditioned_realization",
         "strict_mode": strict_mode,
         "recommended_small_models": list_small_model_payloads(),
         "shared_fingerprint": common_context.config_fingerprint,

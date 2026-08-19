@@ -1,28 +1,13 @@
 """Joint inference algorithm (Algorithm 1 from the paper)."""
-
 from __future__ import annotations
 
 import dataclasses
 import logging
 import math
-from collections.abc import Callable
-from typing import Any, cast
+from typing import Any, Callable
 
-from forecaster.config import (
-    InferenceConfig,
-    RealizationConfig,
-    strict_inference_score_contract,
-    validate_inference_config,
-)
-from forecaster.inference.deduplication import deduplicate_proposals
-from forecaster.inference.scoring import (
-    build_realization_scorer,
-    build_strict_realization_scorer,
-    compute_joint_score,
-    compute_prior_score,
-    compute_realization_score,
-    compute_strict_joint_score,
-)
+from live_idea_bench.models import PaperRecord
+
 from forecaster.models import (
     Innovation,
     JointCandidate,
@@ -30,16 +15,26 @@ from forecaster.models import (
     ScoredProposal,
     realization_trajectory_to_dict,
 )
+from forecaster.config import InferenceConfig, RealizationConfig
+from forecaster.config import strict_inference_score_contract, validate_inference_config
+from forecaster.inference.scoring import (
+    build_realization_scorer,
+    build_strict_realization_scorer,
+    compute_prior_score,
+    compute_realization_score,
+    compute_joint_score,
+    compute_strict_joint_score,
+)
+from forecaster.inference.deduplication import deduplicate_proposals
 from forecaster.prior.memory import MemoryStore
 from forecaster.prior.sampler import build_prior_scorer
-from forecaster.realization.evidence import retrieve_evidence
-from forecaster.realization.proposal_generator import generate_proposal
-from forecaster.realization.realization_reward import evaluate_strict_trajectory_reward
 from forecaster.realization.strict_runtime import (
     run_strict_realization_rollout,
     serialize_strict_rollout_completion,
 )
-from live_idea_bench.models import PaperRecord
+from forecaster.realization.evidence import retrieve_evidence
+from forecaster.realization.proposal_generator import generate_proposal
+from forecaster.realization.realization_reward import evaluate_strict_trajectory_reward
 
 logger = logging.getLogger(__name__)
 _LOG_EPSILON = 1e-6
@@ -98,23 +93,11 @@ def run_joint_inference(
         if popularity_scorer is not None:
             raise ValueError("Strict joint inference does not allow popularity_scorer.")
     prior_scorer: Callable[[Innovation], float] | None = None
-    realization_scorer: Callable[[str, Innovation, list[PaperRecord]], float] | None = (
-        None
-    )
+    realization_scorer: Callable[[str, Innovation, list[PaperRecord]], float] | None = None
     strict_realization_scorer: Callable[[RealizationTrajectory], float] | None = None
-    if (
-        strict_runtime
-        and inference_config.prior_score_method == "conditional_logprob"
-        and not prior_model_path
-    ):
-        raise ValueError(
-            "Strict joint inference requires a prior_model_path for conditional prior scoring."
-        )
-    if (
-        strict_runtime
-        and inference_config.realization_score_method == "conditional_logprob"
-        and not realization_model_path
-    ):
+    if strict_runtime and inference_config.prior_score_method == "conditional_logprob" and not prior_model_path:
+        raise ValueError("Strict joint inference requires a prior_model_path for conditional prior scoring.")
+    if strict_runtime and inference_config.realization_score_method == "conditional_logprob" and not realization_model_path:
         raise ValueError(
             "Strict joint inference requires a realization_model_path for conditional realization scoring."
         )
@@ -193,29 +176,23 @@ def run_joint_inference(
         all_evidence: list[list[PaperRecord]] = []
         for innovation in innovations:
             evidence = retrieve_evidence(
-                innovation,
-                papers,
+                innovation, papers,
                 top_k=realization_config.evidence_top_k,
                 similarity_threshold=realization_config.evidence_similarity_threshold,
             )
             all_evidence.append(evidence)
 
         # Step 3: Batched proposal generation (single model.generate() call)
-        innovations_and_evidence = list(zip(innovations, all_evidence, strict=False))
+        innovations_and_evidence = list(zip(innovations, all_evidence))
         try:
             proposal_texts = generate_proposals_batch(
                 innovations_and_evidence,
-                # `use_batch` is only truthy when `realization_model_path` is a
-                # non-empty str, but mypy cannot narrow through that variable.
-                cast(str, realization_model_path),
+                realization_model_path,
                 realization_config,
                 context_papers=papers,
             )
         except Exception as exc:
-            logger.warning(
-                "Batch proposal generation failed (%s); falling back to sequential.",
-                exc,
-            )
+            logger.warning("Batch proposal generation failed (%s); falling back to sequential.", exc)
             proposal_texts = None
 
         if proposal_texts is None:
@@ -224,12 +201,8 @@ def run_joint_inference(
             for innovation, evidence in innovations_and_evidence:
                 try:
                     text = generate_proposal(
-                        innovation=innovation,
-                        evidence=evidence,
-                        context_papers=papers,
-                        llm_client=llm_client,
-                        model=model,
-                        config=realization_config,
+                        innovation=innovation, evidence=evidence, context_papers=papers,
+                        llm_client=llm_client, model=model, config=realization_config,
                         realization_model_path=realization_model_path,
                     )
                     proposal_texts.append(text)
@@ -238,52 +211,32 @@ def run_joint_inference(
                     proposal_texts.append("")
 
         # Step 4: Score and build candidates
-        for _i, (
-            innovation,
-            evidence,
-            proposal_text,
-            prior_score,
-            prior_source,
-        ) in enumerate(
-            zip(
-                innovations,
-                all_evidence,
-                proposal_texts,
-                prior_scores,
-                prior_sources,
-                strict=False,
-            )
+        for i, (innovation, evidence, proposal_text, prior_score, prior_source) in enumerate(
+            zip(innovations, all_evidence, proposal_texts, prior_scores, prior_sources)
         ):
             if not proposal_text.strip():
                 continue
             realization_score = compute_realization_score(
-                proposal_text,
-                innovation,
-                evidence,
-                realization_config,
+                proposal_text, innovation, evidence, realization_config,
             )
-            candidates.append(
-                JointCandidate(
-                    innovation=innovation,
-                    prior_score=prior_score,
-                    evidence_paper_ids=tuple(p.paper_id for p in evidence),
-                    proposal_text=proposal_text,
-                    realization_score=realization_score,
-                    popularity_bonus=0.0,
-                    metadata={
-                        "innovation": dataclasses.asdict(innovation),
-                        "prior_score_source": prior_source,
-                        "prior_score_method": inference_config.prior_score_method,
-                        "realization_score_source": "paper_reward_log",
-                        "realization_score_method": inference_config.realization_score_method,
-                        "score_normalization": inference_config.score_normalization,
-                        "proposal_title": proposal_text.splitlines()[0].strip()
-                        if proposal_text.strip()
-                        else "",
-                        "evidence_paper_ids": [p.paper_id for p in evidence],
-                    },
-                )
-            )
+            candidates.append(JointCandidate(
+                innovation=innovation,
+                prior_score=prior_score,
+                evidence_paper_ids=tuple(p.paper_id for p in evidence),
+                proposal_text=proposal_text,
+                realization_score=realization_score,
+                popularity_bonus=0.0,
+                metadata={
+                    "innovation": dataclasses.asdict(innovation),
+                    "prior_score_source": prior_source,
+                    "prior_score_method": inference_config.prior_score_method,
+                    "realization_score_source": "paper_reward_log",
+                    "realization_score_method": inference_config.realization_score_method,
+                    "score_normalization": inference_config.score_normalization,
+                    "proposal_title": proposal_text.splitlines()[0].strip() if proposal_text.strip() else "",
+                    "evidence_paper_ids": [p.paper_id for p in evidence],
+                },
+            ))
 
     else:
         # --- Original sequential path (strict mode or LLM API fallback) ---
@@ -301,8 +254,7 @@ def run_joint_inference(
                             ) from exc
                         logger.warning(
                             "Prior scorer failed for innovation %d (%s); using heuristic memory score.",
-                            i,
-                            exc,
+                            i, exc,
                         )
                         prior_score = compute_prior_score(innovation, memory_store)
                         prior_score_source = "heuristic_memory_fallback"
@@ -316,51 +268,33 @@ def run_joint_inference(
                 strict_trajectory_payload: dict[str, Any] = {}
                 if strict_runtime:
                     trajectory, evidence = run_strict_realization_rollout(
-                        innovation,
-                        papers,
-                        llm_client=llm_client,
-                        model=model,
+                        innovation, papers,
+                        llm_client=llm_client, model=model,
                         realization_config=realization_config,
                         realization_model_path=realization_model_path,
                     )
                     if trajectory.invalid_reason:
-                        raise RuntimeError(
-                            f"Strict realization rollout produced invalid trajectory: {trajectory.invalid_reason}"
-                        )
+                        raise RuntimeError(f"Strict realization rollout produced invalid trajectory: {trajectory.invalid_reason}")
                     if trajectory.result is None:
-                        raise RuntimeError(
-                            "Strict realization rollout did not finish with a proposal."
-                        )
-                    strict_rollout_payload = serialize_strict_rollout_completion(
-                        trajectory
-                    )
-                    strict_trajectory_payload = realization_trajectory_to_dict(
-                        trajectory
-                    )
+                        raise RuntimeError("Strict realization rollout did not finish with a proposal.")
+                    strict_rollout_payload = serialize_strict_rollout_completion(trajectory)
+                    strict_trajectory_payload = realization_trajectory_to_dict(trajectory)
                     proposal_text = trajectory.result.proposal_text
                     search_queries = list(trajectory.result.search_queries)
                     surfaced_paper_ids_by_step = [
                         [obs.paper_id for obs in step.observation]
-                        for step in trajectory.steps
-                        if step.action.action_type == "search"
+                        for step in trajectory.steps if step.action.action_type == "search"
                     ]
-                    selected_evidence_ids = list(
-                        trajectory.result.selected_evidence_ids
-                    )
+                    selected_evidence_ids = list(trajectory.result.selected_evidence_ids)
                 else:
                     evidence = retrieve_evidence(
-                        innovation,
-                        papers,
+                        innovation, papers,
                         top_k=realization_config.evidence_top_k,
                         similarity_threshold=realization_config.evidence_similarity_threshold,
                     )
                     proposal_text = generate_proposal(
-                        innovation=innovation,
-                        evidence=evidence,
-                        context_papers=papers,
-                        llm_client=llm_client,
-                        model=model,
-                        config=realization_config,
+                        innovation=innovation, evidence=evidence, context_papers=papers,
+                        llm_client=llm_client, model=model, config=realization_config,
                         realization_model_path=realization_model_path,
                     )
 
@@ -370,79 +304,51 @@ def run_joint_inference(
                         realization_score = float(strict_realization_scorer(trajectory))
                         realization_score_source = "model_conditional_logprob"
                     except Exception as exc:
-                        raise RuntimeError(
-                            f"Strict realization scoring failed for innovation {i}: {exc}"
-                        ) from exc
+                        raise RuntimeError(f"Strict realization scoring failed for innovation {i}: {exc}") from exc
                 elif realization_scorer is not None:
                     try:
-                        realization_score = float(
-                            realization_scorer(proposal_text, innovation, evidence)
-                        )
+                        realization_score = float(realization_scorer(proposal_text, innovation, evidence))
                         realization_score_source = "model_conditional_logprob"
                     except Exception as exc:
-                        logger.warning(
-                            "Realization scorer failed for innovation %d (%s); using paper reward.",
-                            i,
-                            exc,
-                        )
-                        realization_score = compute_realization_score(
-                            proposal_text, innovation, evidence, realization_config
-                        )
+                        logger.warning("Realization scorer failed for innovation %d (%s); using paper reward.", i, exc)
+                        realization_score = compute_realization_score(proposal_text, innovation, evidence, realization_config)
                         realization_score_source = "paper_reward_log_fallback"
                 else:
                     if strict_runtime:
-                        strict_reward = evaluate_strict_trajectory_reward(
-                            trajectory, papers, realization_config
-                        )
+                        strict_reward = evaluate_strict_trajectory_reward(trajectory, papers, realization_config)
                         if strict_reward.invalid_completion:
-                            raise RuntimeError(
-                                f"Strict realization reward rejected: {strict_reward.invalid_reason}"
-                            )
-                        realization_score = math.log(
-                            strict_reward.total_reward + _LOG_EPSILON
-                        )
+                            raise RuntimeError(f"Strict realization reward rejected: {strict_reward.invalid_reason}")
+                        realization_score = math.log(strict_reward.total_reward + _LOG_EPSILON)
                         realization_score_source = "strict_trajectory_reward_log"
                     else:
-                        realization_score = compute_realization_score(
-                            proposal_text, innovation, evidence, realization_config
-                        )
+                        realization_score = compute_realization_score(proposal_text, innovation, evidence, realization_config)
 
-                candidates.append(
-                    JointCandidate(
-                        innovation=innovation,
-                        prior_score=prior_score,
-                        evidence_paper_ids=tuple(p.paper_id for p in evidence),
-                        proposal_text=proposal_text,
-                        realization_score=realization_score,
-                        popularity_bonus=0.0,
-                        metadata={
-                            "innovation": dataclasses.asdict(innovation),
-                            "prior_score_source": prior_score_source,
-                            "prior_score_method": inference_config.prior_score_method,
-                            "realization_score_source": realization_score_source,
-                            "realization_score_method": inference_config.realization_score_method,
-                            "score_normalization": inference_config.score_normalization,
-                            "proposal_title": proposal_text.splitlines()[0].strip()
-                            if proposal_text.strip()
-                            else "",
-                            "evidence_paper_ids": [p.paper_id for p in evidence],
-                            "search_queries": search_queries,
-                            "surfaced_paper_ids_by_step": surfaced_paper_ids_by_step,
-                            "selected_evidence_ids": selected_evidence_ids,
-                            "policy_rollout": strict_rollout_payload,
-                            "strict_trajectory": strict_trajectory_payload,
-                        },
-                    )
-                )
+                candidates.append(JointCandidate(
+                    innovation=innovation, prior_score=prior_score,
+                    evidence_paper_ids=tuple(p.paper_id for p in evidence),
+                    proposal_text=proposal_text, realization_score=realization_score,
+                    popularity_bonus=0.0,
+                    metadata={
+                        "innovation": dataclasses.asdict(innovation),
+                        "prior_score_source": prior_score_source,
+                        "prior_score_method": inference_config.prior_score_method,
+                        "realization_score_source": realization_score_source,
+                        "realization_score_method": inference_config.realization_score_method,
+                        "score_normalization": inference_config.score_normalization,
+                        "proposal_title": proposal_text.splitlines()[0].strip() if proposal_text.strip() else "",
+                        "evidence_paper_ids": [p.paper_id for p in evidence],
+                        "search_queries": search_queries,
+                        "surfaced_paper_ids_by_step": surfaced_paper_ids_by_step,
+                        "selected_evidence_ids": selected_evidence_ids,
+                        "policy_rollout": strict_rollout_payload,
+                        "strict_trajectory": strict_trajectory_payload,
+                    },
+                ))
 
             except Exception as exc:
                 if strict_runtime:
-                    raise RuntimeError(
-                        f"Strict joint inference failed for innovation {i}: {exc}"
-                    ) from exc
-                logger.warning(
-                    "Skipping innovation %d (%s) due to error: %s", i, innovation, exc
-                )
+                    raise RuntimeError(f"Strict joint inference failed for innovation {i}: {exc}") from exc
+                logger.warning("Skipping innovation %d (%s) due to error: %s", i, innovation, exc)
 
     # Compute joint scores once, sort descending
     scored: list[tuple[float, JointCandidate]] = []
@@ -466,9 +372,7 @@ def run_joint_inference(
     sorted_candidates = [c for _, c in sorted_scored]
 
     # Deduplicate
-    deduped = deduplicate_proposals(
-        sorted_candidates, threshold=inference_config.dedup_threshold
-    )
+    deduped = deduplicate_proposals(sorted_candidates, threshold=inference_config.dedup_threshold)
 
     # Take top-K
     top_k_candidates = deduped[: inference_config.top_k]
@@ -493,9 +397,7 @@ def run_joint_inference(
                 "strict_score_contract": strict_inference_score_contract(
                     score_normalization=inference_config.score_normalization,
                     score_temperature=inference_config.score_temperature,
-                )
-                if strict_runtime
-                else {},
+                ) if strict_runtime else {},
             },
         )
         proposals.append(proposal)

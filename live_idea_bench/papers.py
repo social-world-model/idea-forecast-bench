@@ -3,17 +3,16 @@ from __future__ import annotations
 import calendar
 import json
 import re
-from collections.abc import Mapping
 from datetime import date, datetime
 from pathlib import Path
-from typing import IO, Any
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 from live_idea_bench.models import PaperRecord
 
-PathLike = str | Path
+PathLike = Union[str, Path]
 
 
-def find_markdown_files(root: Path) -> list[Path]:
+def find_markdown_files(root: Path) -> List[Path]:
     return sorted(root.rglob("*.md"))
 
 
@@ -35,7 +34,7 @@ def truncate(text: str, max_chars: int) -> str:
     return text[:max_chars] + "\n...(truncated)"
 
 
-def load_json(path: Path) -> dict[str, Any]:
+def load_json(path: Path) -> Dict[str, Any]:
     if not path.exists():
         return {}
     try:
@@ -52,10 +51,10 @@ def save_json(path: Path, obj: Mapping[str, Any]) -> None:
 
 
 def filter_by_arxiv_date(
-    results: dict[str, list[str]],
+    results: Dict[str, List[str]],
     start_yymm: str,
     end_yymm: str,
-) -> dict[str, list[str]]:
+) -> Dict[str, List[str]]:
     filtered = {}
     for file_path, keywords in results.items():
         filename = Path(file_path).name
@@ -67,18 +66,16 @@ def filter_by_arxiv_date(
 
 
 def group_by_keywords(
-    results: dict[str, list[str]],
-    target_categories: list[str] | None = None,
+    results: Dict[str, List[str]],
+    target_categories: List[str] | None = None,
     fuzzy_threshold: float = 0.6,
     min_papers: int = 1,
-) -> dict[str, list[str]]:
+) -> Dict[str, List[str]]:
     import difflib
     from collections import defaultdict
 
     keyword_map = defaultdict(set)
-    targets_lower = (
-        [item.lower() for item in target_categories] if target_categories else []
-    )
+    targets_lower = [item.lower() for item in target_categories] if target_categories else []
 
     for file_path, keywords in results.items():
         for keyword in keywords:
@@ -109,7 +106,7 @@ def group_by_keywords(
                 keyword_map[normalized_keyword].add(file_path)
 
     return {
-        keyword: sorted(paths)
+        keyword: sorted(list(paths))
         for keyword, paths in keyword_map.items()
         if len(paths) >= min_papers
     }
@@ -224,7 +221,7 @@ def _to_date_text(raw: object) -> str:
     return str(raw or "").strip()
 
 
-def _extract_title_and_body(text: str, path: Path) -> tuple[str, str]:
+def _extract_title_and_body(text: str, path: Path) -> Tuple[str, str]:
     match = re.search(r"^#\s+(.+?)\s*$", text, flags=re.MULTILINE)
     if not match:
         return path.stem, text
@@ -239,9 +236,9 @@ def _normalize_metadata_key(raw: str) -> str:
     return key
 
 
-def _extract_preamble_metadata(body: str) -> tuple[dict[str, object], str]:
+def _extract_preamble_metadata(body: str) -> Tuple[Dict[str, object], str]:
     lines = body.splitlines()
-    metadata: dict[str, object] = {}
+    metadata: Dict[str, object] = {}
     consumed = 0
 
     for idx, line in enumerate(lines):
@@ -268,7 +265,7 @@ def _infer_month_from_parent_dirs(path: Path) -> str:
     raise ValueError(f"Cannot determine month for {path}")
 
 
-def _extract_published_date(metadata: dict[str, object], path: Path) -> str:
+def _extract_published_date(metadata: Dict[str, object], path: Path) -> str:
     raw_date = metadata.get("date")
     date_text = _to_date_text(raw_date)
     if date_text:
@@ -281,7 +278,7 @@ def _extract_published_date(metadata: dict[str, object], path: Path) -> str:
     return month_end_date(_infer_month_from_parent_dirs(path))
 
 
-def _extract_keywords(metadata: dict[str, object]) -> list[str]:
+def _extract_keywords(metadata: Dict[str, object]) -> List[str]:
     raw = metadata.get("keywords")
     if isinstance(raw, list):
         values = [str(v).strip().lower() for v in raw if str(v).strip()]
@@ -309,55 +306,18 @@ def _normalize_metadata_value(value: object) -> Any:
     return str(value)
 
 
-_TITLE_STOP_WORDS = frozenset(
-    {
-        "a",
-        "an",
-        "the",
-        "of",
-        "for",
-        "in",
-        "on",
-        "with",
-        "and",
-        "or",
-        "to",
-        "is",
-        "by",
-        "from",
-        "at",
-        "its",
-        "via",
-        "are",
-        "we",
-        "our",
-        "can",
-        "be",
-        "has",
-        "have",
-        "this",
-        "that",
-        "it",
-        "not",
-        "but",
-        "as",
-        "do",
-        "how",
-        "what",
-        "which",
-        "into",
-        "over",
-        "new",
-        "more",
-        "than",
-    }
-)
+_TITLE_STOP_WORDS = frozenset({
+    "a", "an", "the", "of", "for", "in", "on", "with", "and", "or", "to",
+    "is", "by", "from", "at", "its", "via", "are", "we", "our", "can",
+    "be", "has", "have", "this", "that", "it", "not", "but", "as", "do",
+    "how", "what", "which", "into", "over", "new", "more", "than",
+})
 
 
-def _keywords_from_title(title: str) -> list[str]:
+def _keywords_from_title(title: str) -> List[str]:
     tokens = re.findall(r"[A-Za-z][A-Za-z0-9]+", title)
-    seen: set[str] = set()
-    keywords: list[str] = []
+    seen: set = set()
+    keywords: List[str] = []
     for token in tokens:
         low = token.lower()
         if low in _TITLE_STOP_WORDS or len(low) < 3 or low in seen:
@@ -367,7 +327,7 @@ def _keywords_from_title(title: str) -> list[str]:
     return keywords
 
 
-def _split_preface_and_sections(body: str) -> tuple[str, str]:
+def _split_preface_and_sections(body: str) -> Tuple[str, str]:
     match = re.search(r"^#{1,6}\s+\S.+$", body, flags=re.MULTILINE)
     if not match:
         return body.strip(), ""
@@ -390,21 +350,13 @@ def _extract_summary(body: str) -> str:
 
     preface, _sections = _split_preface_and_sections(body)
     if preface:
-        paragraphs = [
-            part.strip() for part in re.split(r"\n\s*\n", preface) if part.strip()
-        ]
+        paragraphs = [part.strip() for part in re.split(r"\n\s*\n", preface) if part.strip()]
         for index, paragraph in enumerate(paragraphs):
-            match = re.match(
-                r"^Abstract\s*[—–:-]\s*(.*)$",
-                paragraph,
-                flags=re.IGNORECASE | re.DOTALL,
-            )
+            match = re.match(r"^Abstract\s*[—–:-]\s*(.*)$", paragraph, flags=re.IGNORECASE | re.DOTALL)
             if not match:
                 continue
             abstract_parts = [match.group(1).strip()] + paragraphs[index + 1 :]
-            return _clean_summary_text(
-                "\n\n".join(part for part in abstract_parts if part)
-            )
+            return _clean_summary_text("\n\n".join(part for part in abstract_parts if part))
         return _clean_summary_text(preface)
 
     return _clean_summary_text(clean_paper_content(body))
@@ -418,13 +370,13 @@ def _strip_reference_prefix(line: str) -> str:
     return re.sub(r"^(?:\[\d+\]|\d+[.)])\s+", "", line).strip()
 
 
-def _extract_bibliography(body: str) -> list[dict[str, Any]]:
+def _extract_bibliography(body: str) -> List[Dict[str, Any]]:
     references_text = _extract_section(body, "References")
     if not references_text:
         return []
 
-    entries: list[str] = []
-    current_parts: list[str] = []
+    entries: List[str] = []
+    current_parts: List[str] = []
     saw_blank = False
     for raw_line in references_text.splitlines():
         line = " ".join(raw_line.split()).strip()
@@ -454,7 +406,7 @@ def _extract_bibliography(body: str) -> list[dict[str, Any]]:
     return [{"text": entry} for entry in entries if entry]
 
 
-def parse_markdown_paper(path: Path) -> PaperRecord | None:
+def parse_markdown_paper(path: Path) -> Optional[PaperRecord]:
     text = read_file_content(path)
     if not text.strip():
         return None
@@ -492,7 +444,7 @@ def parse_markdown_paper(path: Path) -> PaperRecord | None:
     )
 
 
-def _arxiv_dir_in_range(name: str, start_idx: int | None, end_idx: int | None) -> bool:
+def _arxiv_dir_in_range(name: str, start_idx: Optional[int], end_idx: Optional[int]) -> bool:
     """Fast pre-filter: arxiv IDs start with YYMM (e.g. 2401 = 2024-01).
 
     Returns True if the directory name could contain papers within [start_idx, end_idx].
@@ -512,14 +464,16 @@ def _arxiv_dir_in_range(name: str, start_idx: int | None, end_idx: int | None) -
         return True
     if start_idx is not None and idx < start_idx:
         return False
-    return not (end_idx is not None and idx > end_idx)
+    if end_idx is not None and idx > end_idx:
+        return False
+    return True
 
 
 def _parse_and_filter(
     file_path: Path,
-    start_idx: int | None,
-    end_idx: int | None,
-) -> PaperRecord | None:
+    start_idx: Optional[int],
+    end_idx: Optional[int],
+) -> Optional[PaperRecord]:
     """Parse a single markdown file and apply month filter. Thread-safe."""
     if file_path.name.lower() == "readme.md":
         return None
@@ -541,11 +495,10 @@ def _parse_and_filter(
 def _default_workers() -> int:
     """Use all available CPU cores, capped at 32 to avoid fd exhaustion."""
     import os
-
     return min(os.cpu_count() or 4, 32)
 
 
-def _discover_files_for_dir(args: tuple[str, str]) -> list[Path]:
+def _discover_files_for_dir(args: tuple) -> List[Path]:
     """Discover .md files in a single paper directory. Thread-safe."""
     child_path, child_name = args
     child = Path(child_path)
@@ -557,12 +510,9 @@ def _discover_files_for_dir(args: tuple[str, str]) -> list[Path]:
     return [p for p in child.rglob("*.md") if p.name.lower() != "readme.md"]
 
 
-def _cache_path_for(
-    input_dir: Path, start_month: str | None, end_month: str | None
-) -> Path:
+def _cache_path_for(input_dir: Path, start_month: Optional[str], end_month: Optional[str]) -> Path:
     """Return a deterministic pickle cache path for the given query."""
     import hashlib
-
     key = f"{Path(input_dir).resolve()}|{start_month}|{end_month}"
     h = hashlib.sha256(key.encode()).hexdigest()[:16]
     cache_dir = Path(input_dir) / ".paper_cache"
@@ -572,12 +522,12 @@ def _cache_path_for(
 
 def load_papers_from_markdown(
     input_dir: Path,
-    start_month: str | None = None,
-    end_month: str | None = None,
+    start_month: Optional[str] = None,
+    end_month: Optional[str] = None,
     *,
-    workers: int | None = None,
+    workers: Optional[int] = None,
     use_cache: bool = True,
-) -> list[PaperRecord]:
+) -> List[PaperRecord]:
     import os
     import pickle
     from concurrent.futures import ThreadPoolExecutor
@@ -586,14 +536,10 @@ def load_papers_from_markdown(
     cache_file = _cache_path_for(input_dir, start_month, end_month)
     if use_cache and cache_file.is_file():
         try:
-            # Declared up front: the same name is rebound to a writer below.
-            f: IO[bytes]
             with open(cache_file, "rb") as f:
                 cached = pickle.load(f)
             if isinstance(cached, list) and cached:
-                print(
-                    f"[papers] Loaded {len(cached)} papers from cache ({cache_file.name})"
-                )
+                print(f"[papers] Loaded {len(cached)} papers from cache ({cache_file.name})")
                 return cached
         except Exception:
             pass  # stale/corrupt cache — rebuild
@@ -606,15 +552,12 @@ def load_papers_from_markdown(
 
     # Fast path: single os.listdir + prefix set filter — avoids slow iterdir/glob
     # on 239k-entry directories. Then parallel file discovery + parsing.
-    if start_idx is not None or end_idx is not None:
+    if (start_idx is not None or end_idx is not None):
         input_dir = Path(input_dir)
         s_idx = start_idx if start_idx is not None else 0
-        # month_to_index is year*12 + month, so 2024-01 is 24288 -- a 9999
-        # sentinel made range(s_idx, 9999 + 1) empty for every real date and
-        # silently returned zero papers whenever end_month was omitted.
-        e_idx = end_idx if end_idx is not None else month_to_index("2100-12")
+        e_idx = end_idx if end_idx is not None else 9999
         # Build YYMM prefix set for O(1) lookup
-        prefixes: set[str] = set()
+        prefixes: set = set()
         for idx in range(s_idx, e_idx + 1):
             yy = (idx // 12) % 100
             mm = (idx % 12) + 1
@@ -623,7 +566,7 @@ def load_papers_from_markdown(
         # Accept both the legacy arXiv "YYMM" prefix layout (e.g. "2603") and the
         # canonical "YYYY-MM" month-directory layout (e.g. "2026-03").
         all_names = os.listdir(input_dir)
-        dir_args: list[tuple[str, str]] = []
+        dir_args: List[tuple] = []
         for name in all_names:
             keep = len(name) >= 4 and name[:4] in prefixes
             if not keep and re.match(r"^\d{4}-\d{2}$", name):
@@ -633,16 +576,14 @@ def load_papers_from_markdown(
                     keep = False
             if keep:
                 dir_args.append((str(input_dir / name), name))
-        print(
-            f"[papers] Found {len(dir_args)} dirs, discovering .md files ({workers} workers)..."
-        )
+        print(f"[papers] Found {len(dir_args)} dirs, discovering .md files ({workers} workers)...")
         effective_disc = min(max(1, workers), len(dir_args)) if dir_args else 1
         if effective_disc <= 1:
             nested = [_discover_files_for_dir(a) for a in dir_args]
         else:
             with ThreadPoolExecutor(max_workers=effective_disc) as pool:
                 nested = list(pool.map(_discover_files_for_dir, dir_args))
-        files: list[Path] = []
+        files: List[Path] = []
         for batch in nested:
             files.extend(batch)
     else:
@@ -654,17 +595,13 @@ def load_papers_from_markdown(
         records = [_parse_and_filter(f, start_idx, end_idx) for f in files]
     else:
         with ThreadPoolExecutor(max_workers=effective_workers) as pool:
-            records = list(
-                pool.map(
-                    lambda f: _parse_and_filter(f, start_idx, end_idx),
-                    files,
-                )
-            )
+            records = list(pool.map(
+                lambda f: _parse_and_filter(f, start_idx, end_idx),
+                files,
+            ))
 
     results = [r for r in records if r is not None]
-    results.sort(
-        key=lambda p: (date_to_ordinal(get_paper_published_date(p)), p.paper_id)
-    )
+    results.sort(key=lambda p: (date_to_ordinal(get_paper_published_date(p)), p.paper_id))
 
     # --- Save to cache ---
     if use_cache and results:

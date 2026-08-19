@@ -1,5 +1,4 @@
 """LLM-based hindsight innovation extraction."""
-
 from __future__ import annotations
 
 import json
@@ -7,11 +6,12 @@ import logging
 import re
 from typing import Any
 
-from forecaster.config import HindsightConfig
-from forecaster.hindsight.prompt import build_hindsight_prompt
-from forecaster.models import ALLOWED_INNOVATION_OPERATORS, Innovation
 from live_idea_bench.llm import get_response_from_llm
 from live_idea_bench.models import PaperRecord
+
+from forecaster.config import HindsightConfig
+from forecaster.hindsight.prompt import build_hindsight_prompt
+from forecaster.models import Innovation, ALLOWED_INNOVATION_OPERATORS
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +36,7 @@ def parse_innovation(text: str) -> Innovation:
     try:
         data = json.loads(stripped)
     except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"LLM output is not valid JSON: {exc!r}\nRaw text: {text!r}"
-        ) from exc
+        raise ValueError(f"LLM output is not valid JSON: {exc!r}\nRaw text: {text!r}") from exc
 
     if not isinstance(data, dict):
         raise ValueError(f"Expected JSON object, got {type(data).__name__}: {text!r}")

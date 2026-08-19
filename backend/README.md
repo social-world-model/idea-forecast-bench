@@ -11,19 +11,20 @@ backtests/generation on request, and the daily ingest/eval pipeline. This is a
 - `backend/strategy_store.py` — JSON-backed strategy persistence under `backend/strategies/`
 - `backend/services/daily_pipeline.py` — daily ingest/eval/generate pipeline
 - `backend/services/arxiv_ingest.py` — arXiv ingestion service
+- `backend/requirements.txt` — backend-only dependencies (no `torch` / ML stack)
+- `backend/Dockerfile` — lightweight API image
 
 ## 1. Environment setup
 
 ```bash
 conda create -n live-idea-bench python=3.11 -y
 conda activate live-idea-bench
-poetry install --with webapp
+pip install -r backend/requirements.txt
 ```
 
-The `webapp` group adds only Flask and flask-cors on top of the core
-dependencies. It does not install `torch` or the local training stack, so the
-API runtime stays lightweight — that is why Flask is an optional group rather
-than a core dependency of the benchmark package.
+`backend/requirements.txt` is intentionally backend-only — it does not install
+`torch` or the local training stack, so the API runtime (and Docker image) stays
+lightweight.
 
 ## 2. Environment variables
 

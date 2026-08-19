@@ -5,7 +5,7 @@
 #   1. No LoRA attached — the judge is the base model, not the trained policy.
 #   2. Sized for a single inference workload, not concurrent training rollouts.
 #   3. Defaults the served model name to `qwen3.5-9b-instruct` to match
-#      examples/forecaster/phase2_rubric_validation.py's expectation.
+#      scripts/phase2_rubric_validation.py's expectation.
 #
 # Usage:
 #   bash scripts/launch_judge_sglang.sh                       # foreground
@@ -15,7 +15,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-PYTHON_BIN="${PYTHON_BIN:-python}"
+PYTHON_BIN="${PYTHON_BIN:-/home/jiayey3/.conda/envs/ideabench/bin/python}"
 PORT="${PORT:-30000}"
 HOST="${HOST:-127.0.0.1}"
 MODEL_ALIAS="${MODEL_ALIAS:-qwen3.5-9b}"

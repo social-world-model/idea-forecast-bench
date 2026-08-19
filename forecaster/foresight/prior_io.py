@@ -6,14 +6,12 @@ This module converts the Phase-1 D_z (forecaster.foresight.dz) into those
 rows and exposes a thin `RawMemoryStore` so the existing sampler can be
 fed a precomputed `memory_text` string.
 """
-
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from forecaster.foresight.dz import load_dz_rows
 from forecaster.foresight.operators import (
@@ -22,15 +20,16 @@ from forecaster.foresight.operators import (
 )
 from forecaster.prior.prompting import render_prior_user_prompt
 
+
 # --------------------------------------------------------------------------- D_z -> SFT samples
 
 
 def dz_row_to_sft_sample(
-    row: dict[str, Any],
+    row: dict,
     *,
     inventory: OperatorInventory,
     drop_unmappable: bool,
-) -> dict[str, str] | None:
+) -> dict | None:
     """Convert one D_z row into a `{input, target, ...}` SFT sample.
 
     Returns None if the row has no memory_text (i.e., the D_z was built
@@ -54,9 +53,7 @@ def dz_row_to_sft_sample(
         "target": json.dumps(target, ensure_ascii=False),
         "cutoff_month": str(row.get("cutoff_t", "") or "")[:7],
         "future_paper_id": str(row.get("source_future_id", "") or ""),
-        "future_paper_published_date": str(
-            row.get("future_paper_published_date", "") or ""
-        ),
+        "future_paper_published_date": str(row.get("future_paper_published_date", "") or ""),
         "memory_prompt": memory_text,
         "operator_closed": op_closed,
         "topic_id": str(row.get("topic_id", "") or ""),
@@ -68,7 +65,7 @@ def build_sft_samples_from_dz(
     *,
     inventory: OperatorInventory | None = None,
     drop_unmappable: bool = True,
-) -> list[dict[str, str]]:
+) -> list[dict]:
     """Stream a D_z JSONL into SFT samples.
 
     Rows missing `memory_text` are skipped (a corpus must be passed in
@@ -76,13 +73,11 @@ def build_sft_samples_from_dz(
     """
     inventory = inventory or load_operator_inventory()
     rows = load_dz_rows(dz_path)
-    samples: list[dict[str, str]] = []
+    samples: list[dict] = []
     skipped_no_memory = 0
     skipped_unmappable = 0
     for r in rows:
-        out = dz_row_to_sft_sample(
-            r, inventory=inventory, drop_unmappable=drop_unmappable
-        )
+        out = dz_row_to_sft_sample(r, inventory=inventory, drop_unmappable=drop_unmappable)
         if out is None:
             if not r.get("memory_text"):
                 skipped_no_memory += 1
@@ -93,7 +88,7 @@ def build_sft_samples_from_dz(
     return samples
 
 
-def save_sft_jsonl(samples: list[dict[str, str]], path: str | Path) -> Path:
+def save_sft_jsonl(samples: list[dict], path: str | Path) -> Path:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     with p.open("w", encoding="utf-8") as fh:
@@ -120,7 +115,7 @@ class RawMemoryStore:
     def format_for_prompt(self, *, top_n: int | None = None) -> str:
         return self.memory_text
 
-    def exclude_source_paper_ids(self, paper_ids: Iterable[str]) -> RawMemoryStore:
+    def exclude_source_paper_ids(self, paper_ids: Iterable[str]) -> "RawMemoryStore":
         # No-op: RawMemoryStore doesn't track per-entry provenance.
         # The training pipeline calls this to avoid label leakage; since
         # memory_text is already a function of the legal cutoff, the call

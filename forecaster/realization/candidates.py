@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from live_idea_bench.models import IdeaPrediction
 from forecaster.realization.episodes import RLEpisode
 from forecaster.realization.reward import RLRewardEvaluation
-from live_idea_bench.models import IdeaPrediction
 
 
 @dataclass

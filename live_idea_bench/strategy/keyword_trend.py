@@ -1,21 +1,14 @@
 from collections import Counter
-from typing import TypedDict
+from typing import Dict, List
 
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.papers import add_months, month_to_index
 from live_idea_bench.strategy.base import IdeaStrategy
 
 
-class _ScoredKeyword(TypedDict):
-    keyword: str
-    score: float
-    recent_count: float
-    total_count: float
-
-
-def _unique_ordered(items: list[str]) -> list[str]:
-    out: list[str] = []
-    seen: set[str] = set()
+def _unique_ordered(items: List[str]) -> List[str]:
+    out: List[str] = []
+    seen = set()
     for item in items:
         if item in seen:
             continue
@@ -41,24 +34,20 @@ class KeywordTrendStrategy(IdeaStrategy):
 
     def generate(
         self,
-        train_papers: list[PaperRecord],
+        train_papers: List[PaperRecord],
         cutoff_month: str,
         top_k: int,
-    ) -> list[IdeaPrediction]:
+    ) -> List[IdeaPrediction]:
         if not train_papers:
             return []
 
         cutoff_idx = month_to_index(cutoff_month)
-        recent_start_idx = month_to_index(
-            add_months(cutoff_month, -(self.recent_months - 1))
-        )
-        overall: Counter[str] = Counter()
-        recent: Counter[str] = Counter()
+        recent_start_idx = month_to_index(add_months(cutoff_month, -(self.recent_months - 1)))
+        overall = Counter()
+        recent = Counter()
 
         for paper in train_papers:
-            unique_keys = _unique_ordered(
-                [keyword.lower() for keyword in paper.keywords if keyword.strip()]
-            )
+            unique_keys = _unique_ordered([keyword.lower() for keyword in paper.keywords if keyword.strip()])
             for key in unique_keys:
                 if key in self.stop_terms:
                     continue
@@ -70,7 +59,7 @@ class KeywordTrendStrategy(IdeaStrategy):
         if not overall:
             return []
 
-        scored: list[_ScoredKeyword] = []
+        scored: List[Dict[str, object]] = []
         for keyword, total_count in overall.items():
             if total_count < self.min_keyword_freq:
                 continue
@@ -97,16 +86,11 @@ class KeywordTrendStrategy(IdeaStrategy):
                     }
                 )
 
-        scored.sort(
-            key=lambda item: (-item["score"], -item["recent_count"], item["keyword"])
-        )
-        results: list[IdeaPrediction] = []
+        scored.sort(key=lambda item: (-item["score"], -item["recent_count"], item["keyword"]))
+        results: List[IdeaPrediction] = []
         for rank, item in enumerate(scored[:top_k], start=1):
             keyword = item["keyword"]
-            confidence = min(
-                0.99,
-                0.35 + (0.08 * item["recent_count"]) + (0.02 * item["total_count"]),
-            )
+            confidence = min(0.99, 0.35 + (0.08 * item["recent_count"]) + (0.02 * item["total_count"]))
             results.append(
                 IdeaPrediction(
                     rank=rank,

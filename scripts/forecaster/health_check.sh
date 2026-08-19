@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set -euo pipefail
 # 15-minute health probe for an active GRPO run. Loops every 900 s and writes
 # a one-line status record to <out_dir>/health.log. On a critical condition
 # also writes <out_dir>/ALERT_<reason>.txt so the orchestrator (or a human)

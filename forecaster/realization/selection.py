@@ -4,15 +4,9 @@ import dataclasses
 import logging
 import re
 
-from forecaster.realization.config import SelectionConfig
 from live_idea_bench.models import IdeaPrediction, PaperRecord
-from live_idea_bench.predictor import (
-    _base_score,
-    _dedup_predictions,
-    _jaccard,
-    _prediction_text,
-    _top_terms,
-)
+from live_idea_bench.predictor import _base_score, _dedup_predictions, _jaccard, _prediction_text, _top_terms
+from forecaster.realization.config import SelectionConfig
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +18,7 @@ def _title_key(prediction: IdeaPrediction) -> str:
 def _signal_terms(train_papers: list[PaperRecord]) -> list[str]:
     recent = train_papers[-20:]
     return _top_terms(
-        [paper.summary for paper in recent]
-        + [keyword for paper in recent for keyword in paper.keywords],
+        list(paper.summary for paper in recent) + [keyword for paper in recent for keyword in paper.keywords],
         limit=20,
     )
 
@@ -55,9 +48,7 @@ def select_top_k_predictions(
         title_frequency[key] = title_frequency.get(key, 0) + 1
 
     unique_candidate_titles = len(title_frequency)
-    deduped = _dedup_predictions(
-        candidates, threshold=selection_config.dedup_similarity_threshold
-    )
+    deduped = _dedup_predictions(candidates, threshold=selection_config.dedup_similarity_threshold)
     dedup_retention_ratio = round(len(deduped) / max(1, len(candidates)), 4)
     logger.info(
         "Selector candidate pool: total=%d unique_titles=%d deduped=%d retention=%.4f",
@@ -91,9 +82,7 @@ def select_top_k_predictions(
             "unique_candidate_titles": unique_candidate_titles,
             "dedup_retention_ratio": dedup_retention_ratio,
         }
-        scored_pool.append(
-            (dataclasses.replace(candidate, metadata=metadata), relevance)
-        )
+        scored_pool.append((dataclasses.replace(candidate, metadata=metadata), relevance))
 
     scored_pool.sort(key=lambda item: (-item[1], item[0].title.lower()))
     selected: list[IdeaPrediction] = []
@@ -114,13 +103,11 @@ def select_top_k_predictions(
         best_idx = 0
         best_score = float("-inf")
         for idx, (candidate, relevance) in enumerate(scored_pool):
-            similarity = max(
-                _jaccard(_prediction_text(candidate), _prediction_text(chosen))
-                for chosen in selected
-            )
+            similarity = max(_jaccard(_prediction_text(candidate), _prediction_text(chosen)) for chosen in selected)
             novelty_to_selected = 1.0 - similarity
-            mmr_score = (selection_config.mmr_relevance_weight * relevance) + (
-                selection_config.mmr_diversity_weight * novelty_to_selected
+            mmr_score = (
+                (selection_config.mmr_relevance_weight * relevance)
+                + (selection_config.mmr_diversity_weight * novelty_to_selected)
             )
             if mmr_score > best_score:
                 best_score = mmr_score
@@ -133,10 +120,7 @@ def select_top_k_predictions(
                 rank=len(selected) + 1,
                 score=round(best_score, 4),
                 confidence=round(relevance, 4),
-                metadata={
-                    **prediction.metadata,
-                    "selector_mmr_score": round(best_score, 4),
-                },
+                metadata={**prediction.metadata, "selector_mmr_score": round(best_score, 4)},
             )
         )
 

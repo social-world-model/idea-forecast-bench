@@ -12,16 +12,14 @@ This module is *backend-agnostic*: pass any callable
 `scorer(idea, candidate, rubric) -> JudgeResult` (e.g. RubricJudge.score
 or a stubbed function used in tests).
 """
-
 from __future__ import annotations
 
 import csv
 import logging
 import math
-from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Callable, Iterable, Sequence
 
 from forecaster.foresight.judge import JudgeResult, RubricJudge
 from forecaster.foresight.rubric import Rubric
@@ -33,8 +31,8 @@ logger = logging.getLogger(__name__)
 class LabeledPair:
     idea_text: str
     candidate_text: str
-    label: int  # 1 = positive (post-cutoff emerged), 0 = negative (pre-cutoff existing)
-    meta: dict[str, Any] = field(default_factory=dict)
+    label: int                # 1 = positive (post-cutoff emerged), 0 = negative (pre-cutoff existing)
+    meta: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -52,12 +50,12 @@ class RubricValidationReport:
     auc: float
     positive_median: float
     negative_max: float
-    leakage_hits: int  # negatives with score >= positive_median
-    leakage_examples: list[dict[str, Any]] = field(default_factory=list)
+    leakage_hits: int                                # negatives with score >= positive_median
+    leakage_examples: list[dict] = field(default_factory=list)
     threshold_used: float = 0.70
     passed: bool = False
 
-    def to_json(self) -> dict[str, Any]:
+    def to_json(self) -> dict:
         return {
             "topic_id": self.topic_id,
             "cutoff_t": self.cutoff_t,
@@ -99,13 +97,11 @@ def compute_auc(
         j = i
         while j + 1 < len(combined) and combined[j + 1][0] == combined[i][0]:
             j += 1
-        avg_rank = (i + j) / 2.0 + 1.0  # 1-indexed average
+        avg_rank = (i + j) / 2.0 + 1.0      # 1-indexed average
         for k in range(i, j + 1):
             ranks[k] = avg_rank
         i = j + 1
-    rank_sum_pos = sum(
-        r for r, (_, lbl) in zip(ranks, combined, strict=False) if lbl == 1
-    )
+    rank_sum_pos = sum(r for r, (_, lbl) in zip(ranks, combined) if lbl == 1)
     u = rank_sum_pos - n_pos * (n_pos + 1) / 2.0
     return u / (n_pos * n_neg)
 
@@ -170,7 +166,10 @@ def validate_rubric(
     auc = compute_auc([s.score for s in pos], [s.score for s in neg])
     pos_med = _median([s.score for s in pos])
     neg_max = max((s.score for s in neg), default=float("nan"))
-    leakage = [s for s in neg if not math.isnan(pos_med) and s.score >= pos_med]
+    leakage = [
+        s for s in neg
+        if not math.isnan(pos_med) and s.score >= pos_med
+    ]
     leakage.sort(key=lambda s: -s.score)
     leakage_examples = [
         {
@@ -204,15 +203,13 @@ def write_scored_pairs_csv(scored: Sequence[ScoredPair], path: str | Path) -> Pa
         w = csv.writer(fh)
         w.writerow(["label", "score", "idea_preview", "candidate_preview", "meta"])
         for s in scored:
-            w.writerow(
-                [
-                    s.pair.label,
-                    f"{s.score:.4f}",
-                    s.pair.idea_text[:160].replace("\n", " "),
-                    s.pair.candidate_text[:160].replace("\n", " "),
-                    str(s.pair.meta),
-                ]
-            )
+            w.writerow([
+                s.pair.label,
+                f"{s.score:.4f}",
+                s.pair.idea_text[:160].replace("\n", " "),
+                s.pair.candidate_text[:160].replace("\n", " "),
+                str(s.pair.meta),
+            ])
     return p
 
 

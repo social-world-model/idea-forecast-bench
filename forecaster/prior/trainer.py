@@ -132,14 +132,14 @@ def train_prior(
     """
     try:
         import torch
-        from peft import LoraConfig, TaskType, get_peft_model
         from transformers import (
-            AutoModelForCausalLM,
             AutoTokenizer,
-            DataCollatorForSeq2Seq,
-            Trainer,
+            AutoModelForCausalLM,
             TrainingArguments,
+            Trainer,
+            DataCollatorForSeq2Seq,
         )
+        from peft import get_peft_model, LoraConfig, TaskType
     except ImportError as exc:
         raise ImportError(
             "SFT training requires: torch, transformers, peft, datasets. "

@@ -7,12 +7,11 @@ downstream code (prior SFT, rubric retrieval, reward grounding) only
 relies on the returned string being a stable, deterministic projection
 of `papers_before_t`.
 """
-
 from __future__ import annotations
 
-from collections import defaultdict
-from collections.abc import Sequence
+from collections import Counter, defaultdict
 from datetime import date
+from typing import Iterable, Sequence
 
 from live_idea_bench.models import PaperRecord
 
@@ -127,13 +126,9 @@ def build_memory(
     bucket_stats = bucket_stats[:max_entries]
 
     header = (
-        (
-            f"Memory snapshot at t={cutoff_t} | papers={len(papers_before_t)} "
-            f"| recency_window={recency_window_months}mo"
-        )
-        if cutoff_t
-        else f"Memory snapshot | papers={len(papers_before_t)}"
-    )
+        f"Memory snapshot at t={cutoff_t} | papers={len(papers_before_t)} "
+        f"| recency_window={recency_window_months}mo"
+    ) if cutoff_t else f"Memory snapshot | papers={len(papers_before_t)}"
     lines: list[str] = [header, ""]
     for name, total, recent, rep in bucket_stats:
         line = f"- {name} (total={total}, recent={recent}): {rep}".rstrip()

@@ -3,33 +3,22 @@ from __future__ import annotations
 import logging
 import math
 import re
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, Iterable, Sequence
 
+from live_idea_bench.models import EvaluationResult, IdeaPrediction, PaperRecord, PredictionMatchDetail
 from forecaster.config import RealizationConfig
 from forecaster.models import Innovation, innovation_from_dict
 from forecaster.realization.config import RewardConfig
-from forecaster.realization.local_generation import (
-    _completion_to_text,
-    parse_single_completion_prediction,
-)
-from forecaster.realization.proposal_generator import (
-    proposal_to_idea_prediction,
-    strip_think_block,
-)
+from forecaster.realization.local_generation import _completion_to_text, parse_single_completion_prediction
+from forecaster.realization.proposal_generator import proposal_to_idea_prediction, strip_think_block
 from forecaster.realization.realization_reward import (
     StrictTrajectoryRewardBreakdown,
     evaluate_realization_reward,
     evaluate_strict_trajectory_reward,
 )
 from forecaster.realization.strict_runtime import parse_strict_rollout_completion
-from live_idea_bench.models import (
-    EvaluationResult,
-    IdeaPrediction,
-    PaperRecord,
-    PredictionMatchDetail,
-)
 from live_idea_bench.similarity import idea_text, paper_text, score_prediction_list
 
 logger = logging.getLogger(__name__)
@@ -76,9 +65,7 @@ _SPECIFICITY_MIN_CHARS = 80
 
 def _specificity_score(prediction: IdeaPrediction, config: RewardConfig) -> float:
     title_score = 1.0 if prediction.title.strip() else 0.0
-    rationale_score = min(
-        1.0, len(prediction.rationale.strip()) / _SPECIFICITY_MIN_CHARS
-    )
+    rationale_score = min(1.0, len(prediction.rationale.strip()) / _SPECIFICITY_MIN_CHARS)
     approach_score = min(1.0, len(prediction.approach.strip()) / _SPECIFICITY_MIN_CHARS)
     total_weight = (
         config.specificity_title_weight
@@ -95,9 +82,7 @@ def _specificity_score(prediction: IdeaPrediction, config: RewardConfig) -> floa
     return round(max(0.0, min(1.0, weighted)), 4)
 
 
-def _novelty_score(
-    prediction: IdeaPrediction, train_papers: Iterable[PaperRecord]
-) -> float:
+def _novelty_score(prediction: IdeaPrediction, train_papers: Iterable[PaperRecord]) -> float:
     refs = [paper_text(paper) for paper in train_papers]
     if not refs:
         return 1.0
@@ -197,9 +182,7 @@ def _innovation_from_prediction(prediction: IdeaPrediction) -> Innovation:
     if ":" in approach:
         operator, _, base_direction = approach.partition(":")
         operator = operator.strip().lower() or "extend"
-        base_direction = (
-            base_direction.strip() or prediction.title.strip() or "emerging direction"
-        )
+        base_direction = base_direction.strip() or prediction.title.strip() or "emerging direction"
     else:
         operator = "extend"
         base_direction = prediction.title.strip() or approach or "emerging direction"
@@ -241,7 +224,6 @@ def coerce_reward_prediction(
         return None, ""
 
     normalized_mode = str(prompt_mode or "").strip().lower()
-    prediction: IdeaPrediction | None
     if normalized_mode == "z_conditioned_realization" and innovation is not None:
         prediction = proposal_to_idea_prediction(raw_text, innovation, rank=1)
         prediction.metadata["proposal_text"] = raw_text
@@ -365,9 +347,7 @@ def evaluate_strict_rl_reward(
         cutoff_date=cutoff_date,
         future_end_date=future_end_date,
     )
-    benchmark_match_value = float(
-        benchmark.reward_breakdown.get("benchmark_match", 0.0)
-    )
+    benchmark_match_value = float(benchmark.reward_breakdown.get("benchmark_match", 0.0))
     return RLRewardEvaluation(
         benchmark_evaluation=benchmark.benchmark_evaluation,
         benchmark_score=benchmark.benchmark_score,
@@ -385,9 +365,7 @@ def evaluate_strict_rl_reward(
             "duplicate_rate": benchmark.benchmark_evaluation.duplicate_rate,
             "parse_failure": 0.0,
             "invalid_completion": 0.0,
-            "invalid_completion_reward": round(
-                reward_config.invalid_completion_reward, 4
-            ),
+            "invalid_completion_reward": round(reward_config.invalid_completion_reward, 4),
         },
         match_details=benchmark.match_details,
     )
@@ -417,10 +395,8 @@ def _evaluate_single_metric_reward(
         get_default_judge_model,
     )
 
-    prediction = (
-        predictions[0]
-        if predictions
-        else IdeaPrediction(rank=1, title="", rationale="", approach="")
+    prediction = predictions[0] if predictions else IdeaPrediction(
+        rank=1, title="", rationale="", approach=""
     )
     embedder = get_default_embedder()
 
@@ -480,9 +456,7 @@ def _evaluate_single_metric_reward(
             "duplicate_rate": 0.0,
             "invalid_completion": 0.0,
             "parse_failure": 0.0,
-            "invalid_completion_reward": round(
-                reward_config.invalid_completion_reward, 4
-            ),
+            "invalid_completion_reward": round(reward_config.invalid_completion_reward, 4),
         },
         match_details=[],
     )
@@ -529,18 +503,10 @@ def evaluate_rl_reward(
     evaluation = scored.evaluation
     reward_items: list[PerIdeaReward] = []
     top_predictions = predictions[:1]
-    prediction = (
-        top_predictions[0]
-        if top_predictions
-        else IdeaPrediction(rank=1, title="", rationale="", approach="")
-    )
-    detail = (
-        scored.matches[0]
-        if scored.matches
-        else PredictionMatchDetail(
-            prediction_rank=prediction.rank,
-            prediction_title=prediction.title,
-        )
+    prediction = top_predictions[0] if top_predictions else IdeaPrediction(rank=1, title="", rationale="", approach="")
+    detail = scored.matches[0] if scored.matches else PredictionMatchDetail(
+        prediction_rank=prediction.rank,
+        prediction_title=prediction.title,
     )
     resolved_innovation = innovation or _innovation_from_prediction(prediction)
     resolved_proposal_text = _proposal_text_from_prediction(
@@ -555,6 +521,7 @@ def evaluate_rl_reward(
         resolved_realization_config,
     )
     benchmark_match_value = detail.score if detail.is_match else 0.0
+    lead_time_value = round(max(0.0, min(1.0, detail.lead_time if detail.is_match else 0.0)), 4)
     total = paper_reward.total_reward
     reward_items.append(
         PerIdeaReward(
@@ -591,9 +558,7 @@ def evaluate_rl_reward(
             "duplicate_rate": evaluation.duplicate_rate,
             "invalid_completion": 0.0,
             "parse_failure": 0.0,
-            "invalid_completion_reward": round(
-                reward_config.invalid_completion_reward, 4
-            ),
+            "invalid_completion_reward": round(reward_config.invalid_completion_reward, 4),
         },
         match_details=scored.matches,
     )
@@ -627,9 +592,7 @@ def spearman_correlation(xs: Sequence[float], ys: Sequence[float]) -> float:
     y_ranks = _ranks(ys)
     x_mean = sum(x_ranks) / len(x_ranks)
     y_mean = sum(y_ranks) / len(y_ranks)
-    numerator = sum(
-        (x - x_mean) * (y - y_mean) for x, y in zip(x_ranks, y_ranks, strict=False)
-    )
+    numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_ranks, y_ranks))
     x_denom = math.sqrt(sum((x - x_mean) ** 2 for x in x_ranks))
     y_denom = math.sqrt(sum((y - y_mean) ** 2 for y in y_ranks))
     if x_denom == 0.0 or y_denom == 0.0:
@@ -668,13 +631,9 @@ def build_online_rl_reward_function(
             future_end_value = _value_for_index(future_end_date, idx, total)
             try:
                 reconstructed_train = [PaperRecord(**paper) for paper in train_payload]
-                reconstructed_future = [
-                    PaperRecord(**paper) for paper in future_payload
-                ]
+                reconstructed_future = [PaperRecord(**paper) for paper in future_payload]
             except (TypeError, KeyError) as exc:
-                logger.warning(
-                    "Failed to reconstruct PaperRecord at index %d: %s", idx, exc
-                )
+                logger.warning("Failed to reconstruct PaperRecord at index %d: %s", idx, exc)
                 rewards.append(round(reward_config.invalid_completion_reward, 4))
                 continue
             innovation_payload = _value_for_index(innovation, idx, total)
@@ -694,11 +653,7 @@ def build_online_rl_reward_function(
                     else (realization_config or RealizationConfig())
                 )
             except (TypeError, KeyError, ValueError) as exc:
-                logger.warning(
-                    "Failed to reconstruct realization reward context at index %d: %s",
-                    idx,
-                    exc,
-                )
+                logger.warning("Failed to reconstruct realization reward context at index %d: %s", idx, exc)
                 innovation_value = None
                 evidence_value = []
                 resolved_realization_config = realization_config or RealizationConfig()
@@ -710,9 +665,7 @@ def build_online_rl_reward_function(
                     train_papers=reconstructed_train,
                     reward_config=reward_config,
                     realization_config=resolved_realization_config,
-                    search_env_payload=search_env_value
-                    if isinstance(search_env_value, dict)
-                    else None,
+                    search_env_payload=search_env_value if isinstance(search_env_value, dict) else None,
                 )
                 rewards.append(strict_reward.total_reward)
                 continue
@@ -741,9 +694,7 @@ def build_online_rl_reward_function(
                     future_end_date=str(future_end_value) if future_end_value else None,
                 )
             except Exception as exc:
-                logger.warning(
-                    "evaluate_rl_reward failed at index %d: %s", idx, exc, exc_info=True
-                )
+                logger.warning("evaluate_rl_reward failed at index %d: %s", idx, exc, exc_info=True)
                 rewards.append(round(reward_config.invalid_completion_reward, 4))
                 continue
             rewards.append(evaluation.list_reward)

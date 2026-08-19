@@ -16,7 +16,7 @@
 #      future/history indices + validated rubrics). Build it first:
 #        1. provide the paper corpus at $PAPERS
 #        2. run the hindsight pipeline to produce data/topic_hindsight/dz.jsonl
-#        3. python examples/forecaster/build_indices.py --papers-dir "$PAPERS" \
+#        3. python build_indices.py --papers-dir "$PAPERS" \
 #               --dz data/topic_hindsight/dz.jsonl --art output/foresight_artifacts
 #        4. generate validated rubrics (see forecaster/foresight/README.md)
 #    REWARD_MODE=legacy — fixed-weight composite reward, NO artifacts required.
@@ -117,7 +117,7 @@ case "$REWARD_MODE" in
       echo "         ${FORESIGHT_ARTIFACT_DIR}/{indices,rubrics}" >&2
       echo "       The gated foresight reward needs per-cutoff indices + validated rubrics." >&2
       echo "       Build them first:" >&2
-      echo "         python examples/forecaster/build_indices.py --papers-dir \"${PAPERS}\" \\" >&2
+      echo "         python build_indices.py --papers-dir \"${PAPERS}\" \\" >&2
       echo "             --dz data/topic_hindsight/dz.jsonl --art \"${FORESIGHT_ARTIFACT_DIR}\"" >&2
       echo "         (then generate validated rubrics — see forecaster/foresight/README.md)" >&2
       echo "       Or run the whole pipeline with the no-artifacts reward:" >&2
@@ -187,7 +187,7 @@ if [ -f "$TRAINED_EVAL" ]; then
   echo ""; echo "===== Phase 4: Eval (trained) — SKIPPED (exists) ====="
 else
   echo ""; echo "===== Phase 4: Eval (trained forecaster) ====="
-  python3 examples/benchmark/run_domain_backtest.py \
+  python3 examples/live-idea-bench/run_domain_backtest.py \
     --strategy forecaster \
     --model-name "$BASE_MODEL_ID" \
     --prior-checkpoint "$PRIOR_CKPT" \
@@ -206,7 +206,7 @@ if [ -n "${VOYAGE_API_KEY:-}" ] && [ -f "$TRAINED_EVAL" ]; then
     echo ""; echo "===== Voyage Re-eval — SKIPPED (exists) ====="
   else
     echo ""; echo "===== Voyage Re-eval (threshold=0.80) ====="
-    VOYAGE_API_KEY="$VOYAGE_API_KEY" python3 examples/benchmark/reeval_voyage.py \
+    VOYAGE_API_KEY="$VOYAGE_API_KEY" python3 examples/live-idea-bench/reeval_voyage.py \
       --input-json "$TRAINED_EVAL" \
       --papers-dir "$PAPERS" \
       --output "$VOYAGE_EVAL" \

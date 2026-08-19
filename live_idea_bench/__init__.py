@@ -75,11 +75,7 @@ from live_idea_bench.strategy.execution import (
     run_strategy_backtest,
     run_strategy_generation,
 )
-from live_idea_bench.topics import (
-    classify_paper_topics,
-    classify_papers_by_topic,
-    normalize_topic_text,
-)
+from live_idea_bench.topics import classify_paper_topics, classify_papers_by_topic, normalize_topic_text
 
 __all__ = [
     "BacktestConfig",

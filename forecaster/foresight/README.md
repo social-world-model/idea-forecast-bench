@@ -42,22 +42,22 @@ scripts/
 
 ```bash
 # Phase 1: M1 spot-check (no LLM, runs on existing hindsight JSONL)
-PYTHONPATH=. python examples/forecaster/phase1_spot_check.py
+PYTHONPATH=. python scripts/phase1_spot_check.py
 
 # Phase 2: rubric construction (smoke mode = no LLM)
-PYTHONPATH=. python examples/forecaster/phase2_rubric_validation.py --mode smoke
+PYTHONPATH=. python scripts/phase2_rubric_validation.py --mode smoke
 
 # Phase 3: SFT input shape (no GPU)
-PYTHONPATH=. python examples/forecaster/phase3_prior_smoke.py
+PYTHONPATH=. python scripts/phase3_prior_smoke.py
 
 # Phase 4: reward end-to-end (gates + judge stub)
-PYTHONPATH=. python examples/forecaster/phase4_reward_smoke.py
+PYTHONPATH=. python scripts/phase4_reward_smoke.py
 
 # Phase 5: grouping invariant + dedup penalty
-PYTHONPATH=. python examples/forecaster/phase5_grouping_smoke.py
+PYTHONPATH=. python scripts/phase5_grouping_smoke.py
 
 # Phase 8: ablation table (smoke evaluator)
-PYTHONPATH=. python examples/forecaster/phase8_ablations.py --mode smoke
+PYTHONPATH=. python scripts/phase8_ablations.py --mode smoke
 ```
 
 ## Wiring the new reward into a real GRPO run
@@ -65,7 +65,7 @@ PYTHONPATH=. python examples/forecaster/phase8_ablations.py --mode smoke
 1. Build per-cutoff indices and rubrics:
 
 ```bash
-PYTHONPATH=. python examples/forecaster/phase2_rubric_validation.py --mode live
+PYTHONPATH=. python scripts/phase2_rubric_validation.py --mode live
 PYTHONPATH=. python - <<'PY'
 from pathlib import Path
 from forecaster.foresight.indices import SentenceTransformerEmbedder, build_cutoff_indices

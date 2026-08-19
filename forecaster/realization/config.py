@@ -2,12 +2,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any
 
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RL_CONFIG_DIR = PROJECT_ROOT / "config" / "forecaster"
+
+
+@dataclass
+class RewardWeights:
+    future_match: float = 0.7
+    novelty: float = 0.05
+    specificity: float = 0.1
+    lead_time: float = 0.15
+    duplicate_penalty: float = 0.0
+    popularity: float = 0.0  # Opt-in: weight for matched paper popularity in RL reward
 
 
 @dataclass
@@ -21,6 +31,7 @@ class RewardConfig:
     specificity_approach_weight: float = 0.4
     rank_decay: float = 0.15
     benchmark_score_weight: float = 0.0
+    weights: RewardWeights = field(default_factory=RewardWeights)
     # When set, completely replaces the composite reward with a single
     # eval metric for GRPO training: "soft" | "coverage" | "novelty".
     # Default "composite" keeps the legacy mixed reward.
@@ -68,9 +79,7 @@ class SelectionConfig:
     candidate_pool_size: int = 24
     output_top_k: int = 5
     dedup_similarity_threshold: float = 0.8
-    temperature_schedule: list[float] = field(
-        default_factory=lambda: [0.35, 0.55, 0.75, 0.95]
-    )
+    temperature_schedule: list[float] = field(default_factory=lambda: [0.35, 0.55, 0.75, 0.95])
     top_p_schedule: list[float] = field(default_factory=lambda: [0.8, 0.9, 0.95])
     enable_context_shuffle: bool = True
     relevance_frequency_weight: float = 0.5
@@ -109,10 +118,8 @@ class OnlineRLTrainConfig:
     # config/forecaster/grpo_train.yaml (output/foresight_artifacts).
     foresight_artifact_dir: str = ""
     # When reward_mode == "foresight", which embedder + judge backend to use.
-    foresight_embedder: str = (
-        "sentence-transformer:sentence-transformers/allenai-specter"
-    )
-    foresight_judge_mode: str = "live"  # "live" | "stub" (stub used only in tests)
+    foresight_embedder: str = "sentence-transformer:sentence-transformers/allenai-specter"
+    foresight_judge_mode: str = "live"   # "live" | "stub" (stub used only in tests)
     # Phase-5: in-group dedup penalty. Subtracted from each rollout's reward
     # for every near-duplicate sibling within its group (Jaccard >= threshold).
     dedup_penalty: float = 0.0
@@ -154,23 +161,20 @@ def _resolve_rl_config_path(name_or_path: str) -> Path:
     return (DEFAULT_RL_CONFIG_DIR / path.name).resolve()
 
 
-_ConfigT = TypeVar("_ConfigT")
-
-
-def _load_model_config(name_or_path: str, model_class: type[_ConfigT]) -> _ConfigT:
+def _load_model_config(name_or_path: str, model_class: type[Any]) -> Any:
     payload = _read_yaml(_resolve_rl_config_path(name_or_path))
-    if model_class is RewardConfig and "weights" in payload:
-        # This block named future_match / specificity / lead_time /
-        # duplicate_penalty, none of which the reward ever computed -- it was
-        # parsed and then never read, so tuning it changed nothing. Fail
-        # loudly rather than accept a knob that does not exist.
-        raise ValueError(
-            f"{name_or_path!r} still has a `weights:` block. It was a no-op: "
-            "none of its fields were ever read. The weights that actually "
-            "shape the realization reward live in config/forecaster/"
-            "realization.yaml (evidence_accuracy_weight, "
-            "operator_adherence_weight, coherence_weight). Delete the block."
-        )
+    if model_class is RewardConfig:
+        weights_payload = payload.get("weights", {}) or {}
+        if not isinstance(weights_payload, dict):
+            raise ValueError("reward weights must be a mapping")
+        remaining = {k: v for k, v in payload.items() if k != "weights"}
+        try:
+            return RewardConfig(weights=RewardWeights(**weights_payload), **remaining)
+        except TypeError as exc:
+            raise ValueError(
+                f"Invalid config for {RewardConfig.__name__}: {exc}. "
+                f"Check the YAML file at {name_or_path!r} for unknown or missing keys."
+            ) from exc
     try:
         return model_class(**payload)
     except TypeError as exc:
@@ -184,15 +188,11 @@ def load_reward_config(name_or_path: str = "reward.yaml") -> RewardConfig:
     return _load_model_config(name_or_path, RewardConfig)
 
 
-def load_episode_build_config(
-    name_or_path: str = "episode_build.yaml",
-) -> EpisodeBuildConfig:
+def load_episode_build_config(name_or_path: str = "episode_build.yaml") -> EpisodeBuildConfig:
     return _load_model_config(name_or_path, EpisodeBuildConfig)
 
 
-def load_candidate_generation_config(
-    name_or_path: str = "candidate_generation.yaml",
-) -> CandidateGenerationConfig:
+def load_candidate_generation_config(name_or_path: str = "candidate_generation.yaml") -> CandidateGenerationConfig:
     return _load_model_config(name_or_path, CandidateGenerationConfig)
 
 

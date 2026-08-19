@@ -157,13 +157,13 @@ dmypy.json
 cython_debug/
 
 # PyCharm
-.idea/
+#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
+#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+#  and can be added to the global gitignore or merged into this file.  For a more nuclear
+#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
+#.idea/
 
-# Datasets and run artifacts. Anchored at the repo root on purpose: a bare
-# `**/data/*` also swallows source directories named `data` (e.g. the tracked
-# scripts under examples/data/), so new files there would be silently ignored.
-/data/*
-!/data/.gitkeep
+**/data/*
 **/keywords_results.json
 backend/strategies/*.json
 frontend/build/
@@ -179,20 +179,3 @@ output/
 
 # Phase-validation test output
 reports/
-
-# Editors
-.vscode/
-
-# Agent/tool scratch dirs (local only)
-.claude/
-.codex/
-
-# Local scratch + paper working dirs (kept on disk, never committed)
-tmp/
-rebuttal/
-
-# Tool caches
-.ruff_cache/
-
-# Large local archives
-*.zip

@@ -10,14 +10,12 @@ shares its scoring backbone with the eval-time scorer.
 
 A pluggable `ScorerFn` is exposed so unit tests can inject a stub.
 """
-
 from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Callable, Protocol
 
 from forecaster.foresight.rubric import Rubric
 
@@ -29,10 +27,10 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class JudgeResult:
-    score: float  # in [0, 1]
+    score: float           # in [0, 1]
     reasoning: str
     raw_text: str
-    engine: str  # e.g. "llm:gpt-4o" or "stub:fixed"
+    engine: str            # e.g. "llm:gpt-4o" or "stub:fixed"
 
 
 class ScorerFn(Protocol):
@@ -184,9 +182,7 @@ def make_live_scorer(
     resolved = model_name or runtime_cfg.model_name
     client, resolved = create_client(resolved)
 
-    # Same name as the local-endpoint scorer above, but the two definitions sit
-    # on mutually exclusive branches (the one above returns before this point).
-    def _scorer(system_prompt: str, user_prompt: str) -> str:  # type: ignore[no-redef]
+    def _scorer(system_prompt: str, user_prompt: str) -> str:
         raw, _ = get_response_from_llm(
             msg=user_prompt,
             client=client,
@@ -219,7 +215,7 @@ def _extract_block(text: str, header: str) -> str:
     idx = text.find(header)
     if idx < 0:
         return ""
-    rest = text[idx + len(header) :]
+    rest = text[idx + len(header):]
     next_idx = rest.find("\n===")
     return (rest[:next_idx] if next_idx >= 0 else rest).strip()
 
@@ -244,9 +240,7 @@ class RubricJudge:
         raw = self.scorer(JUDGE_SYSTEM_PROMPT, user_prompt)
         score, reasoning = parse_score(raw)
         engine_name = getattr(self.scorer, "__name__", None) or self.engine_label
-        return JudgeResult(
-            score=score, reasoning=reasoning, raw_text=raw, engine=engine_name
-        )
+        return JudgeResult(score=score, reasoning=reasoning, raw_text=raw, engine=engine_name)
 
     def score_batch(
         self,

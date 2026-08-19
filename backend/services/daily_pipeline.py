@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import contextlib
 import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from types import TracebackType
-from typing import Any
+from typing import Any, Dict, List, Optional, Set
 
 from backend import strategy_store
 from live_idea_bench.daily import (
@@ -35,7 +33,7 @@ def _lock_ttl_seconds() -> int:
 class _FileLock:
     def __init__(self, path: Path) -> None:
         self.path = path
-        self.fd: int | None = None
+        self.fd: Optional[int] = None
 
     @staticmethod
     def _process_alive(pid: int) -> bool:
@@ -49,7 +47,7 @@ class _FileLock:
             return True
         return True
 
-    def _read_metadata(self) -> tuple[int | None, datetime | None]:
+    def _read_metadata(self) -> tuple[Optional[int], Optional[datetime]]:
         try:
             payload = self.path.read_text(encoding="utf-8").strip()
         except FileNotFoundError:
@@ -57,8 +55,8 @@ class _FileLock:
         except OSError:
             return None, None
 
-        pid: int | None = None
-        created_at: datetime | None = None
+        pid: Optional[int] = None
+        created_at: Optional[datetime] = None
         for token in payload.split():
             if token.startswith("pid="):
                 try:
@@ -76,11 +74,7 @@ class _FileLock:
     def _clear_if_stale(self) -> bool:
         pid, created_at = self._read_metadata()
         now = datetime.now(timezone.utc)
-        expired = (
-            created_at is None
-            or (now - created_at.astimezone(timezone.utc)).total_seconds()
-            >= _lock_ttl_seconds()
-        )
+        expired = created_at is None or (now - created_at.astimezone(timezone.utc)).total_seconds() >= _lock_ttl_seconds()
         process_dead = pid is None or not self._process_alive(pid)
         if not expired and not process_dead:
             return False
@@ -92,7 +86,7 @@ class _FileLock:
             return False
         return True
 
-    def __enter__(self) -> _FileLock:
+    def __enter__(self) -> "_FileLock":
         self.path.parent.mkdir(parents=True, exist_ok=True)
         for _ in range(2):
             try:
@@ -100,46 +94,37 @@ class _FileLock:
                 break
             except FileExistsError as exc:
                 if not self._clear_if_stale():
-                    raise PipelineAlreadyRunningError(
-                        f"Lock exists: {self.path}"
-                    ) from exc
+                    raise PipelineAlreadyRunningError(f"Lock exists: {self.path}") from exc
         else:
             raise PipelineAlreadyRunningError(f"Lock exists: {self.path}")
 
-        payload = (
-            f"pid={os.getpid()} created_at={datetime.now(timezone.utc).isoformat()}\n"
-        )
+        payload = f"pid={os.getpid()} created_at={datetime.now(timezone.utc).isoformat()}\n"
         os.write(self.fd, payload.encode("utf-8"))
         return self
 
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        tb: TracebackType | None,
-    ) -> None:
+    def __exit__(self, exc_type, exc, tb) -> None:
         if self.fd is not None:
             os.close(self.fd)
             self.fd = None
-        with contextlib.suppress(FileNotFoundError):
+        try:
             self.path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def _iso(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).isoformat()
 
 
-def _latest_month_from_data_dir(data_dir: Path) -> str | None:
+def _latest_month_from_data_dir(data_dir: Path) -> Optional[str]:
     papers = load_papers_from_markdown(data_dir)
     if not papers:
         return None
     return papers[-1].month
 
 
-def _fallback_backtest_score(strategy: dict[str, Any]) -> float | None:
-    summary = strategy_store._aggregate_topic_backtest_summary(
-        strategy.get("topic_runs") or []
-    )
+def _fallback_backtest_score(strategy: Dict[str, Any]) -> Optional[float]:
+    summary = strategy_store._aggregate_topic_backtest_summary(strategy.get("topic_runs") or [])
     if summary is None:
         summary = (strategy.get("backtest_result") or {}).get("summary") or {}
     score = summary.get("avg_hit_at_k")
@@ -151,9 +136,7 @@ def _fallback_backtest_score(strategy: dict[str, Any]) -> float | None:
         return None
 
 
-def _ensure_strategy_end_month(
-    strategy: dict[str, Any], latest_month: str | None
-) -> dict[str, Any]:
+def _ensure_strategy_end_month(strategy: Dict[str, Any], latest_month: Optional[str]) -> Dict[str, Any]:
     if not latest_month:
         return strategy
 
@@ -176,14 +159,14 @@ def _ensure_strategy_end_month(
     return updated or strategy
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
+def _write_json(path: Path, payload: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def _extract_new_paper_ids(ingest_result: dict[str, Any]) -> set[str]:
+def _extract_new_paper_ids(ingest_result: Dict[str, Any]) -> Set[str]:
     raw = ingest_result.get("new_papers") or []
-    ids: set[str] = set()
+    ids: Set[str] = set()
     if not isinstance(raw, list):
         return ids
     for item in raw:
@@ -197,9 +180,9 @@ def _extract_new_paper_ids(ingest_result: dict[str, Any]) -> set[str]:
 
 def run_daily_pipeline(
     *,
-    now: datetime | None = None,
-    data_dir: Path | None = None,
-) -> dict[str, Any]:
+    now: Optional[datetime] = None,
+    data_dir: Optional[Path] = None,
+) -> Dict[str, Any]:
     utc_now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     cutoff_date = daily_cutoff_date(utc_now)
     project_root = strategy_store.PROJECT_ROOT
@@ -209,15 +192,11 @@ def run_daily_pipeline(
     with _FileLock(lock_path):
         ingest_result = ingest_latest_arxiv_papers(data_dir=data_dir, now=utc_now)
         raw_data_dir = str(ingest_result.get("data_dir") or "").strip()
-        resolved_data_dir = (
-            Path(raw_data_dir).expanduser()
-            if raw_data_dir
-            else strategy_store.DEFAULT_DATA_DIR
-        )
+        resolved_data_dir = Path(raw_data_dir).expanduser() if raw_data_dir else strategy_store.DEFAULT_DATA_DIR
         latest_month = _latest_month_from_data_dir(resolved_data_dir)
         new_paper_ids = _extract_new_paper_ids(ingest_result)
 
-        strategy_results: list[dict[str, Any]] = []
+        strategy_results: List[Dict[str, Any]] = []
         for strategy in strategy_store.list_strategies():
             strategy_id = strategy.get("id")
             if not strategy_id:
@@ -233,7 +212,7 @@ def run_daily_pipeline(
                 evaluated_at=utc_now,
             )
 
-            updates: dict[str, Any] = {"last_daily_run_at": _iso(utc_now)}
+            updates: Dict[str, Any] = {"last_daily_run_at": _iso(utc_now)}
             if latest_month:
                 updates["last_generation_cutoff_month"] = latest_month
             if daily_eval is not None:
@@ -248,9 +227,7 @@ def run_daily_pipeline(
             if latest_month:
                 strategy_store.run_generation_sync(strategy_id, cutoff_date=cutoff_date)
                 after_generation = strategy_store.get_strategy(strategy_id) or {}
-                generation_status = str(
-                    after_generation.get("generation_status") or "unknown"
-                )
+                generation_status = str(after_generation.get("generation_status") or "unknown")
                 generation_error = after_generation.get("generation_error")
 
             final = strategy_store.get_strategy(strategy_id) or {}

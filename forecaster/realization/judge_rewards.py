@@ -27,31 +27,17 @@ signal to be informative and bounded.
 All three functions accept dependency-injected clients/embedders so
 they can be tested without a vLLM server up.
 """
-
 from __future__ import annotations
 
 import logging
 import math
 import os
 import re
-from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import Iterable
 
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.similarity import idea_text, paper_text
-
-if TYPE_CHECKING:  # pragma: no cover - typing-only import, kept off the hot path
-    import openai
-
-
-class SupportsEmbedding(Protocol):
-    """Structural type of the injected embedder (see forecaster.embedding)."""
-
-    def embed(self, texts: Iterable[str]) -> list[list[float]]: ...
-
-    def embed_one(self, text: str) -> list[float]: ...
-
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +94,7 @@ class JudgeScores:
 def _cosine(a: list[float], b: list[float]) -> float:
     if not a or not b:
         return 0.0
-    dot = sum(x * y for x, y in zip(a, b, strict=False))
+    dot = sum(x * y for x, y in zip(a, b))
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(x * x for x in b))
     if na <= 0.0 or nb <= 0.0:
@@ -116,15 +102,11 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return max(0.0, min(1.0, dot / (na * nb)))
 
 
-def _embed_prediction(
-    prediction: IdeaPrediction, embedder: SupportsEmbedding
-) -> list[float]:
+def _embed_prediction(prediction: IdeaPrediction, embedder) -> list[float]:
     return embedder.embed_one(idea_text(prediction))
 
 
-def _embed_papers(
-    papers: Iterable[PaperRecord], embedder: SupportsEmbedding
-) -> list[list[float]]:
+def _embed_papers(papers: Iterable[PaperRecord], embedder) -> list[list[float]]:
     texts = [paper_text(p) for p in papers]
     return embedder.embed(texts) if texts else []
 
@@ -136,7 +118,7 @@ def compute_novelty_reward(
     prediction: IdeaPrediction,
     train_papers: list[PaperRecord],
     *,
-    embedder: SupportsEmbedding,
+    embedder,
 ) -> float:
     """1 - max cosine similarity to any training paper. Higher = more novel."""
     if not train_papers:
@@ -156,7 +138,7 @@ def compute_coverage_reward(
     prediction: IdeaPrediction,
     future_papers: list[PaperRecord],
     *,
-    embedder: SupportsEmbedding,
+    embedder,
     k: int = DEFAULT_CLUSTER_K,
     sim_gate: float = COVERAGE_SIM_GATE,
 ) -> float:
@@ -178,8 +160,8 @@ def compute_coverage_reward(
 
     k_eff = min(k, len(future_vecs))
     try:
-        import numpy as np
         from sklearn.cluster import KMeans
+        import numpy as np
 
         X = np.asarray(future_vecs, dtype=np.float32)
         labels = KMeans(n_clusters=k_eff, n_init=5, random_state=0).fit_predict(X)
@@ -221,9 +203,7 @@ def _call_judge(
     prediction: IdeaPrediction,
     paper: PaperRecord,
     *,
-    # OpenAI-compatible chat client; duck-typed so tests can inject a fake
-    # without depending on the concrete openai.OpenAI resource classes.
-    judge_client: Any,
+    judge_client,
     judge_model: str,
     max_retries: int = 2,
 ) -> JudgeScores | None:
@@ -265,8 +245,8 @@ def compute_soft_reward(
     prediction: IdeaPrediction,
     future_papers: list[PaperRecord],
     *,
-    embedder: SupportsEmbedding,
-    judge_client: Any,
+    embedder,
+    judge_client,
     judge_model: str,
     top_r: int = DEFAULT_TOP_R,
 ) -> float:
@@ -283,7 +263,10 @@ def compute_soft_reward(
         return 0.0
     pred_vec = _embed_prediction(prediction, embedder)
 
-    scored = [(i, _cosine(pred_vec, vec)) for i, vec in enumerate(future_vecs)]
+    scored = [
+        (i, _cosine(pred_vec, vec))
+        for i, vec in enumerate(future_vecs)
+    ]
     scored.sort(key=lambda x: -x[1])
     candidates = [future_papers[i] for i, _ in scored[:top_r]]
 
@@ -305,10 +288,10 @@ def compute_soft_reward(
 # ---------------------------------------------------------------------------
 # Lazy judge-client singleton driven by env vars.
 # ---------------------------------------------------------------------------
-_JUDGE_CLIENT: openai.OpenAI | None = None
+_JUDGE_CLIENT = None
 
 
-def get_default_judge_client() -> openai.OpenAI:
+def get_default_judge_client():
     """Return a process-wide OpenAI-compatible client built from env vars.
 
     Reads ``JUDGE_BASE_URL`` (default ``http://localhost:8765/v1``) and

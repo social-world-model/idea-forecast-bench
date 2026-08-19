@@ -20,12 +20,10 @@ Given training papers up to cutoff_month:
 This tests whether lightweight historical abstraction (memory) adds value over
 using only recent context (Direct Prompting).
 """
-
 from __future__ import annotations
 
-import contextlib
 import json
-from typing import Any
+from typing import List
 
 from live_idea_bench.llm import create_client, get_response_from_llm
 from live_idea_bench.models import IdeaPrediction, PaperRecord
@@ -34,7 +32,7 @@ from live_idea_bench.similarity import _sanitize
 from live_idea_bench.strategy.base import IdeaStrategy
 
 _DEFAULT_MODEL = "gpt-4o"
-_MAX_LONG_TERM_PAPERS = 60  # cap to avoid huge prompts
+_MAX_LONG_TERM_PAPERS = 60   # cap to avoid huge prompts
 _MAX_RECENT_PAPERS = 20
 _MAX_MEMORY_BULLETS = 8
 
@@ -109,11 +107,7 @@ def _forecast_with_memory(
         for i, p in enumerate(recent_papers[-_MAX_RECENT_PAPERS:], start=1)
     )
 
-    memory_section = (
-        f"Historical Memory (recurring themes from earlier literature):\n{memory}\n\n"
-        if memory
-        else ""
-    )
+    memory_section = f"Historical Memory (recurring themes from earlier literature):\n{memory}\n\n" if memory else ""
 
     prompt = (
         f"{memory_section}"
@@ -137,7 +131,7 @@ def _forecast_with_memory(
         reasoning_effort=reasoning_effort,
     )
 
-    items: list[dict[str, Any]] = []
+    items: list[dict] = []
     try:
         payload = json.loads(raw.strip())
         if isinstance(payload, list):
@@ -147,11 +141,12 @@ def _forecast_with_memory(
             items = ideas if isinstance(ideas, list) else []
     except json.JSONDecodeError:
         import re
-
         m = re.search(r"\[.*\]", raw, re.DOTALL)
         if m:
-            with contextlib.suppress(json.JSONDecodeError):
+            try:
                 items = json.loads(m.group())
+            except json.JSONDecodeError:
+                pass
 
     predictions: list[IdeaPrediction] = []
     for item in items[:top_k]:
@@ -198,31 +193,18 @@ class MemoryPromptingStrategy(IdeaStrategy):
 
     def generate(
         self,
-        train_papers: list[PaperRecord],
+        train_papers: List[PaperRecord],
         cutoff_month: str,
         top_k: int,
-    ) -> list[IdeaPrediction]:
+    ) -> List[IdeaPrediction]:
         if not train_papers:
             return []
 
-        long_term, recent = _split_papers(
-            train_papers, cutoff_month, self.memory_months
-        )
+        long_term, recent = _split_papers(train_papers, cutoff_month, self.memory_months)
         client, resolved_model = create_client(self.model_name)
 
         # If no long-term papers, skip memory compression step
-        memory = (
-            _compress_to_memory(
-                long_term,
-                cutoff_month,
-                client,
-                resolved_model,
-                self.temperature,
-                reasoning_effort=self.reasoning_effort,
-            )
-            if long_term
-            else ""
-        )
+        memory = _compress_to_memory(long_term, cutoff_month, client, resolved_model, self.temperature, reasoning_effort=self.reasoning_effort) if long_term else ""
 
         predictions = _forecast_with_memory(
             memory=memory,
@@ -238,11 +220,9 @@ class MemoryPromptingStrategy(IdeaStrategy):
         # Retry if short
         if len(predictions) < top_k:
             import sys
-
             print(
                 f"[memory_prompting WARNING] cutoff={cutoff_month}: got {len(predictions)}/{top_k} predictions — retrying",
-                file=sys.stderr,
-                flush=True,
+                file=sys.stderr, flush=True,
             )
             extra = _forecast_with_memory(
                 memory=memory,

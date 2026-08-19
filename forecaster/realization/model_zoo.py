@@ -167,9 +167,7 @@ def list_small_model_payloads() -> list[dict[str, object]]:
 
 
 def resolve_small_model(alias_or_model_id: str) -> SmallModelSpec:
-    normalized = _MODEL_ALIAS_REDIRECTS.get(
-        alias_or_model_id.strip().lower(), alias_or_model_id.strip().lower()
-    )
+    normalized = _MODEL_ALIAS_REDIRECTS.get(alias_or_model_id.strip().lower(), alias_or_model_id.strip().lower())
     for spec in _SMALL_MODEL_SPECS:
         if spec.alias == normalized or spec.model_id.lower() == normalized:
             return spec

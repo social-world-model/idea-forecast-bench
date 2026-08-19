@@ -8,12 +8,11 @@ forecast() composition.
 This module deliberately does no model loading itself; it composes with
 whatever loader the existing sampler exposes.
 """
-
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
+from typing import Callable
 
 from forecaster.config import InferenceConfig
 from forecaster.foresight.prior_io import RawMemoryStore
@@ -73,28 +72,16 @@ def sample_z(
         ) from exc
 
     if inference_config is None:
+        # Minimal default that keeps the existing sampler happy.
         from forecaster.config import InferenceConfig as _IC
 
         inference_config = _IC()
-
-    # `n` and `temperature` are arguments of THIS function, not of
-    # sample_innovations -- that sampler reads them off the config as
-    # num_candidates / prior_temperature. Fold them in rather than passing
-    # them as keywords the sampler does not accept.
-    sampler_config = replace(
-        inference_config,
-        num_candidates=n,
-        prior_temperature=temperature,
-    )
-    if prior_model_path is None:
-        raise ValueError(
-            "sample_z fallback needs prior_model_path (or an injected sampler); "
-            "pass the SFT prior checkpoint path."
-        )
     return sample_innovations(
-        model_path=prior_model_path,
         memory_store=store,
-        config=sampler_config,
+        n=n,
+        temperature=temperature,
+        config=inference_config,
+        prior_model_path=prior_model_path,
     )
 
 

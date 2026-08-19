@@ -1,23 +1,23 @@
 """Strict interactive search environment shared by training and inference."""
-
 from __future__ import annotations
 
 import logging
 from dataclasses import replace
 
+from live_idea_bench.config import SimilarityConfig
+from live_idea_bench.models import PaperRecord
+from live_idea_bench.similarity import compute_similarity, paper_text
+
 from forecaster.models import (
-    STRICT_SEARCH_ENV_DEFAULTS,
     Innovation,
     RealizationTrajectory,
     RealizationTrajectoryStep,
+    STRICT_SEARCH_ENV_DEFAULTS,
     SearchAction,
     SearchObservation,
     SearchState,
     StrictRealizationResult,
 )
-from live_idea_bench.config import SimilarityConfig
-from live_idea_bench.models import PaperRecord
-from live_idea_bench.similarity import compute_similarity, paper_text
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +37,7 @@ def initialize_search_state(innovation: Innovation) -> SearchState:
     return SearchState(innovation=innovation)
 
 
-def _extend_unique(
-    existing: tuple[str, ...], values: tuple[str, ...]
-) -> tuple[str, ...]:
+def _extend_unique(existing: tuple[str, ...], values: tuple[str, ...]) -> tuple[str, ...]:
     ordered = list(existing)
     seen = set(existing)
     for value in values:
@@ -49,9 +47,7 @@ def _extend_unique(
     return tuple(ordered)
 
 
-def _invalid_state(
-    state: SearchState, reason: str, *, action: SearchAction | None = None
-) -> SearchState:
+def _invalid_state(state: SearchState, reason: str, *, action: SearchAction | None = None) -> SearchState:
     history = state.action_history + ((action,) if action is not None else ())
     return replace(
         state,
@@ -141,9 +137,7 @@ def apply_search_action(
                 last_observation=(),
             ), ()
         if len(state.selected_evidence_ids) >= max_selected_evidence:
-            return _invalid_state(
-                state, "max_selected_evidence_exceeded", action=action
-            ), ()
+            return _invalid_state(state, "max_selected_evidence_exceeded", action=action), ()
         return replace(
             state,
             action_history=state.action_history + (action,),
@@ -160,9 +154,7 @@ def apply_search_action(
             done=True,
         ), ()
 
-    return _invalid_state(
-        state, f"unsupported_action_type:{action.action_type}", action=action
-    ), ()
+    return _invalid_state(state, f"unsupported_action_type:{action.action_type}", action=action), ()
 
 
 def strict_result_from_state(state: SearchState) -> StrictRealizationResult | None:

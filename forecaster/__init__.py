@@ -5,39 +5,37 @@ Main entry points:
 - run_joint_inference: joint inference (Algorithm 1)
 - MemoryStore: memory inventory for the innovation prior
 """
-# Dependency direction: forecaster -> live_idea_bench, one way only.
-# live_idea_bench never imports forecaster at module scope; the MDF strategy
-# adapters under live_idea_bench/strategy/ import it inside functions.
+# NOTE: Symbols that depend on live_idea_bench.backtest (hindsight, orchestrator, inference)
+# are loaded lazily via __getattr__ to avoid the pre-existing circular import:
+#   live_idea_bench.backtest → live_idea_bench.strategy.policy_rl
+#   → forecaster.realization.config → forecaster/__init__
+#   → forecaster.hindsight.dataset_builder → live_idea_bench.backtest  (circular!)
 #
-# The symbols below that pull in live_idea_bench.backtest (hindsight,
-# orchestrator, inference) stay behind __getattr__ so that `import forecaster`
-# does not drag in the whole benchmark runner. This used to be load-bearing --
-# it worked around a real cycle through live_idea_bench.strategy.policy_rl --
-# but that cycle is gone; the laziness is now just about import cost.
+# Eager imports below are safe because they do NOT transitively import live_idea_bench.backtest.
 
-from forecaster.config import (
-    HindsightConfig,
-    InferenceConfig,
-    PriorConfig,
-    RealizationConfig,
-    SFTTrainConfig,
-    load_hindsight_config,
-    load_inference_config,
-    load_prior_config,
-    load_realization_config,
-    load_sft_train_config,
-)
 from forecaster.models import (
-    HindsightSample,
     Innovation,
-    JointCandidate,
     MemoryEntry,
     MemoryInventory,
+    HindsightSample,
+    JointCandidate,
     ScoredProposal,
-    innovation_from_dict,
     innovation_to_dict,
-    memory_inventory_from_dict,
+    innovation_from_dict,
     memory_inventory_to_dict,
+    memory_inventory_from_dict,
+)
+from forecaster.config import (
+    HindsightConfig,
+    PriorConfig,
+    SFTTrainConfig,
+    RealizationConfig,
+    InferenceConfig,
+    load_hindsight_config,
+    load_prior_config,
+    load_sft_train_config,
+    load_realization_config,
+    load_inference_config,
 )
 from forecaster.prior.memory import MemoryStore
 

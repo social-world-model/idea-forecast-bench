@@ -13,3 +13,9 @@ benchmark_score_weight: 0.0
 mode: composite
 judge_top_r: 10
 cluster_k: 5
+weights:
+  future_match: 0.7
+  novelty: 0.05
+  specificity: 0.1
+  lead_time: 0.15
+  duplicate_penalty: 0.0

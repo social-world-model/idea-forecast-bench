@@ -6,11 +6,10 @@ Locked design decision (see memory: foresight-rl-plan-decisions):
 - rubric held-out:      cutoff <= 2024-06, positives drawn from 2024-07..2024-09
 - test cutoffs:         t >= 2024-10
 """
-
 from __future__ import annotations
 
-from collections.abc import Iterable
 from datetime import date
+from typing import Iterable
 
 # These are the load-bearing dates. Changing them invalidates the
 # train/test disjointness invariant.
@@ -58,7 +57,8 @@ def assert_train_test_disjoint(
         )
     if train[-1] >= test[0]:
         raise AssertionError(
-            f"train/test cutoffs overlap: max(train)={train[-1]} vs min(test)={test[0]}"
+            f"train/test cutoffs overlap: max(train)={train[-1]} "
+            f"vs min(test)={test[0]}"
         )
 
 

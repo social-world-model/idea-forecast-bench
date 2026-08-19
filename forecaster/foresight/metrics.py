@@ -9,16 +9,13 @@ your own judge" objection.
   * impact_stratified_breakdown(rows, bucket_fn) — slice metrics by
     citation count / impact bucket.
 """
-
 from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from collections.abc import Callable, Iterable, Sequence
-from typing import Any
+from typing import Callable, Iterable, Sequence
 
 import numpy as np
-import numpy.typing as npt
 
 logger = logging.getLogger(__name__)
 
@@ -26,22 +23,17 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------- MMD
 
 
-def _pairwise_squared_distances(
-    A: npt.NDArray[np.float32], B: npt.NDArray[np.float32]
-) -> npt.NDArray[np.float32]:
+def _pairwise_squared_distances(A: np.ndarray, B: np.ndarray) -> np.ndarray:
     """Return shape (|A|, |B|) squared euclidean distance matrix."""
     A2 = (A * A).sum(axis=1, keepdims=True)
     B2 = (B * B).sum(axis=1, keepdims=True).T
     cross = A @ B.T
-    # numpy's ufunc stubs are typed as returning Any; bind to a typed local
-    # instead of returning it straight out of an ndarray-declared function.
-    dists: npt.NDArray[np.float32] = np.maximum(A2 + B2 - 2.0 * cross, 0.0)
-    return dists
+    return np.maximum(A2 + B2 - 2.0 * cross, 0.0)
 
 
 def mmd_rbf(
-    P: npt.NDArray[np.float32],
-    Q: npt.NDArray[np.float32],
+    P: np.ndarray,
+    Q: np.ndarray,
     *,
     bandwidth: float | None = None,
 ) -> float:
@@ -105,9 +97,9 @@ def wasserstein_1d(p: Sequence[float], q: Sequence[float]) -> float:
 
 
 def impact_stratified_breakdown(
-    rows: Iterable[dict[str, Any]],
+    rows: Iterable[dict],
     *,
-    bucket_fn: Callable[[dict[str, Any]], str] | None = None,
+    bucket_fn: Callable[[dict], str] | None = None,
     metric_keys: Sequence[str] = ("hit_at_k", "mrr"),
 ) -> dict[str, dict[str, float]]:
     """Group `rows` by bucket and average each metric within.
@@ -119,7 +111,7 @@ def impact_stratified_breakdown(
             falls back to "all".
         metric_keys: names of numeric keys to aggregate.
     """
-    by_bucket: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    by_bucket: dict[str, list[dict]] = defaultdict(list)
     if bucket_fn is None:
         bucket_fn = _default_impact_bucket
     for row in rows:
@@ -134,7 +126,7 @@ def impact_stratified_breakdown(
     return out
 
 
-def _default_impact_bucket(row: dict[str, Any]) -> str:
+def _default_impact_bucket(row: dict) -> str:
     c = row.get("citation_count")
     if c is None:
         return "all"

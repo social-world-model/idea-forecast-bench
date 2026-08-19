@@ -47,15 +47,11 @@ def build_grpo_advantages(
 ) -> list[dict[str, Any]]:
     payloads: list[dict[str, Any]] = []
     for episode_batch in episodes:
-        rewards = [
-            candidate.reward.list_reward for candidate in episode_batch.candidates
-        ]
+        rewards = [candidate.reward.list_reward for candidate in episode_batch.candidates]
         if not rewards:
             continue
         mean_reward = sum(rewards) / len(rewards)
-        variance = sum((reward - mean_reward) ** 2 for reward in rewards) / max(
-            1, len(rewards)
-        )
+        variance = sum((reward - mean_reward) ** 2 for reward in rewards) / max(1, len(rewards))
         stddev = sqrt(variance) if variance > 0 else 1.0
 
         candidates_payload: list[dict[str, Any]] = []

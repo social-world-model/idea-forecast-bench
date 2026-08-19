@@ -45,7 +45,7 @@ TS="$(date +%Y%m%d_%H%M%S)"
 ROOT_OUT="outputs"
 mkdir -p "${ROOT_OUT}"
 
-PYTHON_BIN="${PYTHON_BIN:-python}"
+PYTHON_BIN="${PYTHON_BIN:-/data/haofeiy2/miniconda3/envs/ideabench-unsloth/bin/python}"
 
 IFS=',' read -r -a GPU_ARR <<< "${GPUS}"
 NUM_GPUS=${#GPU_ARR[@]}
@@ -123,7 +123,7 @@ run_mode() {
   # Rollout vLLM server.
   local rollout_log="${out_dir}/rollout_vllm.log"
   local rollout_pid_file="${out_dir}/rollout_vllm.pid"
-  nohup env CUDA_VISIBLE_DEVICES="${rollout_gpus}" "${PYTHON_BIN}" examples/forecaster/_trl_vllm_serve.py \
+  nohup env CUDA_VISIBLE_DEVICES="${rollout_gpus}" "${PYTHON_BIN}" scripts/forecaster/_trl_vllm_serve.py \
     --model "${MODEL_ID}" \
     --port "${ROLLOUT_PORT}" \
     --host 0.0.0.0 \
