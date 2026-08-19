@@ -11,10 +11,13 @@ from live_idea_bench.papers import (
     normalize_date,
     normalize_month,
 )
+from live_idea_bench.strategy.base import IdeaStrategy
 from live_idea_bench.strategy.registry import create_strategy
 
 
-def _coerce_int(value: object, default: int) -> int:
+# `value` comes straight out of an untyped JSON/YAML record, so it really can be
+# any object; anything int() rejects is funnelled to `default` by the except.
+def _coerce_int(value: Any, default: int) -> int:
     try:
         return int(value)
     except (TypeError, ValueError):
@@ -34,12 +37,13 @@ def _legacy_to_current_params(params: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-def build_strategy(strategy_record: dict[str, Any]):
+def build_strategy(strategy_record: dict[str, Any]) -> IdeaStrategy:
     strategy_name = str(strategy_record.get("strategy_name") or "keyword_trend")
     params = _legacy_to_current_params(strategy_record.get("params") or {})
     if strategy_name == "prompt_llm":
         strategy_name = "predictor_llm"
 
+    raw_temperature = params.get("temperature")
     return create_strategy(
         strategy_name,
         recent_months=_coerce_int(params.get("recent_months", 3), 3),
@@ -51,11 +55,7 @@ def build_strategy(strategy_record: dict[str, Any]):
         ),
         predictor_config=str(params.get("predictor_config", "predictor.yaml")),
         similarity_config=str(params.get("similarity_config", "similarity.yaml")),
-        temperature=(
-            float(params.get("temperature"))
-            if params.get("temperature") is not None
-            else None
-        ),
+        temperature=(float(raw_temperature) if raw_temperature is not None else None),
         policy_manifest_path=(
             str(params.get("policy_manifest_path"))
             if params.get("policy_manifest_path") not in {None, ""}

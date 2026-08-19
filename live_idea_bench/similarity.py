@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from difflib import SequenceMatcher
+from typing import Any
 
 from live_idea_bench.config import (
     Config,
@@ -41,7 +42,7 @@ def _tokenize(text: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", text.lower())
 
 
-def idea_text(prediction: IdeaPrediction | dict[str, object] | str) -> str:
+def idea_text(prediction: IdeaPrediction | dict[str, Any] | str) -> str:
     if isinstance(prediction, str):
         return prediction
     if isinstance(prediction, dict):

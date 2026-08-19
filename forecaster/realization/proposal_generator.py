@@ -333,26 +333,6 @@ def generate_proposals_batch(
     return results
 
 
-def _sglang_api_url() -> str | None:
-    """Return the SGLang server URL if available, or None.
-
-    Set SGLANG_URL=http://localhost:30000 to enable.
-    The server must be launched separately (e.g., from the eval-sglang conda env).
-    """
-    import os
-
-    url = os.environ.get("SGLANG_URL", "").strip()
-    if not url:
-        return None
-    try:
-        import urllib.request
-
-        urllib.request.urlopen(f"{url}/v1/models", timeout=2)
-        return url
-    except Exception:
-        return None
-
-
 def generate_local_proposal(
     innovation: Innovation,
     evidence: list[PaperRecord],

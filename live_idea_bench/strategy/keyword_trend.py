@@ -1,13 +1,21 @@
 from collections import Counter
+from typing import TypedDict
 
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.papers import add_months, month_to_index
 from live_idea_bench.strategy.base import IdeaStrategy
 
 
+class _ScoredKeyword(TypedDict):
+    keyword: str
+    score: float
+    recent_count: float
+    total_count: float
+
+
 def _unique_ordered(items: list[str]) -> list[str]:
     out: list[str] = []
-    seen = set()
+    seen: set[str] = set()
     for item in items:
         if item in seen:
             continue
@@ -44,8 +52,8 @@ class KeywordTrendStrategy(IdeaStrategy):
         recent_start_idx = month_to_index(
             add_months(cutoff_month, -(self.recent_months - 1))
         )
-        overall = Counter()
-        recent = Counter()
+        overall: Counter[str] = Counter()
+        recent: Counter[str] = Counter()
 
         for paper in train_papers:
             unique_keys = _unique_ordered(
@@ -62,7 +70,7 @@ class KeywordTrendStrategy(IdeaStrategy):
         if not overall:
             return []
 
-        scored: list[dict[str, object]] = []
+        scored: list[_ScoredKeyword] = []
         for keyword, total_count in overall.items():
             if total_count < self.min_keyword_freq:
                 continue

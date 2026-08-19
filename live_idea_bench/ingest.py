@@ -206,7 +206,7 @@ def ingest_latest_arxiv_papers(
     ).expanduser()
     base_dir.mkdir(parents=True, exist_ok=True)
 
-    params = {
+    params: dict[str, str | int] = {
         "search_query": resolved_query,
         "start": 0,
         "max_results": max(1, resolved_max_results),

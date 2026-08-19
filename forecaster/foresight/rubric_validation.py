@@ -21,6 +21,7 @@ import math
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from forecaster.foresight.judge import JudgeResult, RubricJudge
 from forecaster.foresight.rubric import Rubric
@@ -33,7 +34,7 @@ class LabeledPair:
     idea_text: str
     candidate_text: str
     label: int  # 1 = positive (post-cutoff emerged), 0 = negative (pre-cutoff existing)
-    meta: dict = field(default_factory=dict)
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -52,11 +53,11 @@ class RubricValidationReport:
     positive_median: float
     negative_max: float
     leakage_hits: int  # negatives with score >= positive_median
-    leakage_examples: list[dict] = field(default_factory=list)
+    leakage_examples: list[dict[str, Any]] = field(default_factory=list)
     threshold_used: float = 0.70
     passed: bool = False
 
-    def to_json(self) -> dict:
+    def to_json(self) -> dict[str, Any]:
         return {
             "topic_id": self.topic_id,
             "cutoff_t": self.cutoff_t,

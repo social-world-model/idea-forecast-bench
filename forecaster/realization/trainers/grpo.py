@@ -16,7 +16,10 @@ class GRPOTrainerRunner(RLTrainerRunner):
     default_config_filename = "grpo_train.yaml"
     backend_name = "trl"
 
-    def prepare(
+    # The base class declares `**kwargs: Any` as an open extension point, so
+    # naming a *required* keyword here narrows the inherited signature (LSP).
+    # Every call site does pass `trainer_config`, so this is safe in practice.
+    def prepare(  # type: ignore[override]
         self,
         common_context: PreparedRLContext,
         *,
@@ -29,7 +32,9 @@ class GRPOTrainerRunner(RLTrainerRunner):
             dry_run=trainer_config.dry_run,
         )
 
-    def train(
+    # Same inherited-signature narrowing as `prepare` above: `config` is a
+    # required keyword here but only part of `**kwargs` on the base class.
+    def train(  # type: ignore[override]
         self,
         prepared_artifacts: TrainerPreparedArtifacts,
         *,

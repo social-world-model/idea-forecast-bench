@@ -7,7 +7,7 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import openai
 
@@ -20,7 +20,9 @@ from live_idea_bench.backtest import split_train_future_by_cutoff
 
 logger = logging.getLogger(__name__)
 
-_BATCH_ENDPOINT = "/v1/chat/completions"
+# `Final` (with no explicit annotation) keeps the literal type, which is what
+# `openai.resources.Batches.create` requires for its `endpoint` argument.
+_BATCH_ENDPOINT: Final = "/v1/chat/completions"
 _CUSTOM_ID_MAX_LEN = 64
 _CUSTOM_ID_SEP = "|"
 

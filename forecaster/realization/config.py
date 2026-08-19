@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar, cast
 
 import yaml
 
@@ -165,7 +165,10 @@ def _resolve_rl_config_path(name_or_path: str) -> Path:
     return (DEFAULT_RL_CONFIG_DIR / path.name).resolve()
 
 
-def _load_model_config(name_or_path: str, model_class: type[Any]) -> Any:
+_ConfigT = TypeVar("_ConfigT")
+
+
+def _load_model_config(name_or_path: str, model_class: type[_ConfigT]) -> _ConfigT:
     payload = _read_yaml(_resolve_rl_config_path(name_or_path))
     if model_class is RewardConfig:
         weights_payload = payload.get("weights", {}) or {}
@@ -173,7 +176,12 @@ def _load_model_config(name_or_path: str, model_class: type[Any]) -> Any:
             raise ValueError("reward weights must be a mapping")
         remaining = {k: v for k, v in payload.items() if k != "weights"}
         try:
-            return RewardConfig(weights=RewardWeights(**weights_payload), **remaining)
+            # `model_class is RewardConfig` guarantees _ConfigT is RewardConfig,
+            # but mypy cannot narrow a TypeVar through an identity check.
+            return cast(
+                "_ConfigT",
+                RewardConfig(weights=RewardWeights(**weights_payload), **remaining),
+            )
         except TypeError as exc:
             raise ValueError(
                 f"Invalid config for {RewardConfig.__name__}: {exc}. "

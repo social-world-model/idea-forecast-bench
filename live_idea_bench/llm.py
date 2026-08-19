@@ -47,8 +47,8 @@ def _req_key(
 
 
 def batch_set_collect(
-    collector: dict,
-    cache: dict | None = None,
+    collector: dict[str, dict[str, Any]],
+    cache: dict[str, str] | None = None,
     system_prefix: str | None = None,
 ) -> None:
     """Switch current thread to collect mode.
@@ -73,7 +73,7 @@ def batch_set_collect(
     _batch_tls.system_prefix = system_prefix
 
 
-def batch_set_replay(cache: dict) -> None:
+def batch_set_replay(cache: dict[str, str]) -> None:
     """Switch current thread to replay mode (serve from cache, fall back to live)."""
     _batch_tls.mode = "replay"
     _batch_tls.cache = cache
@@ -226,8 +226,10 @@ def create_client(model: str) -> tuple[Any, str]:
         import google.generativeai as genai
 
         api_key = _require_api_key("GOOGLE_API_KEY", model)
-        genai.configure(api_key=api_key)
-        return genai.GenerativeModel(model), model
+        # google-generativeai re-exports these from its __init__ without an
+        # explicit `as` alias, so strict mode's no_implicit_reexport hides them.
+        genai.configure(api_key=api_key)  # type: ignore[attr-defined]
+        return genai.GenerativeModel(model), model  # type: ignore[attr-defined]
 
     if _is_local_model(model):
         resolved_model = resolve_model_reference(model)
@@ -268,7 +270,7 @@ def get_response_from_llm(
     _mode = getattr(_batch_tls, "mode", None)
     if _mode in ("collect", "replay"):
         _key = _req_key(model, system_message, msg, reasoning_effort, temperature)
-        _cache: dict = getattr(_batch_tls, "cache", {}) or {}
+        _cache: dict[str, str] = getattr(_batch_tls, "cache", {}) or {}
 
         # Cache hit: return stored response (works in both collect and replay modes)
         if _key in _cache:
@@ -282,7 +284,9 @@ def get_response_from_llm(
         if _mode == "collect":
             _sys_prefix = getattr(_batch_tls, "system_prefix", None)
             if _sys_prefix is None or system_message.startswith(_sys_prefix):
-                _collector: dict = getattr(_batch_tls, "collector", {})
+                _collector: dict[str, dict[str, Any]] = getattr(
+                    _batch_tls, "collector", {}
+                )
                 _collector[_key] = {
                     "model": model,
                     "system_message": system_message,
@@ -314,7 +318,7 @@ def get_response_from_llm(
                 "content": [{"type": "text", "text": msg}],
             }
         ]
-        request_kwargs = {
+        request_kwargs: dict[str, Any] = {
             "model": model,
             "max_tokens": MAX_NUM_TOKENS,
             "temperature": temperature,
@@ -335,7 +339,7 @@ def get_response_from_llm(
         import os as _os
 
         new_msg_history = msg_history + [{"role": "user", "content": msg}]
-        request_kwargs: dict[str, Any] = {
+        request_kwargs = {
             "model": model,
             "messages": [
                 {"role": "system", "content": system_message},

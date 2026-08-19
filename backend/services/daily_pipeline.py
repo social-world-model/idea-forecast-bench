@@ -5,6 +5,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from types import TracebackType
 from typing import Any
 
 from backend import strategy_store
@@ -111,7 +112,12 @@ class _FileLock:
         os.write(self.fd, payload.encode("utf-8"))
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
         if self.fd is not None:
             os.close(self.fd)
             self.fd = None

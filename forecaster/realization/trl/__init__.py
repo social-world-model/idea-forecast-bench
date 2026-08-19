@@ -6,6 +6,7 @@ import importlib.machinery
 import importlib.util
 import sys
 import types
+from typing import Any
 
 if importlib.util.find_spec("vllm_ascend") is None:
     _mod = types.ModuleType("vllm_ascend")
@@ -18,7 +19,9 @@ if importlib.util.find_spec("vllm_ascend") is None:
         "distributed.device_communicators.pyhccl",
     ):
         _fqn = f"vllm_ascend.{_sub}"
-        _m = types.ModuleType(_fqn)
+        # Annotated `Any`: this is a hand-built stub module onto which we
+        # deliberately graft attributes ModuleType does not declare.
+        _m: Any = types.ModuleType(_fqn)
         _m.__spec__ = importlib.machinery.ModuleSpec(_fqn, None)
         if _sub.endswith("pyhccl"):
             _m.PyHcclCommunicator = None

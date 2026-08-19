@@ -184,7 +184,9 @@ def make_live_scorer(
     resolved = model_name or runtime_cfg.model_name
     client, resolved = create_client(resolved)
 
-    def _scorer(system_prompt: str, user_prompt: str) -> str:
+    # Same name as the local-endpoint scorer above, but the two definitions sit
+    # on mutually exclusive branches (the one above returns before this point).
+    def _scorer(system_prompt: str, user_prompt: str) -> str:  # type: ignore[no-redef]
         raw, _ = get_response_from_llm(
             msg=user_prompt,
             client=client,

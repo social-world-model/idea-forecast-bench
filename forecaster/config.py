@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 import yaml
 
@@ -21,6 +21,8 @@ STRICT_REALIZATION_SCORE_METHOD = "conditional_logprob"
 STRICT_JOINT_SCORE_MODE = "linear_blend"
 STRICT_POPULARITY_WEIGHT = 0.0
 STRICT_JOINT_SCORE_COMPONENTS: tuple[str, str] = ("prior_score", "realization_score")
+
+_ConfigT = TypeVar("_ConfigT")
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +136,7 @@ def _resolve_forecaster_config_path(name_or_path: str) -> Path:
     return (DEFAULT_FORECASTER_CONFIG_DIR / path.name).resolve()
 
 
-def _load_config(name_or_path: str, model_class: type[Any]) -> Any:
+def _load_config(name_or_path: str, model_class: type[_ConfigT]) -> _ConfigT:
     payload = _read_yaml(_resolve_forecaster_config_path(name_or_path))
     try:
         return model_class(**payload)

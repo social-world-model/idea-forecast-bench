@@ -18,7 +18,7 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeVar
 
 import numpy as np
 
@@ -101,6 +101,10 @@ def _paper_text(p: PaperRecord) -> str:
 
 # --------------------------------------------------------------------------- index dataclasses
 
+# `load` is inherited by FutureIndex / HistoryIndex and returns whichever
+# subclass it was called on, so it is typed against the calling class.
+_IndexT = TypeVar("_IndexT", bound="_BaseIndex")
+
 
 @dataclass
 class _BaseIndex:
@@ -170,7 +174,7 @@ class _BaseIndex:
         return p
 
     @classmethod
-    def load(cls, path: str | Path) -> _BaseIndex:
+    def load(cls: type[_IndexT], path: str | Path) -> _IndexT:
         p = Path(path)
         meta = json.loads(p.with_suffix(".meta.json").read_text())
         emb = np.load(p)["embeddings"].astype(np.float32)
@@ -286,7 +290,7 @@ class CutoffIndexBundle:
 
 
 def build_cutoff_indices(
-    papers: Sequence[PaperRecord],
+    papers: list[PaperRecord],
     cutoff_dates: Sequence[str],
     horizon_months: int,
     embedder: Embedder,

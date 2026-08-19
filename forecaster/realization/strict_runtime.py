@@ -133,6 +133,7 @@ def _extract_json_payload(text: str) -> object | None:
     if not raw:
         return None
     decoder = json.JSONDecoder()
+    payload: object
     for index, char in enumerate(raw):
         if char not in "{[":
             continue
@@ -307,7 +308,8 @@ def _generate_local_completion(
         )
     generated = model.generate(**encoded, **generation_kwargs)
     output_ids = generated[0][len(encoded["input_ids"][0]) :].tolist()
-    return tokenizer.decode(output_ids, skip_special_tokens=True).strip()
+    decoded: str = tokenizer.decode(output_ids, skip_special_tokens=True)
+    return decoded.strip()
 
 
 def generate_strict_policy_completion(

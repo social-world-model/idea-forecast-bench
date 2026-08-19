@@ -5,10 +5,14 @@ from __future__ import annotations
 import dataclasses
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.strategy.base import IdeaStrategy
+
+if TYPE_CHECKING:
+    from forecaster.models import Innovation
+    from forecaster.prior.memory import MemoryStore
 
 logger = logging.getLogger(__name__)
 
@@ -100,11 +104,11 @@ class ForecasterStrategy(IdeaStrategy):
 
     def _load_memory_store(
         self,
-        train_papers: list | None = None,
+        train_papers: list[PaperRecord] | None = None,
         cutoff_month: str | None = None,
         *,
         strict_mode: bool = False,
-    ) -> Any:
+    ) -> MemoryStore:
         from forecaster.prior.memory import MemoryStore
 
         if self.memory_path:
@@ -140,7 +144,9 @@ class ForecasterStrategy(IdeaStrategy):
             )
         return MemoryStore.empty("1970-01")
 
-    def _build_memory_from_papers(self, train_papers: list, current_month: str) -> Any:
+    def _build_memory_from_papers(
+        self, train_papers: list[PaperRecord], current_month: str
+    ) -> MemoryStore:
         """Build a MemoryStore from training papers as a heuristic M_t.
 
         Creates Innovation entries from paper metadata chronologically,
@@ -170,7 +176,7 @@ class ForecasterStrategy(IdeaStrategy):
         self,
         train_papers: list[PaperRecord],
         top_k: int,
-    ) -> list:
+    ) -> list[Innovation]:
         """Create Innovation objects from paper keywords as a heuristic fallback."""
         from forecaster.models import Innovation
 
@@ -266,11 +272,15 @@ class ForecasterStrategy(IdeaStrategy):
         )
 
         # Sample innovations from trained prior, or fall back to heuristic
-        innovations: list
+        innovations: list[Innovation]
         if strict_mode:
             # Strict evaluation must not swallow prior-sampling errors.
+            # cast: strict_mode is only True when _resolve_runtime_mode found
+            # self.prior_checkpoint on disk -- the same condition that makes
+            # prior_model_path non-None just above -- but mypy cannot see that
+            # through the dict[str, Any] runtime contract.
             sampled = sample_innovations(
-                prior_model_path, memory_store, inference_config
+                cast(str, prior_model_path), memory_store, inference_config
             )
             if not sampled:
                 raise RuntimeError(

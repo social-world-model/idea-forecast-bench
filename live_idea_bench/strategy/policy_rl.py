@@ -223,13 +223,12 @@ class PolicyRLStrategy(IdeaStrategy):
             str(manifest.get("predictor_config") or "").strip() or self.predictor_config
         )
         resolved_selection_config = self._resolve_selection_config(manifest)
+        manifest_temperature = manifest.get("temperature")
         resolved_temperature = (
             self.temperature
             if self.temperature is not None
             else (
-                float(manifest.get("temperature"))
-                if manifest.get("temperature") is not None
-                else 0.8
+                float(manifest_temperature) if manifest_temperature is not None else 0.8
             )
         )
         import os as _os

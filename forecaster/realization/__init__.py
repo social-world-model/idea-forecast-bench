@@ -5,6 +5,7 @@ from __future__ import annotations
 # forecaster.realization.config — creating a circular import if these modules
 # were loaded eagerly when the package initializes.
 from importlib import import_module
+from typing import Any
 
 from forecaster.realization.config import (
     CandidateGenerationConfig,
@@ -87,7 +88,7 @@ _LAZY = {
 }
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     if name not in _LAZY:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     module_name, attr_name = _LAZY[name]

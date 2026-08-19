@@ -13,6 +13,7 @@ import json
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from forecaster.foresight.dz import load_dz_rows
 from forecaster.foresight.operators import (
@@ -25,11 +26,11 @@ from forecaster.prior.prompting import render_prior_user_prompt
 
 
 def dz_row_to_sft_sample(
-    row: dict,
+    row: dict[str, Any],
     *,
     inventory: OperatorInventory,
     drop_unmappable: bool,
-) -> dict | None:
+) -> dict[str, str] | None:
     """Convert one D_z row into a `{input, target, ...}` SFT sample.
 
     Returns None if the row has no memory_text (i.e., the D_z was built
@@ -67,7 +68,7 @@ def build_sft_samples_from_dz(
     *,
     inventory: OperatorInventory | None = None,
     drop_unmappable: bool = True,
-) -> list[dict]:
+) -> list[dict[str, str]]:
     """Stream a D_z JSONL into SFT samples.
 
     Rows missing `memory_text` are skipped (a corpus must be passed in
@@ -75,7 +76,7 @@ def build_sft_samples_from_dz(
     """
     inventory = inventory or load_operator_inventory()
     rows = load_dz_rows(dz_path)
-    samples: list[dict] = []
+    samples: list[dict[str, str]] = []
     skipped_no_memory = 0
     skipped_unmappable = 0
     for r in rows:
@@ -92,7 +93,7 @@ def build_sft_samples_from_dz(
     return samples
 
 
-def save_sft_jsonl(samples: list[dict], path: str | Path) -> Path:
+def save_sft_jsonl(samples: list[dict[str, str]], path: str | Path) -> Path:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     with p.open("w", encoding="utf-8") as fh:

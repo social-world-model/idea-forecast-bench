@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Any
 
 from live_idea_bench.llm import create_client, get_response_from_llm
 from live_idea_bench.models import IdeaPrediction, PaperRecord
@@ -71,7 +72,7 @@ def _build_forecast_prompt(summary: str, cutoff_month: str, top_k: int) -> str:
 
 
 def _parse_predictions(raw: str, top_k: int) -> list[IdeaPrediction]:
-    items: list[dict] = []
+    items: list[dict[str, Any]] = []
     try:
         payload = json.loads(raw.strip())
         if isinstance(payload, list):

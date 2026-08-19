@@ -241,6 +241,7 @@ def coerce_reward_prediction(
         return None, ""
 
     normalized_mode = str(prompt_mode or "").strip().lower()
+    prediction: IdeaPrediction | None
     if normalized_mode == "z_conditioned_realization" and innovation is not None:
         prediction = proposal_to_idea_prediction(raw_text, innovation, rank=1)
         prediction.metadata["proposal_text"] = raw_text

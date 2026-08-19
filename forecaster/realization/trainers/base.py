@@ -5,11 +5,14 @@ import json
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from forecaster.models import strict_runtime_manifest_contract
 from forecaster.realization.io import _write_json
 from live_idea_bench.models import PaperRecord
+
+if TYPE_CHECKING:  # pragma: no cover - typing-only helper alias
+    from _typeshed import DataclassInstance
 
 
 @dataclass
@@ -62,7 +65,9 @@ class RLTrainerRunner(ABC):
 
 def _serialize_for_fingerprint(value: Any) -> Any:
     if is_dataclass(value):
-        return asdict(value)
+        # `is_dataclass` also accepts dataclass *classes*; only instances ever
+        # reach here, and `asdict` would raise on a class anyway.
+        return asdict(cast("DataclassInstance", value))
     if isinstance(value, Path):
         return str(value.resolve())
     if isinstance(value, dict):

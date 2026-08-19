@@ -55,9 +55,9 @@ class ScoredForecast:
     realization_score: float
     joint_score: float
     evidence_paper_ids: list[str] = field(default_factory=list)
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_json(self) -> dict:
+    def to_json(self) -> dict[str, Any]:
         return {
             "rank": self.rank,
             "innovation": {

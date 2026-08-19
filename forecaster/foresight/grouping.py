@@ -27,9 +27,11 @@ def _coerce_extra(extra: Any) -> dict[str, Any]:
         return extra
     if isinstance(extra, str) and extra.strip():
         try:
-            return json.loads(extra)
+            # json.loads is typed as returning Any; bind it to a typed local.
+            parsed: dict[str, Any] = json.loads(extra)
         except json.JSONDecodeError:
             return {}
+        return parsed
     return {}
 
 

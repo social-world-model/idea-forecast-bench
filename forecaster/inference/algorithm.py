@@ -6,7 +6,7 @@ import dataclasses
 import logging
 import math
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from forecaster.config import (
     InferenceConfig,
@@ -205,7 +205,9 @@ def run_joint_inference(
         try:
             proposal_texts = generate_proposals_batch(
                 innovations_and_evidence,
-                realization_model_path,
+                # `use_batch` is only truthy when `realization_model_path` is a
+                # non-empty str, but mypy cannot narrow through that variable.
+                cast(str, realization_model_path),
                 realization_config,
                 context_papers=papers,
             )

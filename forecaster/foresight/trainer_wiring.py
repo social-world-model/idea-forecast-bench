@@ -26,16 +26,23 @@ import json
 import logging
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # imported lazily at runtime to keep the heavy deps optional
+    from forecaster.foresight.indices import Embedder, FutureIndex, HistoryIndex
+    from forecaster.foresight.judge import RubricJudge
+    from forecaster.foresight.reward import ForesightContext
 
 logger = logging.getLogger(__name__)
 
 
-def _load_indices(indices_dir: Path):
+def _load_indices(
+    indices_dir: Path,
+) -> tuple[dict[str, FutureIndex], dict[str, HistoryIndex]]:
     from forecaster.foresight.indices import FutureIndex, HistoryIndex
 
-    future_indices: dict = {}
-    history_indices: dict = {}
+    future_indices: dict[str, FutureIndex] = {}
+    history_indices: dict[str, HistoryIndex] = {}
     for npz in sorted(indices_dir.glob("future_*.npz")):
         cutoff = npz.stem.split("future_", 1)[1]
         future_indices[cutoff] = FutureIndex.load(npz)
@@ -84,7 +91,7 @@ def _build_paper_to_topic(hindsight_path: str | Path | None = None) -> dict[str,
     return mapping
 
 
-def _build_embedder(name: str):
+def _build_embedder(name: str) -> Embedder:
     from forecaster.foresight.indices import (
         HashingEmbedder,
         SentenceTransformerEmbedder,
@@ -103,7 +110,7 @@ def _build_embedder(name: str):
     )
 
 
-def _build_judge(mode: str):
+def _build_judge(mode: str) -> RubricJudge:
     from forecaster.foresight.judge import (
         RubricJudge,
         StubScorer,
@@ -125,7 +132,7 @@ def build_foresight_context(
     embedder_name: str = "sentence-transformer:sentence-transformers/allenai-specter",
     judge_mode: str = "live",
     hindsight_path: str | Path | None = None,
-):
+) -> ForesightContext:
     """Construct a ForesightContext from a saved artifact directory."""
     from forecaster.foresight.reward import ForesightContext
     from forecaster.foresight.rubric import load_rubrics_dir
@@ -277,7 +284,9 @@ def make_reward_fn(
     # ---- legacy path ----
     from forecaster.realization.verl.reward_fn import compute_score
 
-    def _reward_fn(completions: list[str], **kwargs: Any) -> list[float]:
+    # Same name as the foresight reward_fn above, but the two definitions sit on
+    # mutually exclusive branches (the one above returns before this point).
+    def _reward_fn(completions: list[str], **kwargs: Any) -> list[float]:  # type: ignore[no-redef]
         extra_infos = kwargs.get("extra_info", ["{}"] * len(completions))
         out: list[float] = []
         for completion, extra in zip(completions, extra_infos, strict=False):

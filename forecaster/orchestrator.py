@@ -6,7 +6,7 @@ import json
 import logging
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from forecaster.config import (
     HindsightConfig,
@@ -158,7 +158,11 @@ class ForecasterPipeline:
             sft_samples = build_sft_samples(
                 hindsight_samples,
                 max_memory_entries=max_mem,
-                memory_snapshots_by_cutoff=memory_snapshots_by_cutoff,
+                # `dict` is invariant, so `dict[str, MemoryStore]` is not a
+                # `dict[str, object]`; the callee only reads the mapping.
+                memory_snapshots_by_cutoff=cast(
+                    "dict[str, object]", memory_snapshots_by_cutoff
+                ),
             )
 
         prior_output_dir = self.output_dir / output_subdir
@@ -555,7 +559,7 @@ class ForecasterPipeline:
             if use_strict_eval and refresh_memory_snapshots:
                 latest_refresh_cutoff = sorted(refresh_memory_snapshots)[-1]
                 latest_refresh_memory = refresh_memory_snapshots[latest_refresh_cutoff]
-                utility_overrides = {
+                utility_overrides: dict[str, tuple[float, dict[str, Any] | None]] = {
                     entry.source_paper_id: (
                         float(entry.utility_score),
                         dict(entry.metadata),
@@ -730,7 +734,11 @@ def _extract_realization_model_path(manifest_path: str | None) -> str | None:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
         trainer_output_dir = payload.get("trainer_output_dir", "")
-        if trainer_output_dir and Path(trainer_output_dir).exists():
+        if (
+            isinstance(trainer_output_dir, str)
+            and trainer_output_dir
+            and Path(trainer_output_dir).exists()
+        ):
             return trainer_output_dir
     except Exception:
         pass

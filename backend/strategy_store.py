@@ -12,11 +12,17 @@ import os
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from live_idea_bench.config import TopicDefinition, load_topics
+from live_idea_bench.models import PaperRecord
 from live_idea_bench.papers import load_papers_from_markdown
 from live_idea_bench.topics import classify_papers_by_topic
+
+if TYPE_CHECKING:
+    from typing import SupportsFloat, SupportsInt
+
+    from live_idea_bench.strategy.base import IdeaStrategy
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DATA_DIR = PROJECT_ROOT / "data" / "arxiv_csml" / "raw_markdown"
@@ -35,7 +41,9 @@ def _path(strategy_id: str) -> Path:
 
 def _coerce_int(value: object, default: int) -> int:
     try:
-        return int(value)
+        # Deliberate duck-typing of an untyped JSON value; the cast keeps the
+        # runtime call unchanged and the failure modes are caught below.
+        return int(cast("SupportsInt | str", value))
     except (TypeError, ValueError):
         return default
 
@@ -52,7 +60,7 @@ def _normalize_params(
     params: object,
     *,
     strict_keyword_coercion: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     raw_params = params if isinstance(params, dict) else {}
     normalized_params = dict(raw_params)
 
@@ -78,7 +86,9 @@ def _normalize_params(
         normalized_params.setdefault("predictor_config", "predictor.yaml")
         normalized_params.setdefault("similarity_config", "similarity.yaml")
         if raw_params.get("temperature") is not None:
-            normalized_params["temperature"] = float(raw_params.get("temperature"))
+            normalized_params["temperature"] = float(
+                cast("SupportsFloat | str", raw_params.get("temperature"))
+            )
 
     normalized_params.pop("model_id", None)
     normalized_params.pop("prompt_id", None)
@@ -87,7 +97,7 @@ def _normalize_params(
     return normalized_params
 
 
-def _normalize_prediction(raw: object, rank_fallback: int) -> dict | None:
+def _normalize_prediction(raw: object, rank_fallback: int) -> dict[str, Any] | None:
     if not isinstance(raw, dict):
         return None
 
@@ -97,7 +107,8 @@ def _normalize_prediction(raw: object, rank_fallback: int) -> dict | None:
 
     def _coerce_score(value: object, default: float = 0.0) -> float:
         try:
-            resolved = float(value)
+            # Same duck-typing as _coerce_int: JSON scores may arrive as str.
+            resolved = float(cast("SupportsFloat | str", value))
         except (TypeError, ValueError):
             resolved = default
         if resolved > 1.0:
@@ -199,7 +210,7 @@ def _normalize_status(value: object) -> str:
     return "pending"
 
 
-def _normalize_topic_run(topic_run: object) -> dict | None:
+def _normalize_topic_run(topic_run: object) -> dict[str, Any] | None:
     if not isinstance(topic_run, dict):
         return None
 
@@ -232,11 +243,11 @@ def _normalize_topic_run(topic_run: object) -> dict | None:
     return normalized
 
 
-def _normalize_topic_runs(topic_runs: object) -> list[dict]:
+def _normalize_topic_runs(topic_runs: object) -> list[dict[str, Any]]:
     if not isinstance(topic_runs, list):
         return []
 
-    normalized: list[dict] = []
+    normalized: list[dict[str, Any]] = []
     for raw in topic_runs:
         topic_run = _normalize_topic_run(raw)
         if topic_run is not None:
@@ -245,7 +256,7 @@ def _normalize_topic_runs(topic_runs: object) -> list[dict]:
 
 
 def _aggregate_topic_backtest_summary(
-    topic_runs: list[dict],
+    topic_runs: list[dict[str, Any]],
 ) -> dict[str, float] | None:
     summaries: list[tuple[dict[str, Any], int]] = []
     for topic_run in topic_runs:
@@ -290,12 +301,12 @@ def _configured_topics() -> list[TopicDefinition]:
 
 def _seed_topic_runs(
     topics: list[TopicDefinition], existing_runs: object
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     existing_by_id = {
         topic_run["topic_id"]: topic_run
         for topic_run in _normalize_topic_runs(existing_runs)
     }
-    seeded: list[dict] = []
+    seeded: list[dict[str, Any]] = []
     for topic in topics:
         current = dict(existing_by_id.get(topic.id) or {})
         seeded.append(
@@ -320,7 +331,7 @@ def _seed_topic_runs(
     return seeded
 
 
-def _normalize_strategy(strategy: dict) -> dict:
+def _normalize_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
     strategy_name = str(strategy.get("strategy_name") or "keyword_trend")
     if strategy_name == "prompt_llm":
         strategy_name = "predictor_llm"
@@ -341,7 +352,7 @@ def _normalize_strategy(strategy: dict) -> dict:
     return normalized
 
 
-def _read(strategy_id: str) -> dict | None:
+def _read(strategy_id: str) -> dict[str, Any] | None:
     p = _path(strategy_id)
     if not p.exists():
         return None
@@ -354,13 +365,13 @@ def _read(strategy_id: str) -> dict | None:
         return None
 
 
-def _write(strategy: dict) -> None:
+def _write(strategy: dict[str, Any]) -> None:
     _path(strategy["id"]).write_text(
         json.dumps(strategy, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
 
-def _sort_key(s: dict) -> tuple:
+def _sort_key(s: dict[str, Any]) -> tuple[float, str]:
     score = s.get("leaderboard_score")
     if score is not None:
         try:
@@ -377,8 +388,8 @@ def _sort_key(s: dict) -> tuple:
 # ── Public API ────────────────────────────────────────────────────────────────
 
 
-def list_strategies() -> list[dict]:
-    strategies = []
+def list_strategies() -> list[dict[str, Any]]:
+    strategies: list[dict[str, Any]] = []
     for p in sorted(STRATEGIES_DIR.glob("*.json")):
         try:
             loaded = json.loads(p.read_text(encoding="utf-8"))
@@ -390,11 +401,11 @@ def list_strategies() -> list[dict]:
     return strategies
 
 
-def get_strategy(strategy_id: str) -> dict | None:
+def get_strategy(strategy_id: str) -> dict[str, Any] | None:
     return _read(strategy_id)
 
 
-def create_strategy(data: dict) -> dict:
+def create_strategy(data: dict[str, Any]) -> dict[str, Any]:
     strategy_id = uuid.uuid4().hex[:8]
     strategy_name = str(data.get("strategy_name", "keyword_trend"))
     if strategy_name == "prompt_llm":
@@ -403,7 +414,7 @@ def create_strategy(data: dict) -> dict:
     raw_data_dir = config.get("data_dir", "")
     data_dir = str(raw_data_dir).strip() if raw_data_dir is not None else ""
 
-    strategy = {
+    strategy: dict[str, Any] = {
         "id": strategy_id,
         "name": data.get("name") or f"{strategy_name} [{strategy_id}]",
         # Which IdeaStrategy implementation to use (matches IdeaStrategy.name)
@@ -438,7 +449,7 @@ def create_strategy(data: dict) -> dict:
     return strategy
 
 
-def update_strategy(strategy_id: str, updates: dict) -> dict | None:
+def update_strategy(strategy_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
     strategy = _read(strategy_id)
     if strategy is None:
         return None
@@ -458,7 +469,7 @@ def delete_strategy(strategy_id: str) -> bool:
 # ── Engine helpers ─────────────────────────────────────────────────────────────
 
 
-def _resolve_data_dir(s: dict) -> Path:
+def _resolve_data_dir(s: dict[str, Any]) -> Path:
     raw_data_dir = (s.get("config") or {}).get("data_dir", "")
     data_dir = str(raw_data_dir).strip() if raw_data_dir is not None else ""
 
@@ -475,7 +486,7 @@ def _resolve_data_dir(s: dict) -> Path:
     return (PROJECT_ROOT / configured).resolve()
 
 
-def _load_papers(s: dict):
+def _load_papers(s: dict[str, Any]) -> list[PaperRecord]:
     """Load PaperRecord list for this strategy's data_dir and time window."""
     return load_papers_from_markdown(
         _resolve_data_dir(s),
@@ -484,15 +495,15 @@ def _load_papers(s: dict):
     )
 
 
-def resolve_data_dir_for_strategy(strategy: dict) -> Path:
+def resolve_data_dir_for_strategy(strategy: dict[str, Any]) -> Path:
     return _resolve_data_dir(strategy)
 
 
-def load_papers_for_strategy(strategy: dict):
+def load_papers_for_strategy(strategy: dict[str, Any]) -> list[PaperRecord]:
     return _load_papers(strategy)
 
 
-def _make_strategy_obj(s: dict):
+def _make_strategy_obj(s: dict[str, Any]) -> "IdeaStrategy":
     """Instantiate the IdeaStrategy from the live_idea_bench registry."""
     from live_idea_bench.strategy.execution import build_strategy
 
@@ -500,13 +511,13 @@ def _make_strategy_obj(s: dict):
 
 
 def _classify_strategy_papers(
-    papers: list,
+    papers: list[PaperRecord],
     topics: list[TopicDefinition],
-) -> dict[str, list]:
+) -> dict[str, list[PaperRecord]]:
     return dict(classify_papers_by_topic(papers, topics))
 
 
-def _aggregate_mode_status(topic_runs: list[dict], mode: str) -> str:
+def _aggregate_mode_status(topic_runs: list[dict[str, Any]], mode: str) -> str:
     statuses = [
         _normalize_status(topic_run.get(f"{mode}_status")) for topic_run in topic_runs
     ]
@@ -521,7 +532,7 @@ def _aggregate_mode_status(topic_runs: list[dict], mode: str) -> str:
     return "pending"
 
 
-def _collect_mode_errors(topic_runs: list[dict], mode: str) -> str | None:
+def _collect_mode_errors(topic_runs: list[dict[str, Any]], mode: str) -> str | None:
     errors: list[str] = []
     for topic_run in topic_runs:
         error = topic_run.get(f"{mode}_error")
@@ -758,7 +769,7 @@ def has_leaderboard_baseline() -> bool:
     return False
 
 
-def bootstrap_backtest_if_missing() -> dict:
+def bootstrap_backtest_if_missing() -> dict[str, Any]:
     strategies = list_strategies()
     if not strategies:
         return {

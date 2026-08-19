@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 from live_idea_bench.models import IdeaPrediction, PaperRecord
@@ -55,7 +55,12 @@ def coerce_prediction(raw: dict[str, Any], rank_fallback: int) -> IdeaPrediction
             raw.get("confidence", raw.get("Confidence", raw.get("score")))
         ),
         key_terms=[str(term).strip() for term in key_terms_raw if str(term).strip()],
-        metadata=(raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}),
+        # The isinstance guard already restricts this to a dict, but mypy cannot
+        # narrow across the two separate `raw.get("metadata")` calls.
+        metadata=cast(
+            "dict[str, Any]",
+            raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {},
+        ),
     )
 
 
@@ -166,7 +171,7 @@ def evaluate_previous_generation(
         and date_to_ordinal(get_paper_published_date(paper)) > cutoff_ord
     ]
 
-    predictions = []
+    predictions: list[IdeaPrediction] = []
     for generation in generations:
         predictions_raw = generation.get("predictions")
         if not isinstance(predictions_raw, list):

@@ -1,3 +1,5 @@
+from typing import Any
+
 from live_idea_bench.strategy.base import IdeaStrategy
 from live_idea_bench.strategy.keyword_trend import KeywordTrendStrategy
 from live_idea_bench.strategy.memory_prompting import MemoryPromptingStrategy
@@ -18,7 +20,7 @@ def create_strategy(
     similarity_config: str = "similarity.yaml",
     temperature: float | None = None,
     reasoning_effort: str | None = None,
-    **legacy_params,
+    **legacy_params: Any,
 ) -> IdeaStrategy:
     normalized = strategy_name.strip().lower()
     if normalized == KeywordTrendStrategy.name:

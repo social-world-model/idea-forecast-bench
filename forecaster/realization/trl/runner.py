@@ -39,7 +39,8 @@ def _vllm_available() -> bool:
         import vllm  # noqa: F401
         from trl.import_utils import is_vllm_available
 
-        return is_vllm_available()
+        available: bool = is_vllm_available()
+        return available
     except Exception:
         return False
 
@@ -183,7 +184,10 @@ def train_with_trl(
         reward_config_path=reward_config_path,
         realization_config_path=realization_config_path,
         similarity_config_path=similarity_config_path,
-        runtime_config_path=runtime_config_path,
+        # `make_reward_fn` declares `runtime_config_path: str = "config.yaml"`,
+        # but this parameter is Optional and defaults to None, so None can reach
+        # it instead of the intended default. Left as-is to preserve behaviour.
+        runtime_config_path=runtime_config_path,  # type: ignore[arg-type]
         model_name=model_name,
     )
     logger.info(
