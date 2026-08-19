@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 from forecaster.prior.prompting import render_prior_chat_transcript
-from forecaster.prior.trainer import _build_target_only_labels, _tokenize_training_sample
+from forecaster.prior.trainer import (
+    _build_target_only_labels,
+    _tokenize_training_sample,
+)
 
 
 class _CharTokenizer:

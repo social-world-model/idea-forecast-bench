@@ -18,12 +18,10 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Sequence
-
-from live_idea_bench.backtest import split_train_future_by_cutoff
-from live_idea_bench.models import PaperRecord
+from typing import Any
 
 from forecaster.foresight.cutoffs import (
     FUTURE_WINDOW_HARD_LIMIT,
@@ -35,6 +33,8 @@ from forecaster.foresight.operators import (
     load_operator_inventory,
     map_free_text_operator,
 )
+from live_idea_bench.backtest import split_train_future_by_cutoff
+from live_idea_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +138,7 @@ def augment_hindsight_rows(
     hard_limit = _to_date(FUTURE_WINDOW_HARD_LIMIT)
 
     summary = AugmentationSummary()
-    counts: dict[str, int] = {op_id: 0 for op_id in inventory.closed_ids}
+    counts: dict[str, int] = dict.fromkeys(inventory.closed_ids, 0)
     counts[inventory.unmappable_bucket] = 0
 
     all_papers: list[PaperRecord] | None = None

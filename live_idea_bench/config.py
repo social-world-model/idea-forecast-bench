@@ -162,7 +162,7 @@ class Config:
         cls,
         config_path: str | None = None,
         prompt_dir: str | None = None,
-    ) -> "Config":
+    ) -> Config:
         runtime = load_runtime_config(config_path)
         similarity = load_similarity_config("similarity.yaml", prompt_dir=prompt_dir)
         runtime.prompt_template = PromptTemplate(

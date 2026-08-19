@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-
-from backend.services.daily_pipeline import PipelineAlreadyRunningError, run_daily_pipeline  # noqa: E402
+from backend.services.daily_pipeline import (  # noqa: E402
+    PipelineAlreadyRunningError,
+    run_daily_pipeline,
+)
 
 
 def main() -> int:

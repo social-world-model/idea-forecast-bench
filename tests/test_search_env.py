@@ -1,11 +1,9 @@
 """Tests for the strict interactive search environment."""
 from __future__ import annotations
 
-from live_idea_bench.models import PaperRecord
-
 from forecaster.models import (
-    Innovation,
     STRICT_TRAJECTORY_SCHEMA_VERSION,
+    Innovation,
     SearchAction,
     realization_trajectory_to_dict,
 )
@@ -14,6 +12,7 @@ from forecaster.realization.search_env import (
     initialize_search_state,
     rollout_search_trajectory,
 )
+from live_idea_bench.models import PaperRecord
 
 
 def _make_innovation() -> Innovation:

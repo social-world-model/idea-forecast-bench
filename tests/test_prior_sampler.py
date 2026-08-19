@@ -4,15 +4,9 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from types import ModuleType
-from typing import Any
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
-import pytest
-
-from forecaster.models import Innovation
 from forecaster.config import InferenceConfig
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -239,7 +233,7 @@ class TestTrainPriorMetadata:
         fake_task_type = MagicMock()
         fake_task_type.CAUSAL_LM = "CAUSAL_LM"
         fake_trainer = MagicMock()
-        fake_dataset = MagicMock()
+        MagicMock()
 
         fake_peft_module = MagicMock()
         fake_peft_module.get_peft_model.return_value = fake_peft_model
@@ -272,8 +266,9 @@ class TestTrainPriorMetadata:
             "forecaster.prior.trainer._build_hf_dataset",
             return_value=fake_ds,
         ):
-            from forecaster.prior import trainer as trainer_mod
             import importlib
+
+            from forecaster.prior import trainer as trainer_mod
             importlib.reload(trainer_mod)
 
             result = trainer_mod.train_prior(

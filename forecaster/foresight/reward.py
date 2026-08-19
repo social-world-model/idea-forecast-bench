@@ -20,9 +20,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
-
-import numpy as np
+from typing import Any
 
 from forecaster.foresight.gates import format_ok, grounded, operator_consistent
 from forecaster.foresight.indices import (
@@ -95,7 +93,7 @@ class ForesightContext:
         *,
         inventory: OperatorInventory | None = None,
         config: ForesightRewardConfig | None = None,
-    ) -> "ForesightContext":
+    ) -> ForesightContext:
         future = {k: b.future for k, b in bundles.items()}
         history = {k: b.history for k, b in bundles.items()}
         return cls(
@@ -145,7 +143,7 @@ class RewardPayload:
         extra_info: dict[str, Any],
         inventory: OperatorInventory,
         paper_to_topic: dict[str, str] | None = None,
-    ) -> "RewardPayload":
+    ) -> RewardPayload:
         inno_raw = extra_info.get("innovation") or {}
         innovation = Innovation(
             base_direction=str(inno_raw.get("base_direction") or ""),

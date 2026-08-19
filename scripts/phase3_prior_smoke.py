@@ -22,11 +22,11 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
-from live_idea_bench.models import PaperRecord
 from forecaster.foresight.dz import augment_hindsight_rows
 from forecaster.foresight.prior_api import operator_distribution, sample_z
 from forecaster.foresight.prior_io import build_sft_samples_from_dz, save_sft_jsonl
 from forecaster.models import Innovation
+from live_idea_bench.models import PaperRecord
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("phase3_smoke")

@@ -7,12 +7,11 @@ can branch on a small enum.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import yaml
-
 
 CLOSED_OPERATORS: tuple[str, ...] = (
     "limitation_extension",

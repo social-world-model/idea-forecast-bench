@@ -13,29 +13,29 @@ Main entry points:
 #
 # Eager imports below are safe because they do NOT transitively import live_idea_bench.backtest.
 
-from forecaster.models import (
-    Innovation,
-    MemoryEntry,
-    MemoryInventory,
-    HindsightSample,
-    JointCandidate,
-    ScoredProposal,
-    innovation_to_dict,
-    innovation_from_dict,
-    memory_inventory_to_dict,
-    memory_inventory_from_dict,
-)
 from forecaster.config import (
     HindsightConfig,
-    PriorConfig,
-    SFTTrainConfig,
-    RealizationConfig,
     InferenceConfig,
+    PriorConfig,
+    RealizationConfig,
+    SFTTrainConfig,
     load_hindsight_config,
-    load_prior_config,
-    load_sft_train_config,
-    load_realization_config,
     load_inference_config,
+    load_prior_config,
+    load_realization_config,
+    load_sft_train_config,
+)
+from forecaster.models import (
+    HindsightSample,
+    Innovation,
+    JointCandidate,
+    MemoryEntry,
+    MemoryInventory,
+    ScoredProposal,
+    innovation_from_dict,
+    innovation_to_dict,
+    memory_inventory_from_dict,
+    memory_inventory_to_dict,
 )
 from forecaster.prior.memory import MemoryStore
 

@@ -30,6 +30,7 @@ from pathlib import Path
 # Unsloth's loader is single-GPU by design so we never go through torchrun /
 # DDP here. The launching script sets CUDA_VISIBLE_DEVICES to the one GPU.
 import torch  # noqa: E402
+
 if torch.cuda.is_available():
     torch.cuda.set_device(0)
 
@@ -52,8 +53,9 @@ def _patch_vllm_client_group_port() -> None:
     # TRL 1.4+ path: GRPOConfig has a vllm_group_port field; patch its
     # default so unsloth's compiled trainer reads our env-var value.
     try:
-        from trl.trainer.grpo_config import GRPOConfig as _Cfg
         import dataclasses as _dc
+
+        from trl.trainer.grpo_config import GRPOConfig as _Cfg
 
         for f in _dc.fields(_Cfg):
             if f.name == "vllm_group_port":
@@ -99,6 +101,7 @@ def _patch_vllm_client_group_port() -> None:
 _patch_vllm_client_group_port()
 
 
+from forecaster.models import HindsightSample  # noqa: E402
 from forecaster.realization import (  # noqa: E402
     load_candidate_generation_config,
     load_episode_build_config,
@@ -106,7 +109,6 @@ from forecaster.realization import (  # noqa: E402
     load_reward_config,
     load_selection_config,
 )
-from forecaster.models import HindsightSample, Innovation  # noqa: E402
 from forecaster.realization.episodes import build_rl_episodes  # noqa: E402
 from forecaster.realization.model_zoo import resolve_small_model  # noqa: E402
 from forecaster.realization.pipeline import (  # noqa: E402

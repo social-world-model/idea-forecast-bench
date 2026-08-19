@@ -40,8 +40,8 @@ import argparse
 import json
 import os
 import sys
-import time
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -149,11 +149,10 @@ def _collect_requests(
     # Use heuristic similarity during collect — we only care about capturing LLM
     # request prompts, not about evaluation quality.  Heuristic is CPU-only and
     # ~10× faster than hybrid/embedding engines, so collect finishes in minutes.
-    _tmp = tempfile.NamedTemporaryFile(
+    with tempfile.NamedTemporaryFile(
         mode="w", suffix=".yaml", delete=False, prefix="sim_collect_"
-    )
-    _tmp.write("engine: heuristic\n")
-    _tmp.close()
+    ) as _tmp:
+        _tmp.write("engine: heuristic\n")
     collect_bt_config = BacktestConfig(
         top_k=bt_config.top_k,
         horizon_months=bt_config.horizon_months,
@@ -493,11 +492,10 @@ def main() -> int:
     _tmp_sim_cfg = None
     if args.similarity_engine:
         import tempfile
-        _tmp_sim_cfg = tempfile.NamedTemporaryFile(
+        with tempfile.NamedTemporaryFile(
             mode="w", suffix=".yaml", delete=False, prefix="sim_override_"
-        )
-        _tmp_sim_cfg.write(f"engine: {args.similarity_engine}\n")
-        _tmp_sim_cfg.close()
+        ) as _tmp_sim_cfg:
+            _tmp_sim_cfg.write(f"engine: {args.similarity_engine}\n")
         args.similarity_config = _tmp_sim_cfg.name
 
     # ── setup paths ───────────────────────────────────────────────────────────

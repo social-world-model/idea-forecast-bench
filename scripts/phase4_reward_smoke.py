@@ -16,19 +16,15 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from live_idea_bench.models import PaperRecord
-
 from forecaster.foresight.indices import (
     HashingEmbedder,
     build_cutoff_indices,
 )
-from forecaster.foresight.judge import RubricJudge, StubScorer
-from forecaster.foresight.reward import ForesightContext, ForesightRewardConfig
 from forecaster.foresight.rubric import Rubric, save_rubric, stamp_metadata
 from forecaster.foresight.trainer_wiring import (
-    build_foresight_context,
     make_reward_fn,
 )
+from live_idea_bench.models import PaperRecord
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("phase4_smoke")
@@ -134,7 +130,7 @@ def main() -> int:
 
         rewards = reward_fn(completions, extra_info=extra_infos)
         logger.info("rewards: %s", rewards)
-        for completion, reward in zip(completions, rewards):
+        for completion, reward in zip(completions, rewards, strict=False):
             logger.info(
                 "%.3f | %s",
                 reward,

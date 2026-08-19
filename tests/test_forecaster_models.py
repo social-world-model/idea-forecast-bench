@@ -11,15 +11,14 @@ from forecaster.models import (
     MemoryEntry,
     MemoryInventory,
     ScoredProposal,
-    innovation_schema_contract,
     innovation_from_dict,
+    innovation_schema_contract,
     innovation_to_dict,
     memory_entry_from_dict,
     memory_entry_to_dict,
     memory_inventory_from_dict,
     memory_inventory_to_dict,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

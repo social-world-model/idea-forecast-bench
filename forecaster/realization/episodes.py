@@ -4,10 +4,10 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from forecaster.realization.config import EpisodeBuildConfig
 from live_idea_bench.backtest import split_train_future_by_cutoff
 from live_idea_bench.models import PaperRecord
 from live_idea_bench.papers import add_months, month_start_date, month_to_index
-from forecaster.realization.config import EpisodeBuildConfig
 
 
 @dataclass
@@ -116,7 +116,7 @@ def build_rl_episodes(
     if not scoped_papers:
         return []
 
-    month_values = sorted(set(paper.month for paper in scoped_papers), key=month_to_index)
+    month_values = sorted({paper.month for paper in scoped_papers}, key=month_to_index)
     first_month_idx = month_to_index(month_values[0])
     candidate_rows: list[dict[str, Any]] = []
     for cutoff in month_values:

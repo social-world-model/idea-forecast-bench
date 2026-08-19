@@ -1,49 +1,47 @@
 """ForecasterPipeline: orchestrates all 4 phases of the forecasting method."""
 from __future__ import annotations
 
-from dataclasses import replace
 import json
 import logging
+from dataclasses import replace
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
-from live_idea_bench.backtest import split_train_future_by_cutoff
-from live_idea_bench.models import PaperRecord
-from live_idea_bench.llm import create_client
-from live_idea_bench.papers import month_start_date
-from live_idea_bench.similarity import score_prediction_list
-
+from forecaster.config import (
+    HindsightConfig,
+    InferenceConfig,
+    PriorConfig,
+    RealizationConfig,
+    SFTTrainConfig,
+    load_hindsight_config,
+    load_inference_config,
+    load_prior_config,
+    load_realization_config,
+    load_sft_train_config,
+    strict_inference_score_contract,
+)
+from forecaster.hindsight.dataset_builder import build_hindsight_dataset
+from forecaster.inference.algorithm import run_joint_inference as run_joint_inference_fn
 from forecaster.models import (
     HindsightSample,
     Innovation,
     ScoredProposal,
     innovation_schema_contract,
 )
-from forecaster.prior.sampler import sample_innovations
-from forecaster.realization.proposal_generator import proposal_to_idea_prediction
-from forecaster.config import (
-    HindsightConfig,
-    PriorConfig,
-    SFTTrainConfig,
-    RealizationConfig,
-    InferenceConfig,
-    strict_inference_score_contract,
-    load_hindsight_config,
-    load_prior_config,
-    load_sft_train_config,
-    load_realization_config,
-    load_inference_config,
-)
 from forecaster.prior.memory import (
     MemoryStore,
     build_memory_store_from_hindsight_samples,
     hindsight_sample_available_by_cutoff,
 )
-from forecaster.hindsight.dataset_builder import build_hindsight_dataset
+from forecaster.prior.sampler import sample_innovations
 from forecaster.prior.sft_dataset import build_sft_samples, save_sft_dataset
 from forecaster.prior.trainer import train_prior
-from forecaster.inference.algorithm import run_joint_inference as run_joint_inference_fn
-
+from forecaster.realization.proposal_generator import proposal_to_idea_prediction
+from live_idea_bench.backtest import split_train_future_by_cutoff
+from live_idea_bench.llm import create_client
+from live_idea_bench.models import PaperRecord
+from live_idea_bench.papers import month_start_date
+from live_idea_bench.similarity import score_prediction_list
 
 logger = logging.getLogger(__name__)
 
@@ -273,7 +271,7 @@ class ForecasterPipeline:
                     "bootstrap_prior_checkpoint": bootstrap_prior_checkpoint,
                     "refresh_prior_checkpoint": refresh_checkpoint,
                     "realization_model_path": realization_model_path,
-                    "train_cutoffs": list(sorted(train_cutoffs)),
+                    "train_cutoffs": sorted(train_cutoffs),
                     "memory_snapshot_dir": str(memory_snapshot_dir.resolve()),
                     "replay_events": replay_events,
                 },
@@ -298,14 +296,13 @@ class ForecasterPipeline:
 
         Delegates to the existing RL pipeline. Returns manifest path or None.
         """
-        from forecaster.realization.pipeline import run_policy_rl_pipeline
         from forecaster.realization.config import (
-            load_episode_build_config,
             load_candidate_generation_config,
+            load_episode_build_config,
             load_reward_config,
             load_selection_config,
         )
-        from forecaster.realization.trainers import create_trainer_runner
+        from forecaster.realization.pipeline import run_policy_rl_pipeline
 
         realization_output_dir = str(self.output_dir / "realization_grpo")
         resolved_model = model_name or "gpt-4o-mini"
@@ -329,7 +326,7 @@ class ForecasterPipeline:
             reward_config = load_reward_config()
             selection_config = load_selection_config()
 
-            manifest = run_policy_rl_pipeline(
+            run_policy_rl_pipeline(
                 self.papers,
                 trainer="grpo",
                 model_name=resolved_model,
@@ -363,8 +360,8 @@ class ForecasterPipeline:
         cutoff_month: str,
         innovations: list[Innovation],
         *,
-        prior_model_path: Optional[str] = None,
-        realization_model_path: Optional[str] = None,
+        prior_model_path: str | None = None,
+        realization_model_path: str | None = None,
     ) -> list[ScoredProposal]:
         """Phase 4: run Algorithm 1 for joint inference.
 
@@ -481,7 +478,7 @@ class ForecasterPipeline:
         else:
             logger.info("Phase 2: Skipping prior SFT training (skip_training=True).")
 
-        realization_model_path: Optional[str] = None
+        realization_model_path: str | None = None
         if not skip_training and train_cutoffs:
             logger.info("Phase 3: Realization GRPO training.")
             manifest_path = self.run_realization_training(
@@ -700,7 +697,7 @@ class ForecasterPipeline:
 # ---------------------------------------------------------------------------
 
 
-def _extract_realization_model_path(manifest_path: Optional[str]) -> Optional[str]:
+def _extract_realization_model_path(manifest_path: str | None) -> str | None:
     """Extract the trained realization model path from the pipeline manifest.
 
     The manifest's trainer_output_dir is where the GRPO-trained realization

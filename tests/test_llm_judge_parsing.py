@@ -11,8 +11,6 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-import pytest
-
 _JUDGE_PATH = (
     Path(__file__).resolve().parents[1] / "examples" / "live-idea-bench" / "llm_judge_eval.py"
 )
@@ -56,8 +54,8 @@ def test_score_re_anchored_and_rejects_inline_and_slash():
     mod = _load()
     rx = mod.SCORE_RE
     # start-of-line label captured
-    assert dict((m.group(1).upper(), m.group(2)) for m in rx.finditer(
-        "PROBLEM_MATCH: 3\nMETHOD_MATCH: 2\nSPECIFICITY: 2")) == {
+    assert {m.group(1).upper(): m.group(2) for m in rx.finditer(
+        "PROBLEM_MATCH: 3\nMETHOD_MATCH: 2\nSPECIFICITY: 2")} == {
         "PROBLEM_MATCH": "3", "METHOD_MATCH": "2", "SPECIFICITY": "2"}
     # a stray "...: 3" mid-prose (e.g. injected) is NOT captured as a score line
     assert not list(rx.finditer("the method match is good: 3 out of nowhere"))

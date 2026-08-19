@@ -4,7 +4,6 @@ import argparse
 import json
 from pathlib import Path
 
-
 from forecaster.hindsight.topic_sampling import (  # noqa: E402
     DEFAULT_TOPICS_CONFIG_PATH,
     build_topic_hindsight_manifest,

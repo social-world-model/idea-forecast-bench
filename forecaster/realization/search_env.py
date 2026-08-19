@@ -4,20 +4,19 @@ from __future__ import annotations
 import logging
 from dataclasses import replace
 
-from live_idea_bench.config import SimilarityConfig
-from live_idea_bench.models import PaperRecord
-from live_idea_bench.similarity import compute_similarity, paper_text
-
 from forecaster.models import (
+    STRICT_SEARCH_ENV_DEFAULTS,
     Innovation,
     RealizationTrajectory,
     RealizationTrajectoryStep,
-    STRICT_SEARCH_ENV_DEFAULTS,
     SearchAction,
     SearchObservation,
     SearchState,
     StrictRealizationResult,
 )
+from live_idea_bench.config import SimilarityConfig
+from live_idea_bench.models import PaperRecord
+from live_idea_bench.similarity import compute_similarity, paper_text
 
 logger = logging.getLogger(__name__)
 

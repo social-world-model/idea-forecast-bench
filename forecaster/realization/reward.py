@@ -3,22 +3,33 @@ from __future__ import annotations
 import logging
 import math
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass, field
-from typing import Any, Iterable, Sequence
+from typing import Any
 
-from live_idea_bench.models import EvaluationResult, IdeaPrediction, PaperRecord, PredictionMatchDetail
 from forecaster.config import RealizationConfig
 from forecaster.models import Innovation, innovation_from_dict
 from forecaster.realization.config import RewardConfig
-from forecaster.realization.local_generation import _completion_to_text, parse_single_completion_prediction
-from forecaster.realization.proposal_generator import proposal_to_idea_prediction, strip_think_block
+from forecaster.realization.local_generation import (
+    _completion_to_text,
+    parse_single_completion_prediction,
+)
+from forecaster.realization.proposal_generator import (
+    proposal_to_idea_prediction,
+    strip_think_block,
+)
 from forecaster.realization.realization_reward import (
     StrictTrajectoryRewardBreakdown,
     evaluate_realization_reward,
     evaluate_strict_trajectory_reward,
 )
 from forecaster.realization.strict_runtime import parse_strict_rollout_completion
+from live_idea_bench.models import (
+    EvaluationResult,
+    IdeaPrediction,
+    PaperRecord,
+    PredictionMatchDetail,
+)
 from live_idea_bench.similarity import idea_text, paper_text, score_prediction_list
 
 logger = logging.getLogger(__name__)
@@ -521,7 +532,6 @@ def evaluate_rl_reward(
         resolved_realization_config,
     )
     benchmark_match_value = detail.score if detail.is_match else 0.0
-    lead_time_value = round(max(0.0, min(1.0, detail.lead_time if detail.is_match else 0.0)), 4)
     total = paper_reward.total_reward
     reward_items.append(
         PerIdeaReward(
@@ -592,7 +602,7 @@ def spearman_correlation(xs: Sequence[float], ys: Sequence[float]) -> float:
     y_ranks = _ranks(ys)
     x_mean = sum(x_ranks) / len(x_ranks)
     y_mean = sum(y_ranks) / len(y_ranks)
-    numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_ranks, y_ranks))
+    numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_ranks, y_ranks, strict=False))
     x_denom = math.sqrt(sum((x - x_mean) ** 2 for x in x_ranks))
     y_denom = math.sqrt(sum((y - y_mean) ** 2 for y in y_ranks))
     if x_denom == 0.0 or y_denom == 0.0:

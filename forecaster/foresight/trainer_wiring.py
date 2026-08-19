@@ -23,8 +23,9 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,10 @@ def _build_paper_to_topic(hindsight_path: str | Path | None = None) -> dict[str,
 
 
 def _build_embedder(name: str):
-    from forecaster.foresight.indices import HashingEmbedder, SentenceTransformerEmbedder
+    from forecaster.foresight.indices import (
+        HashingEmbedder,
+        SentenceTransformerEmbedder,
+    )
     if name.startswith("hashing:"):
         try:
             dim = int(name.split(":", 1)[1])
@@ -116,7 +120,6 @@ def build_foresight_context(
     hindsight_path: str | Path | None = None,
 ):
     """Construct a ForesightContext from a saved artifact directory."""
-    from forecaster.foresight.indices import CutoffIndexBundle
     from forecaster.foresight.reward import ForesightContext
     from forecaster.foresight.rubric import load_rubrics_dir
 
@@ -214,7 +217,7 @@ def make_reward_fn(
                 ticked["value"] = True
 
             out: list[float] = []
-            for completion, extra in zip(completions, extra_infos):
+            for completion, extra in zip(completions, extra_infos, strict=False):
                 # TRL returns conversational completions as a list of message
                 # dicts ([{"role":"assistant","content":...}]); the foresight
                 # reward/gates expect a plain string. Flatten to the text.
@@ -243,7 +246,7 @@ def make_reward_fn(
                     threshold=dedup_threshold,
                     penalty=dedup_penalty,
                 )
-                out = [max(0.0, r - p) for r, p in zip(out, penalties)]
+                out = [max(0.0, r - p) for r, p in zip(out, penalties, strict=False)]
             return out
 
         _reward_fn.__name__ = "foresight_reward_fn"
@@ -255,7 +258,7 @@ def make_reward_fn(
     def _reward_fn(completions: list[str], **kwargs: Any) -> list[float]:
         extra_infos = kwargs.get("extra_info", ["{}"] * len(completions))
         out: list[float] = []
-        for completion, extra in zip(completions, extra_infos):
+        for completion, extra in zip(completions, extra_infos, strict=False):
             try:
                 out.append(compute_score(
                     data_source=f"live_idea_bench::{trainer_name}",

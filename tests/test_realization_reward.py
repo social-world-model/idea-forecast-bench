@@ -3,14 +3,19 @@ from __future__ import annotations
 
 import pytest
 
-from live_idea_bench.models import EvaluationResult, PaperRecord, PredictionMatchDetail, ScoredPredictionList
-from forecaster.models import Innovation
 from forecaster.config import RealizationConfig
+from forecaster.models import Innovation
 from forecaster.realization.realization_reward import (
     compute_coherence_score,
     compute_evidence_accuracy,
     compute_operator_adherence,
     compute_realization_reward,
+)
+from live_idea_bench.models import (
+    EvaluationResult,
+    PaperRecord,
+    PredictionMatchDetail,
+    ScoredPredictionList,
 )
 
 
@@ -255,9 +260,9 @@ def _mock_scored_prediction_list() -> ScoredPredictionList:
 
 class TestRLRewardAlignment:
     def test_evaluate_rl_reward_changes_with_evidence_quality(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from live_idea_bench.models import IdeaPrediction
         from forecaster.realization.config import RewardConfig
         from forecaster.realization.reward import evaluate_rl_reward
+        from live_idea_bench.models import IdeaPrediction
 
         monkeypatch.setattr(
             "forecaster.realization.reward.score_prediction_list",
@@ -295,9 +300,9 @@ class TestRLRewardAlignment:
         assert good.list_reward > weak.list_reward
 
     def test_evaluate_rl_reward_changes_with_operator_adherence(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from live_idea_bench.models import IdeaPrediction
         from forecaster.realization.config import RewardConfig
         from forecaster.realization.reward import evaluate_rl_reward
+        from live_idea_bench.models import IdeaPrediction
 
         monkeypatch.setattr(
             "forecaster.realization.reward.score_prediction_list",
@@ -335,9 +340,9 @@ class TestRLRewardAlignment:
         assert aligned.list_reward > misaligned.list_reward
 
     def test_evaluate_rl_reward_changes_with_coherence(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from live_idea_bench.models import IdeaPrediction
         from forecaster.realization.config import RewardConfig
         from forecaster.realization.reward import evaluate_rl_reward
+        from live_idea_bench.models import IdeaPrediction
 
         monkeypatch.setattr(
             "forecaster.realization.reward.score_prediction_list",

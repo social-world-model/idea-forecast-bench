@@ -1,8 +1,8 @@
 """Tests for build_memory(papers_before_t) -> str."""
 from __future__ import annotations
 
-from live_idea_bench.models import PaperRecord
 from forecaster.foresight.memory import build_memory
+from live_idea_bench.models import PaperRecord
 
 
 def _make(paper_id: str, *, month: str, topic: str, summary: str = "") -> PaperRecord:

@@ -12,7 +12,7 @@ import os
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from live_idea_bench.config import TopicDefinition, load_topics
 from live_idea_bench.papers import load_papers_from_markdown
@@ -312,7 +312,7 @@ def _normalize_strategy(strategy: dict) -> dict:
     return normalized
 
 
-def _read(strategy_id: str) -> Optional[dict]:
+def _read(strategy_id: str) -> dict | None:
     p = _path(strategy_id)
     if not p.exists():
         return None
@@ -347,7 +347,7 @@ def _sort_key(s: dict) -> tuple:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def list_strategies() -> List[dict]:
+def list_strategies() -> list[dict]:
     strategies = []
     for p in sorted(STRATEGIES_DIR.glob("*.json")):
         try:
@@ -360,7 +360,7 @@ def list_strategies() -> List[dict]:
     return strategies
 
 
-def get_strategy(strategy_id: str) -> Optional[dict]:
+def get_strategy(strategy_id: str) -> dict | None:
     return _read(strategy_id)
 
 
@@ -375,9 +375,7 @@ def create_strategy(data: dict) -> dict:
 
     strategy = {
         "id": strategy_id,
-        "name": data.get("name") or "{} [{}]".format(
-            strategy_name, strategy_id
-        ),
+        "name": data.get("name") or f"{strategy_name} [{strategy_id}]",
         # Which IdeaStrategy implementation to use (matches IdeaStrategy.name)
         "strategy_name": strategy_name,
         # Strategy hyper-parameters passed to the strategy constructor
@@ -410,7 +408,7 @@ def create_strategy(data: dict) -> dict:
     return strategy
 
 
-def update_strategy(strategy_id: str, updates: dict) -> Optional[dict]:
+def update_strategy(strategy_id: str, updates: dict) -> dict | None:
     strategy = _read(strategy_id)
     if strategy is None:
         return None

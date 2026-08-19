@@ -14,10 +14,11 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ class Rubric:
         }
 
     @classmethod
-    def from_json(cls, payload: dict[str, Any]) -> "Rubric":
+    def from_json(cls, payload: dict[str, Any]) -> Rubric:
         return cls(
             topic_id=str(payload["topic_id"]),
             cutoff_t=str(payload.get("cutoff_t", "")),

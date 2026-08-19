@@ -15,11 +15,11 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from live_idea_bench.models import PaperRecord
+from forecaster.foresight.grouping import GroupingInvariantError
 from forecaster.foresight.indices import HashingEmbedder, build_cutoff_indices
 from forecaster.foresight.rubric import Rubric, save_rubric, stamp_metadata
 from forecaster.foresight.trainer_wiring import make_reward_fn
-from forecaster.foresight.grouping import GroupingInvariantError
+from live_idea_bench.models import PaperRecord
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("phase5_smoke")

@@ -1,6 +1,7 @@
 """Tests for ForecasterStrategy (Phase 6)."""
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -193,7 +194,7 @@ class TestForecasterStrategyPriorWiring:
              patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")), \
              patch("forecaster.prior.sampler.sample_innovations", return_value=fake_innovations):
             strategy = ForecasterStrategy(prior_checkpoint=str(tmp_path))
-            results = strategy.generate(train_papers, "2024-06", top_k=3)
+            strategy.generate(train_papers, "2024-06", top_k=3)
 
         assert captured_innovations == fake_innovations
 
@@ -233,7 +234,7 @@ class TestForecasterStrategyPriorWiring:
              patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")), \
              patch("forecaster.prior.sampler.sample_innovations", side_effect=RuntimeError("model load failed")):
             strategy = ForecasterStrategy(prior_checkpoint=str(tmp_path))
-            results = strategy.generate(train_papers, "2024-06", top_k=3)
+            strategy.generate(train_papers, "2024-06", top_k=3)
 
         # Should still have produced heuristic innovations (no crash)
         assert len(captured_innovations) >= 1
@@ -300,6 +301,7 @@ class TestForecasterStrategyMemoryConditioning:
     def test_memory_chronology_warning_when_newer_than_cutoff(self, tmp_path, caplog) -> None:  # type: ignore[no-untyped-def]
         """Warning emitted when loaded memory is newer than inference cutoff."""
         import logging
+
         from forecaster.prior.memory import MemoryStore
 
         memory = MemoryStore.empty("2025-06")

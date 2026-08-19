@@ -14,7 +14,6 @@ import json
 import logging
 from pathlib import Path
 
-
 from forecaster.config import SFTTrainConfig
 from forecaster.hindsight.dataset_builder import load_hindsight_samples_jsonl
 from forecaster.prior.sft_dataset import build_sft_samples, save_sft_dataset

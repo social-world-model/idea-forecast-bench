@@ -3,8 +3,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from live_idea_bench.models import PaperRecord
-
 from forecaster.config import RealizationConfig
 from forecaster.models import (
     Innovation,
@@ -19,6 +17,7 @@ from forecaster.realization.strict_runtime import (
     run_strict_realization_rollout,
     score_strict_realization_trajectory,
 )
+from live_idea_bench.models import PaperRecord
 
 
 def _make_innovation() -> Innovation:

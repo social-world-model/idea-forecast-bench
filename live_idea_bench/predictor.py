@@ -4,15 +4,15 @@ import json
 import logging
 import random
 import re
-from typing import Any, Iterable, List
-
-logger = logging.getLogger(__name__)
+from collections.abc import Iterable
+from typing import Any
 
 from live_idea_bench.config import load_predictor_config, load_runtime_config
 from live_idea_bench.llm import create_client, get_response_from_llm
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.similarity import _sanitize
 
+logger = logging.getLogger(__name__)
 STOPWORDS = {
     "a",
     "an",
@@ -248,7 +248,7 @@ def _parse_single_prediction_item(payload: Any) -> dict[str, Any] | None:
 
 def _infer_domain(train_papers: list[PaperRecord]) -> str:
     terms = _top_terms(
-        list(paper.summary for paper in train_papers[-20:]) + [kw for p in train_papers[-20:] for kw in p.keywords],
+        [paper.summary for paper in train_papers[-20:]] + [kw for p in train_papers[-20:] for kw in p.keywords],
         limit=3,
     )
     return ", ".join(terms) if terms else "recent AI research"

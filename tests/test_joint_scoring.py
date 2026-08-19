@@ -5,17 +5,16 @@ import math
 
 import pytest
 
-from live_idea_bench.models import PaperRecord
-
-from forecaster.models import Innovation, MemoryEntry, MemoryInventory
 from forecaster.config import InferenceConfig, RealizationConfig
-from forecaster.prior.memory import MemoryStore
 from forecaster.inference.scoring import (
+    compute_joint_score,
     compute_prior_score,
     compute_realization_score,
-    compute_joint_score,
     compute_strict_joint_score,
 )
+from forecaster.models import Innovation, MemoryEntry, MemoryInventory
+from forecaster.prior.memory import MemoryStore
+from live_idea_bench.models import PaperRecord
 
 
 def _make_innovation(

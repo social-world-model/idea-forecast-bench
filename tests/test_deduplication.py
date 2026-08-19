@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import pytest
 
+from forecaster.inference.deduplication import (
+    _jaccard_similarity,
+    deduplicate_proposals,
+)
 from forecaster.models import Innovation, JointCandidate
-from forecaster.inference.deduplication import deduplicate_proposals, _jaccard_similarity
 
 
 def _make_innovation(base: str = "transformer", op: str = "extend", gap: str = "efficiency") -> Innovation:
@@ -106,7 +109,7 @@ class TestDeduplicateProposals:
     def test_deduplicate_preserves_order(self) -> None:
         """Earlier (higher-scored) proposals are kept over later ones."""
         text = "transformer attention long sequence efficiency model"
-        candidates = [
+        [
             _make_candidate(text + " first"),
             _make_candidate(text + " first"),  # same as first
         ]

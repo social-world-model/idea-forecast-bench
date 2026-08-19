@@ -22,7 +22,6 @@ import json
 import logging
 from pathlib import Path
 
-
 from forecaster.config import InferenceConfig
 from forecaster.hindsight.dataset_builder import load_hindsight_samples_jsonl
 from forecaster.models import innovation_to_dict
@@ -53,7 +52,7 @@ def main() -> int:
 
     # Build memory at last cutoff
     samples = load_hindsight_samples_jsonl(args.hindsight)
-    last_cutoff = sorted(set(s.cutoff_month for s in samples))[-1]
+    last_cutoff = sorted({s.cutoff_month for s in samples})[-1]
     log.info("Eval cutoff: %s", last_cutoff)
 
     memory = build_memory_store_from_hindsight_samples(samples, last_cutoff)

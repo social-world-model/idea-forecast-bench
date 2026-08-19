@@ -1,11 +1,9 @@
 """Tests for forecaster/realization/evidence.py"""
 from __future__ import annotations
 
-import pytest
-
-from live_idea_bench.models import PaperRecord
 from forecaster.models import Innovation
 from forecaster.realization.evidence import build_innovation_query, retrieve_evidence
+from live_idea_bench.models import PaperRecord
 
 
 def _make_paper(paper_id: str, title: str, summary: str, keywords: list[str] | None = None) -> PaperRecord:

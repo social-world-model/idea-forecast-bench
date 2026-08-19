@@ -4,6 +4,7 @@ All mutation operations return new MemoryStore instances (immutable pattern).
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 import os
@@ -11,19 +12,15 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from live_idea_bench.papers import date_to_ordinal, month_start_date
-
 from forecaster.models import (
     HindsightSample,
     Innovation,
     MemoryEntry,
     MemoryInventory,
-    memory_entry_to_dict,
-    memory_entry_from_dict,
-    memory_inventory_to_dict,
     memory_inventory_from_dict,
-    innovation_to_dict,
+    memory_inventory_to_dict,
 )
+from live_idea_bench.papers import date_to_ordinal, month_start_date
 
 _RECENCY_DECAY_PER_MONTH: float = 0.9
 _DEFAULT_QUERY_RECENCY_WEIGHT: float = 0.45
@@ -155,10 +152,8 @@ class MemoryStore:
                 f.write(data)
             os.replace(tmp_path, path)
         except Exception:
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(tmp_path)
-            except OSError:
-                pass
             raise
 
     def append(

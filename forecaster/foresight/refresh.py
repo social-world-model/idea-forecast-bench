@@ -10,12 +10,11 @@ Disabled by default — opt in via `rubric_refresh_every > 0` on the config.
 """
 from __future__ import annotations
 
-import json
 import logging
 from collections import defaultdict
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable
 
 from forecaster.foresight.judge import RubricJudge
 from forecaster.foresight.rubric import Rubric, save_rubric, stamp_metadata

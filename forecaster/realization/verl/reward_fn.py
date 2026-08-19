@@ -1,21 +1,19 @@
 from __future__ import annotations
 
-from functools import lru_cache
 import json
-from pathlib import Path
+from functools import lru_cache
 from typing import Any
 
-
-from live_idea_bench.models import PaperRecord
 from forecaster.config import RealizationConfig, load_realization_config
 from forecaster.models import innovation_from_dict
 from forecaster.realization.config import load_reward_config
 from forecaster.realization.reward import (
     build_invalid_reward_evaluation,
     coerce_reward_prediction,
-    evaluate_strict_completion_reward,
     evaluate_rl_reward,
+    evaluate_strict_completion_reward,
 )
+from live_idea_bench.models import PaperRecord
 
 
 @lru_cache(maxsize=8)

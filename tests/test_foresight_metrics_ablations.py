@@ -15,7 +15,6 @@ from forecaster.foresight.metrics import (
     wasserstein_1d,
 )
 
-
 # --------------------------------------------------------------------------- MMD
 
 
@@ -91,7 +90,7 @@ def test_baseline_set_includes_ours_plus_one_per_switch():
     names = [c.name for c in grid]
     assert "ours" in names
     # 2 reward, 1 decomposition, 1 rubric, 3 gate variants → 7 alternatives.
-    assert len(grid) == 1 + (len([v for v in ("embedding_threshold", "raw_judge")])
+    assert len(grid) == 1 + (len(["embedding_threshold", "raw_judge"])
                              + 1 + 1 + 3)
     assert any("reward=" in n for n in names)
     assert any("decomp=" in n for n in names)

@@ -4,12 +4,9 @@ from __future__ import annotations
 import logging
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from live_idea_bench.models import PaperRecord
-from forecaster.models import HindsightSample, Innovation
 from forecaster.config import HindsightConfig
-
+from forecaster.models import HindsightSample, Innovation
+from live_idea_bench.models import PaperRecord
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -142,20 +139,22 @@ class TestBuildHindsightDataset:
                 raise ValueError("Extraction failed for paper")
             return _make_innovation(call_count)
 
-        with patch(
-            "forecaster.hindsight.dataset_builder.extract_innovation",
-            side_effect=_side_effect,
+        with (
+            patch(
+                "forecaster.hindsight.dataset_builder.extract_innovation",
+                side_effect=_side_effect,
+            ),
+            caplog.at_level(logging.WARNING, logger="forecaster.hindsight.dataset_builder"),
         ):
-            with caplog.at_level(logging.WARNING, logger="forecaster.hindsight.dataset_builder"):
-                samples = build_hindsight_dataset(
-                    papers=ALL_PAPERS,
-                    cutoff_months=["2024-01"],
-                    horizon_months=1,
-                    config=config,
-                    llm_client=client,
-                    model="gpt-4o",
-                    max_future_papers_per_cutoff=10,
-                )
+            samples = build_hindsight_dataset(
+                papers=ALL_PAPERS,
+                cutoff_months=["2024-01"],
+                horizon_months=1,
+                config=config,
+                llm_client=client,
+                model="gpt-4o",
+                max_future_papers_per_cutoff=10,
+            )
 
         # At least one warning should have been logged about failure
         warning_messages = [r.message for r in caplog.records if r.levelno >= logging.WARNING]

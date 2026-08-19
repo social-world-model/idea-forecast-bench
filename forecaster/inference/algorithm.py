@@ -4,10 +4,24 @@ from __future__ import annotations
 import dataclasses
 import logging
 import math
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from live_idea_bench.models import PaperRecord
-
+from forecaster.config import (
+    InferenceConfig,
+    RealizationConfig,
+    strict_inference_score_contract,
+    validate_inference_config,
+)
+from forecaster.inference.deduplication import deduplicate_proposals
+from forecaster.inference.scoring import (
+    build_realization_scorer,
+    build_strict_realization_scorer,
+    compute_joint_score,
+    compute_prior_score,
+    compute_realization_score,
+    compute_strict_joint_score,
+)
 from forecaster.models import (
     Innovation,
     JointCandidate,
@@ -15,26 +29,16 @@ from forecaster.models import (
     ScoredProposal,
     realization_trajectory_to_dict,
 )
-from forecaster.config import InferenceConfig, RealizationConfig
-from forecaster.config import strict_inference_score_contract, validate_inference_config
-from forecaster.inference.scoring import (
-    build_realization_scorer,
-    build_strict_realization_scorer,
-    compute_prior_score,
-    compute_realization_score,
-    compute_joint_score,
-    compute_strict_joint_score,
-)
-from forecaster.inference.deduplication import deduplicate_proposals
 from forecaster.prior.memory import MemoryStore
 from forecaster.prior.sampler import build_prior_scorer
+from forecaster.realization.evidence import retrieve_evidence
+from forecaster.realization.proposal_generator import generate_proposal
+from forecaster.realization.realization_reward import evaluate_strict_trajectory_reward
 from forecaster.realization.strict_runtime import (
     run_strict_realization_rollout,
     serialize_strict_rollout_completion,
 )
-from forecaster.realization.evidence import retrieve_evidence
-from forecaster.realization.proposal_generator import generate_proposal
-from forecaster.realization.realization_reward import evaluate_strict_trajectory_reward
+from live_idea_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 _LOG_EPSILON = 1e-6
@@ -183,7 +187,7 @@ def run_joint_inference(
             all_evidence.append(evidence)
 
         # Step 3: Batched proposal generation (single model.generate() call)
-        innovations_and_evidence = list(zip(innovations, all_evidence))
+        innovations_and_evidence = list(zip(innovations, all_evidence, strict=False))
         try:
             proposal_texts = generate_proposals_batch(
                 innovations_and_evidence,
@@ -211,8 +215,8 @@ def run_joint_inference(
                     proposal_texts.append("")
 
         # Step 4: Score and build candidates
-        for i, (innovation, evidence, proposal_text, prior_score, prior_source) in enumerate(
-            zip(innovations, all_evidence, proposal_texts, prior_scores, prior_sources)
+        for _i, (innovation, evidence, proposal_text, prior_score, prior_source) in enumerate(
+            zip(innovations, all_evidence, proposal_texts, prior_scores, prior_sources, strict=False)
         ):
             if not proposal_text.strip():
                 continue

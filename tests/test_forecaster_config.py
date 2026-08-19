@@ -17,7 +17,6 @@ from forecaster.config import (
 )
 from forecaster.realization.config import EpisodeBuildConfig, load_episode_build_config
 
-
 # ---------------------------------------------------------------------------
 # Default value tests
 # ---------------------------------------------------------------------------

@@ -114,11 +114,10 @@ def main() -> int:
     _tmp_sim_cfg = None
     if args.similarity_engine:
         import tempfile
-        _tmp_sim_cfg = tempfile.NamedTemporaryFile(
+        with tempfile.NamedTemporaryFile(
             mode="w", suffix=".yaml", delete=False, prefix="sim_override_"
-        )
-        _tmp_sim_cfg.write(f"engine: {args.similarity_engine}\n")
-        _tmp_sim_cfg.close()
+        ) as _tmp_sim_cfg:
+            _tmp_sim_cfg.write(f"engine: {args.similarity_engine}\n")
         args.similarity_config = _tmp_sim_cfg.name
 
     import hashlib
@@ -218,7 +217,10 @@ def main() -> int:
     def _save_checkpoint() -> None:
         resolved: str | None = None
         if args.strategy == "predictor_llm":
-            from live_idea_bench.config import load_predictor_config, load_runtime_config
+            from live_idea_bench.config import (
+                load_predictor_config,
+                load_runtime_config,
+            )
             _pc = load_predictor_config()
             _rc = load_runtime_config()
             resolved = args.model_name or _pc.default_model or _rc.model_name

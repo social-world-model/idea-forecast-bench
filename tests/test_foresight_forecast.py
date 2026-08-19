@@ -3,13 +3,12 @@ from __future__ import annotations
 
 import pytest
 
-from live_idea_bench.models import PaperRecord
 from forecaster.foresight.forecast import (
     RealizedIdea,
-    ScoredForecast,
     forecast,
 )
 from forecaster.models import Innovation
+from live_idea_bench.models import PaperRecord
 
 
 def _paper(pid: str, date: str, topic: str) -> PaperRecord:

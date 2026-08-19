@@ -5,12 +5,13 @@ import json
 import tempfile
 from pathlib import Path
 
-import pytest
-
-from forecaster.models import Innovation, HindsightSample, MemoryEntry, MemoryInventory
+from forecaster.models import HindsightSample, Innovation, MemoryEntry, MemoryInventory
 from forecaster.prior.memory import MemoryStore
-from forecaster.prior.sft_dataset import build_sft_samples, save_sft_dataset, load_sft_dataset
-
+from forecaster.prior.sft_dataset import (
+    build_sft_samples,
+    load_sft_dataset,
+    save_sft_dataset,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures

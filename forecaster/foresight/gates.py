@@ -11,16 +11,12 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Sequence
 
-import numpy as np
-
-from forecaster.foresight.indices import HistoryIndex, Embedder
+from forecaster.foresight.indices import Embedder, HistoryIndex
 from forecaster.foresight.operators import (
     CLOSED_OPERATORS,
     UNMAPPABLE_BUCKET,
     OperatorInventory,
-    map_free_text_operator,
 )
 from forecaster.models import Innovation
 from forecaster.realization.realization_reward import compute_operator_adherence
@@ -109,7 +105,7 @@ def grounded(
         return True
     # Second pass: semantic retrieval for the rest.
     embs = embedder.encode(unresolved)
-    for cit, q in zip(unresolved, embs):
+    for cit, q in zip(unresolved, embs, strict=False):
         hits = history_index.search(q, top_k=top_k)
         if not hits:
             return False
@@ -144,7 +140,7 @@ def operator_consistent(
     # operator vocabulary used by compute_operator_adherence).
     inv = inventory  # noqa: F841 (currently unused; kept for forward compatibility)
     op_for_adherence = expected_operator.strip().lower()
-    if op_for_adherence in {op for op in CLOSED_OPERATORS}:
+    if op_for_adherence in set(CLOSED_OPERATORS):
         # compute_operator_adherence expects the free-text operator. Map back:
         reverse = {
             "limitation_extension": "extend",

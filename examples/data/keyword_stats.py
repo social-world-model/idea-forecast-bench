@@ -1,7 +1,8 @@
-import json
 import argparse
-from pathlib import Path
+import json
 from collections import Counter
+from pathlib import Path
+
 
 def main():
     parser = argparse.ArgumentParser(description="Analyze keyword distribution from subsets JSON.")
@@ -20,13 +21,13 @@ def main():
         return
 
     print(f"Loading data from {input_path}...")
-    with open(input_path, 'r', encoding='utf-8') as f:
+    with open(input_path, encoding='utf-8') as f:
         data = json.load(f)
 
     # Calculate counts
     counts = {k: len(v) for k, v in data.items()}
     total_keywords = len(counts)
-    
+
     if total_keywords == 0:
         print("No keywords found.")
         return
@@ -67,7 +68,7 @@ def main():
         # Show top 50 if too many
         for k, c in interest_group[:50]:
             print(f"{k[:30]:<30} | {c:<10}")
-        
+
         if len(interest_group) > 50:
             print(f"... and {len(interest_group) - 50} more.")
 

@@ -2,11 +2,17 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Set
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from live_idea_bench.models import IdeaPrediction, PaperRecord
-from live_idea_bench.papers import date_to_ordinal, get_paper_published_date, month_start_date, normalize_date, normalize_month
+from live_idea_bench.papers import (
+    date_to_ordinal,
+    get_paper_published_date,
+    month_start_date,
+    normalize_date,
+    normalize_month,
+)
 from live_idea_bench.similarity import evaluate_predictions
 
 
@@ -14,7 +20,7 @@ def _iso(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).isoformat()
 
 
-def coerce_prediction(raw: Dict[str, Any], rank_fallback: int) -> IdeaPrediction:
+def coerce_prediction(raw: dict[str, Any], rank_fallback: int) -> IdeaPrediction:
     rank_raw = raw.get("rank", rank_fallback)
     try:
         rank = int(rank_raw)
@@ -48,13 +54,13 @@ def coerce_prediction(raw: Dict[str, Any], rank_fallback: int) -> IdeaPrediction
     )
 
 
-def compute_leaderboard_score(daily_eval: Dict[str, Any]) -> float:
+def compute_leaderboard_score(daily_eval: dict[str, Any]) -> float:
     hit = float(daily_eval.get("hit_at_k", 0.0))
     mrr = float(daily_eval.get("mrr", 0.0))
     return round((0.7 * hit) + (0.3 * mrr), 4)
 
 
-def compute_popularity_leaderboard_score(daily_eval: Dict[str, Any]) -> float:
+def compute_popularity_leaderboard_score(daily_eval: dict[str, Any]) -> float:
     """Leaderboard score weighted by paper popularity (opt-in).
 
     Falls back to regular hit_at_k/mrr when weighted metrics are not available.
@@ -70,7 +76,7 @@ def daily_cutoff_date(now_utc: datetime) -> str:
     return now_utc.astimezone(ZoneInfo("America/New_York")).date().isoformat()
 
 
-def _resolve_generation_cutoff(generation: Dict[str, Any]) -> str | None:
+def _resolve_generation_cutoff(generation: dict[str, Any]) -> str | None:
     cutoff_date_raw = str(generation.get("cutoff_date") or "").strip()
     cutoff_month_raw = str(generation.get("cutoff_month") or "").strip()
     if cutoff_date_raw:
@@ -84,7 +90,7 @@ def _resolve_generation_cutoff(generation: Dict[str, Any]) -> str | None:
     return None
 
 
-def _topic_generations(strategy: Dict[str, Any]) -> list[Dict[str, Any]]:
+def _topic_generations(strategy: dict[str, Any]) -> list[dict[str, Any]]:
     generation = strategy.get("generation") or {}
     predictions_raw = generation.get("predictions")
     if isinstance(predictions_raw, list) and predictions_raw:
@@ -94,7 +100,7 @@ def _topic_generations(strategy: Dict[str, Any]) -> list[Dict[str, Any]]:
     if not isinstance(topic_runs, list):
         return []
 
-    generations: list[Dict[str, Any]] = []
+    generations: list[dict[str, Any]] = []
     for topic_run in topic_runs:
         if not isinstance(topic_run, dict):
             continue
@@ -119,12 +125,12 @@ def _topic_generations(strategy: Dict[str, Any]) -> list[Dict[str, Any]]:
 
 
 def evaluate_previous_generation(
-    strategy: Dict[str, Any],
+    strategy: dict[str, Any],
     *,
     papers: list[PaperRecord],
-    new_paper_ids: Set[str],
+    new_paper_ids: set[str],
     evaluated_at: datetime,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     generations = _topic_generations(strategy)
     if not generations:
         return None

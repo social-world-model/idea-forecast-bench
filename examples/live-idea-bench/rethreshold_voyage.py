@@ -94,7 +94,7 @@ def main() -> None:
 
     # Weighted aggregate
     metric_keys = ["avg_hit_at_k", "avg_recall_at_k", "avg_precision_at_k", "avg_mrr"]
-    num = {k: 0.0 for k in metric_keys}
+    num = dict.fromkeys(metric_keys, 0.0)
     den = 0
     for tval in new_topic_results.values():
         bt = tval.get("backtest")

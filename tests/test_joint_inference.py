@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from live_idea_bench.models import PaperRecord
-
+from forecaster.config import InferenceConfig, RealizationConfig
+from forecaster.inference.algorithm import run_joint_inference
 from forecaster.models import (
     Innovation,
     MemoryEntry,
@@ -19,9 +19,8 @@ from forecaster.models import (
     SearchObservation,
     StrictRealizationResult,
 )
-from forecaster.config import InferenceConfig, RealizationConfig
 from forecaster.prior.memory import MemoryStore
-from forecaster.inference.algorithm import run_joint_inference
+from live_idea_bench.models import PaperRecord
 
 
 def _make_innovation(
@@ -346,25 +345,28 @@ class TestRunJointInference:
         artifact_dir = tmp_path / "realization"
         artifact_dir.mkdir()
 
-        with patch(
-            "forecaster.inference.algorithm.build_prior_scorer",
-            return_value=lambda innovation: -0.2,
-        ), patch(
-            "forecaster.inference.algorithm.build_strict_realization_scorer",
-            side_effect=RuntimeError("broken scorer"),
+        with (
+            patch(
+                "forecaster.inference.algorithm.build_prior_scorer",
+                return_value=lambda innovation: -0.2,
+            ),
+            patch(
+                "forecaster.inference.algorithm.build_strict_realization_scorer",
+                side_effect=RuntimeError("broken scorer"),
+            ),
+            pytest.raises(RuntimeError, match="Strict realization scorer initialization failed"),
         ):
-            with pytest.raises(RuntimeError, match="Strict realization scorer initialization failed"):
-                run_joint_inference(
-                    innovations=[_make_innovation()],
-                    papers=[_make_paper("p1", "attention mechanism for long document sequences training")],
-                    memory_store=MemoryStore.empty("2024-01"),
-                    llm_client=MagicMock(),
-                    model="gpt-4o",
-                    inference_config=InferenceConfig(runtime_mode="strict_eval"),
-                    realization_config=RealizationConfig(),
-                    prior_model_path=str(tmp_path),
-                    realization_model_path=str(artifact_dir),
-                )
+            run_joint_inference(
+                innovations=[_make_innovation()],
+                papers=[_make_paper("p1", "attention mechanism for long document sequences training")],
+                memory_store=MemoryStore.empty("2024-01"),
+                llm_client=MagicMock(),
+                model="gpt-4o",
+                inference_config=InferenceConfig(runtime_mode="strict_eval"),
+                realization_config=RealizationConfig(),
+                prior_model_path=str(tmp_path),
+                realization_model_path=str(artifact_dir),
+            )
 
     def test_run_joint_inference_strict_mode_persists_search_metadata(self, tmp_path: Path) -> None:
         """Strict runtime should persist the interactive search trace into proposal metadata."""

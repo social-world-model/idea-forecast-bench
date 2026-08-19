@@ -1,8 +1,6 @@
 """Tests for strict trajectory-based realization reward."""
 from __future__ import annotations
 
-from live_idea_bench.models import PaperRecord
-
 from forecaster.config import RealizationConfig
 from forecaster.models import (
     Innovation,
@@ -13,6 +11,7 @@ from forecaster.models import (
     StrictRealizationResult,
 )
 from forecaster.realization.realization_reward import evaluate_strict_trajectory_reward
+from live_idea_bench.models import PaperRecord
 
 
 def _make_innovation() -> Innovation:

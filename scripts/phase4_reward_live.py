@@ -22,13 +22,13 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from live_idea_bench.models import PaperRecord
 from forecaster.foresight.indices import (
     HashingEmbedder,
     build_cutoff_indices,
 )
 from forecaster.foresight.rubric import load_rubric, save_rubric
 from forecaster.foresight.trainer_wiring import make_reward_fn
+from live_idea_bench.models import PaperRecord
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("phase4_live")
@@ -130,7 +130,7 @@ def main() -> int:
             }))
 
         rewards = reward_fn(completions, extra_info=extras)
-        for c, r in zip(completions, rewards):
+        for c, r in zip(completions, rewards, strict=False):
             preview = c[:90] + ("…" if len(c) > 90 else "")
             logger.info("%.3f | %s", r, preview)
         print(json.dumps({"rewards": rewards}, indent=2))

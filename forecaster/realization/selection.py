@@ -4,9 +4,15 @@ import dataclasses
 import logging
 import re
 
-from live_idea_bench.models import IdeaPrediction, PaperRecord
-from live_idea_bench.predictor import _base_score, _dedup_predictions, _jaccard, _prediction_text, _top_terms
 from forecaster.realization.config import SelectionConfig
+from live_idea_bench.models import IdeaPrediction, PaperRecord
+from live_idea_bench.predictor import (
+    _base_score,
+    _dedup_predictions,
+    _jaccard,
+    _prediction_text,
+    _top_terms,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +24,7 @@ def _title_key(prediction: IdeaPrediction) -> str:
 def _signal_terms(train_papers: list[PaperRecord]) -> list[str]:
     recent = train_papers[-20:]
     return _top_terms(
-        list(paper.summary for paper in recent) + [keyword for paper in recent for keyword in paper.keywords],
+        [paper.summary for paper in recent] + [keyword for paper in recent for keyword in paper.keywords],
         limit=20,
     )
 

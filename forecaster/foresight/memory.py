@@ -9,9 +9,9 @@ of `papers_before_t`.
 """
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import defaultdict
+from collections.abc import Sequence
 from datetime import date
-from typing import Iterable, Sequence
 
 from live_idea_bench.models import PaperRecord
 

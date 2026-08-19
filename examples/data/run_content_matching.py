@@ -1,13 +1,11 @@
 import argparse
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
 from live_idea_bench.config import load_runtime_config, load_similarity_config
 from live_idea_bench.papers import clean_paper_content, read_file_content
 from live_idea_bench.similarity import compute_similarity
 
-
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 def parse_args():
     parser = argparse.ArgumentParser(description="Test research-idea similarity against markdown papers.")
     parser.add_argument("--idea", type=str, default="Graph Representation Learning")
@@ -30,7 +28,7 @@ def print_result(score: float, reasoning: str | None, engine_name: str, file_nam
     print(f"{border}")
     print(f" Engine:    {engine_name}")
     print(f" Score:     {score:.4f}")
-    print(f"\n Reasoning:")
+    print("\n Reasoning:")
     print(f" {reasoning or '-'}")
     print(f"{border}\n")
 

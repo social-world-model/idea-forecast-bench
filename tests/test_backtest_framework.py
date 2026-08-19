@@ -1,11 +1,16 @@
 import dataclasses
 from pathlib import Path
-from typing import List
 
 import pytest
 
 import live_idea_bench.similarity as similarity_module
-from live_idea_bench.backtest import BacktestConfig, backtest, evaluate, generate, load_papers_from_markdown
+from live_idea_bench.backtest import (
+    BacktestConfig,
+    backtest,
+    evaluate,
+    generate,
+    load_papers_from_markdown,
+)
 from live_idea_bench.config import load_similarity_config
 from live_idea_bench.strategy import create_strategy
 

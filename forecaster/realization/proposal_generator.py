@@ -7,12 +7,11 @@ from typing import Any
 
 import yaml
 
-from live_idea_bench.models import IdeaPrediction, PaperRecord
+from forecaster.config import RealizationConfig
+from forecaster.models import Innovation
 from live_idea_bench.llm import get_response_from_llm
 from live_idea_bench.model_refs import resolve_model_reference
-
-from forecaster.models import Innovation
-from forecaster.config import RealizationConfig
+from live_idea_bench.models import IdeaPrediction, PaperRecord
 
 logger = logging.getLogger(__name__)
 
@@ -142,8 +141,12 @@ def _generate_proposal_local(
     Returns:
         Generated proposal text.
     """
-    from forecaster.realization.local_generation import _load_local_model, _apply_chat_template, _require_local_generation_stack
     from forecaster.prior.sampler import _detect_base_model
+    from forecaster.realization.local_generation import (
+        _apply_chat_template,
+        _load_local_model,
+        _require_local_generation_stack,
+    )
 
     full_prompt = f"{system_prompt}\n\n{user_msg}".strip()
 
@@ -207,7 +210,7 @@ def _sglang_api_url() -> str | None:
 
 
 def generate_proposals_batch(
-    innovations_and_evidence: list[tuple["Innovation", list[PaperRecord]]],
+    innovations_and_evidence: list[tuple[Innovation, list[PaperRecord]]],
     realization_model_path: str,
     config: RealizationConfig,
     *,
@@ -269,7 +272,11 @@ def generate_proposals_batch(
             logger.warning("SGLang API failed (%s); falling back to HF generate.", exc)
 
     # --- HF generate fallback ---
-    from forecaster.realization.local_generation import _load_local_model, _apply_chat_template, _require_local_generation_stack
+    from forecaster.realization.local_generation import (
+        _apply_chat_template,
+        _load_local_model,
+        _require_local_generation_stack,
+    )
 
     resolved_base = base_model_name
     adapter_path = Path(realization_model_path) / "adapter_config.json"
@@ -330,7 +337,7 @@ def _sglang_api_url() -> str | None:
 
 
 def generate_proposals_batch(
-    innovations_and_evidence: list[tuple["Innovation", list[PaperRecord]]],
+    innovations_and_evidence: list[tuple[Innovation, list[PaperRecord]]],
     realization_model_path: str,
     config: RealizationConfig,
     *,
@@ -379,7 +386,11 @@ def generate_proposals_batch(
             logger.warning("SGLang API failed (%s); falling back to HF generate.", exc)
 
     # --- HF generate fallback ---
-    from forecaster.realization.local_generation import _load_local_model, _apply_chat_template, _require_local_generation_stack
+    from forecaster.realization.local_generation import (
+        _apply_chat_template,
+        _load_local_model,
+        _require_local_generation_stack,
+    )
 
     resolved_base = base_model_name
     adapter_path = Path(realization_model_path) / "adapter_config.json"
@@ -461,12 +472,12 @@ def score_local_proposal(
     score_temperature: float = 1.0,
 ) -> float:
     """Score log p_psi(y | z, X) for a concrete proposal under a local policy artifact."""
+    from forecaster.prior.sampler import _detect_base_model
     from forecaster.realization.local_generation import (
         _apply_chat_template,
         _load_local_model,
         _require_local_generation_stack,
     )
-    from forecaster.prior.sampler import _detect_base_model
 
     if not proposal_text.strip():
         return float("-inf")

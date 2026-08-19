@@ -5,15 +5,12 @@ import json
 from pathlib import Path
 from typing import Any
 
-from live_idea_bench.llm import get_response_from_llm
-from live_idea_bench.models import PaperRecord
-
 from forecaster.config import RealizationConfig
 from forecaster.models import (
+    STRICT_SEARCH_ENV_DEFAULTS,
     Innovation,
     RealizationTrajectory,
     RealizationTrajectoryStep,
-    STRICT_SEARCH_ENV_DEFAULTS,
     SearchAction,
     SearchState,
     realization_trajectory_from_dict,
@@ -33,6 +30,8 @@ from forecaster.realization.search_env import (
     initialize_search_state,
     strict_result_from_state,
 )
+from live_idea_bench.llm import get_response_from_llm
+from live_idea_bench.models import PaperRecord
 
 
 def build_default_search_queries(
@@ -141,10 +140,7 @@ def parse_search_actions_completion(text: str) -> list[SearchAction] | None:
     """Parse a legacy completion payload into a list of search actions."""
     payload = _extract_json_payload(text)
     rows: object
-    if isinstance(payload, dict):
-        rows = payload.get("actions", [])
-    else:
-        rows = payload
+    rows = payload.get("actions", []) if isinstance(payload, dict) else payload
     if not isinstance(rows, list):
         return None
     try:

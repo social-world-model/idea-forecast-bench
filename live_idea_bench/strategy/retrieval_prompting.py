@@ -20,12 +20,16 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
-from typing import List
 
 from live_idea_bench.llm import create_client, get_response_from_llm
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.papers import add_months, month_to_index
-from live_idea_bench.similarity import _hybrid_similarity, _keyword_overlap, _sanitize, paper_text
+from live_idea_bench.similarity import (
+    _hybrid_similarity,
+    _keyword_overlap,
+    _sanitize,
+    paper_text,
+)
 from live_idea_bench.strategy.base import IdeaStrategy
 
 _DEFAULT_MODEL = "gpt-4o"
@@ -168,10 +172,10 @@ class RetrievalPromptingStrategy(IdeaStrategy):
 
     def generate(
         self,
-        train_papers: List[PaperRecord],
+        train_papers: list[PaperRecord],
         cutoff_month: str,
         top_k: int,
-    ) -> List[IdeaPrediction]:
+    ) -> list[IdeaPrediction]:
         if not train_papers:
             return []
 

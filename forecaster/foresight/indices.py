@@ -14,17 +14,18 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol, Sequence
+from typing import Any, Protocol
 
 import numpy as np
 
-from live_idea_bench.models import PaperRecord
 from forecaster.foresight.cutoffs import (
     FUTURE_WINDOW_HARD_LIMIT,
     assert_no_test_window_leakage,
 )
+from live_idea_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +169,7 @@ class _BaseIndex:
         return p
 
     @classmethod
-    def load(cls, path: str | Path) -> "_BaseIndex":
+    def load(cls, path: str | Path) -> _BaseIndex:
         p = Path(path)
         meta = json.loads(p.with_suffix(".meta.json").read_text())
         emb = np.load(p)["embeddings"].astype(np.float32)
@@ -220,7 +221,7 @@ def build_index_from_papers(
     full_meta = dict(meta or {})
     full_meta.setdefault(
         "paper_texts",
-        {p.paper_id: t for p, t in zip(papers, texts)},
+        {p.paper_id: t for p, t in zip(papers, texts, strict=False)},
     )
     cls = FutureIndex if kind == "future" else HistoryIndex
     return cls(

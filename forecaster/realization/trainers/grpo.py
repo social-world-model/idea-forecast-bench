@@ -3,7 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from forecaster.realization.config import GRPOTrainConfig
-from forecaster.realization.trainers.base import PreparedRLContext, RLTrainerRunner, TrainerPreparedArtifacts
+from forecaster.realization.trainers.base import (
+    PreparedRLContext,
+    RLTrainerRunner,
+    TrainerPreparedArtifacts,
+)
 from forecaster.realization.trl.runner import prepare_trl_artifacts, train_with_trl
 
 

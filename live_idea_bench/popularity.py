@@ -70,7 +70,7 @@ def normalize_popularity_scores(raw_counts: dict[str, int]) -> dict[str, float]:
 
     if max_c == min_c:
         # No variation — everyone gets 1.0 (equally popular / no data)
-        return {pid: 1.0 for pid in raw_counts}
+        return dict.fromkeys(raw_counts, 1.0)
 
     span = max_c - min_c
     return {pid: (count - min_c) / span for pid, count in raw_counts.items()}

@@ -3,12 +3,17 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from forecaster.models import Innovation, innovation_from_json, innovation_to_json
 from forecaster.config import InferenceConfig
-from forecaster.prior.prompting import load_prior_prompt_config, render_prior_chat_transcript, render_prior_user_prompt
+from forecaster.models import Innovation, innovation_from_json, innovation_to_json
+from forecaster.prior.prompting import (
+    load_prior_prompt_config,
+    render_prior_chat_transcript,
+    render_prior_user_prompt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +85,9 @@ def _load_prior_model_and_tokenizer(model_path_str: str) -> tuple[Any, Any]:
         return _PRIOR_MODEL_CACHE[model_path_str]
 
     try:
-        import torch
-        from transformers import AutoTokenizer, AutoModelForCausalLM
         import peft
+        import torch  # noqa: F401  -- availability probe only
+        from transformers import AutoModelForCausalLM, AutoTokenizer
     except ImportError as exc:
         raise ImportError(
             "Sampling/scoring from the prior requires: torch, transformers, peft. "

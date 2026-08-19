@@ -2,7 +2,8 @@ from __future__ import annotations
 
 
 def test_protected_strategy_write_requires_admin_token(monkeypatch, tmp_path) -> None:
-    from backend import app as app_module, strategy_store
+    from backend import app as app_module
+    from backend import strategy_store
 
     strategies_dir = tmp_path / "strategies"
     strategies_dir.mkdir(parents=True, exist_ok=True)
@@ -19,7 +20,8 @@ def test_protected_strategy_write_requires_admin_token(monkeypatch, tmp_path) ->
 
 
 def test_protected_strategy_write_accepts_valid_admin_token(monkeypatch, tmp_path) -> None:
-    from backend import app as app_module, strategy_store
+    from backend import app as app_module
+    from backend import strategy_store
 
     strategies_dir = tmp_path / "strategies"
     strategies_dir.mkdir(parents=True, exist_ok=True)

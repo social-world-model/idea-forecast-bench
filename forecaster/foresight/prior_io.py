@@ -9,9 +9,9 @@ fed a precomputed `memory_text` string.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
 
 from forecaster.foresight.dz import load_dz_rows
 from forecaster.foresight.operators import (
@@ -19,7 +19,6 @@ from forecaster.foresight.operators import (
     load_operator_inventory,
 )
 from forecaster.prior.prompting import render_prior_user_prompt
-
 
 # --------------------------------------------------------------------------- D_z -> SFT samples
 
@@ -115,7 +114,7 @@ class RawMemoryStore:
     def format_for_prompt(self, *, top_n: int | None = None) -> str:
         return self.memory_text
 
-    def exclude_source_paper_ids(self, paper_ids: Iterable[str]) -> "RawMemoryStore":
+    def exclude_source_paper_ids(self, paper_ids: Iterable[str]) -> RawMemoryStore:
         # No-op: RawMemoryStore doesn't track per-entry provenance.
         # The training pipeline calls this to avoid label leakage; since
         # memory_text is already a function of the legal cutoff, the call

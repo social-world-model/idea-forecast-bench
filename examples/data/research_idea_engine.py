@@ -1,8 +1,9 @@
 import argparse
 import json
+from collections.abc import Mapping
 from dataclasses import asdict
 from pathlib import Path
-from typing import Dict, Mapping, cast
+from typing import cast
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -80,7 +81,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
         end_month=args.end_month,
     )
     if not papers:
-        print("No papers loaded from {}".format(input_dir))
+        print(f"No papers loaded from {input_dir}")
         return 1
 
     strategy = create_strategy(
@@ -114,8 +115,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
         output_path = PROJECT_ROOT / output_path
     _write_json(output_path, payload)
 
-    print("Generated {} ideas at cutoff {}.".format(len(predictions), args.cutoff_month))
-    print("Saved to {}".format(output_path))
+    print(f"Generated {len(predictions)} ideas at cutoff {args.cutoff_month}.")
+    print(f"Saved to {output_path}")
     return 0
 
 
@@ -127,7 +128,7 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         end_month=args.end_month,
     )
     if not papers:
-        print("No papers loaded from {}".format(input_dir))
+        print(f"No papers loaded from {input_dir}")
         return 1
 
     strategy = create_strategy(
@@ -151,8 +152,8 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     report_obj = backtest(papers=papers, strategy=strategy, config=config)
     if not isinstance(report_obj, dict):
         raise ValueError("backtest must return a mapping")
-    report = cast(Dict[str, object], report_obj)
-    payload: Dict[str, object] = {
+    report = cast(dict[str, object], report_obj)
+    payload: dict[str, object] = {
         "mode": "backtest",
         "strategy": args.strategy,
         "config": asdict(config),
@@ -165,14 +166,14 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     _write_json(output_path, payload)
 
     summary_obj = report.get("summary", {})
-    summary = cast(Dict[str, object], summary_obj) if isinstance(summary_obj, dict) else {}
+    summary = cast(dict[str, object], summary_obj) if isinstance(summary_obj, dict) else {}
     print("Backtest finished: {} windows".format(summary.get("windows", 0)))
     print("avg_hit_at_k={}, avg_recall_at_k={}, avg_mrr={}".format(
         summary.get("avg_hit_at_k", 0.0),
         summary.get("avg_recall_at_k", 0.0),
         summary.get("avg_mrr", 0.0),
     ))
-    print("Saved to {}".format(output_path))
+    print(f"Saved to {output_path}")
     return 0
 
 

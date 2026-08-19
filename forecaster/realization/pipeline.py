@@ -5,23 +5,28 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
-from live_idea_bench.llm import create_client
-from live_idea_bench.models import PaperRecord
 from forecaster.config import RealizationConfig, load_realization_config
 from forecaster.models import (
     HindsightSample,
     Innovation,
     innovation_to_dict,
     realization_trajectory_to_dict,
-    strict_search_contract,
     strict_runtime_manifest_contract,
+    strict_search_contract,
 )
 from forecaster.realization.candidates import CandidateListSample, EpisodeCandidateLists
-from forecaster.realization.config import CandidateGenerationConfig, EpisodeBuildConfig, RewardConfig, SelectionConfig
+from forecaster.realization.config import (
+    CandidateGenerationConfig,
+    EpisodeBuildConfig,
+    RewardConfig,
+    SelectionConfig,
+)
+from forecaster.realization.episodes import (
+    RLEpisode,
+    build_rl_episodes,
+    serialize_episodes,
+)
 from forecaster.realization.evidence import retrieve_evidence
-from forecaster.realization.episodes import RLEpisode, build_rl_episodes, serialize_episodes
 from forecaster.realization.grpo import compute_reward_alignment
 from forecaster.realization.io import _read_json, _read_jsonl, _write_json, _write_jsonl
 from forecaster.realization.model_zoo import list_small_model_payloads
@@ -43,9 +48,15 @@ from forecaster.realization.strict_runtime import (
     run_strict_realization_rollout,
     serialize_strict_rollout_completion,
 )
-from forecaster.realization.trainers import PreparedRLContext, TrainerPreparedArtifacts, build_config_fingerprint, create_trainer_runner
+from forecaster.realization.trainers import (
+    PreparedRLContext,
+    build_config_fingerprint,
+    create_trainer_runner,
+)
+from live_idea_bench.llm import create_client
+from live_idea_bench.models import PaperRecord
 
-
+logger = logging.getLogger(__name__)
 def _paper_lookup(papers: list[PaperRecord]) -> dict[str, PaperRecord]:
     return {paper.paper_id: paper for paper in papers}
 
@@ -596,7 +607,6 @@ def generate_episode_candidate_lists(
     base_model_name: str | None = None,
     fallback_to_heuristic: bool = False,
 ) -> list[EpisodeCandidateLists]:
-    paper_lookup = _paper_lookup(papers)
     single_config = _single_idea_candidate_config(candidate_config)
     temperatures = _temperature_schedule(single_config)
     resolved_realization_config = realization_config or load_realization_config()

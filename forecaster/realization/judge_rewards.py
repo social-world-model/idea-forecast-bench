@@ -33,8 +33,8 @@ import logging
 import math
 import os
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.similarity import idea_text, paper_text
@@ -94,7 +94,7 @@ class JudgeScores:
 def _cosine(a: list[float], b: list[float]) -> float:
     if not a or not b:
         return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(x * x for x in b))
     if na <= 0.0 or nb <= 0.0:
@@ -160,8 +160,8 @@ def compute_coverage_reward(
 
     k_eff = min(k, len(future_vecs))
     try:
-        from sklearn.cluster import KMeans
         import numpy as np
+        from sklearn.cluster import KMeans
 
         X = np.asarray(future_vecs, dtype=np.float32)
         labels = KMeans(n_clusters=k_eff, n_init=5, random_state=0).fit_predict(X)

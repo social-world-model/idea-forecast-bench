@@ -3,16 +3,17 @@ from __future__ import annotations
 import calendar
 import json
 import re
+from collections.abc import Mapping
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
+from typing import Any
 
 from live_idea_bench.models import PaperRecord
 
-PathLike = Union[str, Path]
+PathLike = str | Path
 
 
-def find_markdown_files(root: Path) -> List[Path]:
+def find_markdown_files(root: Path) -> list[Path]:
     return sorted(root.rglob("*.md"))
 
 
@@ -34,7 +35,7 @@ def truncate(text: str, max_chars: int) -> str:
     return text[:max_chars] + "\n...(truncated)"
 
 
-def load_json(path: Path) -> Dict[str, Any]:
+def load_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     try:
@@ -51,10 +52,10 @@ def save_json(path: Path, obj: Mapping[str, Any]) -> None:
 
 
 def filter_by_arxiv_date(
-    results: Dict[str, List[str]],
+    results: dict[str, list[str]],
     start_yymm: str,
     end_yymm: str,
-) -> Dict[str, List[str]]:
+) -> dict[str, list[str]]:
     filtered = {}
     for file_path, keywords in results.items():
         filename = Path(file_path).name
@@ -66,11 +67,11 @@ def filter_by_arxiv_date(
 
 
 def group_by_keywords(
-    results: Dict[str, List[str]],
-    target_categories: List[str] | None = None,
+    results: dict[str, list[str]],
+    target_categories: list[str] | None = None,
     fuzzy_threshold: float = 0.6,
     min_papers: int = 1,
-) -> Dict[str, List[str]]:
+) -> dict[str, list[str]]:
     import difflib
     from collections import defaultdict
 
@@ -106,7 +107,7 @@ def group_by_keywords(
                 keyword_map[normalized_keyword].add(file_path)
 
     return {
-        keyword: sorted(list(paths))
+        keyword: sorted(paths)
         for keyword, paths in keyword_map.items()
         if len(paths) >= min_papers
     }
@@ -221,7 +222,7 @@ def _to_date_text(raw: object) -> str:
     return str(raw or "").strip()
 
 
-def _extract_title_and_body(text: str, path: Path) -> Tuple[str, str]:
+def _extract_title_and_body(text: str, path: Path) -> tuple[str, str]:
     match = re.search(r"^#\s+(.+?)\s*$", text, flags=re.MULTILINE)
     if not match:
         return path.stem, text
@@ -236,9 +237,9 @@ def _normalize_metadata_key(raw: str) -> str:
     return key
 
 
-def _extract_preamble_metadata(body: str) -> Tuple[Dict[str, object], str]:
+def _extract_preamble_metadata(body: str) -> tuple[dict[str, object], str]:
     lines = body.splitlines()
-    metadata: Dict[str, object] = {}
+    metadata: dict[str, object] = {}
     consumed = 0
 
     for idx, line in enumerate(lines):
@@ -265,7 +266,7 @@ def _infer_month_from_parent_dirs(path: Path) -> str:
     raise ValueError(f"Cannot determine month for {path}")
 
 
-def _extract_published_date(metadata: Dict[str, object], path: Path) -> str:
+def _extract_published_date(metadata: dict[str, object], path: Path) -> str:
     raw_date = metadata.get("date")
     date_text = _to_date_text(raw_date)
     if date_text:
@@ -278,7 +279,7 @@ def _extract_published_date(metadata: Dict[str, object], path: Path) -> str:
     return month_end_date(_infer_month_from_parent_dirs(path))
 
 
-def _extract_keywords(metadata: Dict[str, object]) -> List[str]:
+def _extract_keywords(metadata: dict[str, object]) -> list[str]:
     raw = metadata.get("keywords")
     if isinstance(raw, list):
         values = [str(v).strip().lower() for v in raw if str(v).strip()]
@@ -314,10 +315,10 @@ _TITLE_STOP_WORDS = frozenset({
 })
 
 
-def _keywords_from_title(title: str) -> List[str]:
+def _keywords_from_title(title: str) -> list[str]:
     tokens = re.findall(r"[A-Za-z][A-Za-z0-9]+", title)
     seen: set = set()
-    keywords: List[str] = []
+    keywords: list[str] = []
     for token in tokens:
         low = token.lower()
         if low in _TITLE_STOP_WORDS or len(low) < 3 or low in seen:
@@ -327,7 +328,7 @@ def _keywords_from_title(title: str) -> List[str]:
     return keywords
 
 
-def _split_preface_and_sections(body: str) -> Tuple[str, str]:
+def _split_preface_and_sections(body: str) -> tuple[str, str]:
     match = re.search(r"^#{1,6}\s+\S.+$", body, flags=re.MULTILINE)
     if not match:
         return body.strip(), ""
@@ -370,13 +371,13 @@ def _strip_reference_prefix(line: str) -> str:
     return re.sub(r"^(?:\[\d+\]|\d+[.)])\s+", "", line).strip()
 
 
-def _extract_bibliography(body: str) -> List[Dict[str, Any]]:
+def _extract_bibliography(body: str) -> list[dict[str, Any]]:
     references_text = _extract_section(body, "References")
     if not references_text:
         return []
 
-    entries: List[str] = []
-    current_parts: List[str] = []
+    entries: list[str] = []
+    current_parts: list[str] = []
     saw_blank = False
     for raw_line in references_text.splitlines():
         line = " ".join(raw_line.split()).strip()
@@ -406,7 +407,7 @@ def _extract_bibliography(body: str) -> List[Dict[str, Any]]:
     return [{"text": entry} for entry in entries if entry]
 
 
-def parse_markdown_paper(path: Path) -> Optional[PaperRecord]:
+def parse_markdown_paper(path: Path) -> PaperRecord | None:
     text = read_file_content(path)
     if not text.strip():
         return None
@@ -444,7 +445,7 @@ def parse_markdown_paper(path: Path) -> Optional[PaperRecord]:
     )
 
 
-def _arxiv_dir_in_range(name: str, start_idx: Optional[int], end_idx: Optional[int]) -> bool:
+def _arxiv_dir_in_range(name: str, start_idx: int | None, end_idx: int | None) -> bool:
     """Fast pre-filter: arxiv IDs start with YYMM (e.g. 2401 = 2024-01).
 
     Returns True if the directory name could contain papers within [start_idx, end_idx].
@@ -464,16 +465,14 @@ def _arxiv_dir_in_range(name: str, start_idx: Optional[int], end_idx: Optional[i
         return True
     if start_idx is not None and idx < start_idx:
         return False
-    if end_idx is not None and idx > end_idx:
-        return False
-    return True
+    return not (end_idx is not None and idx > end_idx)
 
 
 def _parse_and_filter(
     file_path: Path,
-    start_idx: Optional[int],
-    end_idx: Optional[int],
-) -> Optional[PaperRecord]:
+    start_idx: int | None,
+    end_idx: int | None,
+) -> PaperRecord | None:
     """Parse a single markdown file and apply month filter. Thread-safe."""
     if file_path.name.lower() == "readme.md":
         return None
@@ -498,7 +497,7 @@ def _default_workers() -> int:
     return min(os.cpu_count() or 4, 32)
 
 
-def _discover_files_for_dir(args: tuple) -> List[Path]:
+def _discover_files_for_dir(args: tuple) -> list[Path]:
     """Discover .md files in a single paper directory. Thread-safe."""
     child_path, child_name = args
     child = Path(child_path)
@@ -510,7 +509,7 @@ def _discover_files_for_dir(args: tuple) -> List[Path]:
     return [p for p in child.rglob("*.md") if p.name.lower() != "readme.md"]
 
 
-def _cache_path_for(input_dir: Path, start_month: Optional[str], end_month: Optional[str]) -> Path:
+def _cache_path_for(input_dir: Path, start_month: str | None, end_month: str | None) -> Path:
     """Return a deterministic pickle cache path for the given query."""
     import hashlib
     key = f"{Path(input_dir).resolve()}|{start_month}|{end_month}"
@@ -522,12 +521,12 @@ def _cache_path_for(input_dir: Path, start_month: Optional[str], end_month: Opti
 
 def load_papers_from_markdown(
     input_dir: Path,
-    start_month: Optional[str] = None,
-    end_month: Optional[str] = None,
+    start_month: str | None = None,
+    end_month: str | None = None,
     *,
-    workers: Optional[int] = None,
+    workers: int | None = None,
     use_cache: bool = True,
-) -> List[PaperRecord]:
+) -> list[PaperRecord]:
     import os
     import pickle
     from concurrent.futures import ThreadPoolExecutor
@@ -566,7 +565,7 @@ def load_papers_from_markdown(
         # Accept both the legacy arXiv "YYMM" prefix layout (e.g. "2603") and the
         # canonical "YYYY-MM" month-directory layout (e.g. "2026-03").
         all_names = os.listdir(input_dir)
-        dir_args: List[tuple] = []
+        dir_args: list[tuple] = []
         for name in all_names:
             keep = len(name) >= 4 and name[:4] in prefixes
             if not keep and re.match(r"^\d{4}-\d{2}$", name):
@@ -583,7 +582,7 @@ def load_papers_from_markdown(
         else:
             with ThreadPoolExecutor(max_workers=effective_disc) as pool:
                 nested = list(pool.map(_discover_files_for_dir, dir_args))
-        files: List[Path] = []
+        files: list[Path] = []
         for batch in nested:
             files.extend(batch)
     else:

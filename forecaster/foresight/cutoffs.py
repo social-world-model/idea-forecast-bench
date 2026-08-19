@@ -8,8 +8,8 @@ Locked design decision (see memory: foresight-rl-plan-decisions):
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date
-from typing import Iterable
 
 # These are the load-bearing dates. Changing them invalidates the
 # train/test disjointness invariant.

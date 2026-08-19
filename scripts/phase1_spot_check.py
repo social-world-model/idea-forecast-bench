@@ -19,7 +19,6 @@ from pathlib import Path
 from forecaster.foresight.dz import augment_hindsight_rows, load_dz_rows
 from forecaster.foresight.operators import load_operator_inventory
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 

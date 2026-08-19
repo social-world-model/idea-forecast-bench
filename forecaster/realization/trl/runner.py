@@ -6,15 +6,12 @@ training results — both implement standard GRPO (Eq. 2 in the paper).
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 from forecaster.realization.config import GRPOTrainConfig
-from forecaster.realization.io import _write_json
 from forecaster.realization.trainers.base import (
     PreparedRLContext,
     TrainerPreparedArtifacts,
@@ -52,6 +49,7 @@ def _auto_batch_size(num_generations: int, max_completion_length: int, model_nam
     slower than OOM.
     """
     import os
+
     import torch
 
     # Explicit override: BATCH_SIZE env wins over memory-based auto-sizing.
@@ -208,21 +206,21 @@ def train_with_trl(
     # USE_VLLM=1 for colocate vLLM — ~10x faster generation. Tune memory via
     # VLLM_GPU_MEM_UTIL (fraction left to the vLLM engine after the trainer copy).
     if os.environ.get("USE_VLLM", "0") == "1":
-        vllm_kwargs = dict(
-            use_vllm=True,
-            vllm_mode=os.environ.get("VLLM_MODE", "colocate"),
-            vllm_gpu_memory_utilization=float(os.environ.get("VLLM_GPU_MEM_UTIL", "0.45")),
+        vllm_kwargs = {
+            "use_vllm": True,
+            "vllm_mode": os.environ.get("VLLM_MODE", "colocate"),
+            "vllm_gpu_memory_utilization": float(os.environ.get("VLLM_GPU_MEM_UTIL", "0.45")),
             # Cap the colocate vLLM context to what we actually use
             # (max_prompt_length + max_completion_length). The Qwen3.5 default
             # max_model_len is 262144, whose KV cache (~8GB) won't fit at low
             # gpu_memory_utilization -> "available KV cache memory" ValueError.
-            vllm_max_model_length=int(
+            "vllm_max_model_length": int(
                 os.environ.get("VLLM_MAX_LEN", str(config.max_prompt_length + config.max_completion_length + 1024))
             ),
-        )
+        }
         logger.info("vLLM ENABLED: %s", vllm_kwargs)
     else:
-        vllm_kwargs = dict(use_vllm=False)
+        vllm_kwargs = {"use_vllm": False}
 
     grpo_config = GRPOConfig(
         output_dir=str(target_dir / "checkpoints"),

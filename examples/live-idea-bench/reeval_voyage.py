@@ -19,13 +19,10 @@ import math
 import os
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 import openai
-
 
 from live_idea_bench.backtest import (  # noqa: E402
     split_train_future_by_cutoff,
@@ -34,7 +31,7 @@ from live_idea_bench.backtest import (  # noqa: E402
 from live_idea_bench.config import load_topics  # noqa: E402
 from live_idea_bench.models import IdeaPrediction  # noqa: E402
 from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
-from live_idea_bench.similarity import idea_text, paper_text, _sanitize  # noqa: E402
+from live_idea_bench.similarity import _sanitize, idea_text, paper_text  # noqa: E402
 from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
 
 VOYAGE_BASE_URL = "https://api.voyageai.com/v1"
@@ -71,7 +68,7 @@ def _embed_batch(texts: list[str], client: openai.OpenAI, model: str) -> list[li
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
     na  = math.sqrt(sum(x * x for x in a))
     nb  = math.sqrt(sum(x * x for x in b))
     return max(0.0, min(1.0, dot / (na * nb))) if na and nb else 0.0
@@ -106,13 +103,12 @@ def _evaluate_window(
     k: int,
     threshold: float,
 ) -> dict[str, Any]:
-    from live_idea_bench.similarity import _token_jaccard
 
     used: set[str] = set()
     matched_ranks: list[int] = []
     per_pred: list[dict] = []
 
-    for rank, (pred, pvec) in enumerate(zip(predictions[:k], pred_vecs[:k]), start=1):
+    for rank, (pred, pvec) in enumerate(zip(predictions[:k], pred_vecs[:k], strict=False), start=1):
         best_score   = 0.0
         best_pid     = None
         all_scores   = []
@@ -143,8 +139,6 @@ def _evaluate_window(
     prec = len(matched_ranks) / k if k else 0.0
     rec  = len(matched_ranks) / len(future_paper_ids) if future_paper_ids else 0.0
 
-    # Novelty & diversity use token-level (no embedding)
-    pred_texts = [_pred_text(p) for p in predictions[:k]]
     return {
         "hit_at_k": hit, "recall_at_k": round(rec, 4),
         "precision_at_k": round(prec, 4), "mrr": round(mrr, 4),
@@ -171,7 +165,7 @@ def _process_topic(
     paper_texts = [_sanitize(paper_text(p)[:MAX_CHARS]) for p in scoped_papers]
     print(f"  [{topic_id}] embedding {len(scoped_papers)} papers ...", flush=True)
     paper_vecs_list = _embed_batch(paper_texts, client, model)
-    paper_vecs: dict[str, list[float]] = dict(zip(paper_ids, paper_vecs_list))
+    paper_vecs: dict[str, list[float]] = dict(zip(paper_ids, paper_vecs_list, strict=False))
 
     windows_out = []
     for w in saved_bt["windows"]:

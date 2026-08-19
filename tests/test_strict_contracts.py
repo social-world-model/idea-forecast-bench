@@ -4,12 +4,12 @@ from __future__ import annotations
 import pytest
 
 from forecaster.models import (
-    Innovation,
     STRICT_REWARD_CONTRACT_VERSION,
     STRICT_RUNTIME_MANIFEST_VERSION,
     STRICT_SCORE_CONTRACT_VERSION,
     STRICT_SEARCH_ACTION_SCHEMA_VERSION,
     STRICT_TRAJECTORY_SCHEMA_VERSION,
+    Innovation,
     SearchAction,
     innovation_to_json,
     strict_runtime_manifest_contract,

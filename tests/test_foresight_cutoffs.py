@@ -4,7 +4,6 @@ from __future__ import annotations
 import pytest
 
 from forecaster.foresight.cutoffs import (
-    FUTURE_WINDOW_HARD_LIMIT,
     assert_no_test_window_leakage,
     assert_train_test_disjoint,
 )

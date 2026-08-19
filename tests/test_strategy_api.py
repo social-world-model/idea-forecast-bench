@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import time
-from pathlib import Path
 
 
 def _isolate_strategy_store(monkeypatch, tmp_path) -> None:
@@ -114,7 +113,8 @@ def test_strategy_backtest_and_generate_async_status(monkeypatch, tmp_path) -> N
     reach a terminal status (done|failed) after persisting status transitions.
     Real heavy work is monkeypatched so the test is fast.
     """
-    from backend import app as app_module, strategy_store
+    from backend import app as app_module
+    from backend import strategy_store
 
     _isolate_strategy_store(monkeypatch, tmp_path)
     # Capture strategies_dir at this point so fake workers don't use the
@@ -209,7 +209,8 @@ def test_strategy_generation_failure_persists_error(monkeypatch, tmp_path) -> No
     Failure path: when generation raises an exception the status reaches 'failed'
     and a generation_error string is persisted in the strategy record.
     """
-    from backend import app as app_module, strategy_store
+    from backend import app as app_module
+    from backend import strategy_store
 
     _isolate_strategy_store(monkeypatch, tmp_path)
     captured_dir = tmp_path / "strategies"
@@ -366,7 +367,7 @@ def test_strategy_create_with_predictor_params_persisted(monkeypatch, tmp_path) 
     Regression: creating a strategy with prompt/model params persists them exactly.
     Catches schema drift if strategy_store.create_strategy silently drops new param keys.
     """
-    from backend import app as app_module, strategy_store
+    from backend import app as app_module
 
     _isolate_strategy_store(monkeypatch, tmp_path)
     client = app_module.app.test_client()
@@ -501,7 +502,8 @@ def test_strategy_backtest_status_field_in_response(monkeypatch, tmp_path) -> No
     in the JSON body (not just the 202 status code).
     Catches schema drift if backtest route stops returning the status field.
     """
-    from backend import app as app_module, strategy_store
+    from backend import app as app_module
+    from backend import strategy_store
 
     _isolate_strategy_store(monkeypatch, tmp_path)
 
@@ -527,7 +529,9 @@ def test_strategy_backtest_status_field_in_response(monkeypatch, tmp_path) -> No
     assert body["backtest_status"] == "running", f"Expected 'running', got: {body['backtest_status']}"
     assert body["id"] == sid
     # Thread should be triggered
-    import time; time.sleep(0.05)  # tiny wait for daemon thread to start
+    import time
+
+    time.sleep(0.05)  # tiny wait for daemon thread to start
     assert len(captured) > 0 or True  # non-flaky: thread may or may not have run yet
 
 

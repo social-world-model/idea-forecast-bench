@@ -1,13 +1,11 @@
 """Tests for rubric schema + judge prompt + validation AUC."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 
 from forecaster.foresight.judge import (
-    JUDGE_SYSTEM_PROMPT,
     MUST_NOT_PENALTY,
     RubricJudge,
     StubScorer,
@@ -26,7 +24,6 @@ from forecaster.foresight.rubric_validation import (
     compute_auc,
     validate_rubric,
 )
-
 
 # ----------------------------------------------------------------- rubric schema
 

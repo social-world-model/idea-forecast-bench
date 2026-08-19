@@ -172,8 +172,9 @@ def create_client(model: str) -> tuple[Any, str]:
         return anthropic.Anthropic(api_key=api_key), model
 
     if _is_openai_model(model):
-        import openai
         import os as _os
+
+        import openai
 
         # When OPENAI_BASE_URL is set, route to that endpoint (used for local
         # vLLM-served LoRA-merged models in evaluation pipelines). The

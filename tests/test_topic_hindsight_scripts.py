@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from forecaster.models import Innovation, innovation_from_dict
 from forecaster.hindsight.topic_sampling import (
     FIXED_TOPIC_HINDSIGHT_EPISODES,
     build_topic_hindsight_manifest,
     load_topic_hindsight_context,
     select_preview_targets,
 )
+from forecaster.models import Innovation, innovation_from_dict
 from live_idea_bench.config import load_topics
 from live_idea_bench.papers import parse_markdown_paper
 
@@ -110,7 +110,9 @@ def test_topics_v2_default_loader_has_52_topics() -> None:
 def test_prepare_topic_hindsight_manifest_enforces_fixed_windows_and_sampling(
     tmp_path: Path,
 ) -> None:
-    from examples.data.prepare_topic_hindsight_manifest import prepare_topic_hindsight_manifest
+    from examples.data.prepare_topic_hindsight_manifest import (
+        prepare_topic_hindsight_manifest,
+    )
 
     data_dir = _build_sample_corpus(tmp_path)
     output_dir = tmp_path / "manifest_out"
@@ -251,7 +253,9 @@ def test_preview_uses_existing_manifest_when_present(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    from examples.data.prepare_topic_hindsight_manifest import prepare_topic_hindsight_manifest
+    from examples.data.prepare_topic_hindsight_manifest import (
+        prepare_topic_hindsight_manifest,
+    )
     from examples.forecaster import run_topic_hindsight as preview_module
 
     data_dir = _build_sample_corpus(tmp_path)

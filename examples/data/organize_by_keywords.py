@@ -1,11 +1,11 @@
+import argparse
 import json
 import os
 import shutil
 from pathlib import Path
-import argparse
-
 
 from live_idea_bench import group_by_keywords, load_json
+
 
 def main():
     parser = argparse.ArgumentParser(description="Group papers by keywords and optionally organize files.")
@@ -21,7 +21,7 @@ def main():
     input_path = Path(args.input)
     if not input_path.is_absolute():
         input_path = (Path(__file__).parent / input_path).resolve()
-        
+
     output_json = Path(args.output)
     if not output_json.is_absolute():
         output_json = (Path(__file__).parent / output_json).resolve()
@@ -34,7 +34,7 @@ def main():
     targets = None
     if args.target_keywords:
         if os.path.exists(args.target_keywords):
-            with open(args.target_keywords, 'r') as f:
+            with open(args.target_keywords) as f:
                 targets = [line.strip() for line in f if line.strip()]
         else:
             targets = [t.strip() for t in args.target_keywords.split(",")]
@@ -47,12 +47,12 @@ def main():
 
     # Use the centralized grouping function from the core package.
     final_keyword_map = group_by_keywords(
-        results, 
-        target_categories=targets, 
+        results,
+        target_categories=targets,
         fuzzy_threshold=args.fuzzy_threshold,
         min_papers=args.min_papers
     )
-    
+
     print(f"Found {len(final_keyword_map)} resulting categories.")
 
     # Always save the JSON file
@@ -66,14 +66,14 @@ def main():
         output_base = Path(args.organize_dir)
         if not output_base.is_absolute():
             output_base = (Path(__file__).parent / output_base).resolve()
-            
+
         print(f"Organizing files in {args.mode} mode in {output_base}...")
         processed_count = 0
         for keyword, files in final_keyword_map.items():
             # Clean for filesystem safety
             fs_safe_name = "".join([c if c.isalnum() or c in (" ", "-", "_") else "_" for c in keyword]).strip()
             fs_safe_name = fs_safe_name[:50].strip()
-            
+
             keyword_dir = output_base / fs_safe_name
             keyword_dir.mkdir(parents=True, exist_ok=True)
 
@@ -85,7 +85,8 @@ def main():
                 dest_path = keyword_dir / src_path.name
                 try:
                     if args.mode == "symlink":
-                        if dest_path.exists(): dest_path.unlink()
+                        if dest_path.exists():
+                            dest_path.unlink()
                         dest_path.symlink_to(src_path.resolve())
                     elif args.mode == "copy":
                         shutil.copy2(src_path, dest_path)

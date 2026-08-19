@@ -1,8 +1,6 @@
 """Tests for the rubric refresh state machine."""
 from __future__ import annotations
 
-import pytest
-
 from forecaster.foresight.judge import RubricJudge, StubScorer
 from forecaster.foresight.refresh import (
     RolloutSnapshot,

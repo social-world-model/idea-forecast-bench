@@ -1,21 +1,19 @@
 """Tests for FutureIndex / HistoryIndex + cutoff orchestrator."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from live_idea_bench.models import PaperRecord
 from forecaster.foresight.indices import (
     FutureIndex,
     HashingEmbedder,
-    HistoryIndex,
     build_cutoff_indices,
     build_future_index,
     build_history_index,
 )
+from live_idea_bench.models import PaperRecord
 
 
 def _paper(pid: str, date: str, topic: str = "x") -> PaperRecord:

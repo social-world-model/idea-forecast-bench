@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from typing import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 
 import numpy as np
 

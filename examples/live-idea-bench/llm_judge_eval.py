@@ -34,12 +34,10 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from itertools import combinations
 from pathlib import Path
 from typing import Any
 
 import openai
-
 
 from live_idea_bench.backtest import (  # noqa: E402
     split_train_future_by_cutoff,
@@ -48,7 +46,7 @@ from live_idea_bench.backtest import (  # noqa: E402
 from live_idea_bench.config import load_topics  # noqa: E402
 from live_idea_bench.models import IdeaPrediction  # noqa: E402
 from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
-from live_idea_bench.similarity import idea_text, paper_text, _sanitize  # noqa: E402
+from live_idea_bench.similarity import _sanitize, idea_text, paper_text  # noqa: E402
 from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -394,7 +392,7 @@ def _judge_enable_thinking(judge_model: str) -> bool:
     Mirrors the per-model branch in _call_judge (Qwen judges run with thinking
     disabled). Folded into the fingerprint because a state file produced with
     thinking on is not comparable to one with it off."""
-    return not ("qwen" in judge_model.lower())
+    return "qwen" not in judge_model.lower()
 
 
 def _judge_fingerprint(judge_model: str) -> str:
@@ -448,7 +446,7 @@ def _embed_batch(
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
     na  = math.sqrt(sum(x * x for x in a))
     nb  = math.sqrt(sum(x * x for x in b))
     return max(0.0, min(1.0, dot / (na * nb))) if na and nb else 0.0
@@ -486,8 +484,8 @@ def _cluster_coverage(
     k = min(k, n)
 
     try:
-        from sklearn.cluster import KMeans
         import numpy as np
+        from sklearn.cluster import KMeans
         X = np.array(future_vecs)
         labels = KMeans(n_clusters=k, n_init=5, random_state=0).fit_predict(X)
     except Exception:
@@ -531,15 +529,15 @@ def _call_judge(
     last_problem = ""
     for attempt in range(MAX_JUDGE_RETRY):
         try:
-            create_kwargs = dict(
-                model=judge_model,
-                messages=[
+            create_kwargs = {
+                "model": judge_model,
+                "messages": [
                     {"role": "system", "content": JUDGE_SYSTEM},
                     {"role": "user",   "content": user_msg},
                 ],
-                temperature=JUDGE_TEMPERATURE,
-                max_tokens=JUDGE_MAX_TOKENS,
-            )
+                "temperature": JUDGE_TEMPERATURE,
+                "max_tokens": JUDGE_MAX_TOKENS,
+            }
             # Qwen3.5 judges default to "thinking" mode, which burns the token
             # budget on <think> tokens before the PROBLEM_MATCH/... lines.
             if "qwen" in judge_model.lower():
@@ -678,9 +676,16 @@ def _process_window(
         candidates = _top_r_candidates(pred_vec, paper_vecs, future_paper_ids, top_r)
 
         # Judge all candidates in parallel
-        def _judge_one(pid_score: tuple[str, float]) -> tuple[str, float, dict]:
+        # Loop variables bound as defaults: see the note in
+        # live_idea_bench/similarity.py. The executor is drained within the
+        # iteration, so this makes an existing guarantee explicit.
+        def _judge_one(
+            pid_score: tuple[str, float],
+            _ph: str = ph,
+            _pred: str = pred,
+        ) -> tuple[str, float, dict]:
             pid, score = pid_score
-            cached = state.get_decision(ph, pid)
+            cached = state.get_decision(_ph, pid)
             if cached is not None:
                 return pid, score, cached
             paper = paper_lookup.get(pid)
@@ -692,13 +697,13 @@ def _process_window(
                 }
             else:
                 d = _call_judge(
-                    pred=pred,
+                    pred=_pred,
                     paper_title=getattr(paper, "title", ""),
                     paper_abstract=getattr(paper, "summary", ""),
                     judge_client=judge_client,
                     judge_model=judge_model,
                 )
-            state.set_decision(ph, pid, d)
+            state.set_decision(_ph, pid, d)
             return pid, score, d
 
         judge_results: dict[str, tuple[float, dict]] = {}
@@ -715,7 +720,7 @@ def _process_window(
         matched_paper_id = None
         matched_reasoning = None
         matched_decision: dict = {}
-        for pid, embed_score in candidates:
+        for pid, _embed_score in candidates:
             score, decision = judge_results[pid]
             if decision["match"] and pid not in used_paper_ids:
                 matched_paper_id = pid
@@ -848,7 +853,7 @@ def _process_topic(
         print(f"  [{topic_id}] embedding {len(missing_papers)} papers ...", flush=True)
         texts = [_sanitize(paper_text(p)[:MAX_CHARS]) for p in missing_papers]
         vecs  = _embed_batch(texts, embed_client)
-        state.set_paper_vecs(list(zip([p.paper_id for p in missing_papers], vecs)))
+        state.set_paper_vecs(list(zip([p.paper_id for p in missing_papers], vecs, strict=False)))
 
     paper_vecs: dict[str, list[float]] = {
         p.paper_id: state.get_paper_vec(p.paper_id)
@@ -1023,7 +1028,7 @@ def main() -> int:
     grouped = classify_papers_by_topic(papers, topics)
 
     if args.topics:
-        topic_filter = set(t.strip() for t in args.topics.split(","))
+        topic_filter = {t.strip() for t in args.topics.split(",")}
         topics = [t for t in topics if t.id in topic_filter]
         print(f"Running on {len(topics)} topic(s): {[t.id for t in topics]}", flush=True)
 

@@ -22,8 +22,8 @@ using only recent context (Direct Prompting).
 """
 from __future__ import annotations
 
+import contextlib
 import json
-from typing import List
 
 from live_idea_bench.llm import create_client, get_response_from_llm
 from live_idea_bench.models import IdeaPrediction, PaperRecord
@@ -143,10 +143,8 @@ def _forecast_with_memory(
         import re
         m = re.search(r"\[.*\]", raw, re.DOTALL)
         if m:
-            try:
+            with contextlib.suppress(json.JSONDecodeError):
                 items = json.loads(m.group())
-            except json.JSONDecodeError:
-                pass
 
     predictions: list[IdeaPrediction] = []
     for item in items[:top_k]:
@@ -193,10 +191,10 @@ class MemoryPromptingStrategy(IdeaStrategy):
 
     def generate(
         self,
-        train_papers: List[PaperRecord],
+        train_papers: list[PaperRecord],
         cutoff_month: str,
         top_k: int,
-    ) -> List[IdeaPrediction]:
+    ) -> list[IdeaPrediction]:
         if not train_papers:
             return []
 

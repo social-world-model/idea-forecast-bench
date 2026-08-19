@@ -477,7 +477,7 @@ def select_preview_targets(
         raise ValueError("preview_count must be positive")
 
     rows = sorted(
-        list(manifest.get("topic_episode_rows", [])),
+        manifest.get("topic_episode_rows", []),
         key=lambda row: (str(row.get("episode_id", "")), str(row.get("topic_id", ""))),
     )
     max_selected = max(
@@ -519,7 +519,7 @@ def expand_all_targets(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     ``topic_episode_row`` is included.
     """
     rows = sorted(
-        list(manifest.get("topic_episode_rows", [])),
+        manifest.get("topic_episode_rows", []),
         key=lambda row: (str(row.get("episode_id", "")), str(row.get("topic_id", ""))),
     )
     targets: list[dict[str, Any]] = []

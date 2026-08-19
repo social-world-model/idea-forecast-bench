@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from typing import Any, List
-
 import dataclasses
+import json
 import random
+from pathlib import Path
+from typing import Any
 
+from forecaster.realization.config import SelectionConfig, load_selection_config
+from forecaster.realization.selection import select_top_k_predictions
 from live_idea_bench.daily import coerce_prediction
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.predictor import generate_predictions
-from forecaster.realization.config import SelectionConfig, load_selection_config
-from forecaster.realization.selection import select_top_k_predictions
 from live_idea_bench.strategy.base import IdeaStrategy
 
 
@@ -92,9 +91,9 @@ class PolicyRLStrategy(IdeaStrategy):
 
     @staticmethod
     def _shuffle_train_papers(
-        train_papers: List[PaperRecord],
+        train_papers: list[PaperRecord],
         context_shuffle_seed: int | None,
-    ) -> List[PaperRecord]:
+    ) -> list[PaperRecord]:
         ordered = list(train_papers)
         if context_shuffle_seed is None:
             return ordered
@@ -104,7 +103,7 @@ class PolicyRLStrategy(IdeaStrategy):
 
     def _generate_from_local_checkpoint(
         self,
-        train_papers: List[PaperRecord],
+        train_papers: list[PaperRecord],
         cutoff_month: str,
         selection_config: SelectionConfig,
         *,
@@ -142,7 +141,7 @@ class PolicyRLStrategy(IdeaStrategy):
 
     def _generate_candidate_pool_from_model(
         self,
-        train_papers: List[PaperRecord],
+        train_papers: list[PaperRecord],
         cutoff_month: str,
         *,
         model_name: str | None,
@@ -172,10 +171,10 @@ class PolicyRLStrategy(IdeaStrategy):
 
     def generate(
         self,
-        train_papers: List[PaperRecord],
+        train_papers: list[PaperRecord],
         cutoff_month: str,
         top_k: int,
-    ) -> List[IdeaPrediction]:
+    ) -> list[IdeaPrediction]:
         manifest = self._load_manifest() if self.policy_manifest_path else {}
         static_predictions = manifest.get("static_predictions") or {}
         if isinstance(static_predictions, dict):

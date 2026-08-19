@@ -25,18 +25,16 @@ import logging
 import random
 from collections import defaultdict
 from pathlib import Path
-from typing import Iterable
 
 from forecaster.foresight.dz import load_dz_rows
 from forecaster.foresight.judge import (
-    JUDGE_SYSTEM_PROMPT,
     RubricJudge,
     StubScorer,
     make_live_scorer,
 )
 from forecaster.foresight.rubric import (
-    Rubric,
     RUBRIC_SYSTEM_PROMPT,
+    Rubric,
     build_rubric_generation_prompt,
     parse_rubric_response,
     save_rubric,

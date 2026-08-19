@@ -4,7 +4,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
 
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.strategy.base import IdeaStrategy
@@ -41,7 +41,7 @@ class ForecasterStrategy(IdeaStrategy):
         self.realization_config_path = realization_config_path
 
     def _load_inference_config(self) -> Any:
-        from forecaster.config import load_inference_config, InferenceConfig
+        from forecaster.config import InferenceConfig, load_inference_config
 
         try:
             return load_inference_config(self.inference_config_path)
@@ -49,7 +49,7 @@ class ForecasterStrategy(IdeaStrategy):
             return InferenceConfig()
 
     def _load_realization_config(self) -> Any:
-        from forecaster.config import load_realization_config, RealizationConfig
+        from forecaster.config import RealizationConfig, load_realization_config
 
         try:
             return load_realization_config(self.realization_config_path)
@@ -91,8 +91,8 @@ class ForecasterStrategy(IdeaStrategy):
 
     def _load_memory_store(
         self,
-        train_papers: Optional[List] = None,
-        cutoff_month: Optional[str] = None,
+        train_papers: list | None = None,
+        cutoff_month: str | None = None,
         *,
         strict_mode: bool = False,
     ) -> Any:
@@ -127,14 +127,14 @@ class ForecasterStrategy(IdeaStrategy):
             return self._build_memory_from_papers(train_papers, cutoff_month or "1970-01")
         return MemoryStore.empty("1970-01")
 
-    def _build_memory_from_papers(self, train_papers: List, current_month: str) -> Any:
+    def _build_memory_from_papers(self, train_papers: list, current_month: str) -> Any:
         """Build a MemoryStore from training papers as a heuristic M_t.
 
         Creates Innovation entries from paper metadata chronologically,
         mirroring how the orchestrator populates memory from hindsight samples.
         """
-        from forecaster.prior.memory import MemoryStore
         from forecaster.models import Innovation
+        from forecaster.prior.memory import MemoryStore
 
         store = MemoryStore.empty(current_month)
         for paper in train_papers:
@@ -153,7 +153,7 @@ class ForecasterStrategy(IdeaStrategy):
 
     def _build_heuristic_innovations(
         self,
-        train_papers: List[PaperRecord],
+        train_papers: list[PaperRecord],
         top_k: int,
     ) -> list:
         """Create Innovation objects from paper keywords as a heuristic fallback."""
@@ -185,10 +185,10 @@ class ForecasterStrategy(IdeaStrategy):
 
     def generate(
         self,
-        train_papers: List[PaperRecord],
+        train_papers: list[PaperRecord],
         cutoff_month: str,
         top_k: int,
-    ) -> List[IdeaPrediction]:
+    ) -> list[IdeaPrediction]:
         """Generate forecasts using joint inference.
 
         If prior_checkpoint is provided, samples innovations from the trained model.
@@ -197,12 +197,13 @@ class ForecasterStrategy(IdeaStrategy):
         Converts ScoredProposal → IdeaPrediction for benchmark compatibility.
         """
         from forecaster.inference.algorithm import run_joint_inference
-        from forecaster.realization.proposal_generator import proposal_to_idea_prediction
+        from forecaster.realization.proposal_generator import (
+            proposal_to_idea_prediction,
+        )
 
         if not train_papers:
             return []
 
-        from forecaster.inference.algorithm import run_joint_inference
         from forecaster.prior.sampler import sample_innovations
 
         inference_config = self._load_inference_config()

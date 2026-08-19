@@ -1,37 +1,35 @@
 """Tests for forecaster package public API (Phase 6)."""
 from __future__ import annotations
 
-import pytest
-
 
 def test_forecaster_imports() -> None:
     """All main symbols must be importable from forecaster."""
     from forecaster import (  # noqa: F401
+        ForecasterPipeline,
+        HindsightConfig,
+        HindsightSample,
+        InferenceConfig,
         Innovation,
+        JointCandidate,
         MemoryEntry,
         MemoryInventory,
-        HindsightSample,
-        JointCandidate,
-        ScoredProposal,
-        innovation_to_dict,
-        innovation_from_dict,
-        memory_inventory_to_dict,
-        memory_inventory_from_dict,
-        HindsightConfig,
-        PriorConfig,
-        SFTTrainConfig,
-        RealizationConfig,
-        InferenceConfig,
-        load_hindsight_config,
-        load_prior_config,
-        load_sft_train_config,
-        load_realization_config,
-        load_inference_config,
         MemoryStore,
-        extract_innovation,
+        PriorConfig,
+        RealizationConfig,
+        ScoredProposal,
+        SFTTrainConfig,
         build_hindsight_dataset,
+        extract_innovation,
+        innovation_from_dict,
+        innovation_to_dict,
+        load_hindsight_config,
+        load_inference_config,
+        load_prior_config,
+        load_realization_config,
+        load_sft_train_config,
+        memory_inventory_from_dict,
+        memory_inventory_to_dict,
         run_joint_inference,
-        ForecasterPipeline,
     )
 
 
@@ -43,8 +41,8 @@ def test_forecaster_pipeline_importable() -> None:
 
 def test_forecaster_strategy_registry() -> None:
     """create_strategy('forecaster') must return a ForecasterStrategy instance."""
-    from live_idea_bench.strategy.registry import create_strategy
     from live_idea_bench.strategy.forecaster import ForecasterStrategy
+    from live_idea_bench.strategy.registry import create_strategy
 
     strategy = create_strategy("forecaster")
     assert isinstance(strategy, ForecasterStrategy)

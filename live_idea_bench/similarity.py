@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
-
-logger = logging.getLogger(__name__)
 from difflib import SequenceMatcher
-from typing import Iterable, Optional
 
-from live_idea_bench.config import Config, SimilarityConfig, load_runtime_config, load_similarity_config
+from live_idea_bench.config import (
+    Config,
+    SimilarityConfig,
+    load_runtime_config,
+    load_similarity_config,
+)
 from live_idea_bench.llm import create_client, get_response_from_llm
 from live_idea_bench.models import (
     EvaluationResult,
@@ -23,6 +27,9 @@ from live_idea_bench.papers import (
     get_paper_published_date,
 )
 
+logger = logging.getLogger(__name__)
+
+_EVAL_WORKERS = 8
 # Embedding engine is Voyage-only by design — no local/hybrid fallback. Mixing
 # Voyage cosine, local cosine, and lexical hybrid under one threshold within a
 # run destroys cross-run comparability, so a misconfigured/unavailable Voyage
@@ -157,7 +164,7 @@ def _embedding_similarity(
         try:
             resp = client.embeddings.create(model=model, input=[clean_idea, truncated_context])
             a, b = resp.data[0].embedding, resp.data[1].embedding
-            dot = sum(x * y for x, y in zip(a, b))
+            dot = sum(x * y for x, y in zip(a, b, strict=False))
             na = math.sqrt(sum(x * x for x in a))
             nb = math.sqrt(sum(x * x for x in b))
             score = max(0.0, min(1.0, dot / (na * nb))) if na and nb else 0.0
@@ -298,10 +305,16 @@ def score_prediction_list(
         )
         scored_candidates: list[tuple[PaperRecord, MatchResult, bool]] = []
 
-        def _eval_paper(paper: PaperRecord) -> tuple[PaperRecord, MatchResult, bool]:
+        # `_pred_text` is bound as a default so the closure captures this
+        # iteration's value rather than the loop variable. The executor below
+        # is drained before the next iteration, so this is not a live bug --
+        # but the binding makes that guarantee explicit instead of incidental.
+        def _eval_paper(
+            paper: PaperRecord, _pred_text: str = pred_text
+        ) -> tuple[PaperRecord, MatchResult, bool]:
             body = paper_text(paper)
             res = compute_similarity(
-                pred_text,
+                _pred_text,
                 body,
                 similarity_config,
                 runtime_config,
@@ -309,10 +322,8 @@ def score_prediction_list(
                 reasoning_effort=reasoning_effort,
             )
             res.paper_id = paper.paper_id
-            return paper, res, is_match(res, pred_text, body, similarity_config)
+            return paper, res, is_match(res, _pred_text, body, similarity_config)
 
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        _EVAL_WORKERS = 8
         with ThreadPoolExecutor(max_workers=_EVAL_WORKERS) as pool:
             futures = {pool.submit(_eval_paper, p): p for p in candidate_papers}
             for fut in as_completed(futures):

@@ -5,7 +5,12 @@ from typing import Any
 
 from live_idea_bench.backtest import BacktestConfig, backtest
 from live_idea_bench.models import PaperRecord
-from live_idea_bench.papers import date_to_ordinal, get_paper_published_date, normalize_date, normalize_month
+from live_idea_bench.papers import (
+    date_to_ordinal,
+    get_paper_published_date,
+    normalize_date,
+    normalize_month,
+)
 from live_idea_bench.strategy.registry import create_strategy
 
 

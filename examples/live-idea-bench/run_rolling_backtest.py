@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-
 from live_idea_bench.backtest import BacktestRunner, generate_windows
 
 

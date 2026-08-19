@@ -11,9 +11,9 @@ from live_idea_bench.daily import coerce_prediction
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.predictor import (
     _build_abstract_block,
+    _extract_json_payload,
     _heuristic_predictions,
     _infer_domain,
-    _extract_json_payload,
     _parse_prediction_items,
 )
 
@@ -160,7 +160,7 @@ def _load_local_model(model_name_or_path: str, *, base_model_name: str | None = 
                 raise RuntimeError(
                     "Loading LoRA adapters for local RL inference requires peft to be installed."
                 ) from exc
-            peft_model = getattr(peft, "PeftModel")
+            peft_model = peft.PeftModel
             torch = deps["torch"]
             _dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
             model = deps["AutoModelForCausalLM"].from_pretrained(

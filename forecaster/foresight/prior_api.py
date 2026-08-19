@@ -11,8 +11,8 @@ whatever loader the existing sampler exposes.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from forecaster.config import InferenceConfig
 from forecaster.foresight.prior_io import RawMemoryStore

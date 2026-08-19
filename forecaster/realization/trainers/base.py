@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field, is_dataclass
 import hashlib
 import json
+from abc import ABC, abstractmethod
+from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
 from typing import Any
 
-from live_idea_bench.models import PaperRecord
 from forecaster.models import strict_runtime_manifest_contract
 from forecaster.realization.io import _write_json
+from live_idea_bench.models import PaperRecord
 
 
 @dataclass

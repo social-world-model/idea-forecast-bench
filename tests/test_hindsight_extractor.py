@@ -6,11 +6,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from forecaster.config import HindsightConfig
+from forecaster.models import Innovation
 from live_idea_bench.models import PaperRecord
 from live_idea_bench.papers import parse_markdown_paper
-from forecaster.models import Innovation
-from forecaster.config import HindsightConfig
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -158,15 +157,14 @@ class TestExtractInnovation:
         with patch(
             "forecaster.hindsight.extractor.get_response_from_llm",
             return_value=("this is not json", []),
-        ):
-            with pytest.raises(ValueError, match="[Ff]ailed|[Ee]xtraction"):
-                extract_innovation(
-                    future_paper=FUTURE_PAPER,
-                    context_papers=CONTEXT_PAPERS[:5],
-                    llm_client=client,
-                    model="gpt-4o",
-                    config=config,
-                )
+        ), pytest.raises(ValueError, match="[Ff]ailed|[Ee]xtraction"):
+            extract_innovation(
+                future_paper=FUTURE_PAPER,
+                context_papers=CONTEXT_PAPERS[:5],
+                llm_client=client,
+                model="gpt-4o",
+                config=config,
+            )
 
 
 # ---------------------------------------------------------------------------

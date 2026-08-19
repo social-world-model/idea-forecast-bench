@@ -1,17 +1,14 @@
 """Extended reward function for the realization GRPO training."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 import logging
 import re
-from typing import Any
-
+from dataclasses import asdict, dataclass
 from difflib import SequenceMatcher
 
-from live_idea_bench.models import PaperRecord
-
-from forecaster.models import Innovation, RealizationTrajectory
 from forecaster.config import RealizationConfig
+from forecaster.models import Innovation, RealizationTrajectory
+from live_idea_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 

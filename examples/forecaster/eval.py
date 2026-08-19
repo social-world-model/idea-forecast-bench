@@ -36,6 +36,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
+from forecaster.realization.model_zoo import resolve_small_model  # noqa: E402
 from live_idea_bench.backtest import (  # noqa: E402
     BacktestConfig,
     backtest,
@@ -45,8 +46,6 @@ from live_idea_bench.config import load_topics  # noqa: E402
 from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
 from live_idea_bench.strategy import create_strategy  # noqa: E402
 from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
-
-from forecaster.realization.model_zoo import resolve_small_model  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 log = logging.getLogger("forecaster.eval")
@@ -139,11 +138,10 @@ def _materialize_similarity_config(args: argparse.Namespace) -> str:
     if not args.similarity_engine or args.similarity_engine == "":
         return args.similarity_config
     import tempfile
-    f = tempfile.NamedTemporaryFile(
+    with tempfile.NamedTemporaryFile(
         mode="w", suffix=".yaml", delete=False, prefix="sim_override_eval_"
-    )
-    f.write(f"engine: {args.similarity_engine}\n")
-    f.close()
+    ) as f:
+        f.write(f"engine: {args.similarity_engine}\n")
     return f.name
 
 

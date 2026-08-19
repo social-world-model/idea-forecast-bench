@@ -5,12 +5,11 @@ import os
 import secrets
 import threading
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
-from backend import config
 from backend.strategy_store import (
     bootstrap_backtest_if_missing,
     create_strategy,
@@ -46,7 +45,7 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-def _cors_origins() -> List[str]:
+def _cors_origins() -> list[str]:
     raw = os.environ.get("LIVE_IDEA_CORS_ORIGINS", "").strip()
     if raw:
         return [origin.strip() for origin in raw.split(",") if origin.strip()]
@@ -172,7 +171,7 @@ def _read_views() -> int:
     if not os.path.exists(VIEWS_FILE):
         return 0
     try:
-        with open(VIEWS_FILE, "r", encoding="utf-8") as fh:
+        with open(VIEWS_FILE, encoding="utf-8") as fh:
             payload = json.load(fh)
         return int(payload.get("views", 0))
     except Exception:

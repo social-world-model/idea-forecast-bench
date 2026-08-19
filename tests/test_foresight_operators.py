@@ -1,8 +1,6 @@
 """Tests for the closed operator inventory + free-text mapping."""
 from __future__ import annotations
 
-import pytest
-
 from forecaster.foresight.operators import (
     CLOSED_OPERATORS,
     UNMAPPABLE_BUCKET,

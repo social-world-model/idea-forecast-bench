@@ -7,9 +7,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from live_idea_bench.models import PaperRecord
 from forecaster.models import HindsightSample, Innovation, ScoredProposal
 from forecaster.orchestrator import ForecasterPipeline
+from live_idea_bench.models import PaperRecord
 
 
 def _paper(paper_id: str, month: str) -> PaperRecord:
@@ -480,14 +480,16 @@ class TestForecasterPipelineStrictMode:
         pipeline = ForecasterPipeline(papers=[_paper("p1", "2024-01")], output_dir=tmp_path / "out")
         mock_client = MagicMock()
 
-        with patch("forecaster.orchestrator.create_client", return_value=(mock_client, "gpt-4o")), \
-             patch("forecaster.orchestrator.build_hindsight_dataset", return_value=[]):
-            with pytest.raises(RuntimeError, match="prior checkpoint"):
-                pipeline.run_full_pipeline(
-                    cutoff_months=["2024-01"],
-                    skip_training=True,
-                    strict_eval=True,
-                )
+        with (
+            patch("forecaster.orchestrator.create_client", return_value=(mock_client, "gpt-4o")),
+            patch("forecaster.orchestrator.build_hindsight_dataset", return_value=[]),
+            pytest.raises(RuntimeError, match="prior checkpoint"),
+        ):
+            pipeline.run_full_pipeline(
+                cutoff_months=["2024-01"],
+                skip_training=True,
+                strict_eval=True,
+            )
 
     def test_run_realization_training_enables_alignment_gate_by_default(self, tmp_path: Path) -> None:
         """Real training should run the alignment gate."""

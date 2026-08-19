@@ -2,12 +2,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-import numpy as np
-import pytest
-
-from live_idea_bench.models import PaperRecord
 from forecaster.foresight.gates import (
     extract_citation_candidates,
     format_ok,
@@ -30,7 +25,7 @@ from forecaster.foresight.reward import (
 )
 from forecaster.foresight.rubric import Rubric
 from forecaster.models import Innovation
-
+from live_idea_bench.models import PaperRecord
 
 # --------------------------------------------------------------------------- shared fixtures
 

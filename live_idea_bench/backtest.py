@@ -5,25 +5,39 @@ import shlex
 import subprocess
 import sys
 import time
-from dataclasses import asdict, dataclass, replace as _dc_replace
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass
+from dataclasses import replace as _dc_replace
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any
 
 from tqdm import tqdm
 
-from live_idea_bench.models import BacktestWindowResult, EvaluationResult, IdeaPrediction, PaperRecord
+from live_idea_bench.models import (
+    BacktestWindowResult,
+    EvaluationResult,
+    IdeaPrediction,
+    PaperRecord,
+)
 from live_idea_bench.papers import (
     add_months,
     date_to_ordinal,
     get_paper_published_date,
-    load_papers_from_markdown,
     month_end_date,
     month_start_date,
     month_to_index,
     normalize_date,
     normalize_month,
     to_yymm,
+)
+
+# Explicit re-export: ~10 call sites (tests, examples, live_idea_bench/__init__)
+# import load_papers_from_markdown from this module. The redundant `as` alias
+# marks it as a deliberate re-export so `ruff check --fix` cannot drop it as an
+# unused import and mypy's no_implicit_reexport is satisfied.
+from live_idea_bench.papers import (
+    load_papers_from_markdown as load_papers_from_markdown,
 )
 from live_idea_bench.popularity import enrich_papers_with_popularity
 from live_idea_bench.similarity import evaluate_predictions, score_prediction_list
@@ -35,26 +49,26 @@ class BacktestConfig:
     top_k: int = 5
     horizon_months: int = 3
     min_train_papers: int = 6
-    start_month: Optional[str] = None
-    end_month: Optional[str] = None
+    start_month: str | None = None
+    end_month: str | None = None
     # Earliest cutoff to EVALUATE. Decouples "earliest paper loaded" (start_month,
     # which provides reading context) from "earliest cutoff scored". Needed so the
     # first test cutoff has prior-month context instead of being skipped for an
     # empty train set. None = behave as before (first eligible month is a cutoff).
-    min_cutoff_month: Optional[str] = None
+    min_cutoff_month: str | None = None
     similarity_config: str = "similarity.yaml"
-    popularity_cache_path: Optional[str] = None  # Path to popularity cache JSON
-    candidate_limit: Optional[int] = None  # max future papers per prediction for LLM eval
+    popularity_cache_path: str | None = None  # Path to popularity cache JSON
+    candidate_limit: int | None = None  # max future papers per prediction for LLM eval
 
 
 def _filter_by_month(
-    papers: List[PaperRecord],
-    start_month: Optional[str] = None,
-    end_month: Optional[str] = None,
-) -> List[PaperRecord]:
+    papers: list[PaperRecord],
+    start_month: str | None = None,
+    end_month: str | None = None,
+) -> list[PaperRecord]:
     start_idx = month_to_index(start_month) if start_month else None
     end_idx = month_to_index(end_month) if end_month else None
-    output: List[PaperRecord] = []
+    output: list[PaperRecord] = []
     for paper in papers:
         idx = month_to_index(paper.month)
         if start_idx is not None and idx < start_idx:
@@ -67,9 +81,9 @@ def _filter_by_month(
 
 def _resolve_cutoff(
     *,
-    cutoff_month: Optional[str],
-    cutoff_date: Optional[str],
-) -> Tuple[str, str]:
+    cutoff_month: str | None,
+    cutoff_date: str | None,
+) -> tuple[str, str]:
     if cutoff_date:
         resolved_cutoff_date = normalize_date(cutoff_date)
         resolved_cutoff_month = normalize_month(resolved_cutoff_date)
@@ -81,12 +95,12 @@ def _resolve_cutoff(
 
 
 def generate_at_cutoff(
-    papers: List[PaperRecord],
+    papers: list[PaperRecord],
     strategy: IdeaStrategy,
-    cutoff_month: Optional[str] = None,
+    cutoff_month: str | None = None,
     top_k: int = 5,
-    cutoff_date: Optional[str] = None,
-) -> List[IdeaPrediction]:
+    cutoff_date: str | None = None,
+) -> list[IdeaPrediction]:
     resolved_month, resolved_date = _resolve_cutoff(
         cutoff_month=cutoff_month,
         cutoff_date=cutoff_date,
@@ -101,11 +115,11 @@ def generate_at_cutoff(
 
 
 def split_train_future_by_cutoff(
-    papers: List[PaperRecord],
-    cutoff_month: Optional[str] = None,
+    papers: list[PaperRecord],
+    cutoff_month: str | None = None,
     horizon_months: int = 3,
-    cutoff_date: Optional[str] = None,
-) -> Tuple[List[PaperRecord], List[PaperRecord], str, str]:
+    cutoff_date: str | None = None,
+) -> tuple[list[PaperRecord], list[PaperRecord], str, str]:
     resolved_cutoff_month, resolved_cutoff_date = _resolve_cutoff(
         cutoff_month=cutoff_month,
         cutoff_date=cutoff_date,
@@ -129,12 +143,12 @@ def split_train_future_by_cutoff(
 
 
 def evaluate_at_cutoff(
-    papers: List[PaperRecord],
+    papers: list[PaperRecord],
     strategy: IdeaStrategy,
-    cutoff_month: Optional[str] = None,
+    cutoff_month: str | None = None,
     top_k: int = 5,
     horizon_months: int = 3,
-    cutoff_date: Optional[str] = None,
+    cutoff_date: str | None = None,
     similarity_config: str = "similarity.yaml",
     model_name: str | None = None,
 ) -> EvaluationResult:
@@ -206,9 +220,9 @@ def _summarize_windows(windows: list[BacktestWindowResult]) -> dict[str, float]:
 
 
 def weighted_mean_over_topics(
-    topic_results: Dict[str, Any],
+    topic_results: dict[str, Any],
     metrics: Iterable[str],
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Window-count-weighted mean of each named summary metric across topics.
 
     ``topic_results`` maps topic_id -> {"backtest": {"summary": {...}}, ...}.
@@ -218,7 +232,7 @@ def weighted_mean_over_topics(
     different metric lists (novelty/diversity vs soft_score/cluster_coverage)
     can share this helper without KeyError on absent keys.
     """
-    out: Dict[str, float] = {}
+    out: dict[str, float] = {}
     for metric in metrics:
         num, den = 0.0, 0
         for tr in topic_results.values():
@@ -235,13 +249,13 @@ def weighted_mean_over_topics(
 
 
 def run_backtest(
-    papers: List[PaperRecord],
+    papers: list[PaperRecord],
     strategy: IdeaStrategy,
     config: BacktestConfig,
     *,
     model_name: str | None = None,
     reasoning_effort: str | None = None,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     scoped_papers = _filter_by_month(
         papers,
         start_month=config.start_month,
@@ -250,7 +264,7 @@ def run_backtest(
     if not scoped_papers:
         return {"summary": _summarize_windows([]), "windows": []}
 
-    month_values = sorted(set(paper.month for paper in scoped_papers), key=month_to_index)
+    month_values = sorted({paper.month for paper in scoped_papers}, key=month_to_index)
     last_allowed_cutoff = add_months(month_values[-1], -config.horizon_months)
     max_cutoff_idx = month_to_index(last_allowed_cutoff)
 
@@ -258,7 +272,7 @@ def run_backtest(
     if config.min_cutoff_month:
         min_cutoff_idx = month_to_index(config.min_cutoff_month)
         eligible_cutoffs = [c for c in eligible_cutoffs if month_to_index(c) >= min_cutoff_idx]
-    window_results: List[BacktestWindowResult] = []
+    window_results: list[BacktestWindowResult] = []
     for cutoff in tqdm(eligible_cutoffs, desc="windows", unit="win", leave=False):
         cutoff_date = month_start_date(cutoff)
         train, future, future_end, future_end_date = split_train_future_by_cutoff(

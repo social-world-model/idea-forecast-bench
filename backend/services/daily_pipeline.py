@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 from backend import strategy_store
 from live_idea_bench.daily import (
@@ -33,7 +34,7 @@ def _lock_ttl_seconds() -> int:
 class _FileLock:
     def __init__(self, path: Path) -> None:
         self.path = path
-        self.fd: Optional[int] = None
+        self.fd: int | None = None
 
     @staticmethod
     def _process_alive(pid: int) -> bool:
@@ -47,7 +48,7 @@ class _FileLock:
             return True
         return True
 
-    def _read_metadata(self) -> tuple[Optional[int], Optional[datetime]]:
+    def _read_metadata(self) -> tuple[int | None, datetime | None]:
         try:
             payload = self.path.read_text(encoding="utf-8").strip()
         except FileNotFoundError:
@@ -55,8 +56,8 @@ class _FileLock:
         except OSError:
             return None, None
 
-        pid: Optional[int] = None
-        created_at: Optional[datetime] = None
+        pid: int | None = None
+        created_at: datetime | None = None
         for token in payload.split():
             if token.startswith("pid="):
                 try:
@@ -86,7 +87,7 @@ class _FileLock:
             return False
         return True
 
-    def __enter__(self) -> "_FileLock":
+    def __enter__(self) -> _FileLock:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         for _ in range(2):
             try:
@@ -106,24 +107,22 @@ class _FileLock:
         if self.fd is not None:
             os.close(self.fd)
             self.fd = None
-        try:
+        with contextlib.suppress(FileNotFoundError):
             self.path.unlink()
-        except FileNotFoundError:
-            pass
 
 
 def _iso(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).isoformat()
 
 
-def _latest_month_from_data_dir(data_dir: Path) -> Optional[str]:
+def _latest_month_from_data_dir(data_dir: Path) -> str | None:
     papers = load_papers_from_markdown(data_dir)
     if not papers:
         return None
     return papers[-1].month
 
 
-def _fallback_backtest_score(strategy: Dict[str, Any]) -> Optional[float]:
+def _fallback_backtest_score(strategy: dict[str, Any]) -> float | None:
     summary = strategy_store._aggregate_topic_backtest_summary(strategy.get("topic_runs") or [])
     if summary is None:
         summary = (strategy.get("backtest_result") or {}).get("summary") or {}
@@ -136,7 +135,7 @@ def _fallback_backtest_score(strategy: Dict[str, Any]) -> Optional[float]:
         return None
 
 
-def _ensure_strategy_end_month(strategy: Dict[str, Any], latest_month: Optional[str]) -> Dict[str, Any]:
+def _ensure_strategy_end_month(strategy: dict[str, Any], latest_month: str | None) -> dict[str, Any]:
     if not latest_month:
         return strategy
 
@@ -159,14 +158,14 @@ def _ensure_strategy_end_month(strategy: Dict[str, Any], latest_month: Optional[
     return updated or strategy
 
 
-def _write_json(path: Path, payload: Dict[str, Any]) -> None:
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def _extract_new_paper_ids(ingest_result: Dict[str, Any]) -> Set[str]:
+def _extract_new_paper_ids(ingest_result: dict[str, Any]) -> set[str]:
     raw = ingest_result.get("new_papers") or []
-    ids: Set[str] = set()
+    ids: set[str] = set()
     if not isinstance(raw, list):
         return ids
     for item in raw:
@@ -180,9 +179,9 @@ def _extract_new_paper_ids(ingest_result: Dict[str, Any]) -> Set[str]:
 
 def run_daily_pipeline(
     *,
-    now: Optional[datetime] = None,
-    data_dir: Optional[Path] = None,
-) -> Dict[str, Any]:
+    now: datetime | None = None,
+    data_dir: Path | None = None,
+) -> dict[str, Any]:
     utc_now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     cutoff_date = daily_cutoff_date(utc_now)
     project_root = strategy_store.PROJECT_ROOT
@@ -196,7 +195,7 @@ def run_daily_pipeline(
         latest_month = _latest_month_from_data_dir(resolved_data_dir)
         new_paper_ids = _extract_new_paper_ids(ingest_result)
 
-        strategy_results: List[Dict[str, Any]] = []
+        strategy_results: list[dict[str, Any]] = []
         for strategy in strategy_store.list_strategies():
             strategy_id = strategy.get("id")
             if not strategy_id:
@@ -212,7 +211,7 @@ def run_daily_pipeline(
                 evaluated_at=utc_now,
             )
 
-            updates: Dict[str, Any] = {"last_daily_run_at": _iso(utc_now)}
+            updates: dict[str, Any] = {"last_daily_run_at": _iso(utc_now)}
             if latest_month:
                 updates["last_generation_cutoff_month"] = latest_month
             if daily_eval is not None:

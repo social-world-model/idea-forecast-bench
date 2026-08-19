@@ -31,7 +31,6 @@ Run ``python -m live_idea_bench <command> --help`` to see a command's own flags.
 
 from __future__ import annotations
 
-import argparse
 import runpy
 import sys
 from pathlib import Path

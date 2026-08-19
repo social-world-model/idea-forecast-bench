@@ -29,10 +29,10 @@ Full mode, synchronous (slow but works with Anthropic / Gemini too)::
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 from pathlib import Path
 from typing import Any
-
 
 from forecaster.config import load_hindsight_config  # noqa: E402
 from forecaster.hindsight.batch import (  # noqa: E402
@@ -53,7 +53,6 @@ from forecaster.hindsight.topic_sampling import (  # noqa: E402
 from forecaster.models import innovation_to_dict  # noqa: E402
 from live_idea_bench.backtest import split_train_future_by_cutoff  # noqa: E402
 from live_idea_bench.llm import _is_openai_model, create_client  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Manifest helpers (shared with run_topic_hindsight_preview.py)
@@ -195,10 +194,8 @@ def run_topic_hindsight(
         for line in jsonl_path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if line:
-                try:
+                with contextlib.suppress(json.JSONDecodeError):
                     rows.append(json.loads(line))
-                except json.JSONDecodeError:
-                    pass
 
     if use_batch:
         # -----------------------------------------------------------------
@@ -271,7 +268,7 @@ def run_topic_hindsight(
             "model": model,
             "total_targets": len(targets),
             "extracted_count": len(rows),
-            "batch_failures": {cid: msg for cid, msg in failures.items()},
+            "batch_failures": dict(failures.items()),
         }
 
     else:

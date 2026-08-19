@@ -26,11 +26,14 @@ import logging
 from dataclasses import replace
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
 from forecaster.config import SFTTrainConfig  # noqa: E402
-from forecaster.hindsight.dataset_builder import load_hindsight_samples_jsonl  # noqa: E402
-from forecaster.prior.sft_dataset import build_sft_samples, save_sft_dataset  # noqa: E402
+from forecaster.hindsight.dataset_builder import (
+    load_hindsight_samples_jsonl,  # noqa: E402
+)
+from forecaster.prior.sft_dataset import (  # noqa: E402
+    build_sft_samples,
+    save_sft_dataset,
+)
 from forecaster.prior.trainer import train_prior  # noqa: E402
 from forecaster.realization import (  # noqa: E402
     load_candidate_generation_config,
@@ -42,6 +45,8 @@ from forecaster.realization import (  # noqa: E402
 from forecaster.realization.model_zoo import resolve_small_model  # noqa: E402
 from forecaster.realization.pipeline import run_policy_rl_pipeline  # noqa: E402
 from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 log = logging.getLogger("forecaster.train")

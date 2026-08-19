@@ -19,13 +19,14 @@ stubs to keep the path LLM-free.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Callable, Protocol, Sequence
+from typing import Any
 
 from forecaster.foresight.memory import build_memory
 from forecaster.foresight.prior_api import sample_z
-from forecaster.models import Innovation
 from forecaster.inference.deduplication import _jaccard_similarity
+from forecaster.models import Innovation
 from live_idea_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)

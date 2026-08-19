@@ -16,9 +16,8 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-from dataclasses import asdict
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import numpy as np
 
@@ -26,11 +25,6 @@ from forecaster.foresight.ablations import (
     AblationConfig,
     AblationResult,
     baseline_set,
-)
-from forecaster.foresight.metrics import (
-    impact_stratified_breakdown,
-    mmd_rbf,
-    wasserstein_1d,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -94,7 +88,7 @@ def live_evaluator(cfg: AblationConfig) -> AblationResult:  # pragma: no cover
 
 
 def _format_table(results: list[AblationResult]) -> str:
-    metric_keys = sorted({k for r in results for k in r.metrics.keys()})
+    metric_keys = sorted({k for r in results for k in r.metrics})
     header = ["config"] + metric_keys
     lines = [
         "| " + " | ".join(header) + " |",

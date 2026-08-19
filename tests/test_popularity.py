@@ -1,7 +1,6 @@
 """Tests for live_idea_bench/popularity.py — written BEFORE implementation (TDD RED phase)."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -16,7 +15,6 @@ from live_idea_bench.popularity import (
     normalize_popularity_scores,
     save_popularity_cache,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

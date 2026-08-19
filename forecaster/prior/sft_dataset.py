@@ -4,7 +4,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from forecaster.models import HindsightSample, innovation_to_json, memory_inventory_to_dict
+from forecaster.models import (
+    HindsightSample,
+    innovation_to_json,
+    memory_inventory_to_dict,
+)
 from forecaster.prior.memory import build_memory_store_from_hindsight_samples
 from forecaster.prior.prompting import render_prior_user_prompt
 

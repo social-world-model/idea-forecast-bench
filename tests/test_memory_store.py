@@ -1,11 +1,8 @@
 """Tests for MemoryStore (TDD: RED phase)."""
 from __future__ import annotations
 
-import json
 import tempfile
 from pathlib import Path
-
-import pytest
 
 from forecaster.models import HindsightSample, Innovation, MemoryEntry, MemoryInventory
 from forecaster.prior.memory import (
@@ -13,7 +10,6 @@ from forecaster.prior.memory import (
     build_memory_store_from_hindsight_samples,
     hindsight_sample_available_by_cutoff,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -129,8 +125,8 @@ def test_decay_recency_reduces_scores():
     original_scores = [e.recency_score for e in store.inventory.entries]
     decayed = store.decay_recency("2024-06")
     new_scores = [e.recency_score for e in decayed.inventory.entries]
-    assert all(new <= orig for new, orig in zip(new_scores, original_scores))
-    assert any(new < orig for new, orig in zip(new_scores, original_scores))
+    assert all(new <= orig for new, orig in zip(new_scores, original_scores, strict=False))
+    assert any(new < orig for new, orig in zip(new_scores, original_scores, strict=False))
 
 
 def test_decay_recency_returns_new_store():
@@ -175,7 +171,7 @@ def test_persist_and_load_roundtrip():
         loaded = MemoryStore.load(path)
     assert loaded.size == store.size
     assert loaded.inventory.last_updated_month == store.inventory.last_updated_month
-    for orig, loaded_entry in zip(store.inventory.entries, loaded.inventory.entries):
+    for orig, loaded_entry in zip(store.inventory.entries, loaded.inventory.entries, strict=False):
         assert orig.innovation == loaded_entry.innovation
         assert orig.frequency == loaded_entry.frequency
 
@@ -286,8 +282,8 @@ def test_load_without_cutoff_never_warns(tmp_path, caplog):  # type: ignore[no-u
 
 def test_apply_delayed_utility_update_increases_utility_on_match():
     """_apply_delayed_utility_update raises utility for actual future support."""
-    from forecaster.orchestrator import _apply_delayed_utility_update
     from forecaster.models import Innovation, ScoredProposal
+    from forecaster.orchestrator import _apply_delayed_utility_update
 
     innovation = Innovation(base_direction="neural network", operator="extend", gap="efficiency")
     store = MemoryStore.empty("2024-01")
@@ -324,8 +320,8 @@ def test_apply_delayed_utility_update_increases_utility_on_match():
 
 def test_apply_delayed_utility_update_decreases_utility_on_no_match():
     """_apply_delayed_utility_update applies small negative delta for non-matching proposals."""
-    from forecaster.orchestrator import _apply_delayed_utility_update
     from forecaster.models import Innovation, ScoredProposal
+    from forecaster.orchestrator import _apply_delayed_utility_update
 
     innovation = Innovation(base_direction="neural network", operator="extend", gap="efficiency")
     store = MemoryStore.empty("2024-01")
@@ -363,8 +359,8 @@ def test_apply_delayed_utility_update_decreases_utility_on_no_match():
 
 def test_apply_delayed_utility_update_preserves_immutability():
     """_apply_delayed_utility_update returns new store, does not mutate original."""
-    from forecaster.orchestrator import _apply_delayed_utility_update
     from forecaster.models import Innovation, ScoredProposal
+    from forecaster.orchestrator import _apply_delayed_utility_update
 
     innovation = Innovation(base_direction="neural", operator="extend", gap="test")
     store = MemoryStore.empty("2024-01")
@@ -395,8 +391,8 @@ def test_apply_delayed_utility_update_preserves_immutability():
 
 def test_apply_delayed_utility_update_records_provenance():
     """Delayed feedback should persist proposal/evidence provenance in memory metadata."""
-    from forecaster.orchestrator import _apply_delayed_utility_update
     from forecaster.models import ScoredProposal
+    from forecaster.orchestrator import _apply_delayed_utility_update
 
     innovation = Innovation(base_direction="retrieval agent", operator="compose", gap="ground long-horizon planning")
     store = MemoryStore.empty("2024-01").append(innovation, source_paper_id="src-1", month="2024-01")

@@ -5,8 +5,8 @@ live_idea_bench/config.py and forecaster/realization/config.py.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -202,7 +202,7 @@ def load_hindsight_config(name_or_path: str = "hindsight.yaml") -> HindsightConf
 def load_prior_config(name_or_path: str = "prior.yaml") -> PriorConfig:
     """Load PriorConfig from a YAML file (uses only PriorConfig fields)."""
     payload = _read_yaml(_resolve_forecaster_config_path(name_or_path))
-    prior_fields = {f for f in PriorConfig.__dataclass_fields__}
+    prior_fields = set(PriorConfig.__dataclass_fields__)
     filtered = {k: v for k, v in payload.items() if k in prior_fields}
     try:
         return PriorConfig(**filtered)
@@ -216,7 +216,7 @@ def load_prior_config(name_or_path: str = "prior.yaml") -> PriorConfig:
 def load_sft_train_config(name_or_path: str = "prior.yaml") -> SFTTrainConfig:
     """Load SFTTrainConfig from a YAML file (uses only SFTTrainConfig fields)."""
     payload = _read_yaml(_resolve_forecaster_config_path(name_or_path))
-    sft_fields = {f for f in SFTTrainConfig.__dataclass_fields__}
+    sft_fields = set(SFTTrainConfig.__dataclass_fields__)
     filtered = {k: v for k, v in payload.items() if k in sft_fields}
     try:
         return SFTTrainConfig(**filtered)

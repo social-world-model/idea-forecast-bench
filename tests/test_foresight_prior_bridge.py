@@ -4,10 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from forecaster.foresight.dz import augment_hindsight_rows
-from forecaster.foresight.operators import load_operator_inventory
 from forecaster.foresight.prior_api import operator_distribution, sample_z
 from forecaster.foresight.prior_io import (
     RawMemoryStore,
@@ -89,7 +86,7 @@ def test_save_sft_jsonl_round_trip(tmp_path: Path):
     dz_path = _make_dz_with_memory(tmp_path)
     samples = build_sft_samples_from_dz(dz_path, drop_unmappable=False)
     out_path = save_sft_jsonl(samples, tmp_path / "sft.jsonl")
-    loaded = [json.loads(l) for l in out_path.read_text().splitlines()]
+    loaded = [json.loads(line) for line in out_path.read_text().splitlines()]
     assert loaded == samples
 
 

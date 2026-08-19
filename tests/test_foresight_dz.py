@@ -4,10 +4,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
-from live_idea_bench.models import PaperRecord
 from forecaster.foresight.dz import augment_hindsight_rows, load_dz_rows
+from live_idea_bench.models import PaperRecord
 
 
 def _write_jsonl(path: Path, rows: list[dict]) -> None:

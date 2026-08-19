@@ -6,12 +6,11 @@ import logging
 import re
 from typing import Any
 
-from live_idea_bench.llm import get_response_from_llm
-from live_idea_bench.models import PaperRecord
-
 from forecaster.config import HindsightConfig
 from forecaster.hindsight.prompt import build_hindsight_prompt
-from forecaster.models import Innovation, ALLOWED_INNOVATION_OPERATORS
+from forecaster.models import ALLOWED_INNOVATION_OPERATORS, Innovation
+from live_idea_bench.llm import get_response_from_llm
+from live_idea_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,12 @@ import pytest
 import live_idea_bench.similarity as similarity_module
 from live_idea_bench.config import SimilarityConfig, load_similarity_config
 from live_idea_bench.models import IdeaPrediction, MatchResult, PaperRecord
-from live_idea_bench.similarity import compute_similarity, evaluate_predictions, is_match, score_prediction_list
+from live_idea_bench.similarity import (
+    compute_similarity,
+    evaluate_predictions,
+    is_match,
+    score_prediction_list,
+)
 
 
 @pytest.fixture(autouse=True)

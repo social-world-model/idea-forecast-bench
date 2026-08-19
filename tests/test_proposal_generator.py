@@ -6,14 +6,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from live_idea_bench.models import IdeaPrediction, PaperRecord
-from forecaster.models import Innovation
 from forecaster.config import RealizationConfig
+from forecaster.models import Innovation
 from forecaster.realization.proposal_generator import (
     build_realization_messages,
     generate_proposal,
     proposal_to_idea_prediction,
 )
+from live_idea_bench.models import IdeaPrediction, PaperRecord
 
 
 def _make_paper(paper_id: str, title: str, summary: str) -> PaperRecord:
@@ -243,16 +243,15 @@ class TestGenerateProposalLocalModel:
         patch(
             "forecaster.realization.proposal_generator.get_response_from_llm",
             return_value=("LLM fallback response", []),
-        ) as mock_llm:
-            with pytest.raises(RuntimeError, match="artifact generation failed"):
-                generate_proposal(
-                    innovation=innovation,
-                    evidence=[],
-                    llm_client=mock_client,
-                    model="gpt-4o",
-                    config=config,
-                    realization_model_path=str(ckpt_dir),
-                )
+        ) as mock_llm, pytest.raises(RuntimeError, match="artifact generation failed"):
+            generate_proposal(
+                innovation=innovation,
+                evidence=[],
+                llm_client=mock_client,
+                model="gpt-4o",
+                config=config,
+                realization_model_path=str(ckpt_dir),
+            )
 
         mock_llm.assert_not_called()
 

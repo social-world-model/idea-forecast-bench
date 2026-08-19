@@ -6,7 +6,6 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
 from forecaster.realization import (  # noqa: E402
     load_candidate_generation_config,
     load_episode_build_config,
@@ -15,8 +14,12 @@ from forecaster.realization import (  # noqa: E402
     load_selection_config,
 )
 from forecaster.realization.io import _write_json  # noqa: E402
-from forecaster.realization.model_zoo import list_small_model_payloads, resolve_small_model  # noqa: E402
+from forecaster.realization.model_zoo import (  # noqa: E402
+    list_small_model_payloads,
+    resolve_small_model,
+)
 from forecaster.realization.pipeline import run_policy_rl_pipeline  # noqa: E402
+from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:

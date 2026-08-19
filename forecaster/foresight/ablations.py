@@ -11,7 +11,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-
 # The single switches mandated by the plan.
 REWARD_VARIANTS: tuple[str, ...] = ("foresight", "embedding_threshold", "raw_judge")
 DECOMPOSITION_VARIANTS: tuple[str, ...] = ("per_z", "single_shot_k")

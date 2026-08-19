@@ -17,9 +17,9 @@ from __future__ import annotations
 import csv
 import logging
 import math
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterable, Sequence
 
 from forecaster.foresight.judge import JudgeResult, RubricJudge
 from forecaster.foresight.rubric import Rubric
@@ -101,7 +101,7 @@ def compute_auc(
         for k in range(i, j + 1):
             ranks[k] = avg_rank
         i = j + 1
-    rank_sum_pos = sum(r for r, (_, lbl) in zip(ranks, combined) if lbl == 1)
+    rank_sum_pos = sum(r for r, (_, lbl) in zip(ranks, combined, strict=False) if lbl == 1)
     u = rank_sum_pos - n_pos * (n_pos + 1) / 2.0
     return u / (n_pos * n_neg)
 

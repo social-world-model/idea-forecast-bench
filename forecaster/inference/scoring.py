@@ -2,19 +2,19 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from live_idea_bench.models import PaperRecord
-
-from forecaster.models import Innovation, RealizationTrajectory
 from forecaster.config import (
     InferenceConfig,
     RealizationConfig,
     validate_inference_config,
 )
-from forecaster.realization.realization_reward import compute_realization_reward
+from forecaster.models import Innovation, RealizationTrajectory
 from forecaster.realization.proposal_generator import score_local_proposal
+from forecaster.realization.realization_reward import compute_realization_reward
 from forecaster.realization.strict_runtime import score_strict_realization_trajectory
+from live_idea_bench.models import PaperRecord
 
 if TYPE_CHECKING:
     from forecaster.prior.memory import MemoryStore
@@ -54,7 +54,7 @@ def _normalized_utility(value: float) -> float:
     return _clamp01(0.5 + (0.5 * math.tanh(value)))
 
 
-def compute_prior_score(innovation: Innovation, memory_store: "MemoryStore") -> float:
+def compute_prior_score(innovation: Innovation, memory_store: MemoryStore) -> float:
     """Compute the explicit heuristic fallback prior score for an innovation.
 
     The fallback is calibrated into a log-like scale so it is comparable to the

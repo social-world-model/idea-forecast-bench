@@ -1,12 +1,8 @@
 from pathlib import Path
-import sys
 
 import pytest
 
-if sys.version_info < (3, 8):
-    pytestmark = pytest.mark.skip(reason="Config module requires Python 3.8+ (typing.Literal)")
-else:
-    from live_idea_bench.config import Config
+from live_idea_bench.config import Config
 
 
 def test_load_config_with_embedding_and_prompt(tmp_path: Path) -> None:
