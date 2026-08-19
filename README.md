@@ -121,7 +121,6 @@ scripts/              # Shell wrappers for the above, plus environment setup
   benchmark/          #   benchmark run wrappers
   forecaster/         #   training / serving / eval wrappers
 config/               # YAML configs (config/, config/forecaster/)
-tests/                # Test suite (pytest)
 docs/                 # Setup notes and runbooks
 backend/  frontend/   # Optional web app (Flask API + React UI), not gated by CI
 ```
@@ -133,8 +132,8 @@ backend/  frontend/   # Optional web app (Flask API + React UI), not gated by CI
 ## Installation detail
 
 - **Core** (`poetry install`): runs the benchmark and the LLM-API baselines, and the
-  retrieve-then-judge protocol against a hosted judge/embedding API. The full test suite
-  (`pytest`) passes on a core install — CI verifies exactly this configuration.
+  retrieve-then-judge protocol against a hosted judge/embedding API. CI's smoke job
+  verifies this configuration on Python 3.10 and 3.12.
   `poetry install` puts `live_idea_bench` and `forecaster` on the path in editable mode,
   so `import live_idea_bench` works from any directory. Editable is required, not
   incidental: several modules resolve `config/` and `examples/` relative to their own
@@ -157,8 +156,9 @@ API keys (set as needed for the providers you use): `OPENAI_API_KEY`, `ANTHROPIC
 
 ## Development & reproduction
 
-- **Checks:** `pre-commit run --all-files` (lint), `mypy` (types), `pytest` (tests).
-  These are exactly the three jobs in CI — see CONTRIBUTING.md.
+- **Checks:** `pre-commit run --all-files` (lint) and `mypy` (types) — the two
+  gating jobs in CI, plus a smoke job. There is no automated test suite; see
+  CONTRIBUTING.md.
 - **MDF training pipeline:** `scripts/run_train_and_eval.sh` runs prior SFT → GRPO →
   eval end to end. The GRPO step defaults to the gated foresight reward used for the
   reported results, which needs a prebuilt artifact dir (`output/foresight_artifacts/{indices,rubrics}`):

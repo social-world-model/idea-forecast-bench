@@ -36,7 +36,8 @@ One workflow, `CI`, with three jobs. Reproduce all of them locally:
 ```bash
 pre-commit run --all-files    # lint: ruff check, ruff format --check, codespell, file hygiene
 mypy                          # typecheck: strict, over live_idea_bench/ forecaster/ backend/
-pytest -q                     # test: must pass on a core install, no API keys
+python -c "import live_idea_bench, forecaster, backend.app"   # smoke
+live-idea-bench --help
 ```
 
 Two rules the tooling enforces that are easy to trip over:
@@ -44,9 +45,15 @@ Two rules the tooling enforces that are easy to trip over:
 - **Lint never rewrites your code.** `[tool.ruff]` deliberately has no
   `fix = true`; use `ruff check --fix` yourself when you want it. (CI used to
   auto-fix its own checkout and then report success.)
-- **The test suite must not need network or API keys.** Mock the client. A
-  test that reaches a paid endpoint will pass on your machine and be a bill
-  in CI.
+- **CI must not need network or API keys.** Nothing in the gate may reach a
+  paid endpoint.
+
+**There is no automated test suite.** It was removed deliberately; the CI
+`smoke` job only proves the import graph, the CLI entry point, its dispatch
+table, and config loading still work. Nothing verifies that the benchmark
+computes the right numbers — so changes to evaluation logic need careful
+manual review, and `git log` before commit 79b434b has the deleted suite if
+you want to bring parts of it back.
 
 ## Layout
 
@@ -57,7 +64,6 @@ Two rules the tooling enforces that are easy to trip over:
 | `examples/` | **Python** entry scripts (the CLI dispatches into these) |
 | `scripts/` | **shell** wrappers for those entry scripts |
 | `config/` | YAML config |
-| `tests/` | pytest suite |
 | `backend/`, `frontend/` | optional web app, not part of the CI gate |
 
 `examples/` holds Python, `scripts/` holds bash. Keep it that way — a shell
