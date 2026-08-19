@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import random
@@ -397,7 +398,12 @@ def _heuristic_predictions(
         "Benchmark-driven {a} generalization beyond static {b}",
     ]
 
-    seed = hash((cutoff_month, tuple(terms[:10]), top_k)) & 0xFFFFFFFF
+    # `hash()` over strings is salted per process (PYTHONHASHSEED), so this
+    # "deterministic" fallback produced different ideas on every run. Use a
+    # stable digest so a given (cutoff, terms, top_k) always yields the same
+    # predictions.
+    seed_material = repr((cutoff_month, tuple(terms[:10]), top_k)).encode()
+    seed = int.from_bytes(hashlib.sha256(seed_material).digest()[:4], "big")
     rng = random.Random(seed)
     candidates: list[IdeaPrediction] = []
     for idx in range(max(top_k * 2, 8)):

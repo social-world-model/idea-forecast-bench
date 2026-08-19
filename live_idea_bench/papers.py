@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 from live_idea_bench.models import PaperRecord
 
@@ -356,7 +356,7 @@ _TITLE_STOP_WORDS = frozenset(
 
 def _keywords_from_title(title: str) -> list[str]:
     tokens = re.findall(r"[A-Za-z][A-Za-z0-9]+", title)
-    seen: set = set()
+    seen: set[str] = set()
     keywords: list[str] = []
     for token in tokens:
         low = token.lower()
@@ -545,7 +545,7 @@ def _default_workers() -> int:
     return min(os.cpu_count() or 4, 32)
 
 
-def _discover_files_for_dir(args: tuple) -> list[Path]:
+def _discover_files_for_dir(args: tuple[str, str]) -> list[Path]:
     """Discover .md files in a single paper directory. Thread-safe."""
     child_path, child_name = args
     child = Path(child_path)
@@ -586,6 +586,8 @@ def load_papers_from_markdown(
     cache_file = _cache_path_for(input_dir, start_month, end_month)
     if use_cache and cache_file.is_file():
         try:
+            # Declared up front: the same name is rebound to a writer below.
+            f: IO[bytes]
             with open(cache_file, "rb") as f:
                 cached = pickle.load(f)
             if isinstance(cached, list) and cached:
@@ -607,9 +609,12 @@ def load_papers_from_markdown(
     if start_idx is not None or end_idx is not None:
         input_dir = Path(input_dir)
         s_idx = start_idx if start_idx is not None else 0
-        e_idx = end_idx if end_idx is not None else 9999
+        # month_to_index is year*12 + month, so 2024-01 is 24288 -- a 9999
+        # sentinel made range(s_idx, 9999 + 1) empty for every real date and
+        # silently returned zero papers whenever end_month was omitted.
+        e_idx = end_idx if end_idx is not None else month_to_index("2100-12")
         # Build YYMM prefix set for O(1) lookup
-        prefixes: set = set()
+        prefixes: set[str] = set()
         for idx in range(s_idx, e_idx + 1):
             yy = (idx // 12) % 100
             mm = (idx % 12) + 1
@@ -618,7 +623,7 @@ def load_papers_from_markdown(
         # Accept both the legacy arXiv "YYMM" prefix layout (e.g. "2603") and the
         # canonical "YYYY-MM" month-directory layout (e.g. "2026-03").
         all_names = os.listdir(input_dir)
-        dir_args: list[tuple] = []
+        dir_args: list[tuple[str, str]] = []
         for name in all_names:
             keep = len(name) >= 4 and name[:4] in prefixes
             if not keep and re.match(r"^\d{4}-\d{2}$", name):
