@@ -100,6 +100,11 @@ flask-cors = ">=4,<7"
 pre-commit = "^3.6.0"
 nbmake = "^1.5.0"
 types-setuptools = "^69.0.0.0"
+# Stub packages mypy needs to type third-party calls. Without these the
+# typecheck job fails on a clean machine even though it passes wherever the
+# stubs happen to already be installed.
+types-pyyaml = "^6.0"
+types-requests = "^2.31"
 # Keep ruff/mypy pinned in lockstep with .pre-commit-config.yaml -- CI runs
 # the pre-commit hooks, so a drift here means "green locally, red in CI".
 ruff = "^0.15.0"

@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Protocol, TypeVar
 
 import numpy as np
+import numpy.typing as npt
 
 from forecaster.foresight.cutoffs import (
     FUTURE_WINDOW_HARD_LIMIT,
@@ -39,7 +40,7 @@ class Embedder(Protocol):
 
     name: str
 
-    def encode(self, texts: Sequence[str]) -> np.ndarray: ...
+    def encode(self, texts: Sequence[str]) -> npt.NDArray[np.float32]: ...
 
 
 class SentenceTransformerEmbedder:
@@ -52,7 +53,7 @@ class SentenceTransformerEmbedder:
         self._model = SentenceTransformer(model_name)
         self.name = f"sentence-transformer:{model_name}"
 
-    def encode(self, texts: Sequence[str]) -> np.ndarray:
+    def encode(self, texts: Sequence[str]) -> npt.NDArray[np.float32]:
         arr = self._model.encode(
             list(texts),
             normalize_embeddings=True,
@@ -75,7 +76,7 @@ class HashingEmbedder:
         self.seed = int(seed)
         self.name = f"hashing:{self.dim}d"
 
-    def encode(self, texts: Sequence[str]) -> np.ndarray:
+    def encode(self, texts: Sequence[str]) -> npt.NDArray[np.float32]:
         out = np.zeros((len(texts), self.dim), dtype=np.float32)
         for i, text in enumerate(texts):
             for token in (text or "").lower().split():
@@ -110,7 +111,7 @@ _IndexT = TypeVar("_IndexT", bound="_BaseIndex")
 class _BaseIndex:
     paper_ids: tuple[str, ...]
     published_dates: tuple[str, ...]
-    embeddings: np.ndarray  # (N, D) L2-normalized float32
+    embeddings: npt.NDArray[np.float32]  # (N, D) L2-normalized float32
     embedder_name: str
     cutoff_date: str
     kind: str  # "future" or "history"
@@ -134,7 +135,7 @@ class _BaseIndex:
 
     def search(
         self,
-        query_embedding: np.ndarray,
+        query_embedding: npt.NDArray[np.float32],
         top_k: int = 5,
     ) -> list[tuple[str, float]]:
         """Cosine-similarity top-k. Returns (paper_id, score) pairs."""

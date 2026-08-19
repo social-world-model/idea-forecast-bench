@@ -18,6 +18,7 @@ from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 
 logger = logging.getLogger(__name__)
 
@@ -25,20 +26,22 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------- MMD
 
 
-def _pairwise_squared_distances(A: np.ndarray, B: np.ndarray) -> np.ndarray:
+def _pairwise_squared_distances(
+    A: npt.NDArray[np.float32], B: npt.NDArray[np.float32]
+) -> npt.NDArray[np.float32]:
     """Return shape (|A|, |B|) squared euclidean distance matrix."""
     A2 = (A * A).sum(axis=1, keepdims=True)
     B2 = (B * B).sum(axis=1, keepdims=True).T
     cross = A @ B.T
     # numpy's ufunc stubs are typed as returning Any; bind to a typed local
     # instead of returning it straight out of an ndarray-declared function.
-    dists: np.ndarray = np.maximum(A2 + B2 - 2.0 * cross, 0.0)
+    dists: npt.NDArray[np.float32] = np.maximum(A2 + B2 - 2.0 * cross, 0.0)
     return dists
 
 
 def mmd_rbf(
-    P: np.ndarray,
-    Q: np.ndarray,
+    P: npt.NDArray[np.float32],
+    Q: npt.NDArray[np.float32],
     *,
     bandwidth: float | None = None,
 ) -> float:
