@@ -2,22 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RL_CONFIG_DIR = PROJECT_ROOT / "config" / "forecaster"
-
-
-@dataclass
-class RewardWeights:
-    future_match: float = 0.7
-    novelty: float = 0.05
-    specificity: float = 0.1
-    lead_time: float = 0.15
-    duplicate_penalty: float = 0.0
-    popularity: float = 0.0  # Opt-in: weight for matched paper popularity in RL reward
 
 
 @dataclass
@@ -31,7 +21,6 @@ class RewardConfig:
     specificity_approach_weight: float = 0.4
     rank_decay: float = 0.15
     benchmark_score_weight: float = 0.0
-    weights: RewardWeights = field(default_factory=RewardWeights)
     # When set, completely replaces the composite reward with a single
     # eval metric for GRPO training: "soft" | "coverage" | "novelty".
     # Default "composite" keeps the legacy mixed reward.
@@ -170,23 +159,18 @@ _ConfigT = TypeVar("_ConfigT")
 
 def _load_model_config(name_or_path: str, model_class: type[_ConfigT]) -> _ConfigT:
     payload = _read_yaml(_resolve_rl_config_path(name_or_path))
-    if model_class is RewardConfig:
-        weights_payload = payload.get("weights", {}) or {}
-        if not isinstance(weights_payload, dict):
-            raise ValueError("reward weights must be a mapping")
-        remaining = {k: v for k, v in payload.items() if k != "weights"}
-        try:
-            # `model_class is RewardConfig` guarantees _ConfigT is RewardConfig,
-            # but mypy cannot narrow a TypeVar through an identity check.
-            return cast(
-                "_ConfigT",
-                RewardConfig(weights=RewardWeights(**weights_payload), **remaining),
-            )
-        except TypeError as exc:
-            raise ValueError(
-                f"Invalid config for {RewardConfig.__name__}: {exc}. "
-                f"Check the YAML file at {name_or_path!r} for unknown or missing keys."
-            ) from exc
+    if model_class is RewardConfig and "weights" in payload:
+        # This block named future_match / specificity / lead_time /
+        # duplicate_penalty, none of which the reward ever computed -- it was
+        # parsed and then never read, so tuning it changed nothing. Fail
+        # loudly rather than accept a knob that does not exist.
+        raise ValueError(
+            f"{name_or_path!r} still has a `weights:` block. It was a no-op: "
+            "none of its fields were ever read. The weights that actually "
+            "shape the realization reward live in config/forecaster/"
+            "realization.yaml (evidence_accuracy_weight, "
+            "operator_adherence_weight, coherence_weight). Delete the block."
+        )
     try:
         return model_class(**payload)
     except TypeError as exc:

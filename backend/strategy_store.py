@@ -39,6 +39,21 @@ def _path(strategy_id: str) -> Path:
     return STRATEGIES_DIR / f"{strategy_id}.json"
 
 
+def _coerce_float(value: object) -> float | None:
+    """Best-effort float, mirroring _coerce_int's tolerance of raw JSON.
+
+    Returns None rather than raising: a stored strategy carrying a junk
+    temperature used to make _read() swallow the exception and drop the
+    record entirely, so one bad field silently deleted a whole strategy.
+    """
+    if value is None:
+        return None
+    try:
+        return float(cast("SupportsFloat | str", value))
+    except (TypeError, ValueError):
+        return None
+
+
 def _coerce_int(value: object, default: int) -> int:
     try:
         # Deliberate duck-typing of an untyped JSON value; the cast keeps the
@@ -85,10 +100,9 @@ def _normalize_params(
         normalized_params.setdefault("model_name", DEFAULT_MODEL_NAME)
         normalized_params.setdefault("predictor_config", "predictor.yaml")
         normalized_params.setdefault("similarity_config", "similarity.yaml")
-        if raw_params.get("temperature") is not None:
-            normalized_params["temperature"] = float(
-                cast("SupportsFloat | str", raw_params.get("temperature"))
-            )
+        temperature = _coerce_float(raw_params.get("temperature"))
+        if temperature is not None:
+            normalized_params["temperature"] = temperature
 
     normalized_params.pop("model_id", None)
     normalized_params.pop("prompt_id", None)
@@ -381,8 +395,12 @@ def _sort_key(s: dict[str, Any]) -> tuple[float, str]:
     summary = _aggregate_topic_backtest_summary(s.get("topic_runs") or [])
     if summary is None:
         summary = (s.get("backtest_result") or {}).get("summary") or {}
-    hit = summary.get("avg_hit_at_k", -1)
-    return (hit, s.get("created_at", ""))
+    # Read straight from unvalidated JSON. Without coercion a single record
+    # storing avg_hit_at_k as a string makes strategies.sort() raise
+    # TypeError comparing str with float, taking down GET /api/strategies
+    # for every strategy, not just the malformed one.
+    hit = _coerce_float(summary.get("avg_hit_at_k"))
+    return (hit if hit is not None else -1.0, s.get("created_at", ""))
 
 
 # ── Public API ────────────────────────────────────────────────────────────────

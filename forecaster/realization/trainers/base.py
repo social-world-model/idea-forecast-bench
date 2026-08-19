@@ -5,7 +5,7 @@ import json
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 from forecaster.models import strict_runtime_manifest_contract
 from forecaster.realization.io import _write_json
@@ -45,20 +45,40 @@ class TrainerPreparedArtifacts:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-class RLTrainerRunner(ABC):
+#: The trainer-specific config dataclass a runner is parameterised by.
+TrainerConfigT = TypeVar("TrainerConfigT")
+
+
+class RLTrainerRunner(ABC, Generic[TrainerConfigT]):
+    """Base contract for an RL trainer backend.
+
+    The config keyword is part of the contract, not an optional extra. It used
+    to hide inside `**kwargs: Any`, which made every implementation that
+    actually required it an LSP violation and forced `# type: ignore[override]`
+    at each override site.
+    """
+
     trainer_name: str
     default_config_filename: str
     backend_name: str = "unknown"
 
     @abstractmethod
     def prepare(
-        self, common_context: PreparedRLContext, **kwargs: Any
+        self,
+        common_context: PreparedRLContext,
+        *,
+        trainer_config: TrainerConfigT,
+        **kwargs: Any,
     ) -> TrainerPreparedArtifacts:
         raise NotImplementedError
 
     @abstractmethod
     def train(
-        self, prepared_artifacts: TrainerPreparedArtifacts, **kwargs: Any
+        self,
+        prepared_artifacts: TrainerPreparedArtifacts,
+        *,
+        config: TrainerConfigT,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         raise NotImplementedError
 

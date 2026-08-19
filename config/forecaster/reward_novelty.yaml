@@ -10,9 +10,3 @@ benchmark_score_weight: 0.0
 mode: novelty
 judge_top_r: 10
 cluster_k: 5
-weights:
-  future_match: 0.0
-  novelty: 0.0
-  specificity: 0.0
-  lead_time: 0.0
-  duplicate_penalty: 0.0

@@ -11,15 +11,12 @@ from forecaster.realization.trainers.base import (
 from forecaster.realization.trl.runner import prepare_trl_artifacts, train_with_trl
 
 
-class GRPOTrainerRunner(RLTrainerRunner):
+class GRPOTrainerRunner(RLTrainerRunner[GRPOTrainConfig]):
     trainer_name = "grpo"
     default_config_filename = "grpo_train.yaml"
     backend_name = "trl"
 
-    # The base class declares `**kwargs: Any` as an open extension point, so
-    # naming a *required* keyword here narrows the inherited signature (LSP).
-    # Every call site does pass `trainer_config`, so this is safe in practice.
-    def prepare(  # type: ignore[override]
+    def prepare(
         self,
         common_context: PreparedRLContext,
         *,
@@ -32,9 +29,7 @@ class GRPOTrainerRunner(RLTrainerRunner):
             dry_run=trainer_config.dry_run,
         )
 
-    # Same inherited-signature narrowing as `prepare` above: `config` is a
-    # required keyword here but only part of `**kwargs` on the base class.
-    def train(  # type: ignore[override]
+    def train(
         self,
         prepared_artifacts: TrainerPreparedArtifacts,
         *,
