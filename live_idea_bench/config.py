@@ -278,8 +278,15 @@ def load_runtime_config(config_path: str | None = None) -> Config:
     payload = _read_yaml(_resolve_config_path(config_path))
     embedding_payload = payload.pop("embedding", {}) or {}
     topics_payload = payload.pop("topics", None)
+    topics_file = payload.pop("topics_file", None)
     if not isinstance(embedding_payload, dict):
         raise ValueError("embedding config must be a mapping")
+    if topics_payload is None and topics_file:
+        # Single source of truth for the taxonomy. An inline `topics:` block
+        # still wins if present, so existing configs keep working.
+        topics_payload = _read_yaml(_resolve_config_path(str(topics_file))).get(
+            "topics"
+        )
     return Config(
         model_name=str(payload.get("model_name", "gpt-4o")),
         max_context_chars=int(payload.get("max_context_chars", 15000)),
