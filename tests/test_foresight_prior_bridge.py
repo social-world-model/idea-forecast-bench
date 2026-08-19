@@ -1,4 +1,5 @@
 """Tests for the D_z ↔ prior SFT bridge + sample_z wrapper."""
+
 from __future__ import annotations
 
 import json
@@ -48,6 +49,7 @@ def _make_dz_with_memory(tmp_path: Path) -> Path:
     _write_jsonl(raw_in, raw_rows)
     # Need a corpus to populate memory_text; reuse a tiny PaperRecord map.
     from live_idea_bench.models import PaperRecord
+
     papers = {
         "ctx_1": PaperRecord(
             paper_id="ctx_1",
@@ -93,19 +95,28 @@ def test_save_sft_jsonl_round_trip(tmp_path: Path):
 def test_rows_missing_memory_text_are_skipped(tmp_path: Path):
     raw_in = tmp_path / "hindsight.jsonl"
     dz_out = tmp_path / "dz.jsonl"
-    _write_jsonl(raw_in, [
-        {
-            "topic_id": "rag",
-            "episode_id": "E1",
-            "cutoff_date": "2024-06-30",
-            "future_paper_id": "p_pos_1",
-            "future_paper_title": "p_pos_1",
-            "future_paper_published_date": "2024-08-15",
-            "innovation": {"base_direction": "rag", "operator": "extend", "gap": "x"},
-            "context_paper_count": 1,
-        }
-    ])
-    augment_hindsight_rows(raw_in, dz_out, papers_by_id=None)  # no corpus -> no memory_text
+    _write_jsonl(
+        raw_in,
+        [
+            {
+                "topic_id": "rag",
+                "episode_id": "E1",
+                "cutoff_date": "2024-06-30",
+                "future_paper_id": "p_pos_1",
+                "future_paper_title": "p_pos_1",
+                "future_paper_published_date": "2024-08-15",
+                "innovation": {
+                    "base_direction": "rag",
+                    "operator": "extend",
+                    "gap": "x",
+                },
+                "context_paper_count": 1,
+            }
+        ],
+    )
+    augment_hindsight_rows(
+        raw_in, dz_out, papers_by_id=None
+    )  # no corpus -> no memory_text
     samples = build_sft_samples_from_dz(dz_out, drop_unmappable=False)
     assert samples == []
 
@@ -115,7 +126,9 @@ def test_sample_z_uses_injected_sampler():
 
     captured: dict = {}
 
-    def fake_sampler(store: RawMemoryStore, n: int, temperature: float) -> list[Innovation]:
+    def fake_sampler(
+        store: RawMemoryStore, n: int, temperature: float
+    ) -> list[Innovation]:
         captured["memory"] = store.format_for_prompt()
         captured["n"] = n
         captured["t"] = temperature

@@ -6,6 +6,7 @@ This module converts the Phase-1 D_z (forecaster.foresight.dz) into those
 rows and exposes a thin `RawMemoryStore` so the existing sampler can be
 fed a precomputed `memory_text` string.
 """
+
 from __future__ import annotations
 
 import json
@@ -52,7 +53,9 @@ def dz_row_to_sft_sample(
         "target": json.dumps(target, ensure_ascii=False),
         "cutoff_month": str(row.get("cutoff_t", "") or "")[:7],
         "future_paper_id": str(row.get("source_future_id", "") or ""),
-        "future_paper_published_date": str(row.get("future_paper_published_date", "") or ""),
+        "future_paper_published_date": str(
+            row.get("future_paper_published_date", "") or ""
+        ),
         "memory_prompt": memory_text,
         "operator_closed": op_closed,
         "topic_id": str(row.get("topic_id", "") or ""),
@@ -76,7 +79,9 @@ def build_sft_samples_from_dz(
     skipped_no_memory = 0
     skipped_unmappable = 0
     for r in rows:
-        out = dz_row_to_sft_sample(r, inventory=inventory, drop_unmappable=drop_unmappable)
+        out = dz_row_to_sft_sample(
+            r, inventory=inventory, drop_unmappable=drop_unmappable
+        )
         if out is None:
             if not r.get("memory_text"):
                 skipped_no_memory += 1

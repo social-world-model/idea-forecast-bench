@@ -22,7 +22,9 @@ def test_strategy_crud_and_status(monkeypatch, tmp_path) -> None:
     assert list_resp.status_code == 200
     assert list_resp.get_json() == []
 
-    create_resp = client.post("/api/strategies", json={"strategy_name": "keyword_trend"})
+    create_resp = client.post(
+        "/api/strategies", json={"strategy_name": "keyword_trend"}
+    )
     assert create_resp.status_code in (200, 201)
     created = create_resp.get_json()
     strategy_id = created["id"]
@@ -78,6 +80,7 @@ def test_strategy_not_found_errors(monkeypatch, tmp_path) -> None:
 # Helpers for async status polling
 # ---------------------------------------------------------------------------
 
+
 def _poll_status(client, strategy_id: str, field: str, timeout: float = 5.0) -> str:
     """Poll /status until field reaches a terminal state or timeout expires.
 
@@ -132,27 +135,37 @@ def test_strategy_backtest_and_generate_async_status(monkeypatch, tmp_path) -> N
 
     # --- monkeypatch run_backtest_sync to a no-op that immediately marks done ---
     def _fake_backtest(strategy_id: str) -> None:
-        _write_direct(strategy_id, {
-            "backtest_status": "done",
-            "backtest_result": {"summary": {"avg_hit_at_k": 0.5, "windows": 2}, "windows": []},
-        })
+        _write_direct(
+            strategy_id,
+            {
+                "backtest_status": "done",
+                "backtest_result": {
+                    "summary": {"avg_hit_at_k": 0.5, "windows": 2},
+                    "windows": [],
+                },
+            },
+        )
 
     monkeypatch.setattr(strategy_store, "run_backtest_sync", _fake_backtest)
     # also patch the imported name inside app
     import backend.app as _app_mod
+
     monkeypatch.setattr(_app_mod, "run_backtest_sync", _fake_backtest)
 
     # --- monkeypatch run_generation_sync to a no-op that immediately marks done ---
     def _fake_generation(strategy_id: str, cutoff_date=None) -> None:
         resolved_cutoff_date = cutoff_date or "2024-06-01"
-        _write_direct(strategy_id, {
-            "generation_status": "done",
-            "generation": {
-                "cutoff_date": resolved_cutoff_date,
-                "cutoff_month": resolved_cutoff_date[:7],
-                "predictions": [{"idea": "test"}],
+        _write_direct(
+            strategy_id,
+            {
+                "generation_status": "done",
+                "generation": {
+                    "cutoff_date": resolved_cutoff_date,
+                    "cutoff_month": resolved_cutoff_date[:7],
+                    "predictions": [{"idea": "test"}],
+                },
             },
-        })
+        )
 
     monkeypatch.setattr(strategy_store, "run_generation_sync", _fake_generation)
     monkeypatch.setattr(_app_mod, "run_generation_sync", _fake_generation)
@@ -171,7 +184,9 @@ def test_strategy_backtest_and_generate_async_status(monkeypatch, tmp_path) -> N
     # Status race check: immediately after trigger, must NOT be 'pending'.
     # Guard against transient non-200 (concurrent file write by background thread).
     _imm_bt = client.get(f"/api/strategies/{sid}/status")
-    if _imm_bt.status_code == 200 and "backtest_status" in (_imm_bt_data := _imm_bt.get_json()):
+    if _imm_bt.status_code == 200 and "backtest_status" in (
+        _imm_bt_data := _imm_bt.get_json()
+    ):
         assert _imm_bt_data["backtest_status"] != "pending", (
             f"Race: backtest_status was still 'pending' right after trigger; "
             f"got {_imm_bt_data['backtest_status']}"
@@ -185,13 +200,17 @@ def test_strategy_backtest_and_generate_async_status(monkeypatch, tmp_path) -> N
     assert record["backtest_status"] in ("done", "failed")
 
     # Trigger generation
-    gen_resp = client.post(f"/api/strategies/{sid}/generate", json={"cutoff_date": "2024-06-01"})
+    gen_resp = client.post(
+        f"/api/strategies/{sid}/generate", json={"cutoff_date": "2024-06-01"}
+    )
     assert gen_resp.status_code in (200, 202)
 
     # Status race check: immediately after trigger, must NOT be 'pending'.
     # Guard against transient non-200 (concurrent file write by background thread).
     _imm_gen = client.get(f"/api/strategies/{sid}/status")
-    if _imm_gen.status_code == 200 and "generation_status" in (_imm_gen_data := _imm_gen.get_json()):
+    if _imm_gen.status_code == 200 and "generation_status" in (
+        _imm_gen_data := _imm_gen.get_json()
+    ):
         assert _imm_gen_data["generation_status"] != "pending", (
             f"Race: generation_status was still 'pending' right after trigger; "
             f"got {_imm_gen_data['generation_status']}"
@@ -203,6 +222,7 @@ def test_strategy_backtest_and_generate_async_status(monkeypatch, tmp_path) -> N
     # Verify generation payload persisted
     record2 = client.get(f"/api/strategies/{sid}").get_json()
     assert record2["generation_status"] in ("done", "failed")
+
 
 def test_strategy_generation_failure_persists_error(monkeypatch, tmp_path) -> None:
     """
@@ -225,13 +245,17 @@ def test_strategy_generation_failure_persists_error(monkeypatch, tmp_path) -> No
 
     # --- monkeypatch run_generation_sync to always fail ---
     def _failing_generation(strategy_id: str, cutoff_date=None) -> None:
-        _write_direct(strategy_id, {
-            "generation_status": "failed",
-            "generation_error": "intentional test failure",
-        })
+        _write_direct(
+            strategy_id,
+            {
+                "generation_status": "failed",
+                "generation_error": "intentional test failure",
+            },
+        )
 
     monkeypatch.setattr(strategy_store, "run_generation_sync", _failing_generation)
     import backend.app as _app_mod
+
     monkeypatch.setattr(_app_mod, "run_generation_sync", _failing_generation)
 
     client = app_module.app.test_client()
@@ -239,7 +263,9 @@ def test_strategy_generation_failure_persists_error(monkeypatch, tmp_path) -> No
     r = client.post("/api/strategies", json={"strategy_name": "keyword_trend"})
     sid = r.get_json()["id"]
 
-    gen_resp = client.post(f"/api/strategies/{sid}/generate", json={"cutoff_date": "2024-06-01"})
+    gen_resp = client.post(
+        f"/api/strategies/{sid}/generate", json={"cutoff_date": "2024-06-01"}
+    )
     assert gen_resp.status_code in (200, 202)
 
     gen_status = _poll_status(client, sid, "generation_status", timeout=5.0)
@@ -249,6 +275,7 @@ def test_strategy_generation_failure_persists_error(monkeypatch, tmp_path) -> No
     assert record["generation_status"] == "failed"
     assert "generation_error" in record
     assert record["generation_error"], "generation_error should be a non-empty string"
+
 
 def test_strategy_backtest_not_found(monkeypatch, tmp_path) -> None:
     """POST /backtest on missing strategy_id returns 404."""
@@ -280,7 +307,9 @@ def test_strategy_generate_requires_cutoff_date(monkeypatch, tmp_path) -> None:
     _isolate_strategy_store(monkeypatch, tmp_path)
     client = app_module.app.test_client()
 
-    created = client.post("/api/strategies", json={"strategy_name": "keyword_trend"}).get_json()
+    created = client.post(
+        "/api/strategies", json={"strategy_name": "keyword_trend"}
+    ).get_json()
     sid = created["id"]
     resp = client.post(f"/api/strategies/{sid}/generate", json={})
     assert resp.status_code == 400
@@ -303,36 +332,69 @@ def test_run_generation_sync_real_worker(monkeypatch, tmp_path) -> None:
 
     # Build small paper fixtures (3 papers strictly before cutoff, 1 after)
     train_fixture = [
-        PaperRecord(paper_id="p1", title="A", month="2024-04", summary="s1",
-                    keywords=["attention", "transformer"], source_path="/fake/p1.md", published_date="2024-04-10"),
-        PaperRecord(paper_id="p2", title="B", month="2024-05", summary="s2",
-                    keywords=["attention", "diffusion"], source_path="/fake/p2.md", published_date="2024-05-12"),
-        PaperRecord(paper_id="p3", title="C", month="2024-06", summary="s3",
-                    keywords=["diffusion", "rl"], source_path="/fake/p3.md", published_date="2024-06-20"),
+        PaperRecord(
+            paper_id="p1",
+            title="A",
+            month="2024-04",
+            summary="s1",
+            keywords=["attention", "transformer"],
+            source_path="/fake/p1.md",
+            published_date="2024-04-10",
+        ),
+        PaperRecord(
+            paper_id="p2",
+            title="B",
+            month="2024-05",
+            summary="s2",
+            keywords=["attention", "diffusion"],
+            source_path="/fake/p2.md",
+            published_date="2024-05-12",
+        ),
+        PaperRecord(
+            paper_id="p3",
+            title="C",
+            month="2024-06",
+            summary="s3",
+            keywords=["diffusion", "rl"],
+            source_path="/fake/p3.md",
+            published_date="2024-06-20",
+        ),
     ]
     future_fixture = [
-        PaperRecord(paper_id="p4", title="D", month="2024-07", summary="s4",
-                    keywords=["leaked_future_term"], source_path="/fake/p4.md", published_date="2024-07-05"),
+        PaperRecord(
+            paper_id="p4",
+            title="D",
+            month="2024-07",
+            summary="s4",
+            keywords=["leaked_future_term"],
+            source_path="/fake/p4.md",
+            published_date="2024-07-05",
+        ),
     ]
     all_papers = train_fixture + future_fixture
 
     # Monkeypatch _load_papers and _make_strategy_obj to use fixtures
     monkeypatch.setattr(strategy_store, "_load_papers", lambda s: all_papers)
     monkeypatch.setattr(
-        strategy_store, "_make_strategy_obj",
+        strategy_store,
+        "_make_strategy_obj",
         lambda s: KeywordTrendStrategy(recent_months=3, min_keyword_freq=1),
     )
     monkeypatch.setattr(
         strategy_store,
         "load_topics",
-        lambda: [TopicDefinition(id="diffusion", name="Diffusion", keywords=["diffusion"])],
+        lambda: [
+            TopicDefinition(id="diffusion", name="Diffusion", keywords=["diffusion"])
+        ],
     )
 
     # Create a strategy record in the isolated store
-    s = strategy_store.create_strategy({
-        "strategy_name": "keyword_trend",
-        "config": {"top_k": 3, "end_month": "2024-06"},
-    })
+    s = strategy_store.create_strategy(
+        {
+            "strategy_name": "keyword_trend",
+            "config": {"top_k": 3, "end_month": "2024-06"},
+        }
+    )
     sid = s["id"]
 
     # Run synchronously (not via thread) to simplify test
@@ -395,8 +457,12 @@ def test_strategy_create_with_predictor_params_persisted(monkeypatch, tmp_path) 
     detail = client.get(f"/api/strategies/{sid}").get_json()
     params = detail["params"]
     assert params["model_name"] == "gpt-4o-mini", f"model_name lost: {params}"
-    assert params["predictor_config"] == "predictor.yaml", f"predictor_config lost: {params}"
-    assert params["similarity_config"] == "similarity.yaml", f"similarity_config lost: {params}"
+    assert params["predictor_config"] == "predictor.yaml", (
+        f"predictor_config lost: {params}"
+    )
+    assert params["similarity_config"] == "similarity.yaml", (
+        f"similarity_config lost: {params}"
+    )
 
     # Status defaults must be pending
     status = client.get(f"/api/strategies/{sid}/status").get_json()
@@ -439,7 +505,9 @@ def test_strategy_delete_returns_204(monkeypatch, tmp_path) -> None:
     del_resp = client.delete(f"/api/strategies/{sid}")
     assert del_resp.status_code == 204, f"Expected 204, got {del_resp.status_code}"
     # Body must be empty for 204
-    assert del_resp.data == b"", f"204 response must have empty body, got: {del_resp.data!r}"
+    assert del_resp.data == b"", (
+        f"204 response must have empty body, got: {del_resp.data!r}"
+    )
 
     # Strategy must no longer be readable
     get_resp = client.get(f"/api/strategies/{sid}")
@@ -461,7 +529,9 @@ def test_strategy_list_returns_raw_array_not_wrapped(monkeypatch, tmp_path) -> N
     r = client.get("/api/strategies")
     assert r.status_code == 200
     data = r.get_json()
-    assert isinstance(data, list), f"Expected raw list, got: {type(data).__name__}: {data!r}"
+    assert isinstance(data, list), (
+        f"Expected raw list, got: {type(data).__name__}: {data!r}"
+    )
 
     # Create one and verify list still raw
     client.post("/api/strategies", json={"strategy_name": "keyword_trend"})
@@ -485,7 +555,14 @@ def test_strategy_create_config_defaults_present(monkeypatch, tmp_path) -> None:
     assert r.status_code in (200, 201)
     created = r.get_json()
 
-    required_config_keys = {"top_k", "horizon_months", "min_train_papers", "start_month", "end_month", "data_dir"}
+    required_config_keys = {
+        "top_k",
+        "horizon_months",
+        "min_train_papers",
+        "start_month",
+        "end_month",
+        "data_dir",
+    }
     missing = required_config_keys - set(created.get("config", {}).keys())
     assert not missing, f"Created strategy config missing required keys: {missing}"
 
@@ -514,6 +591,7 @@ def test_strategy_backtest_status_field_in_response(monkeypatch, tmp_path) -> No
         captured.append(strategy_id)
 
     import backend.app as _app_mod
+
     monkeypatch.setattr(strategy_store, "run_backtest_sync", _fake_backtest)
     monkeypatch.setattr(_app_mod, "run_backtest_sync", _fake_backtest)
 
@@ -526,7 +604,9 @@ def test_strategy_backtest_status_field_in_response(monkeypatch, tmp_path) -> No
     body = bt_resp.get_json()
     assert "backtest_status" in body, f"Response missing 'backtest_status': {body}"
     # Status is set to 'running' synchronously by the route before thread spawn
-    assert body["backtest_status"] == "running", f"Expected 'running', got: {body['backtest_status']}"
+    assert body["backtest_status"] == "running", (
+        f"Expected 'running', got: {body['backtest_status']}"
+    )
     assert body["id"] == sid
     # Thread should be triggered
     import time
@@ -541,7 +621,9 @@ def test_strategy_response_includes_daily_fields(monkeypatch, tmp_path) -> None:
     _isolate_strategy_store(monkeypatch, tmp_path)
     client = app_module.app.test_client()
 
-    created = client.post("/api/strategies", json={"strategy_name": "keyword_trend"}).get_json()
+    created = client.post(
+        "/api/strategies", json={"strategy_name": "keyword_trend"}
+    ).get_json()
     sid = created["id"]
 
     detail = client.get(f"/api/strategies/{sid}").get_json()

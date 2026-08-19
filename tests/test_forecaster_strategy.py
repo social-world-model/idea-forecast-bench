@@ -1,4 +1,5 @@
 """Tests for ForecasterStrategy (Phase 6)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -64,8 +65,13 @@ class TestForecasterStrategyGenerate:
         train_papers = [_paper("p1", "2024-05"), _paper("p2", "2024-05")]
         proposals = [_make_scored_proposal(rank=1), _make_scored_proposal(rank=2)]
 
-        with self._mock_run_joint_inference(proposals), \
-             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")):
+        with (
+            self._mock_run_joint_inference(proposals),
+            patch(
+                "live_idea_bench.llm.create_client",
+                return_value=(MagicMock(), "gpt-4o"),
+            ),
+        ):
             strategy = ForecasterStrategy()
             results = strategy.generate(train_papers, "2024-06", top_k=3)
 
@@ -77,8 +83,13 @@ class TestForecasterStrategyGenerate:
         train_papers = [_paper(f"p{i}", "2024-05") for i in range(5)]
         proposals = [_make_scored_proposal(rank=i + 1) for i in range(10)]
 
-        with self._mock_run_joint_inference(proposals), \
-             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")):
+        with (
+            self._mock_run_joint_inference(proposals),
+            patch(
+                "live_idea_bench.llm.create_client",
+                return_value=(MagicMock(), "gpt-4o"),
+            ),
+        ):
             strategy = ForecasterStrategy()
             results = strategy.generate(train_papers, "2024-06", top_k=3)
 
@@ -89,8 +100,13 @@ class TestForecasterStrategyGenerate:
         train_papers = [_paper("p1", "2024-05"), _paper("p2", "2024-05")]
         proposals = [_make_scored_proposal(rank=i + 1) for i in range(3)]
 
-        with self._mock_run_joint_inference(proposals), \
-             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")):
+        with (
+            self._mock_run_joint_inference(proposals),
+            patch(
+                "live_idea_bench.llm.create_client",
+                return_value=(MagicMock(), "gpt-4o"),
+            ),
+        ):
             strategy = ForecasterStrategy()
             results = strategy.generate(train_papers, "2024-06", top_k=5)
 
@@ -113,12 +129,26 @@ class TestForecasterStrategyGenerate:
 
         captured_innovations: list = []
 
-        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
+        def _fake_joint_inference(
+            innovations,
+            papers,
+            memory_store,
+            llm_client,
+            model,
+            inference_config,
+            realization_config,
+            **kwargs,
+        ):  # type: ignore[no-untyped-def]
             captured_innovations.extend(innovations)
             return []
 
-        with patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference), \
-             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")):
+        with (
+            patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference),
+            patch(
+                "live_idea_bench.llm.create_client",
+                return_value=(MagicMock(), "gpt-4o"),
+            ),
+        ):
             strategy = ForecasterStrategy(prior_checkpoint=None)
             strategy.generate(train_papers, "2024-06", top_k=3)
 
@@ -136,12 +166,26 @@ class TestForecasterStrategyGenerate:
 
         captured_innovations: list = []
 
-        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
+        def _fake_joint_inference(
+            innovations,
+            papers,
+            memory_store,
+            llm_client,
+            model,
+            inference_config,
+            realization_config,
+            **kwargs,
+        ):  # type: ignore[no-untyped-def]
             captured_innovations.extend(innovations)
             return []
 
-        with patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference), \
-             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")):
+        with (
+            patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference),
+            patch(
+                "live_idea_bench.llm.create_client",
+                return_value=(MagicMock(), "gpt-4o"),
+            ),
+        ):
             strategy = ForecasterStrategy(prior_checkpoint=None)
             strategy.generate(train_papers, "2024-06", top_k=top_k)
 
@@ -154,7 +198,9 @@ class TestForecasterStrategyInit:
         strategy = ForecasterStrategy()
         assert strategy.name == "forecaster"
         # These should default to None/empty-string without raising
-        assert strategy.prior_checkpoint is None or isinstance(strategy.prior_checkpoint, str)
+        assert strategy.prior_checkpoint is None or isinstance(
+            strategy.prior_checkpoint, str
+        )
 
     def test_init_with_model_name(self) -> None:
         """Should accept model_name kwarg."""
@@ -185,14 +231,31 @@ class TestForecasterStrategyPriorWiring:
 
         captured_innovations: list = []
 
-        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
+        def _fake_joint_inference(
+            innovations,
+            papers,
+            memory_store,
+            llm_client,
+            model,
+            inference_config,
+            realization_config,
+            **kwargs,
+        ):  # type: ignore[no-untyped-def]
             captured_innovations.extend(innovations)
             return proposals
 
         # Patch at the source so the ``from forecaster.prior.sampler import`` picks it up
-        with patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference), \
-             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")), \
-             patch("forecaster.prior.sampler.sample_innovations", return_value=fake_innovations):
+        with (
+            patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference),
+            patch(
+                "live_idea_bench.llm.create_client",
+                return_value=(MagicMock(), "gpt-4o"),
+            ),
+            patch(
+                "forecaster.prior.sampler.sample_innovations",
+                return_value=fake_innovations,
+            ),
+        ):
             strategy = ForecasterStrategy(prior_checkpoint=str(tmp_path))
             strategy.generate(train_papers, "2024-06", top_k=3)
 
@@ -205,13 +268,30 @@ class TestForecasterStrategyPriorWiring:
         train_papers = [_paper("p1", "2024-05")]
         captured_kwargs: dict = {}
 
-        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
+        def _fake_joint_inference(
+            innovations,
+            papers,
+            memory_store,
+            llm_client,
+            model,
+            inference_config,
+            realization_config,
+            **kwargs,
+        ):  # type: ignore[no-untyped-def]
             captured_kwargs.update(kwargs)
             return [_make_scored_proposal(rank=1)]
 
-        with patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference), \
-             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")), \
-             patch("forecaster.prior.sampler.sample_innovations", return_value=[_make_scored_proposal().innovation]):
+        with (
+            patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference),
+            patch(
+                "live_idea_bench.llm.create_client",
+                return_value=(MagicMock(), "gpt-4o"),
+            ),
+            patch(
+                "forecaster.prior.sampler.sample_innovations",
+                return_value=[_make_scored_proposal().innovation],
+            ),
+        ):
             strategy = ForecasterStrategy(prior_checkpoint=str(tmp_path))
             strategy.generate(train_papers, "2024-06", top_k=3)
 
@@ -226,35 +306,69 @@ class TestForecasterStrategyPriorWiring:
 
         captured_innovations: list = []
 
-        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
+        def _fake_joint_inference(
+            innovations,
+            papers,
+            memory_store,
+            llm_client,
+            model,
+            inference_config,
+            realization_config,
+            **kwargs,
+        ):  # type: ignore[no-untyped-def]
             captured_innovations.extend(innovations)
             return proposals
 
-        with patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference), \
-             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")), \
-             patch("forecaster.prior.sampler.sample_innovations", side_effect=RuntimeError("model load failed")):
+        with (
+            patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference),
+            patch(
+                "live_idea_bench.llm.create_client",
+                return_value=(MagicMock(), "gpt-4o"),
+            ),
+            patch(
+                "forecaster.prior.sampler.sample_innovations",
+                side_effect=RuntimeError("model load failed"),
+            ),
+        ):
             strategy = ForecasterStrategy(prior_checkpoint=str(tmp_path))
             strategy.generate(train_papers, "2024-06", top_k=3)
 
         # Should still have produced heuristic innovations (no crash)
         assert len(captured_innovations) >= 1
         from forecaster.models import Innovation
+
         for inn in captured_innovations:
             assert isinstance(inn, Innovation)
 
     def test_generate_uses_heuristic_when_no_checkpoint(self) -> None:
         """When prior_checkpoint is None, heuristic innovations should be used."""
-        train_papers = [_paper("p1", "2024-05", keywords=["attention", "transformers", "nlp"])]
+        train_papers = [
+            _paper("p1", "2024-05", keywords=["attention", "transformers", "nlp"])
+        ]
         proposals = [_make_scored_proposal(rank=1)]
 
         captured_innovations: list = []
 
-        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
+        def _fake_joint_inference(
+            innovations,
+            papers,
+            memory_store,
+            llm_client,
+            model,
+            inference_config,
+            realization_config,
+            **kwargs,
+        ):  # type: ignore[no-untyped-def]
             captured_innovations.extend(innovations)
             return proposals
 
-        with patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference), \
-             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")):
+        with (
+            patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference),
+            patch(
+                "live_idea_bench.llm.create_client",
+                return_value=(MagicMock(), "gpt-4o"),
+            ),
+        ):
             strategy = ForecasterStrategy(prior_checkpoint=None)
             strategy.generate(train_papers, "2024-06", top_k=3)
 
@@ -271,7 +385,9 @@ class TestForecasterStrategyMemoryConditioning:
             _paper("p2", "2024-02", keywords=["diffusion", "generation"]),
         ]
         strategy = ForecasterStrategy()
-        memory_store = strategy._load_memory_store(train_papers=train_papers, cutoff_month="2024-03")
+        memory_store = strategy._load_memory_store(
+            train_papers=train_papers, cutoff_month="2024-03"
+        )
         assert memory_store.size > 0
 
     def test_default_memory_has_entries_matching_papers(self) -> None:
@@ -280,7 +396,9 @@ class TestForecasterStrategyMemoryConditioning:
             _paper("p1", "2024-01", keywords=["neural", "network", "attention"]),
         ]
         strategy = ForecasterStrategy()
-        memory_store = strategy._load_memory_store(train_papers=train_papers, cutoff_month="2024-02")
+        memory_store = strategy._load_memory_store(
+            train_papers=train_papers, cutoff_month="2024-02"
+        )
         entries = memory_store.inventory.entries
         assert len(entries) >= 1
         directions = [e.innovation.base_direction for e in entries]
@@ -289,16 +407,21 @@ class TestForecasterStrategyMemoryConditioning:
     def test_explicit_memory_path_takes_precedence(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
         """When memory_path points to a valid file, it is loaded instead of built."""
         from forecaster.prior.memory import MemoryStore
+
         memory = MemoryStore.empty("2024-01")
         memory_file = tmp_path / "mem.json"
         memory.persist(memory_file)
 
         train_papers = [_paper("p1", "2024-01")]
         strategy = ForecasterStrategy(memory_path=str(memory_file))
-        loaded = strategy._load_memory_store(train_papers=train_papers, cutoff_month="2024-03")
+        loaded = strategy._load_memory_store(
+            train_papers=train_papers, cutoff_month="2024-03"
+        )
         assert loaded.size == 0
 
-    def test_memory_chronology_warning_when_newer_than_cutoff(self, tmp_path, caplog) -> None:  # type: ignore[no-untyped-def]
+    def test_memory_chronology_warning_when_newer_than_cutoff(
+        self, tmp_path, caplog
+    ) -> None:  # type: ignore[no-untyped-def]
         """Warning emitted when loaded memory is newer than inference cutoff."""
         import logging
 
@@ -327,12 +450,26 @@ class TestForecasterStrategyRealizationCheckpoint:
 
         captured_kwargs: dict = {}
 
-        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
+        def _fake_joint_inference(
+            innovations,
+            papers,
+            memory_store,
+            llm_client,
+            model,
+            inference_config,
+            realization_config,
+            **kwargs,
+        ):  # type: ignore[no-untyped-def]
             captured_kwargs.update(kwargs)
             return proposals
 
-        with patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference), \
-             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")):
+        with (
+            patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference),
+            patch(
+                "live_idea_bench.llm.create_client",
+                return_value=(MagicMock(), "gpt-4o"),
+            ),
+        ):
             strategy = ForecasterStrategy(realization_checkpoint=str(ckpt_dir))
             strategy.generate(train_papers, "2024-06", top_k=3)
 
@@ -344,12 +481,26 @@ class TestForecasterStrategyRealizationCheckpoint:
         proposals = [_make_scored_proposal(1)]
         captured_kwargs: dict = {}
 
-        def _fake_joint_inference(innovations, papers, memory_store, llm_client, model, inference_config, realization_config, **kwargs):  # type: ignore[no-untyped-def]
+        def _fake_joint_inference(
+            innovations,
+            papers,
+            memory_store,
+            llm_client,
+            model,
+            inference_config,
+            realization_config,
+            **kwargs,
+        ):  # type: ignore[no-untyped-def]
             captured_kwargs.update(kwargs)
             return proposals
 
-        with patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference), \
-             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")):
+        with (
+            patch(_PATCH_JOINT_INFERENCE, side_effect=_fake_joint_inference),
+            patch(
+                "live_idea_bench.llm.create_client",
+                return_value=(MagicMock(), "gpt-4o"),
+            ),
+        ):
             strategy = ForecasterStrategy(realization_checkpoint=None)
             strategy.generate(train_papers, "2024-06", top_k=3)
 
@@ -362,8 +513,13 @@ class TestForecasterStrategyRuntimeBoundary:
         train_papers = [_paper("p1", "2024-05")]
         proposals = [_make_scored_proposal(rank=1)]
 
-        with patch(_PATCH_JOINT_INFERENCE, return_value=proposals), \
-             patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")):
+        with (
+            patch(_PATCH_JOINT_INFERENCE, return_value=proposals),
+            patch(
+                "live_idea_bench.llm.create_client",
+                return_value=(MagicMock(), "gpt-4o"),
+            ),
+        ):
             strategy = ForecasterStrategy()
             results = strategy.generate(train_papers, "2024-06", top_k=3)
 
@@ -372,7 +528,9 @@ class TestForecasterStrategyRuntimeBoundary:
         assert metadata["effective_runtime_mode"] == "demo"
         assert metadata["fallback_events"]
 
-    def test_generate_strict_mode_does_not_swallow_prior_sampling_errors(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    def test_generate_strict_mode_does_not_swallow_prior_sampling_errors(
+        self, tmp_path
+    ) -> None:  # type: ignore[no-untyped-def]
         """When all strict artifacts are present, prior failures should raise instead of silently falling back."""
         from forecaster.prior.memory import MemoryStore
 
@@ -383,8 +541,16 @@ class TestForecasterStrategyRuntimeBoundary:
         prior_dir.mkdir()
         realization_dir.mkdir()
 
-        with patch("live_idea_bench.llm.create_client", return_value=(MagicMock(), "gpt-4o")), \
-             patch("forecaster.prior.sampler.sample_innovations", side_effect=RuntimeError("broken prior")):
+        with (
+            patch(
+                "live_idea_bench.llm.create_client",
+                return_value=(MagicMock(), "gpt-4o"),
+            ),
+            patch(
+                "forecaster.prior.sampler.sample_innovations",
+                side_effect=RuntimeError("broken prior"),
+            ),
+        ):
             strategy = ForecasterStrategy(
                 memory_path=str(memory_path),
                 prior_checkpoint=str(prior_dir),

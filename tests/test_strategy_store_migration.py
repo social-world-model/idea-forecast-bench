@@ -13,7 +13,9 @@ def _isolate_strategy_store(monkeypatch, tmp_path: Path) -> Path:
     return strategies_dir
 
 
-def test_prompt_llm_params_round_trip_migrates_to_predictor_mainline(monkeypatch, tmp_path: Path) -> None:
+def test_prompt_llm_params_round_trip_migrates_to_predictor_mainline(
+    monkeypatch, tmp_path: Path
+) -> None:
     from backend import strategy_store
 
     _isolate_strategy_store(monkeypatch, tmp_path)
@@ -79,7 +81,9 @@ def test_legacy_keyword_strategy_missing_prompt_model_keys_still_generates(
     monkeypatch.setattr(
         strategy_store,
         "load_topics",
-        lambda: [TopicDefinition(id="optimizer", name="Optimizer", keywords=["optimizer"])],
+        lambda: [
+            TopicDefinition(id="optimizer", name="Optimizer", keywords=["optimizer"])
+        ],
     )
 
     loaded = strategy_store.get_strategy(legacy_id)

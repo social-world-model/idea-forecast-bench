@@ -75,7 +75,11 @@ class _FileLock:
     def _clear_if_stale(self) -> bool:
         pid, created_at = self._read_metadata()
         now = datetime.now(timezone.utc)
-        expired = created_at is None or (now - created_at.astimezone(timezone.utc)).total_seconds() >= _lock_ttl_seconds()
+        expired = (
+            created_at is None
+            or (now - created_at.astimezone(timezone.utc)).total_seconds()
+            >= _lock_ttl_seconds()
+        )
         process_dead = pid is None or not self._process_alive(pid)
         if not expired and not process_dead:
             return False
@@ -95,11 +99,15 @@ class _FileLock:
                 break
             except FileExistsError as exc:
                 if not self._clear_if_stale():
-                    raise PipelineAlreadyRunningError(f"Lock exists: {self.path}") from exc
+                    raise PipelineAlreadyRunningError(
+                        f"Lock exists: {self.path}"
+                    ) from exc
         else:
             raise PipelineAlreadyRunningError(f"Lock exists: {self.path}")
 
-        payload = f"pid={os.getpid()} created_at={datetime.now(timezone.utc).isoformat()}\n"
+        payload = (
+            f"pid={os.getpid()} created_at={datetime.now(timezone.utc).isoformat()}\n"
+        )
         os.write(self.fd, payload.encode("utf-8"))
         return self
 
@@ -123,7 +131,9 @@ def _latest_month_from_data_dir(data_dir: Path) -> str | None:
 
 
 def _fallback_backtest_score(strategy: dict[str, Any]) -> float | None:
-    summary = strategy_store._aggregate_topic_backtest_summary(strategy.get("topic_runs") or [])
+    summary = strategy_store._aggregate_topic_backtest_summary(
+        strategy.get("topic_runs") or []
+    )
     if summary is None:
         summary = (strategy.get("backtest_result") or {}).get("summary") or {}
     score = summary.get("avg_hit_at_k")
@@ -135,7 +145,9 @@ def _fallback_backtest_score(strategy: dict[str, Any]) -> float | None:
         return None
 
 
-def _ensure_strategy_end_month(strategy: dict[str, Any], latest_month: str | None) -> dict[str, Any]:
+def _ensure_strategy_end_month(
+    strategy: dict[str, Any], latest_month: str | None
+) -> dict[str, Any]:
     if not latest_month:
         return strategy
 
@@ -191,7 +203,11 @@ def run_daily_pipeline(
     with _FileLock(lock_path):
         ingest_result = ingest_latest_arxiv_papers(data_dir=data_dir, now=utc_now)
         raw_data_dir = str(ingest_result.get("data_dir") or "").strip()
-        resolved_data_dir = Path(raw_data_dir).expanduser() if raw_data_dir else strategy_store.DEFAULT_DATA_DIR
+        resolved_data_dir = (
+            Path(raw_data_dir).expanduser()
+            if raw_data_dir
+            else strategy_store.DEFAULT_DATA_DIR
+        )
         latest_month = _latest_month_from_data_dir(resolved_data_dir)
         new_paper_ids = _extract_new_paper_ids(ingest_result)
 
@@ -226,7 +242,9 @@ def run_daily_pipeline(
             if latest_month:
                 strategy_store.run_generation_sync(strategy_id, cutoff_date=cutoff_date)
                 after_generation = strategy_store.get_strategy(strategy_id) or {}
-                generation_status = str(after_generation.get("generation_status") or "unknown")
+                generation_status = str(
+                    after_generation.get("generation_status") or "unknown"
+                )
                 generation_error = after_generation.get("generation_error")
 
             final = strategy_store.get_strategy(strategy_id) or {}

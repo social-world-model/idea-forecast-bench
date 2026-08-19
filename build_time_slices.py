@@ -41,11 +41,7 @@ def load_papers(input_jsonl: Path) -> list[Paper]:
 
 
 def ids_in_range(papers: list[Paper], start_idx: int, end_idx: int) -> list[str]:
-    return [
-        p.paper_id
-        for p in papers
-        if start_idx <= p.month_idx <= end_idx
-    ]
+    return [p.paper_id for p in papers if start_idx <= p.month_idx <= end_idx]
 
 
 def month_bounds(papers: list[Paper]) -> tuple[int, int]:

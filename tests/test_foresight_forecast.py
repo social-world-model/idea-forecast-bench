@@ -1,4 +1,5 @@
 """Tests for the Phase-7 forecast() composer."""
+
 from __future__ import annotations
 
 import pytest
@@ -13,9 +14,14 @@ from live_idea_bench.models import PaperRecord
 
 def _paper(pid: str, date: str, topic: str) -> PaperRecord:
     return PaperRecord(
-        paper_id=pid, title=f"Title {pid}", month=date[:7],
-        summary=f"Summary about {topic} work.", keywords=[topic],
-        source_path="", published_date=date, metadata={"topic_id": topic},
+        paper_id=pid,
+        title=f"Title {pid}",
+        month=date[:7],
+        summary=f"Summary about {topic} work.",
+        keywords=[topic],
+        source_path="",
+        published_date=date,
+        metadata={"topic_id": topic},
     )
 
 
@@ -48,10 +54,15 @@ def test_forecast_returns_top_k_ranked():
         return 1.0, bonus.get(z.operator, 0.1)
 
     out = forecast(
-        papers, cutoff_t="2024-06-30",
-        n_candidates=4, top_k=2,
-        sampler=sampler, realizer=realizer, scorer=scorer,
-        prior_weight=0.0, realization_weight=1.0,
+        papers,
+        cutoff_t="2024-06-30",
+        n_candidates=4,
+        top_k=2,
+        sampler=sampler,
+        realizer=realizer,
+        scorer=scorer,
+        prior_weight=0.0,
+        realization_weight=1.0,
     )
     assert [s.rank for s in out] == [1, 2]
     assert out[0].innovation.operator == "compose"  # highest real_score
@@ -64,9 +75,7 @@ def test_forecast_deduplicates_near_identical_proposals():
     papers = [_paper("p1", "2024-04-15", "rag")]
 
     def sampler(memory: str, n: int, t: float):
-        return [
-            Innovation("rag", "extend", f"variant_{i}") for i in range(4)
-        ]
+        return [Innovation("rag", "extend", f"variant_{i}") for i in range(4)]
 
     def realizer(memory: str, z: Innovation, papers):
         # Almost identical proposal text — should dedupe down to one.
@@ -76,9 +85,12 @@ def test_forecast_deduplicates_near_identical_proposals():
         )
 
     out = forecast(
-        papers, cutoff_t="2024-06-30",
-        n_candidates=4, top_k=4,
-        sampler=sampler, realizer=realizer,
+        papers,
+        cutoff_t="2024-06-30",
+        n_candidates=4,
+        top_k=4,
+        sampler=sampler,
+        realizer=realizer,
         dedup_threshold=0.5,
     )
     assert len(out) == 1
@@ -89,8 +101,10 @@ def test_forecast_empty_when_sampler_returns_nothing():
     papers = [_paper("p1", "2024-04-15", "rag")]
 
     out = forecast(
-        papers, cutoff_t="2024-06-30",
-        n_candidates=4, top_k=4,
+        papers,
+        cutoff_t="2024-06-30",
+        n_candidates=4,
+        top_k=4,
         sampler=lambda *_a: [],
         realizer=lambda *_a: RealizedIdea(proposal_text=""),
     )
@@ -100,5 +114,8 @@ def test_forecast_empty_when_sampler_returns_nothing():
 def test_forecast_requires_realizer():
     papers = [_paper("p1", "2024-04-15", "rag")]
     with pytest.raises(ValueError, match="realizer"):
-        forecast(papers, cutoff_t="2024-06-30",
-                 sampler=lambda *_a: [Innovation("rag", "extend", "x")])
+        forecast(
+            papers,
+            cutoff_t="2024-06-30",
+            sampler=lambda *_a: [Innovation("rag", "extend", "x")],
+        )

@@ -6,6 +6,7 @@ identically-shaped row of metrics. This module owns *only* the toggles
 and the metric-record shape; the actual eval harness lives in
 scripts/phase8_ablations.py.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -23,10 +24,10 @@ class AblationConfig:
     """One ablation cell. Set exactly one field away from the baseline."""
 
     name: str
-    reward_variant: str = "foresight"           # ours
-    decomposition_variant: str = "per_z"        # ours
-    rubric_variant: str = "static"              # ours (Phase 6 off)
-    gate_variant: str = "both"                  # ours
+    reward_variant: str = "foresight"  # ours
+    decomposition_variant: str = "per_z"  # ours
+    rubric_variant: str = "static"  # ours (Phase 6 off)
+    gate_variant: str = "both"  # ours
 
     def to_json(self) -> dict[str, Any]:
         return {

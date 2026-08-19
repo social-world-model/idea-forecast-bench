@@ -9,7 +9,9 @@ def _isolate_strategy_store(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(strategy_store, "STRATEGIES_DIR", strategies_dir)
 
 
-def test_bootstrap_backtest_runs_once_when_baseline_missing(monkeypatch, tmp_path) -> None:
+def test_bootstrap_backtest_runs_once_when_baseline_missing(
+    monkeypatch, tmp_path
+) -> None:
     _isolate_strategy_store(monkeypatch, tmp_path)
 
     s1 = strategy_store.create_strategy({"strategy_name": "keyword_trend"})

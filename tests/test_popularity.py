@@ -1,4 +1,5 @@
 """Tests for live_idea_bench/popularity.py — written BEFORE implementation (TDD RED phase)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -147,11 +148,21 @@ def test_fetch_popularity_batch_from_api(tmp_path: Path) -> None:
     paper_ids = ["2401.00001", "2401.00002"]
 
     s2_data = [
-        {"paperId": "s2-1", "externalIds": {"ArXiv": "2401.00001"}, "citationCount": 10},
-        {"paperId": "s2-2", "externalIds": {"ArXiv": "2401.00002"}, "citationCount": 25},
+        {
+            "paperId": "s2-1",
+            "externalIds": {"ArXiv": "2401.00001"},
+            "citationCount": 10,
+        },
+        {
+            "paperId": "s2-2",
+            "externalIds": {"ArXiv": "2401.00002"},
+            "citationCount": 25,
+        },
     ]
 
-    with patch("live_idea_bench.popularity.requests.post", return_value=_s2_response(s2_data)):
+    with patch(
+        "live_idea_bench.popularity.requests.post", return_value=_s2_response(s2_data)
+    ):
         result = fetch_popularity_batch(paper_ids, cache_path=cache_path)
 
     assert result["2401.00001"] == 10
@@ -184,9 +195,15 @@ def test_fetch_popularity_batch_partial_cache(tmp_path: Path) -> None:
 
     paper_ids = ["2401.00001", "2401.00002"]
     s2_data = [
-        {"paperId": "s2-2", "externalIds": {"ArXiv": "2401.00002"}, "citationCount": 15},
+        {
+            "paperId": "s2-2",
+            "externalIds": {"ArXiv": "2401.00002"},
+            "citationCount": 15,
+        },
     ]
-    with patch("live_idea_bench.popularity.requests.post", return_value=_s2_response(s2_data)):
+    with patch(
+        "live_idea_bench.popularity.requests.post", return_value=_s2_response(s2_data)
+    ):
         result = fetch_popularity_batch(paper_ids, cache_path=cache_path)
 
     assert result["2401.00001"] == 5
@@ -197,7 +214,10 @@ def test_fetch_popularity_batch_api_failure_returns_zero(tmp_path: Path) -> None
     cache_path = tmp_path / "cache.json"
     paper_ids = ["2401.99999"]
 
-    with patch("live_idea_bench.popularity.requests.post", side_effect=Exception("network error")):
+    with patch(
+        "live_idea_bench.popularity.requests.post",
+        side_effect=Exception("network error"),
+    ):
         result = fetch_popularity_batch(paper_ids, cache_path=cache_path)
 
     # Graceful fallback: paper gets 0 citations
@@ -210,7 +230,9 @@ def test_fetch_popularity_batch_saves_to_cache(tmp_path: Path) -> None:
     s2_data = [
         {"paperId": "s2-1", "externalIds": {"ArXiv": "2401.00001"}, "citationCount": 7},
     ]
-    with patch("live_idea_bench.popularity.requests.post", return_value=_s2_response(s2_data)):
+    with patch(
+        "live_idea_bench.popularity.requests.post", return_value=_s2_response(s2_data)
+    ):
         fetch_popularity_batch(paper_ids, cache_path=cache_path)
 
     # Verify cache was updated
@@ -224,7 +246,9 @@ def test_fetch_popularity_batch_no_cache_path() -> None:
     s2_data = [
         {"paperId": "s2-1", "externalIds": {"ArXiv": "2401.00001"}, "citationCount": 3},
     ]
-    with patch("live_idea_bench.popularity.requests.post", return_value=_s2_response(s2_data)):
+    with patch(
+        "live_idea_bench.popularity.requests.post", return_value=_s2_response(s2_data)
+    ):
         result = fetch_popularity_batch(paper_ids, cache_path=None)
     assert result["2401.00001"] == 3
 
@@ -241,10 +265,13 @@ def test_enrich_papers_with_popularity_returns_weights(tmp_path: Path) -> None:
     ]
     # Pre-populate cache with citation counts
     cache_path = tmp_path / "cache.json"
-    save_popularity_cache(cache_path, {
-        "2401.00001": {"citation_count": 0, "fetched_at": "2026-01-01T00:00:00Z"},
-        "2401.00002": {"citation_count": 100, "fetched_at": "2026-01-01T00:00:00Z"},
-    })
+    save_popularity_cache(
+        cache_path,
+        {
+            "2401.00001": {"citation_count": 0, "fetched_at": "2026-01-01T00:00:00Z"},
+            "2401.00002": {"citation_count": 100, "fetched_at": "2026-01-01T00:00:00Z"},
+        },
+    )
 
     with patch("live_idea_bench.popularity.requests.post"):
         weights = enrich_papers_with_popularity(papers, cache_path=cache_path)
@@ -264,10 +291,13 @@ def test_enrich_papers_with_popularity_empty_list(tmp_path: Path) -> None:
 def test_enrich_papers_with_popularity_all_zero_citations(tmp_path: Path) -> None:
     papers = [_paper("2401.00001"), _paper("2401.00002")]
     cache_path = tmp_path / "cache.json"
-    save_popularity_cache(cache_path, {
-        "2401.00001": {"citation_count": 0, "fetched_at": "2026-01-01T00:00:00Z"},
-        "2401.00002": {"citation_count": 0, "fetched_at": "2026-01-01T00:00:00Z"},
-    })
+    save_popularity_cache(
+        cache_path,
+        {
+            "2401.00001": {"citation_count": 0, "fetched_at": "2026-01-01T00:00:00Z"},
+            "2401.00002": {"citation_count": 0, "fetched_at": "2026-01-01T00:00:00Z"},
+        },
+    )
     with patch("live_idea_bench.popularity.requests.post"):
         weights = enrich_papers_with_popularity(papers, cache_path=cache_path)
     # When all zero, everyone gets max weight (all equal, normalized to 1.0)

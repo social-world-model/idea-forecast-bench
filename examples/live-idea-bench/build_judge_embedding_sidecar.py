@@ -26,6 +26,7 @@ Usage:
     #   --output data/raw-208/summary_208_judged.json
     #   --embed-model voyage-3-large
 """
+
 from __future__ import annotations
 
 import argparse
@@ -41,7 +42,11 @@ def _embed_fingerprint(embed_model: str) -> str:
 
 def _extract_flat_map(data) -> dict:
     """Accept either {paper_id: vec} or {"paper_embeddings": {paper_id: vec}}."""
-    if isinstance(data, dict) and "paper_embeddings" in data and isinstance(data["paper_embeddings"], dict):
+    if (
+        isinstance(data, dict)
+        and "paper_embeddings" in data
+        and isinstance(data["paper_embeddings"], dict)
+    ):
         inner = data["paper_embeddings"]
         # Guard against an already-namespaced dump (keys contain "__").
         if inner and "__" in next(iter(inner)):
@@ -58,10 +63,16 @@ def _extract_flat_map(data) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--embeddings", required=True, help="flat {paper_id: vector} JSON")
-    ap.add_argument("--embed-model", default="voyage-3-large",
-                    help="must equal judge-eval's --embed-model so fingerprints match")
-    ap.add_argument("--out", required=True,
-                    help="sidecar path; should be <judge-eval --output>.state.embeddings.json")
+    ap.add_argument(
+        "--embed-model",
+        default="voyage-3-large",
+        help="must equal judge-eval's --embed-model so fingerprints match",
+    )
+    ap.add_argument(
+        "--out",
+        required=True,
+        help="sidecar path; should be <judge-eval --output>.state.embeddings.json",
+    )
     args = ap.parse_args()
 
     src = json.loads(Path(args.embeddings).read_text(encoding="utf-8"))

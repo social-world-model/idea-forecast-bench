@@ -1,4 +1,5 @@
 """Tests for SFT dataset builder (TDD: RED phase)."""
+
 from __future__ import annotations
 
 import json
@@ -16,6 +17,7 @@ from forecaster.prior.sft_dataset import (
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_hindsight_sample(i: int, month: str = "2024-01") -> HindsightSample:
     return HindsightSample(
@@ -39,6 +41,7 @@ def _make_samples(n: int) -> list[HindsightSample]:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 def test_build_sft_samples_returns_dicts():
     """Each sample must have 'input' and 'target' string keys."""
@@ -150,7 +153,9 @@ def test_build_sft_samples_excludes_future_unavailable_at_cutoff():
 
     samples = build_sft_samples([early_future, target])
 
-    target_sample = next(sample for sample in samples if sample["future_paper_id"] == "future-target")
+    target_sample = next(
+        sample for sample in samples if sample["future_paper_id"] == "future-target"
+    )
     assert "late direction" not in target_sample["input"]
 
 

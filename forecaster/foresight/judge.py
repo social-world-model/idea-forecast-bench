@@ -10,6 +10,7 @@ shares its scoring backbone with the eval-time scorer.
 
 A pluggable `ScorerFn` is exposed so unit tests can inject a stub.
 """
+
 from __future__ import annotations
 
 import logging
@@ -28,10 +29,10 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class JudgeResult:
-    score: float           # in [0, 1]
+    score: float  # in [0, 1]
     reasoning: str
     raw_text: str
-    engine: str            # e.g. "llm:gpt-4o" or "stub:fixed"
+    engine: str  # e.g. "llm:gpt-4o" or "stub:fixed"
 
 
 class ScorerFn(Protocol):
@@ -216,7 +217,7 @@ def _extract_block(text: str, header: str) -> str:
     idx = text.find(header)
     if idx < 0:
         return ""
-    rest = text[idx + len(header):]
+    rest = text[idx + len(header) :]
     next_idx = rest.find("\n===")
     return (rest[:next_idx] if next_idx >= 0 else rest).strip()
 
@@ -241,7 +242,9 @@ class RubricJudge:
         raw = self.scorer(JUDGE_SYSTEM_PROMPT, user_prompt)
         score, reasoning = parse_score(raw)
         engine_name = getattr(self.scorer, "__name__", None) or self.engine_label
-        return JudgeResult(score=score, reasoning=reasoning, raw_text=raw, engine=engine_name)
+        return JudgeResult(
+            score=score, reasoning=reasoning, raw_text=raw, engine=engine_name
+        )
 
     def score_batch(
         self,

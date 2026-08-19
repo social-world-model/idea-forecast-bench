@@ -1,4 +1,5 @@
 """Build SFT training dataset for the innovation prior."""
+
 from __future__ import annotations
 
 import json
@@ -47,7 +48,9 @@ def build_sft_samples(
         snapshot = (memory_snapshots_by_cutoff or {}).get(sample.cutoff_month)
         if snapshot is not None:
             if not hasattr(snapshot, "exclude_source_paper_ids"):
-                raise TypeError("memory_snapshots_by_cutoff values must provide exclude_source_paper_ids().")
+                raise TypeError(
+                    "memory_snapshots_by_cutoff values must provide exclude_source_paper_ids()."
+                )
             memory = snapshot.exclude_source_paper_ids({sample.future_paper_id})
         else:
             memory = build_memory_store_from_hindsight_samples(

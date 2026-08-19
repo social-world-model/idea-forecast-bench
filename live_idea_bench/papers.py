@@ -76,7 +76,9 @@ def group_by_keywords(
     from collections import defaultdict
 
     keyword_map = defaultdict(set)
-    targets_lower = [item.lower() for item in target_categories] if target_categories else []
+    targets_lower = (
+        [item.lower() for item in target_categories] if target_categories else []
+    )
 
     for file_path, keywords in results.items():
         for keyword in keywords:
@@ -307,12 +309,49 @@ def _normalize_metadata_value(value: object) -> Any:
     return str(value)
 
 
-_TITLE_STOP_WORDS = frozenset({
-    "a", "an", "the", "of", "for", "in", "on", "with", "and", "or", "to",
-    "is", "by", "from", "at", "its", "via", "are", "we", "our", "can",
-    "be", "has", "have", "this", "that", "it", "not", "but", "as", "do",
-    "how", "what", "which", "into", "over", "new", "more", "than",
-})
+_TITLE_STOP_WORDS = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "of",
+        "for",
+        "in",
+        "on",
+        "with",
+        "and",
+        "or",
+        "to",
+        "is",
+        "by",
+        "from",
+        "at",
+        "its",
+        "via",
+        "are",
+        "we",
+        "our",
+        "can",
+        "be",
+        "has",
+        "have",
+        "this",
+        "that",
+        "it",
+        "not",
+        "but",
+        "as",
+        "do",
+        "how",
+        "what",
+        "which",
+        "into",
+        "over",
+        "new",
+        "more",
+        "than",
+    }
+)
 
 
 def _keywords_from_title(title: str) -> list[str]:
@@ -351,13 +390,21 @@ def _extract_summary(body: str) -> str:
 
     preface, _sections = _split_preface_and_sections(body)
     if preface:
-        paragraphs = [part.strip() for part in re.split(r"\n\s*\n", preface) if part.strip()]
+        paragraphs = [
+            part.strip() for part in re.split(r"\n\s*\n", preface) if part.strip()
+        ]
         for index, paragraph in enumerate(paragraphs):
-            match = re.match(r"^Abstract\s*[—–:-]\s*(.*)$", paragraph, flags=re.IGNORECASE | re.DOTALL)
+            match = re.match(
+                r"^Abstract\s*[—–:-]\s*(.*)$",
+                paragraph,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
             if not match:
                 continue
             abstract_parts = [match.group(1).strip()] + paragraphs[index + 1 :]
-            return _clean_summary_text("\n\n".join(part for part in abstract_parts if part))
+            return _clean_summary_text(
+                "\n\n".join(part for part in abstract_parts if part)
+            )
         return _clean_summary_text(preface)
 
     return _clean_summary_text(clean_paper_content(body))
@@ -494,6 +541,7 @@ def _parse_and_filter(
 def _default_workers() -> int:
     """Use all available CPU cores, capped at 32 to avoid fd exhaustion."""
     import os
+
     return min(os.cpu_count() or 4, 32)
 
 
@@ -509,9 +557,12 @@ def _discover_files_for_dir(args: tuple) -> list[Path]:
     return [p for p in child.rglob("*.md") if p.name.lower() != "readme.md"]
 
 
-def _cache_path_for(input_dir: Path, start_month: str | None, end_month: str | None) -> Path:
+def _cache_path_for(
+    input_dir: Path, start_month: str | None, end_month: str | None
+) -> Path:
     """Return a deterministic pickle cache path for the given query."""
     import hashlib
+
     key = f"{Path(input_dir).resolve()}|{start_month}|{end_month}"
     h = hashlib.sha256(key.encode()).hexdigest()[:16]
     cache_dir = Path(input_dir) / ".paper_cache"
@@ -538,7 +589,9 @@ def load_papers_from_markdown(
             with open(cache_file, "rb") as f:
                 cached = pickle.load(f)
             if isinstance(cached, list) and cached:
-                print(f"[papers] Loaded {len(cached)} papers from cache ({cache_file.name})")
+                print(
+                    f"[papers] Loaded {len(cached)} papers from cache ({cache_file.name})"
+                )
                 return cached
         except Exception:
             pass  # stale/corrupt cache — rebuild
@@ -551,7 +604,7 @@ def load_papers_from_markdown(
 
     # Fast path: single os.listdir + prefix set filter — avoids slow iterdir/glob
     # on 239k-entry directories. Then parallel file discovery + parsing.
-    if (start_idx is not None or end_idx is not None):
+    if start_idx is not None or end_idx is not None:
         input_dir = Path(input_dir)
         s_idx = start_idx if start_idx is not None else 0
         e_idx = end_idx if end_idx is not None else 9999
@@ -575,7 +628,9 @@ def load_papers_from_markdown(
                     keep = False
             if keep:
                 dir_args.append((str(input_dir / name), name))
-        print(f"[papers] Found {len(dir_args)} dirs, discovering .md files ({workers} workers)...")
+        print(
+            f"[papers] Found {len(dir_args)} dirs, discovering .md files ({workers} workers)..."
+        )
         effective_disc = min(max(1, workers), len(dir_args)) if dir_args else 1
         if effective_disc <= 1:
             nested = [_discover_files_for_dir(a) for a in dir_args]
@@ -594,13 +649,17 @@ def load_papers_from_markdown(
         records = [_parse_and_filter(f, start_idx, end_idx) for f in files]
     else:
         with ThreadPoolExecutor(max_workers=effective_workers) as pool:
-            records = list(pool.map(
-                lambda f: _parse_and_filter(f, start_idx, end_idx),
-                files,
-            ))
+            records = list(
+                pool.map(
+                    lambda f: _parse_and_filter(f, start_idx, end_idx),
+                    files,
+                )
+            )
 
     results = [r for r in records if r is not None]
-    results.sort(key=lambda p: (date_to_ordinal(get_paper_published_date(p)), p.paper_id))
+    results.sort(
+        key=lambda p: (date_to_ordinal(get_paper_published_date(p)), p.paper_id)
+    )
 
     # --- Save to cache ---
     if use_cache and results:

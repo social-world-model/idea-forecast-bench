@@ -1,4 +1,5 @@
 """Tests for forecaster/realization/evidence.py"""
+
 from __future__ import annotations
 
 from forecaster.models import Innovation
@@ -6,7 +7,9 @@ from forecaster.realization.evidence import build_innovation_query, retrieve_evi
 from live_idea_bench.models import PaperRecord
 
 
-def _make_paper(paper_id: str, title: str, summary: str, keywords: list[str] | None = None) -> PaperRecord:
+def _make_paper(
+    paper_id: str, title: str, summary: str, keywords: list[str] | None = None
+) -> PaperRecord:
     return PaperRecord(
         paper_id=paper_id,
         title=title,
@@ -41,7 +44,9 @@ class TestBuildInnovationQuery:
         assert "transfer" in query
 
     def test_build_innovation_query_contains_gap(self) -> None:
-        innovation = _make_innovation(gap="cross-domain adaptation for low-resource settings")
+        innovation = _make_innovation(
+            gap="cross-domain adaptation for low-resource settings"
+        )
         query = build_innovation_query(innovation)
         assert "cross-domain adaptation for low-resource settings" in query
 
@@ -67,7 +72,11 @@ class TestRetrieveEvidence:
     def test_retrieve_evidence_returns_list(self) -> None:
         innovation = _make_innovation()
         papers = [
-            _make_paper("p1", "Efficient Transformer", "attention mechanism for long sequence efficiency"),
+            _make_paper(
+                "p1",
+                "Efficient Transformer",
+                "attention mechanism for long sequence efficiency",
+            ),
         ]
         result = retrieve_evidence(innovation, papers)
         assert isinstance(result, list)
@@ -79,7 +88,11 @@ class TestRetrieveEvidence:
             gap="long sequence processing",
         )
         papers = [
-            _make_paper(f"p{i}", f"Attention Paper {i}", "attention mechanism long sequence transformer")
+            _make_paper(
+                f"p{i}",
+                f"Attention Paper {i}",
+                "attention mechanism long sequence transformer",
+            )
             for i in range(20)
         ]
         result = retrieve_evidence(innovation, papers, top_k=3)

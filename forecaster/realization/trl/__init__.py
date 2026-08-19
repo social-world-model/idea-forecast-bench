@@ -12,8 +12,11 @@ if importlib.util.find_spec("vllm_ascend") is None:
     _mod.__path__ = []
     _mod.__spec__ = importlib.machinery.ModuleSpec("vllm_ascend", None)
     sys.modules["vllm_ascend"] = _mod
-    for _sub in ("distributed", "distributed.device_communicators",
-                 "distributed.device_communicators.pyhccl"):
+    for _sub in (
+        "distributed",
+        "distributed.device_communicators",
+        "distributed.device_communicators.pyhccl",
+    ):
         _fqn = f"vllm_ascend.{_sub}"
         _m = types.ModuleType(_fqn)
         _m.__spec__ = importlib.machinery.ModuleSpec(_fqn, None)

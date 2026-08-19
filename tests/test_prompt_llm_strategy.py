@@ -111,7 +111,9 @@ def test_generate_predictions_fails_empty_not_heuristic_by_default(monkeypatch) 
     assert heuristic_called["hit"] is False
 
 
-def test_predictor_llm_strategy_generate_malformed_output_returns_empty(monkeypatch) -> None:
+def test_predictor_llm_strategy_generate_malformed_output_returns_empty(
+    monkeypatch,
+) -> None:
     import live_idea_bench.strategy.predictor_llm as predictor_module
 
     monkeypatch.setattr(

@@ -19,6 +19,7 @@ Artifact directory layout expected when reward_mode == "foresight":
         rubrics/
             <topic>.json
 """
+
 from __future__ import annotations
 
 import json
@@ -32,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 def _load_indices(indices_dir: Path):
     from forecaster.foresight.indices import FutureIndex, HistoryIndex
+
     future_indices: dict = {}
     history_indices: dict = {}
     for npz in sorted(indices_dir.glob("future_*.npz")):
@@ -87,6 +89,7 @@ def _build_embedder(name: str):
         HashingEmbedder,
         SentenceTransformerEmbedder,
     )
+
     if name.startswith("hashing:"):
         try:
             dim = int(name.split(":", 1)[1])
@@ -95,7 +98,9 @@ def _build_embedder(name: str):
         return HashingEmbedder(dim=dim)
     if name.startswith("sentence-transformer:"):
         return SentenceTransformerEmbedder(model_name=name.split(":", 1)[1])
-    return SentenceTransformerEmbedder(model_name="sentence-transformers/allenai-specter")
+    return SentenceTransformerEmbedder(
+        model_name="sentence-transformers/allenai-specter"
+    )
 
 
 def _build_judge(mode: str):
@@ -104,10 +109,12 @@ def _build_judge(mode: str):
         StubScorer,
         make_live_scorer,
     )
+
     if mode == "stub":
         # Deterministic constant for smoke runs.
         def fixed(idea: str, candidate: str) -> float:
             return 0.5
+
         return RubricJudge(scorer=StubScorer(fn=fixed, name="stub-fixed"))
     return RubricJudge(scorer=make_live_scorer())
 
@@ -134,9 +141,13 @@ def build_foresight_context(
         "the fixed-weight composite reward instead."
     )
     if not indices_dir.exists():
-        raise FileNotFoundError(f"missing foresight indices dir: {indices_dir}\n{_hint}")
+        raise FileNotFoundError(
+            f"missing foresight indices dir: {indices_dir}\n{_hint}"
+        )
     if not rubrics_dir.exists():
-        raise FileNotFoundError(f"missing foresight rubrics dir: {rubrics_dir}\n{_hint}")
+        raise FileNotFoundError(
+            f"missing foresight rubrics dir: {rubrics_dir}\n{_hint}"
+        )
     future_indices, history_indices = _load_indices(indices_dir)
     rubrics = load_rubrics_dir(rubrics_dir)
     embedder = _build_embedder(embedder_name)
@@ -171,7 +182,9 @@ def make_reward_fn(
         legacy    — forecaster.realization.verl.reward_fn.compute_score
         foresight — forecaster.foresight.reward.compute_score_v2
     """
-    reward_mode = str(getattr(config, "reward_mode", "legacy") or "legacy").strip().lower()
+    reward_mode = (
+        str(getattr(config, "reward_mode", "legacy") or "legacy").strip().lower()
+    )
     num_generations = int(getattr(config, "num_generations", 0) or 0)
     grouping_assert = bool(getattr(config, "grouping_assert", True))
     dedup_penalty = float(getattr(config, "dedup_penalty", 0.0) or 0.0)
@@ -185,15 +198,20 @@ def make_reward_fn(
             )
         ctx = build_foresight_context(
             artifact_dir,
-            embedder_name=getattr(config, "foresight_embedder",
-                                  "sentence-transformer:sentence-transformers/allenai-specter"),
+            embedder_name=getattr(
+                config,
+                "foresight_embedder",
+                "sentence-transformer:sentence-transformers/allenai-specter",
+            ),
             judge_mode=getattr(config, "foresight_judge_mode", "live"),
             hindsight_path=getattr(config, "foresight_hindsight_path", None)
-                           or getattr(config, "hindsight_path", None),
+            or getattr(config, "hindsight_path", None),
         )
         logger.info(
             "reward_mode=foresight loaded ctx: future_indices=%d history_indices=%d rubrics=%d",
-            len(ctx.future_indices), len(ctx.history_indices), len(ctx.rubrics),
+            len(ctx.future_indices),
+            len(ctx.history_indices),
+            len(ctx.rubrics),
         )
 
         from forecaster.foresight.grouping import (
@@ -223,18 +241,22 @@ def make_reward_fn(
                 # reward/gates expect a plain string. Flatten to the text.
                 if isinstance(completion, list):
                     sol = "\n".join(
-                        str(m.get("content", "")) for m in completion if isinstance(m, dict)
+                        str(m.get("content", ""))
+                        for m in completion
+                        if isinstance(m, dict)
                     )
                 else:
                     sol = completion
                 try:
-                    out.append(compute_score_v2(
-                        data_source=f"live_idea_bench::{trainer_name}",
-                        solution_str=sol,
-                        ground_truth="",
-                        extra_info=extra,
-                        ctx=ctx,
-                    ))
+                    out.append(
+                        compute_score_v2(
+                            data_source=f"live_idea_bench::{trainer_name}",
+                            solution_str=sol,
+                            ground_truth="",
+                            extra_info=extra,
+                            ctx=ctx,
+                        )
+                    )
                 except Exception as exc:
                     logger.warning("foresight reward failed: %s", exc, exc_info=True)
                     out.append(0.0)
@@ -260,17 +282,19 @@ def make_reward_fn(
         out: list[float] = []
         for completion, extra in zip(completions, extra_infos, strict=False):
             try:
-                out.append(compute_score(
-                    data_source=f"live_idea_bench::{trainer_name}",
-                    solution_str=completion,
-                    ground_truth="",
-                    extra_info=extra,
-                    reward_config_path=reward_config_path,
-                    realization_config_path=realization_config_path,
-                    similarity_config_path=similarity_config_path,
-                    runtime_config_path=runtime_config_path,
-                    model_name=model_name,
-                ))
+                out.append(
+                    compute_score(
+                        data_source=f"live_idea_bench::{trainer_name}",
+                        solution_str=completion,
+                        ground_truth="",
+                        extra_info=extra,
+                        reward_config_path=reward_config_path,
+                        realization_config_path=realization_config_path,
+                        similarity_config_path=similarity_config_path,
+                        runtime_config_path=runtime_config_path,
+                        model_name=model_name,
+                    )
+                )
             except Exception as exc:
                 logger.warning("legacy reward failed: %s", exc, exc_info=True)
                 out.append(0.0)

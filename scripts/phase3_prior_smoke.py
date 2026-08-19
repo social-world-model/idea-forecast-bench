@@ -14,6 +14,7 @@ It does NOT call train_prior() — that needs a real GPU + ~minutes per row.
 Run the dedicated SFT script (scripts/run_prior_sft.sh or the runner in
 examples/forecaster/run_prior_sft.py) when you want to actually train.
 """
+
 from __future__ import annotations
 
 import json
@@ -28,64 +29,96 @@ from forecaster.foresight.prior_io import build_sft_samples_from_dz, save_sft_js
 from forecaster.models import Innovation
 from live_idea_bench.models import PaperRecord
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
 logger = logging.getLogger("phase3_smoke")
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 SYNTHETIC_RAW_ROWS = [
     {
-        "topic_id": "rag", "episode_id": "E1",
+        "topic_id": "rag",
+        "episode_id": "E1",
         "cutoff_date": "2024-03-31",
-        "future_paper_id": "p_a", "future_paper_title": "RAG meets time series",
+        "future_paper_id": "p_a",
+        "future_paper_title": "RAG meets time series",
         "future_paper_published_date": "2024-05-20",
-        "innovation": {"base_direction": "rag", "operator": "extend",
-                       "gap": "extends RAG to non-stationary forecasting"},
+        "innovation": {
+            "base_direction": "rag",
+            "operator": "extend",
+            "gap": "extends RAG to non-stationary forecasting",
+        },
         "context_paper_count": 3,
     },
     {
-        "topic_id": "rag", "episode_id": "E2",
+        "topic_id": "rag",
+        "episode_id": "E2",
         "cutoff_date": "2024-04-30",
-        "future_paper_id": "p_b", "future_paper_title": "RAG-as-Plan composition",
+        "future_paper_id": "p_b",
+        "future_paper_title": "RAG-as-Plan composition",
         "future_paper_published_date": "2024-06-10",
-        "innovation": {"base_direction": "rag", "operator": "compose",
-                       "gap": "composes retrieval with a planner"},
+        "innovation": {
+            "base_direction": "rag",
+            "operator": "compose",
+            "gap": "composes retrieval with a planner",
+        },
         "context_paper_count": 3,
     },
     {
-        "topic_id": "agents", "episode_id": "E1",
+        "topic_id": "agents",
+        "episode_id": "E1",
         "cutoff_date": "2024-04-30",
-        "future_paper_id": "p_c", "future_paper_title": "Tool agents on long horizons",
+        "future_paper_id": "p_c",
+        "future_paper_title": "Tool agents on long horizons",
         "future_paper_published_date": "2024-06-15",
-        "innovation": {"base_direction": "tool agents", "operator": "benchmark",
-                       "gap": "proposes a long-horizon evaluation"},
+        "innovation": {
+            "base_direction": "tool agents",
+            "operator": "benchmark",
+            "gap": "proposes a long-horizon evaluation",
+        },
         "context_paper_count": 3,
     },
     {
-        "topic_id": "agents", "episode_id": "E2",
+        "topic_id": "agents",
+        "episode_id": "E2",
         "cutoff_date": "2024-05-31",
-        "future_paper_id": "p_d", "future_paper_title": "Multi-modal agents",
+        "future_paper_id": "p_d",
+        "future_paper_title": "Multi-modal agents",
         "future_paper_published_date": "2024-07-20",
-        "innovation": {"base_direction": "tool agents", "operator": "transfer",
-                       "gap": "ports image-grounded reasoning to agent tooling"},
+        "innovation": {
+            "base_direction": "tool agents",
+            "operator": "transfer",
+            "gap": "ports image-grounded reasoning to agent tooling",
+        },
         "context_paper_count": 3,
     },
     {
-        "topic_id": "agents", "episode_id": "E3",
+        "topic_id": "agents",
+        "episode_id": "E3",
         "cutoff_date": "2024-06-30",
-        "future_paper_id": "p_e", "future_paper_title": "Agent failure analysis",
+        "future_paper_id": "p_e",
+        "future_paper_title": "Agent failure analysis",
         "future_paper_published_date": "2024-08-15",
-        "innovation": {"base_direction": "tool agents", "operator": "analyze",
-                       "gap": "categorizes agent failure modes"},
+        "innovation": {
+            "base_direction": "tool agents",
+            "operator": "analyze",
+            "gap": "categorizes agent failure modes",
+        },
         "context_paper_count": 3,
     },
     {
-        "topic_id": "rag", "episode_id": "E3",
+        "topic_id": "rag",
+        "episode_id": "E3",
         "cutoff_date": "2024-06-30",
-        "future_paper_id": "p_f", "future_paper_title": "RAG with scale-aware retrievers",
+        "future_paper_id": "p_f",
+        "future_paper_title": "RAG with scale-aware retrievers",
         "future_paper_published_date": "2024-09-01",
-        "innovation": {"base_direction": "rag", "operator": "scale",
-                       "gap": "scales retrievers to 1B tokens"},
+        "innovation": {
+            "base_direction": "rag",
+            "operator": "scale",
+            "gap": "scales retrievers to 1B tokens",
+        },
         "context_paper_count": 3,
     },
 ]
@@ -156,8 +189,10 @@ def main() -> int:
 
         corpus = _build_synthetic_corpus()
         summary = augment_hindsight_rows(
-            hindsight_path, dz_path,
-            papers_by_id=corpus, horizon_months=3,
+            hindsight_path,
+            dz_path,
+            papers_by_id=corpus,
+            horizon_months=3,
         )
         logger.info("augment summary: %s", summary.to_json())
 
@@ -185,7 +220,9 @@ def main() -> int:
         dist = operator_distribution(z_list)
         logger.info("sample_z operator distribution: %s", dist)
         assert len(z_list) == 6
-        assert len(dist) >= 2, "sample_z stub returned a degenerate operator distribution"
+        assert len(dist) >= 2, (
+            "sample_z stub returned a degenerate operator distribution"
+        )
 
         # Confirm the SFT JSONL is well-formed.
         for line in sft_path.read_text(encoding="utf-8").splitlines():

@@ -27,6 +27,7 @@ signal to be informative and bounded.
 All three functions accept dependency-injected clients/embedders so
 they can be tested without a vLLM server up.
 """
+
 from __future__ import annotations
 
 import logging
@@ -263,10 +264,7 @@ def compute_soft_reward(
         return 0.0
     pred_vec = _embed_prediction(prediction, embedder)
 
-    scored = [
-        (i, _cosine(pred_vec, vec))
-        for i, vec in enumerate(future_vecs)
-    ]
+    scored = [(i, _cosine(pred_vec, vec)) for i, vec in enumerate(future_vecs)]
     scored.sort(key=lambda x: -x[1])
     candidates = [future_papers[i] for i, _ in scored[:top_r]]
 

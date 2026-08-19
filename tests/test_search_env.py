@@ -1,4 +1,5 @@
 """Tests for the strict interactive search environment."""
+
 from __future__ import annotations
 
 from forecaster.models import (
@@ -96,7 +97,9 @@ def test_rollout_search_trajectory_serializes_queries_and_result() -> None:
         [
             SearchAction(action_type="search", query="graph reasoning planning"),
             SearchAction(action_type="select", paper_id="paper-1"),
-            SearchAction(action_type="finish", proposal_text="Proposal title\nProposal body"),
+            SearchAction(
+                action_type="finish", proposal_text="Proposal title\nProposal body"
+            ),
         ],
         _make_papers(),
     )

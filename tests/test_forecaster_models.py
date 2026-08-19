@@ -1,4 +1,5 @@
 """Tests for forecaster domain models."""
+
 from __future__ import annotations
 
 import pytest
@@ -206,7 +207,10 @@ class TestInnovationSerialization:
         assert innovation.gap == "cross-modal alignment"
 
     def test_round_trip(self, sample_innovation: Innovation) -> None:
-        assert innovation_from_dict(innovation_to_dict(sample_innovation)) == sample_innovation
+        assert (
+            innovation_from_dict(innovation_to_dict(sample_innovation))
+            == sample_innovation
+        )
 
 
 class TestMemoryEntrySerialization:
@@ -217,7 +221,9 @@ class TestMemoryEntrySerialization:
         assert isinstance(d["innovation"], dict)
 
     def test_round_trip(self, sample_entry: MemoryEntry) -> None:
-        assert memory_entry_from_dict(memory_entry_to_dict(sample_entry)) == sample_entry
+        assert (
+            memory_entry_from_dict(memory_entry_to_dict(sample_entry)) == sample_entry
+        )
 
     def test_round_trip_with_metadata(self, sample_innovation: Innovation) -> None:
         entry = MemoryEntry(
@@ -240,8 +246,13 @@ class TestMemoryInventorySerialization:
         assert len(d["entries"]) == 1
 
     def test_round_trip(self, sample_inventory: MemoryInventory) -> None:
-        assert memory_inventory_from_dict(memory_inventory_to_dict(sample_inventory)) == sample_inventory
+        assert (
+            memory_inventory_from_dict(memory_inventory_to_dict(sample_inventory))
+            == sample_inventory
+        )
 
     def test_round_trip_empty(self) -> None:
         inventory = MemoryInventory(entries=(), last_updated_month="2024-03", version=2)
-        assert memory_inventory_from_dict(memory_inventory_to_dict(inventory)) == inventory
+        assert (
+            memory_inventory_from_dict(memory_inventory_to_dict(inventory)) == inventory
+        )

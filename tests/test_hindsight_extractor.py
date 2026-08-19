@@ -1,4 +1,5 @@
 """Tests for hindsight extraction — extractor and prompt."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -154,10 +155,13 @@ class TestExtractInnovation:
         client = MagicMock()
         config = HindsightConfig(max_retries=2, temperature=0.2)
 
-        with patch(
-            "forecaster.hindsight.extractor.get_response_from_llm",
-            return_value=("this is not json", []),
-        ), pytest.raises(ValueError, match="[Ff]ailed|[Ee]xtraction"):
+        with (
+            patch(
+                "forecaster.hindsight.extractor.get_response_from_llm",
+                return_value=("this is not json", []),
+            ),
+            pytest.raises(ValueError, match="[Ff]ailed|[Ee]xtraction"),
+        ):
             extract_innovation(
                 future_paper=FUTURE_PAPER,
                 context_papers=CONTEXT_PAPERS[:5],

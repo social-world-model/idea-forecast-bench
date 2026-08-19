@@ -17,6 +17,7 @@ Per-topic workflow:
   4. Score all pairs, compute AUC + leakage.
   5. Persist rubric to rubrics/{topic}.json and append to reports.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -107,36 +108,48 @@ def build_topic_pairs(
 
     pairs: list[LabeledPair] = []
     for r in pos_rows:
-        pairs.append(LabeledPair(
-            idea_text=_row_idea_text(r),
-            candidate_text=_row_candidate_text(r),
-            label=1,
-            meta={"source_future_id": r.get("source_future_id", ""),
-                  "operator_closed": r.get("operator_closed", "")},
-        ))
+        pairs.append(
+            LabeledPair(
+                idea_text=_row_idea_text(r),
+                candidate_text=_row_candidate_text(r),
+                label=1,
+                meta={
+                    "source_future_id": r.get("source_future_id", ""),
+                    "operator_closed": r.get("operator_closed", ""),
+                },
+            )
+        )
 
     if explicit_neg_rows:
         for r in explicit_neg_rows:
-            pairs.append(LabeledPair(
-                idea_text=_row_idea_text(r),
-                candidate_text=_row_candidate_text(r),
-                label=0,
-                meta={"source_future_id": r.get("source_future_id", ""),
-                      "operator_closed": r.get("operator_closed", "")},
-            ))
+            pairs.append(
+                LabeledPair(
+                    idea_text=_row_idea_text(r),
+                    candidate_text=_row_candidate_text(r),
+                    label=0,
+                    meta={
+                        "source_future_id": r.get("source_future_id", ""),
+                        "operator_closed": r.get("operator_closed", ""),
+                    },
+                )
+            )
     elif pos_rows:
         # Default negatives: paraphrase each positive into legacy framing.
         # In smoke mode this is the only signal; in live mode it serves
         # until we extract real pre-cutoff ideas (Phase 2 follow-up).
         for r in pos_rows[:n_per_class]:
-            pairs.append(LabeledPair(
-                idea_text=_make_negative_idea_from_row(r),
-                candidate_text=_row_candidate_text(r),
-                label=0,
-                meta={"source_future_id": r.get("source_future_id", ""),
-                      "operator_closed": "other",
-                      "negative_source": "synthetic_legacy_paraphrase"},
-            ))
+            pairs.append(
+                LabeledPair(
+                    idea_text=_make_negative_idea_from_row(r),
+                    candidate_text=_row_candidate_text(r),
+                    label=0,
+                    meta={
+                        "source_future_id": r.get("source_future_id", ""),
+                        "operator_closed": "other",
+                        "negative_source": "synthetic_legacy_paraphrase",
+                    },
+                )
+            )
     return pairs
 
 
@@ -145,7 +158,16 @@ def build_topic_pairs(
 
 def smoke_stub_score(idea: str, candidate: str) -> float:
     """Deterministic discriminator: novelty/operator cues -> high; legacy cues -> low."""
-    pos_cues = ("novel", "extends", "extension", "new", "introduce", "propose", "—", "addresses")
+    pos_cues = (
+        "novel",
+        "extends",
+        "extension",
+        "new",
+        "introduce",
+        "propose",
+        "—",
+        "addresses",
+    )
     neg_cues = ("long-standing", "established", "no new", "prior", "legacy")
     score = 0.5
     s = idea.lower()
@@ -213,7 +235,9 @@ def generate_rubric_via_llm(
         resolved_base = None
         model_name = rubric_model_override
     else:
-        resolved_base = (base_url or os.environ.get("JUDGE_BASE_URL", "")).strip() or None
+        resolved_base = (
+            base_url or os.environ.get("JUDGE_BASE_URL", "")
+        ).strip() or None
     if resolved_base:
         import openai
 
@@ -270,20 +294,30 @@ def main() -> int:
     ap.add_argument("--rubrics-dir", default=str(REPO_ROOT / "rubrics"))
     ap.add_argument("--report", default=str(REPO_ROOT / "reports/rubric_validation.md"))
     ap.add_argument("--leakage-report", default=str(REPO_ROOT / "reports/leakage.md"))
-    ap.add_argument("--topics", default="", help="comma-separated topic_ids; empty = top-N by count")
+    ap.add_argument(
+        "--topics", default="", help="comma-separated topic_ids; empty = top-N by count"
+    )
     ap.add_argument("--n-topics", type=int, default=5)
     ap.add_argument("--n-per-class", type=int, default=20)
     ap.add_argument("--threshold", type=float, default=0.70)
     ap.add_argument("--mode", choices=["smoke", "live"], default="smoke")
-    ap.add_argument("--model", default=None,
-                    help="Judge model name. With --judge-base-url, this is the model "
-                         "served by the local endpoint (e.g. qwen3.5-9b-instruct).")
-    ap.add_argument("--judge-base-url", default=None,
-                    help="OpenAI-compatible endpoint URL (e.g. http://localhost:30000/v1). "
-                         "When set, M2 talks to the local self-hosted judge, NOT the gpt-4o default.")
+    ap.add_argument(
+        "--model",
+        default=None,
+        help="Judge model name. With --judge-base-url, this is the model "
+        "served by the local endpoint (e.g. qwen3.5-9b-instruct).",
+    )
+    ap.add_argument(
+        "--judge-base-url",
+        default=None,
+        help="OpenAI-compatible endpoint URL (e.g. http://localhost:30000/v1). "
+        "When set, M2 talks to the local self-hosted judge, NOT the gpt-4o default.",
+    )
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
 
     rows = load_dz_rows(args.dz)
     by_topic: dict[str, list[dict]] = defaultdict(list)
@@ -293,7 +327,10 @@ def main() -> int:
         topics = [t.strip() for t in args.topics.split(",") if t.strip()]
     else:
         topics = [
-            t for t, _ in sorted(by_topic.items(), key=lambda kv: -len(kv[1]))[:args.n_topics]
+            t
+            for t, _ in sorted(by_topic.items(), key=lambda kv: -len(kv[1]))[
+                : args.n_topics
+            ]
         ]
 
     # Set up the scorer once.
@@ -341,32 +378,44 @@ def main() -> int:
             logger.warning("topic=%s yielded no pairs; skipping", topic)
             continue
         report, scored = validate_rubric(
-            rubric, pairs, judge=judge, threshold=args.threshold,
+            rubric,
+            pairs,
+            judge=judge,
+            threshold=args.threshold,
         )
         reports.append(report)
         if report.leakage_hits > 0:
-            leakage_warnings.append({
-                "topic_id": topic,
-                "auc": report.auc,
-                "leakage_hits": report.leakage_hits,
-                "examples": report.leakage_examples,
-            })
+            leakage_warnings.append(
+                {
+                    "topic_id": topic,
+                    "auc": report.auc,
+                    "leakage_hits": report.leakage_hits,
+                    "examples": report.leakage_examples,
+                }
+            )
 
         # Persist per-topic scored pairs for inspection.
         out_csv = rubrics_dir / f"{topic}.scored.csv"
         write_scored_pairs_csv(scored, out_csv)
         logger.info(
             "topic=%s cutoff=%s n+=%d n-=%d auc=%.3f leakage=%d passed=%s",
-            topic, cutoff_t, report.n_positive, report.n_negative,
-            report.auc, report.leakage_hits, report.passed,
+            topic,
+            cutoff_t,
+            report.n_positive,
+            report.n_negative,
+            report.auc,
+            report.leakage_hits,
+            report.passed,
         )
 
     # ---------------- write summary report ----------------
-    report_lines: list[str] = ["# Phase 2 — Rubric validation report\n",
-                               f"mode: `{args.mode}` | scorer: `{scorer.name if hasattr(scorer, 'name') else scorer.__name__}` "
-                               f"| threshold: {args.threshold:.2f} | n_per_class: {args.n_per_class}\n",
-                               "| topic | cutoff | n+ | n- | AUC | leakage | passed |",
-                               "|---|---|---:|---:|---:|---:|:---:|"]
+    report_lines: list[str] = [
+        "# Phase 2 — Rubric validation report\n",
+        f"mode: `{args.mode}` | scorer: `{scorer.name if hasattr(scorer, 'name') else scorer.__name__}` "
+        f"| threshold: {args.threshold:.2f} | n_per_class: {args.n_per_class}\n",
+        "| topic | cutoff | n+ | n- | AUC | leakage | passed |",
+        "|---|---|---:|---:|---:|---:|:---:|",
+    ]
     n_pass = 0
     for r in reports:
         flag = "✅" if r.passed else "❌"
@@ -376,7 +425,9 @@ def main() -> int:
         )
         n_pass += int(r.passed)
     report_lines.append("")
-    report_lines.append(f"**{n_pass}/{len(reports)} topics passed the {args.threshold:.2f} threshold.**")
+    report_lines.append(
+        f"**{n_pass}/{len(reports)} topics passed the {args.threshold:.2f} threshold.**"
+    )
     Path(args.report).parent.mkdir(parents=True, exist_ok=True)
     Path(args.report).write_text("\n".join(report_lines), encoding="utf-8")
 
@@ -391,7 +442,9 @@ def main() -> int:
             "tell it apart from emerging work. Inspect for memorization."
         )
         for w in leakage_warnings:
-            leakage_lines.append(f"\n## `{w['topic_id']}` (AUC={w['auc']:.3f}, hits={w['leakage_hits']})")
+            leakage_lines.append(
+                f"\n## `{w['topic_id']}` (AUC={w['auc']:.3f}, hits={w['leakage_hits']})"
+            )
             for ex in w["examples"]:
                 leakage_lines.append(
                     f"- score={ex['score']:.3f} | idea=`{ex['idea_preview']}` | candidate=`{ex['candidate_preview']}`"
@@ -399,12 +452,17 @@ def main() -> int:
     Path(args.leakage_report).parent.mkdir(parents=True, exist_ok=True)
     Path(args.leakage_report).write_text("\n".join(leakage_lines), encoding="utf-8")
 
-    print(json.dumps({
-        "topics": [r.to_json() for r in reports],
-        "leakage_topics": [w["topic_id"] for w in leakage_warnings],
-        "n_pass": n_pass,
-        "n_total": len(reports),
-    }, indent=2))
+    print(
+        json.dumps(
+            {
+                "topics": [r.to_json() for r in reports],
+                "leakage_topics": [w["topic_id"] for w in leakage_warnings],
+                "n_pass": n_pass,
+                "n_total": len(reports),
+            },
+            indent=2,
+        )
+    )
     return 0 if n_pass == len(reports) else 1
 
 

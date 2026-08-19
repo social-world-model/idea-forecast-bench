@@ -14,6 +14,7 @@ Output rows (D_z, written by `augment_hindsight_rows`):
    context_paper_ids: [...] | null,    # populated only if a corpus is supplied
    memory_text: str | null}            # populated only if a corpus is supplied
 """
+
 from __future__ import annotations
 
 import json
@@ -44,7 +45,7 @@ class DZRow:
     cutoff_t: str
     topic_id: str
     episode_id: str
-    target_z: dict[str, str]            # {base_direction, operator, gap}
+    target_z: dict[str, str]  # {base_direction, operator, gap}
     operator_closed: str
     source_future_id: str
     future_paper_published_date: str
@@ -100,7 +101,9 @@ def _iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
             try:
                 yield json.loads(raw)
             except json.JSONDecodeError as exc:
-                logger.warning("skipping malformed line %d in %s: %s", line_no, path, exc)
+                logger.warning(
+                    "skipping malformed line %d in %s: %s", line_no, path, exc
+                )
 
 
 def augment_hindsight_rows(
@@ -216,8 +219,10 @@ def augment_hindsight_rows(
     logger.info(
         "augment_hindsight_rows: total=%d kept=%d dropped(test_window)=%d "
         "dropped(missing_cutoff)=%d other_ratio=%.3f",
-        summary.total_rows, summary.train_window_rows,
-        summary.dropped_test_window, summary.dropped_missing_cutoff,
+        summary.total_rows,
+        summary.train_window_rows,
+        summary.dropped_test_window,
+        summary.dropped_missing_cutoff,
         summary.other_ratio,
     )
     return summary

@@ -1,4 +1,5 @@
 """OpenAI Batch API support for hindsight innovation extraction."""
+
 from __future__ import annotations
 
 import json
@@ -201,10 +202,12 @@ def prepare_batch_jsonl(
                 continue
 
             topic_papers = list(grouped_papers.get(topic_id, ()))
-            train_papers, future_papers, _end_month, _end_date = split_train_future_by_cutoff(
-                papers=topic_papers,
-                cutoff_date=cutoff_date,
-                horizon_months=TOPIC_HINDSIGHT_HORIZON_MONTHS,
+            train_papers, future_papers, _end_month, _end_date = (
+                split_train_future_by_cutoff(
+                    papers=topic_papers,
+                    cutoff_date=cutoff_date,
+                    horizon_months=TOPIC_HINDSIGHT_HORIZON_MONTHS,
+                )
             )
             future_lookup = {p.paper_id: p for p in future_papers}
             future_paper = future_lookup.get(paper_id)
@@ -489,9 +492,13 @@ def run_batch_extraction(
         # Resume if a submitted batch state file exists for round 0
         resumed = False
         if round_no == 0 and state_path.exists():
-            saved = BatchState.from_dict(json.loads(state_path.read_text(encoding="utf-8")))
+            saved = BatchState.from_dict(
+                json.loads(state_path.read_text(encoding="utf-8"))
+            )
             if saved.status in ("submitted", "uploaded") and saved.batch_id:
-                logger.info("Resuming batch %s (status=%s).", saved.batch_id, saved.status)
+                logger.info(
+                    "Resuming batch %s (status=%s).", saved.batch_id, saved.status
+                )
                 state = saved
                 resumed = True
 
@@ -528,9 +535,16 @@ def run_batch_extraction(
 
         state.output_file_id = output_file_id
         state.status = "completed"
-        _save_state(state, state_path if round_no == 0 else output_dir / f"batch_state_retry{round_no}.json")
+        _save_state(
+            state,
+            state_path
+            if round_no == 0
+            else output_dir / f"batch_state_retry{round_no}.json",
+        )
 
-        round_successes, round_failures = download_and_parse_results(client, output_file_id)
+        round_successes, round_failures = download_and_parse_results(
+            client, output_file_id
+        )
         all_successes.update(round_successes)
         all_failures.update(round_failures)
 
@@ -543,13 +557,13 @@ def run_batch_extraction(
             )
             # Reconstruct minimal target dicts from failed custom_ids
             target_index = {
-                encode_custom_id(t["topic_id"], t["episode_id"], str(t["future_paper_id"])): t
+                encode_custom_id(
+                    t["topic_id"], t["episode_id"], str(t["future_paper_id"])
+                ): t
                 for t in targets
             }
             pending_targets = [
-                target_index[cid]
-                for cid in round_failures
-                if cid in target_index
+                target_index[cid] for cid in round_failures if cid in target_index
             ]
             pending_already_extracted = None  # retry batch only contains failures
             # Remove failures that will be retried from the final failures dict
@@ -569,4 +583,6 @@ def run_batch_extraction(
 
 def _save_state(state: BatchState, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+    path.write_text(
+        json.dumps(state.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
+    )

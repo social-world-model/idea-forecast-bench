@@ -1,4 +1,5 @@
 """Tests for forecaster/realization/realization_reward.py"""
+
 from __future__ import annotations
 
 import pytest
@@ -46,7 +47,9 @@ class TestComputeEvidenceAccuracy:
             gap="long sequence processing",
         )
         evidence = [
-            _make_paper("p1", "attention mechanism long sequence processing transformer"),
+            _make_paper(
+                "p1", "attention mechanism long sequence processing transformer"
+            ),
             _make_paper("p2", "extend attention for long sequences efficiently"),
         ]
         score = compute_evidence_accuracy(evidence, innovation)
@@ -78,7 +81,9 @@ class TestComputeEvidenceAccuracy:
             operator="extend",
             gap="sequence length generalization",
         )
-        evidence = [_make_paper("p1", "deep learning transformer attention sequence length")]
+        evidence = [
+            _make_paper("p1", "deep learning transformer attention sequence length")
+        ]
         score = compute_evidence_accuracy(evidence, innovation)
         assert 0.0 <= score <= 1.0
 
@@ -91,7 +96,9 @@ class TestComputeOperatorAdherence:
             "building upon the foundation of attention mechanisms and improving their capabilities."
         )
         score = compute_operator_adherence(proposal, innovation)
-        assert score > 0.0, f"Expected positive score for 'extend' operator, got {score}"
+        assert score > 0.0, (
+            f"Expected positive score for 'extend' operator, got {score}"
+        )
         assert 0.0 <= score <= 1.0
 
     def test_compute_operator_adherence_benchmark(self) -> None:
@@ -101,7 +108,9 @@ class TestComputeOperatorAdherence:
             "the capabilities of language models across diverse tasks."
         )
         score = compute_operator_adherence(proposal, innovation)
-        assert score > 0.0, f"Expected positive score for 'benchmark' operator, got {score}"
+        assert score > 0.0, (
+            f"Expected positive score for 'benchmark' operator, got {score}"
+        )
         assert 0.0 <= score <= 1.0
 
     def test_compute_operator_adherence_transfer(self) -> None:
@@ -111,7 +120,9 @@ class TestComputeOperatorAdherence:
             "adapting the model using domain adaptation techniques."
         )
         score = compute_operator_adherence(proposal, innovation)
-        assert score > 0.0, f"Expected positive score for 'transfer' operator, got {score}"
+        assert score > 0.0, (
+            f"Expected positive score for 'transfer' operator, got {score}"
+        )
         assert 0.0 <= score <= 1.0
 
     def test_compute_operator_adherence_unknown_operator(self) -> None:
@@ -123,15 +134,28 @@ class TestComputeOperatorAdherence:
     def test_compute_operator_adherence_mismatch(self) -> None:
         innovation = _make_innovation(operator="scale")
         # Proposal only mentions analysis — not scaling
-        proposal = "We analyze the failure modes and study the investigation of small models."
+        proposal = (
+            "We analyze the failure modes and study the investigation of small models."
+        )
         score = compute_operator_adherence(proposal, innovation)
         assert 0.0 <= score <= 1.0
 
     def test_compute_operator_adherence_bounds(self) -> None:
-        for operator in ["extend", "transfer", "compose", "benchmark", "analyze", "simplify", "scale", "adapt"]:
+        for operator in [
+            "extend",
+            "transfer",
+            "compose",
+            "benchmark",
+            "analyze",
+            "simplify",
+            "scale",
+            "adapt",
+        ]:
             innovation = _make_innovation(operator=operator)
             score = compute_operator_adherence("any proposal text", innovation)
-            assert 0.0 <= score <= 1.0, f"Out of bounds for operator={operator}: {score}"
+            assert 0.0 <= score <= 1.0, (
+                f"Out of bounds for operator={operator}: {score}"
+            )
 
 
 class TestComputeCoherenceScore:
@@ -151,7 +175,9 @@ class TestComputeCoherenceScore:
             "We extend the transformer model by building upon the existing research gap around efficiency."
         )
         score = compute_coherence_score(proposal, innovation)
-        assert score > 0.3, f"Expected high coherence for detailed proposal, got {score}"
+        assert score > 0.3, (
+            f"Expected high coherence for detailed proposal, got {score}"
+        )
         assert 0.0 <= score <= 1.0
 
     def test_compute_coherence_score_empty_proposal(self) -> None:
@@ -162,14 +188,18 @@ class TestComputeCoherenceScore:
     def test_compute_coherence_score_very_short_proposal(self) -> None:
         innovation = _make_innovation()
         score = compute_coherence_score("short", innovation)
-        assert score < 0.3, f"Expected low coherence for very short proposal, got {score}"
+        assert score < 0.3, (
+            f"Expected low coherence for very short proposal, got {score}"
+        )
         assert 0.0 <= score <= 1.0
 
     def test_compute_coherence_score_bounds(self) -> None:
         innovation = _make_innovation()
         for proposal in ["", "short", "a" * 500]:
             score = compute_coherence_score(proposal, innovation)
-            assert 0.0 <= score <= 1.0, f"Out of bounds for proposal of length {len(proposal)}: {score}"
+            assert 0.0 <= score <= 1.0, (
+                f"Out of bounds for proposal of length {len(proposal)}: {score}"
+            )
 
 
 class TestComputeRealizationReward:
@@ -206,10 +236,16 @@ class TestComputeRealizationReward:
         )
         test_cases = [
             ("", _make_innovation(), []),
-            ("short", _make_innovation(operator="benchmark"), [_make_paper("p1", "benchmark evaluation dataset")]),
+            (
+                "short",
+                _make_innovation(operator="benchmark"),
+                [_make_paper("p1", "benchmark evaluation dataset")],
+            ),
             (
                 "A" * 1000,
-                _make_innovation(base_direction="transformer", operator="extend", gap="efficiency"),
+                _make_innovation(
+                    base_direction="transformer", operator="extend", gap="efficiency"
+                ),
                 [_make_paper("p1", "transformer efficiency")],
             ),
         ]
@@ -230,8 +266,13 @@ class TestComputeRealizationReward:
     def test_compute_realization_reward_weights_sum_to_one(self) -> None:
         """Verify that the default config weights sum to 1.0."""
         config = RealizationConfig()
-        total = config.evidence_accuracy_weight + config.operator_adherence_weight + config.coherence_weight
+        total = (
+            config.evidence_accuracy_weight
+            + config.operator_adherence_weight
+            + config.coherence_weight
+        )
         assert abs(total - 1.0) < 1e-6, f"Weights should sum to 1.0, got {total}"
+
 
 def _mock_scored_prediction_list() -> ScoredPredictionList:
     return ScoredPredictionList(
@@ -259,7 +300,9 @@ def _mock_scored_prediction_list() -> ScoredPredictionList:
 
 
 class TestRLRewardAlignment:
-    def test_evaluate_rl_reward_changes_with_evidence_quality(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_evaluate_rl_reward_changes_with_evidence_quality(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from forecaster.realization.config import RewardConfig
         from forecaster.realization.reward import evaluate_rl_reward
         from live_idea_bench.models import IdeaPrediction
@@ -274,8 +317,17 @@ class TestRLRewardAlignment:
             operator="compose",
             gap="ground long-horizon agents",
         )
-        prediction = IdeaPrediction(rank=1, title="proposal", rationale="rationale", approach="compose: retrieval planning")
-        good_evidence = [_make_paper("p1", "retrieval planning grounded long-horizon agents compose memory")]
+        prediction = IdeaPrediction(
+            rank=1,
+            title="proposal",
+            rationale="rationale",
+            approach="compose: retrieval planning",
+        )
+        good_evidence = [
+            _make_paper(
+                "p1", "retrieval planning grounded long-horizon agents compose memory"
+            )
+        ]
         weak_evidence = [_make_paper("p2", "cooking recipes and travel guides")]
 
         good = evaluate_rl_reward(
@@ -299,7 +351,9 @@ class TestRLRewardAlignment:
 
         assert good.list_reward > weak.list_reward
 
-    def test_evaluate_rl_reward_changes_with_operator_adherence(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_evaluate_rl_reward_changes_with_operator_adherence(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from forecaster.realization.config import RewardConfig
         from forecaster.realization.reward import evaluate_rl_reward
         from live_idea_bench.models import IdeaPrediction
@@ -314,8 +368,17 @@ class TestRLRewardAlignment:
             operator="simplify",
             gap="retain accuracy under memory constraints",
         )
-        prediction = IdeaPrediction(rank=1, title="proposal", rationale="rationale", approach="simplify: model compression")
-        evidence = [_make_paper("p1", "model compression efficient lightweight memory reduction")]
+        prediction = IdeaPrediction(
+            rank=1,
+            title="proposal",
+            rationale="rationale",
+            approach="simplify: model compression",
+        )
+        evidence = [
+            _make_paper(
+                "p1", "model compression efficient lightweight memory reduction"
+            )
+        ]
 
         aligned = evaluate_rl_reward(
             predictions=[prediction],
@@ -336,10 +399,15 @@ class TestRLRewardAlignment:
             proposal_text="Failure Analysis\nWe analyze large models and study scaling trends without simplifying the architecture.",
         )
 
-        assert aligned.reward_breakdown["operator_adherence"] > misaligned.reward_breakdown["operator_adherence"]
+        assert (
+            aligned.reward_breakdown["operator_adherence"]
+            > misaligned.reward_breakdown["operator_adherence"]
+        )
         assert aligned.list_reward > misaligned.list_reward
 
-    def test_evaluate_rl_reward_changes_with_coherence(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_evaluate_rl_reward_changes_with_coherence(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from forecaster.realization.config import RewardConfig
         from forecaster.realization.reward import evaluate_rl_reward
         from live_idea_bench.models import IdeaPrediction
@@ -354,7 +422,12 @@ class TestRLRewardAlignment:
             operator="extend",
             gap="long sequence efficiency",
         )
-        prediction = IdeaPrediction(rank=1, title="proposal", rationale="rationale", approach="extend: transformer attention")
+        prediction = IdeaPrediction(
+            rank=1,
+            title="proposal",
+            rationale="rationale",
+            approach="extend: transformer attention",
+        )
         evidence = [_make_paper("p1", "transformer attention long sequence efficiency")]
 
         coherent = evaluate_rl_reward(
@@ -380,5 +453,8 @@ class TestRLRewardAlignment:
             proposal_text="short",
         )
 
-        assert coherent.reward_breakdown["coherence"] > incoherent.reward_breakdown["coherence"]
+        assert (
+            coherent.reward_breakdown["coherence"]
+            > incoherent.reward_breakdown["coherence"]
+        )
         assert coherent.list_reward > incoherent.list_reward

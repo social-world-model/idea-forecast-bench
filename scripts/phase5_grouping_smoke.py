@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 """Phase-5 smoke: exercise make_reward_fn under correct + broken grouping.
 
-  1. Build a tiny artifact dir (indices + rubric).
-  2. Drive reward_fn with two well-formed groups (num_generations=4 each).
-     Expect: invariant passes, dedup penalty fires on a triplicate.
-  3. Drive reward_fn with a mixed group (different operators per row).
-     Expect: GroupingInvariantError raised.
+1. Build a tiny artifact dir (indices + rubric).
+2. Drive reward_fn with two well-formed groups (num_generations=4 each).
+   Expect: invariant passes, dedup penalty fires on a triplicate.
+3. Drive reward_fn with a mixed group (different operators per row).
+   Expect: GroupingInvariantError raised.
 """
+
 from __future__ import annotations
 
 import json
@@ -21,7 +22,9 @@ from forecaster.foresight.rubric import Rubric, save_rubric, stamp_metadata
 from forecaster.foresight.trainer_wiring import make_reward_fn
 from live_idea_bench.models import PaperRecord
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
 logger = logging.getLogger("phase5_smoke")
 
 
@@ -38,12 +41,14 @@ class StubConfig:
 
 
 def _extra(cutoff: str, base: str, op: str, gap: str) -> str:
-    return json.dumps({
-        "cutoff_date": cutoff,
-        "topic_id": "rag",
-        "innovation": {"base_direction": base, "operator": op, "gap": gap},
-        "prompt_mode": "z_conditioned_realization",
-    })
+    return json.dumps(
+        {
+            "cutoff_date": cutoff,
+            "topic_id": "rag",
+            "innovation": {"base_direction": base, "operator": op, "gap": gap},
+            "prompt_mode": "z_conditioned_realization",
+        }
+    )
 
 
 def main() -> int:
@@ -53,12 +58,33 @@ def main() -> int:
         (root / "rubrics").mkdir(parents=True)
 
         papers = [
-            PaperRecord("hist1", "Dense retrieval baseline", "2024-04", "RAG dense retriever.",
-                        ["rag"], "", "2024-04-15"),
-            PaperRecord("fut1", "RAG-extension", "2024-08", "Retrieval extension and new gap.",
-                        ["rag"], "", "2024-08-15"),
-            PaperRecord("fut2", "RAG composition", "2024-08", "Composes retrievers and planners.",
-                        ["rag"], "", "2024-08-20"),
+            PaperRecord(
+                "hist1",
+                "Dense retrieval baseline",
+                "2024-04",
+                "RAG dense retriever.",
+                ["rag"],
+                "",
+                "2024-04-15",
+            ),
+            PaperRecord(
+                "fut1",
+                "RAG-extension",
+                "2024-08",
+                "Retrieval extension and new gap.",
+                ["rag"],
+                "",
+                "2024-08-15",
+            ),
+            PaperRecord(
+                "fut2",
+                "RAG composition",
+                "2024-08",
+                "Composes retrievers and planners.",
+                ["rag"],
+                "",
+                "2024-08-20",
+            ),
         ]
         embedder = HashingEmbedder(dim=128, seed=7)
         build_cutoff_indices(
@@ -70,10 +96,12 @@ def main() -> int:
         )
         save_rubric(
             Rubric(
-                topic_id="rag", cutoff_t="2024-06-30",
+                topic_id="rag",
+                cutoff_t="2024-06-30",
                 criteria=("must extend retrieval with a new gap",),
                 operator_focus=("limitation_extension",),
-                version=1, metadata=stamp_metadata(model="smoke"),
+                version=1,
+                metadata=stamp_metadata(model="smoke"),
             ),
             root / "rubrics" / "rag.json",
         )
@@ -116,7 +144,9 @@ def main() -> int:
         except GroupingInvariantError as exc:
             logger.info("grouping invariant correctly raised: %s", exc)
         else:
-            raise AssertionError("expected GroupingInvariantError on mixed-operator group")
+            raise AssertionError(
+                "expected GroupingInvariantError on mixed-operator group"
+            )
 
         logger.info("phase 5 smoke OK")
     return 0

@@ -23,36 +23,118 @@ from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Prepare and train RL policy checkpoints for LiveIdeaBench.")
-    parser.add_argument("--input-dir", type=str, default="data/csml/raw_markdown", help="Directory with markdown papers.")
-    parser.add_argument("--output-dir", type=str, default="data/rl_runs/policy_rl", help="Directory for RL artifacts.")
-    parser.add_argument("--model-name", type=str, help="Hugging Face model id or local checkpoint path.")
-    parser.add_argument("--model-preset", type=str, help="Shortcut alias from the built-in 3B/4B model registry.")
-    parser.add_argument("--trainer", type=str, choices=["grpo"], default="grpo", help="Trainer algorithm to run (GRPO).")
-    parser.add_argument("--trainer-config", type=str, help="Optional trainer config file under config/rl.")
-    parser.add_argument("--init-policy-path", type=str, help="Optional checkpoint path used to warm-start GRPO.")
-    parser.add_argument("--prepare-only", action="store_true", help="Prepare common artifacts and trainer datasets without training.")
+    parser = argparse.ArgumentParser(
+        description="Prepare and train RL policy checkpoints for LiveIdeaBench."
+    )
+    parser.add_argument(
+        "--input-dir",
+        type=str,
+        default="data/csml/raw_markdown",
+        help="Directory with markdown papers.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="data/rl_runs/policy_rl",
+        help="Directory for RL artifacts.",
+    )
+    parser.add_argument(
+        "--model-name", type=str, help="Hugging Face model id or local checkpoint path."
+    )
+    parser.add_argument(
+        "--model-preset",
+        type=str,
+        help="Shortcut alias from the built-in 3B/4B model registry.",
+    )
+    parser.add_argument(
+        "--trainer",
+        type=str,
+        choices=["grpo"],
+        default="grpo",
+        help="Trainer algorithm to run (GRPO).",
+    )
+    parser.add_argument(
+        "--trainer-config",
+        type=str,
+        help="Optional trainer config file under config/rl.",
+    )
+    parser.add_argument(
+        "--init-policy-path",
+        type=str,
+        help="Optional checkpoint path used to warm-start GRPO.",
+    )
+    parser.add_argument(
+        "--prepare-only",
+        action="store_true",
+        help="Prepare common artifacts and trainer datasets without training.",
+    )
     parser.add_argument(
         "--prepare-split",
         type=str,
         choices=["train", "validation", "test", "all"],
         help="Episode split to materialize when used with --prepare-only.",
     )
-    parser.add_argument("--skip-alignment-check", action="store_true", help="Skip the online reward alignment check for GRPO.")
-    parser.add_argument("--max-episodes", type=int, help="Optional cap for quick experiments.")
-    parser.add_argument("--start-month", type=str, help="Optional lower bound month for loading papers.")
-    parser.add_argument("--end-month", type=str, help="Optional upper bound month for loading papers.")
-    parser.add_argument("--episode-config", type=str, default="episode_build.yaml", help="RL episode config file under config/rl.")
-    parser.add_argument("--candidate-config", type=str, default="candidate_generation.yaml", help="Candidate generation config file under config/rl.")
-    parser.add_argument("--reward-config", type=str, default="reward.yaml", help="Reward config file under config/rl.")
-    parser.add_argument("--selection-config", type=str, default="selection.yaml", help="Selector config file under config/rl.")
-    parser.add_argument("--similarity-config", type=str, default="similarity.yaml", help="Similarity config used for reward evaluation.")
-    parser.add_argument("--hindsight", type=str, default=None, help="Path to hindsight_samples.jsonl for GRPO training data.")
-    parser.add_argument("--list-model-presets", action="store_true", help="Print the built-in small-model candidates and exit.")
+    parser.add_argument(
+        "--skip-alignment-check",
+        action="store_true",
+        help="Skip the online reward alignment check for GRPO.",
+    )
+    parser.add_argument(
+        "--max-episodes", type=int, help="Optional cap for quick experiments."
+    )
+    parser.add_argument(
+        "--start-month", type=str, help="Optional lower bound month for loading papers."
+    )
+    parser.add_argument(
+        "--end-month", type=str, help="Optional upper bound month for loading papers."
+    )
+    parser.add_argument(
+        "--episode-config",
+        type=str,
+        default="episode_build.yaml",
+        help="RL episode config file under config/rl.",
+    )
+    parser.add_argument(
+        "--candidate-config",
+        type=str,
+        default="candidate_generation.yaml",
+        help="Candidate generation config file under config/rl.",
+    )
+    parser.add_argument(
+        "--reward-config",
+        type=str,
+        default="reward.yaml",
+        help="Reward config file under config/rl.",
+    )
+    parser.add_argument(
+        "--selection-config",
+        type=str,
+        default="selection.yaml",
+        help="Selector config file under config/rl.",
+    )
+    parser.add_argument(
+        "--similarity-config",
+        type=str,
+        default="similarity.yaml",
+        help="Similarity config used for reward evaluation.",
+    )
+    parser.add_argument(
+        "--hindsight",
+        type=str,
+        default=None,
+        help="Path to hindsight_samples.jsonl for GRPO training data.",
+    )
+    parser.add_argument(
+        "--list-model-presets",
+        action="store_true",
+        help="Print the built-in small-model candidates and exit.",
+    )
     return parser
 
 
-_HF_MODEL_ID_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_./")
+_HF_MODEL_ID_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_./"
+)
 
 
 def _validate_init_policy_path(path: str | None) -> str | None:
@@ -76,7 +158,9 @@ def _resolve_model_name(args: argparse.Namespace) -> str:
         return str(args.model_name)
     if args.model_preset:
         return resolve_small_model(str(args.model_preset)).model_id
-    raise ValueError("Either --model-name or --model-preset is required unless --list-model-presets is used.")
+    raise ValueError(
+        "Either --model-name or --model-preset is required unless --list-model-presets is used."
+    )
 
 
 def _resolve_trainer_config(args: argparse.Namespace) -> tuple[str, object]:
@@ -134,8 +218,11 @@ def main() -> int:
     hindsight_samples = None
     if args.hindsight:
         from forecaster.hindsight.dataset_builder import load_hindsight_samples_jsonl
+
         hindsight_samples = load_hindsight_samples_jsonl(args.hindsight)
-        print(f"Loaded {len(hindsight_samples)} hindsight samples from {args.hindsight}")
+        print(
+            f"Loaded {len(hindsight_samples)} hindsight samples from {args.hindsight}"
+        )
 
     manifest = run_policy_rl_pipeline(
         papers,
@@ -164,7 +251,9 @@ def main() -> int:
     _write_json(manifest_path / "run_summary.json", manifest)
 
     action = "prepared" if args.prepare_only else "finished"
-    print(f"RL trainer '{args.trainer}' {action} for {manifest['selected_episode_count']} episodes.")
+    print(
+        f"RL trainer '{args.trainer}' {action} for {manifest['selected_episode_count']} episodes."
+    )
     print(f"Artifacts saved to {manifest_path.resolve()}")
     return 0
 

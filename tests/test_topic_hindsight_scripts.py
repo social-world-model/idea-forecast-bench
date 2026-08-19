@@ -68,9 +68,7 @@ def _write_legacy_arxiv_markdown(root: Path, *, paper_id: str) -> Path:
 def _build_sample_corpus(root: Path) -> Path:
     data_dir = root / "papers"
     common_title = "Time-series Forecasting for Tabular Data Systems"
-    common_summary = (
-        "This work studies time-series forecasting for tabular data with stable baselines."
-    )
+    common_summary = "This work studies time-series forecasting for tabular data with stable baselines."
     _write_legacy_arxiv_markdown(data_dir, paper_id="0704.0047")
 
     _write_markdown_paper(
@@ -144,7 +142,10 @@ def test_prepare_topic_hindsight_manifest_enforces_fixed_windows_and_sampling(
     assert len(non_empty_rows) == 12
     assert all(row["future_start_date"][:7] >= "2023-04" for row in non_empty_rows)
     assert all(row["future_end_date"][:7] <= "2024-09" for row in non_empty_rows)
-    assert all(len(row["selected_future_paper_ids"]) <= 2 for row in manifest["topic_episode_rows"])
+    assert all(
+        len(row["selected_future_paper_ids"]) <= 2
+        for row in manifest["topic_episode_rows"]
+    )
     assert all(
         paper_id != "bench-2024-10"
         for row in manifest["topic_episode_rows"]
@@ -200,9 +201,13 @@ def test_run_topic_hindsight_preview_generates_10_rows_with_valid_innovations(
     manifest = build_topic_hindsight_manifest(context)
     expected_targets = select_preview_targets(manifest, preview_count=10)
 
-    monkeypatch.setattr(preview_module, "create_client", lambda model: (object(), model))
+    monkeypatch.setattr(
+        preview_module, "create_client", lambda model: (object(), model)
+    )
 
-    def _fake_extract_innovation(*, future_paper, context_papers, llm_client, model, config):
+    def _fake_extract_innovation(
+        *, future_paper, context_papers, llm_client, model, config
+    ):
         assert context_papers
         return Innovation(
             base_direction=f"based on {future_paper.paper_id}",
@@ -230,8 +235,7 @@ def test_run_topic_hindsight_preview_generates_10_rows_with_valid_innovations(
         for target in expected_targets
     ]
     actual_triplets = [
-        (row["topic_id"], row["episode_id"], row["future_paper_id"])
-        for row in rows
+        (row["topic_id"], row["episode_id"], row["future_paper_id"]) for row in rows
     ]
     assert actual_triplets == expected_triplets
 
@@ -243,7 +247,9 @@ def test_run_topic_hindsight_preview_generates_10_rows_with_valid_innovations(
 
     jsonl_rows = [
         json.loads(line)
-        for line in (output_dir / "preview_hindsight_samples.jsonl").read_text(encoding="utf-8").splitlines()
+        for line in (output_dir / "preview_hindsight_samples.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
         if line.strip()
     ]
     assert len(jsonl_rows) == 10
@@ -262,7 +268,9 @@ def test_preview_uses_existing_manifest_when_present(
     output_dir = tmp_path / "preview_existing_manifest"
     prepare_topic_hindsight_manifest(input_dir=data_dir, output_dir=output_dir)
 
-    monkeypatch.setattr(preview_module, "create_client", lambda model: (object(), model))
+    monkeypatch.setattr(
+        preview_module, "create_client", lambda model: (object(), model)
+    )
     monkeypatch.setattr(
         preview_module,
         "extract_innovation",

@@ -1,4 +1,5 @@
 """Tests for the Phase-4 reward gates + retrieve-then-judge."""
+
 from __future__ import annotations
 
 import json
@@ -32,31 +33,45 @@ from live_idea_bench.models import PaperRecord
 
 def _hist_paper(pid: str, date: str, text: str) -> PaperRecord:
     return PaperRecord(
-        paper_id=pid, title=text, month=date[:7], summary=text,
-        keywords=["rag"], source_path="", published_date=date,
+        paper_id=pid,
+        title=text,
+        month=date[:7],
+        summary=text,
+        keywords=["rag"],
+        source_path="",
+        published_date=date,
     )
 
 
 def _fut_paper(pid: str, date: str, text: str) -> PaperRecord:
     return PaperRecord(
-        paper_id=pid, title=text, month=date[:7], summary=text,
-        keywords=["rag"], source_path="", published_date=date,
+        paper_id=pid,
+        title=text,
+        month=date[:7],
+        summary=text,
+        keywords=["rag"],
+        source_path="",
+        published_date=date,
     )
 
 
 def _make_context(rubric_criteria=("must extend retrieval",)) -> ForesightContext:
     emb = HashingEmbedder(dim=128, seed=42)
     history_papers = [
-        _hist_paper("2305.04321", "2024-04-15",
-                    "Dense passage retrieval for rag baselines"),
-        _hist_paper("2305.04322", "2024-05-20",
-                    "Hybrid sparse and dense retrievers"),
+        _hist_paper(
+            "2305.04321", "2024-04-15", "Dense passage retrieval for rag baselines"
+        ),
+        _hist_paper("2305.04322", "2024-05-20", "Hybrid sparse and dense retrievers"),
     ]
     future_papers = [
-        _fut_paper("p_future_1", "2024-08-15",
-                   "RAG meets time series with retrieval extension"),
-        _fut_paper("p_future_2", "2024-08-20",
-                   "Plan composition for retrieval-augmented agents"),
+        _fut_paper(
+            "p_future_1", "2024-08-15", "RAG meets time series with retrieval extension"
+        ),
+        _fut_paper(
+            "p_future_2",
+            "2024-08-20",
+            "Plan composition for retrieval-augmented agents",
+        ),
     ]
     history_idx = build_history_index(history_papers, emb, cutoff_date="2024-06-30")
     future_idx = build_future_index(future_papers, emb, cutoff_date="2024-06-30")
@@ -68,14 +83,16 @@ def _make_context(rubric_criteria=("must extend retrieval",)) -> ForesightContex
             return 0.05
         combined = (idea + " " + cand).lower()
         cues = sum(
-            1 for w in ("extend", "new", "novel", "introduce", "retrieval", "extension")
+            1
+            for w in ("extend", "new", "novel", "introduce", "retrieval", "extension")
             if w in combined
         )
         return min(0.95, 0.4 + 0.08 * cues)
 
     judge = RubricJudge(scorer=StubScorer(fn=scorer))
     rubric = Rubric(
-        topic_id="rag", cutoff_t="2024-06-30",
+        topic_id="rag",
+        cutoff_t="2024-06-30",
         criteria=rubric_criteria,
         operator_focus=("limitation_extension",),
     )
@@ -119,13 +136,19 @@ def _payload(
 
 def test_format_ok_accepts_proposal_text():
     inno = Innovation("rag", "extend", "new gap")
-    assert format_ok("This idea extends rag with a new retrieval layer.",
-                     prompt_mode="z_conditioned_realization", innovation=inno)
+    assert format_ok(
+        "This idea extends rag with a new retrieval layer.",
+        prompt_mode="z_conditioned_realization",
+        innovation=inno,
+    )
 
 
 def test_format_ok_rejects_empty_completion():
-    assert not format_ok("", prompt_mode="z_conditioned_realization",
-                         innovation=Innovation("rag", "extend", "x"))
+    assert not format_ok(
+        "",
+        prompt_mode="z_conditioned_realization",
+        innovation=Innovation("rag", "extend", "x"),
+    )
 
 
 def test_extract_citation_candidates_finds_arxiv_ids():
@@ -154,7 +177,9 @@ def test_grounded_can_require_citations():
     ctx = _make_context()
     history = ctx.history_indices["2024-06-30"]
     assert not grounded(
-        "No citations here.", history, ctx.embedder,
+        "No citations here.",
+        history,
+        ctx.embedder,
         require_citations=True,
     )
 
@@ -207,9 +232,7 @@ def test_random_legacy_idea_scores_low():
 
 def test_rollout_citing_nonexistent_paper_gets_zero():
     ctx = _make_context()
-    rollout = (
-        "We extend retrieval with a clever new trick — see arxiv:9999.99999."
-    )
+    rollout = "We extend retrieval with a clever new trick — see arxiv:9999.99999."
     ctx.config.grounding_threshold = 0.95  # force strictness
     reward, diag = compute_foresight_reward(_payload(rollout), ctx)
     assert reward == 0.0
@@ -265,7 +288,10 @@ def test_compute_score_v2_accepts_extra_info_as_string():
         "prompt_mode": "z_conditioned_realization",
     }
     reward = compute_score_v2(
-        data_source="t", solution_str=rollout, ground_truth="",
-        extra_info=json.dumps(extra), ctx=ctx,
+        data_source="t",
+        solution_str=rollout,
+        ground_truth="",
+        extra_info=json.dumps(extra),
+        ctx=ctx,
     )
     assert reward > 0.0

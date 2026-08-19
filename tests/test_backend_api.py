@@ -19,7 +19,9 @@ def test_protected_strategy_write_requires_admin_token(monkeypatch, tmp_path) ->
     assert resp.get_json()["error"]["code"] == "forbidden"
 
 
-def test_protected_strategy_write_accepts_valid_admin_token(monkeypatch, tmp_path) -> None:
+def test_protected_strategy_write_accepts_valid_admin_token(
+    monkeypatch, tmp_path
+) -> None:
     from backend import app as app_module
     from backend import strategy_store
 

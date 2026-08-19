@@ -15,6 +15,7 @@ Usage (untrained base model by HF id):
         --papers-dir data/csml/raw_markdown \
         --output-dir output/prior_baseline/eval
 """
+
 from __future__ import annotations
 
 import argparse
@@ -37,11 +38,15 @@ log = logging.getLogger("prior_eval")
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="Sample from prior and prepare for voyage eval.")
+    p = argparse.ArgumentParser(
+        description="Sample from prior and prepare for voyage eval."
+    )
     p.add_argument("--model-path", required=True, help="Checkpoint dir or HF model id")
     p.add_argument("--hindsight", required=True, help="Path to hindsight_samples.jsonl")
     p.add_argument("--papers-dir", required=True, help="Papers markdown directory")
-    p.add_argument("--output-dir", required=True, help="Output directory for predictions")
+    p.add_argument(
+        "--output-dir", required=True, help="Output directory for predictions"
+    )
     p.add_argument("--num-candidates", type=int, default=16)
     p.add_argument("--top-k", type=int, default=5)
     p.add_argument("--temperature", type=float, default=0.8)
@@ -77,11 +82,15 @@ def main() -> int:
     out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)
     (out / "sampled_innovations.json").write_text(
-        json.dumps([innovation_to_dict(i) for i in innovations], indent=2, ensure_ascii=False)
+        json.dumps(
+            [innovation_to_dict(i) for i in innovations], indent=2, ensure_ascii=False
+        )
     )
 
     # Build predictions in reeval_voyage format
-    papers = load_papers_from_markdown(Path(args.papers_dir), start_month=args.start_month, end_month=args.end_month)
+    papers = load_papers_from_markdown(
+        Path(args.papers_dir), start_month=args.start_month, end_month=args.end_month
+    )
     log.info("Loaded %d papers", len(papers))
 
     topics = load_topics()
@@ -91,13 +100,23 @@ def main() -> int:
     for topic in topics:
         scoped = grouped.get(topic.id, [])
         if not scoped:
-            topic_results[topic.id] = {"topic_name": topic.name, "paper_count": 0, "backtest": None}
+            topic_results[topic.id] = {
+                "topic_name": topic.name,
+                "paper_count": 0,
+                "backtest": None,
+            }
             continue
         train, future, future_end, _ = split_train_future_by_cutoff(
-            papers=scoped, cutoff_month=last_cutoff, horizon_months=args.horizon_months,
+            papers=scoped,
+            cutoff_month=last_cutoff,
+            horizon_months=args.horizon_months,
         )
         if not future:
-            topic_results[topic.id] = {"topic_name": topic.name, "paper_count": len(scoped), "backtest": None}
+            topic_results[topic.id] = {
+                "topic_name": topic.name,
+                "paper_count": len(scoped),
+                "backtest": None,
+            }
             continue
         preds = [
             {

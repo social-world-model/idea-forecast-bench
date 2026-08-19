@@ -6,13 +6,17 @@ SCORE_RE, the partial-parse fail-loud behavior (no silent backfill to 1), the
 <think>-stripping, and the decode-config-sensitive judge fingerprint — without
 any network call.
 """
+
 from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
 
 _JUDGE_PATH = (
-    Path(__file__).resolve().parents[1] / "examples" / "live-idea-bench" / "llm_judge_eval.py"
+    Path(__file__).resolve().parents[1]
+    / "examples"
+    / "live-idea-bench"
+    / "llm_judge_eval.py"
 )
 
 
@@ -47,16 +51,19 @@ class _FakeClient:
 
 
 def _pred(mod):
-    return mod.IdeaPrediction(rank=1, title="t", rationale="r", approach="a", key_terms=["k"])
+    return mod.IdeaPrediction(
+        rank=1, title="t", rationale="r", approach="a", key_terms=["k"]
+    )
 
 
 def test_score_re_anchored_and_rejects_inline_and_slash():
     mod = _load()
     rx = mod.SCORE_RE
     # start-of-line label captured
-    assert {m.group(1).upper(): m.group(2) for m in rx.finditer(
-        "PROBLEM_MATCH: 3\nMETHOD_MATCH: 2\nSPECIFICITY: 2")} == {
-        "PROBLEM_MATCH": "3", "METHOD_MATCH": "2", "SPECIFICITY": "2"}
+    assert {
+        m.group(1).upper(): m.group(2)
+        for m in rx.finditer("PROBLEM_MATCH: 3\nMETHOD_MATCH: 2\nSPECIFICITY: 2")
+    } == {"PROBLEM_MATCH": "3", "METHOD_MATCH": "2", "SPECIFICITY": "2"}
     # a stray "...: 3" mid-prose (e.g. injected) is NOT captured as a score line
     assert not list(rx.finditer("the method match is good: 3 out of nowhere"))
     # "METHOD_MATCH: 2/3" must not be misread as 2 (word boundary after digit)
@@ -65,7 +72,9 @@ def test_score_re_anchored_and_rejects_inline_and_slash():
 
 def test_full_response_parsed():
     mod = _load()
-    client = _FakeClient("PROBLEM_MATCH: 3\nMETHOD_MATCH: 3\nSPECIFICITY: 3\nREASONING: identical")
+    client = _FakeClient(
+        "PROBLEM_MATCH: 3\nMETHOD_MATCH: 3\nSPECIFICITY: 3\nREASONING: identical"
+    )
     d = mod._call_judge(_pred(mod), "title", "abstract", client, "gpt-4.1-mini")
     assert d["parse_failed"] is False
     assert (d["problem_score"], d["method_score"], d["specificity_score"]) == (3, 3, 3)
@@ -90,8 +99,13 @@ def test_think_block_stripped_before_parse():
         "<think>METHOD_MATCH: 0 this is my scratchpad, ignore</think>\n"
         "PROBLEM_MATCH: 2\nMETHOD_MATCH: 3\nSPECIFICITY: 2\nREASONING: ok"
     )
-    d = mod._call_judge(_pred(mod), "title", "abstract", judge_client=_FakeClient(content),
-                        judge_model="qwen3.5-2b")
+    d = mod._call_judge(
+        _pred(mod),
+        "title",
+        "abstract",
+        judge_client=_FakeClient(content),
+        judge_model="qwen3.5-2b",
+    )
     # the <think> METHOD_MATCH: 0 must be stripped; real scores used
     assert d["parse_failed"] is False
     assert (d["problem_score"], d["method_score"], d["specificity_score"]) == (2, 3, 2)
@@ -103,7 +117,9 @@ def test_judge_fingerprint_sensitive_to_decode_config(monkeypatch):
     # same model+rubric+decode -> stable
     assert mod._judge_fingerprint("gpt-4.1-mini") == fp_default
     # qwen flips enable_thinking -> different fingerprint than a non-qwen model
-    assert mod._judge_fingerprint("qwen3.5-2b") != mod._judge_fingerprint("gpt-4.1-mini")
+    assert mod._judge_fingerprint("qwen3.5-2b") != mod._judge_fingerprint(
+        "gpt-4.1-mini"
+    )
     # changing max_tokens changes the fingerprint
     monkeypatch.setattr(mod, "JUDGE_MAX_TOKENS", 384)
     assert mod._judge_fingerprint("gpt-4.1-mini") != fp_default

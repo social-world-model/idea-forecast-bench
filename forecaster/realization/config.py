@@ -79,7 +79,9 @@ class SelectionConfig:
     candidate_pool_size: int = 24
     output_top_k: int = 5
     dedup_similarity_threshold: float = 0.8
-    temperature_schedule: list[float] = field(default_factory=lambda: [0.35, 0.55, 0.75, 0.95])
+    temperature_schedule: list[float] = field(
+        default_factory=lambda: [0.35, 0.55, 0.75, 0.95]
+    )
     top_p_schedule: list[float] = field(default_factory=lambda: [0.8, 0.9, 0.95])
     enable_context_shuffle: bool = True
     relevance_frequency_weight: float = 0.5
@@ -118,8 +120,10 @@ class OnlineRLTrainConfig:
     # config/forecaster/grpo_train.yaml (output/foresight_artifacts).
     foresight_artifact_dir: str = ""
     # When reward_mode == "foresight", which embedder + judge backend to use.
-    foresight_embedder: str = "sentence-transformer:sentence-transformers/allenai-specter"
-    foresight_judge_mode: str = "live"   # "live" | "stub" (stub used only in tests)
+    foresight_embedder: str = (
+        "sentence-transformer:sentence-transformers/allenai-specter"
+    )
+    foresight_judge_mode: str = "live"  # "live" | "stub" (stub used only in tests)
     # Phase-5: in-group dedup penalty. Subtracted from each rollout's reward
     # for every near-duplicate sibling within its group (Jaccard >= threshold).
     dedup_penalty: float = 0.0
@@ -188,11 +192,15 @@ def load_reward_config(name_or_path: str = "reward.yaml") -> RewardConfig:
     return _load_model_config(name_or_path, RewardConfig)
 
 
-def load_episode_build_config(name_or_path: str = "episode_build.yaml") -> EpisodeBuildConfig:
+def load_episode_build_config(
+    name_or_path: str = "episode_build.yaml",
+) -> EpisodeBuildConfig:
     return _load_model_config(name_or_path, EpisodeBuildConfig)
 
 
-def load_candidate_generation_config(name_or_path: str = "candidate_generation.yaml") -> CandidateGenerationConfig:
+def load_candidate_generation_config(
+    name_or_path: str = "candidate_generation.yaml",
+) -> CandidateGenerationConfig:
     return _load_model_config(name_or_path, CandidateGenerationConfig)
 
 

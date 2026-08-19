@@ -1,4 +1,5 @@
 """Tests for strict schema and manifest contracts."""
+
 from __future__ import annotations
 
 import pytest
@@ -33,12 +34,20 @@ def test_strict_runtime_manifest_contract_freezes_versions() -> None:
     manifest = strict_runtime_manifest_contract()
 
     assert manifest["manifest_version"] == STRICT_RUNTIME_MANIFEST_VERSION
-    assert manifest["search_action_schema_version"] == STRICT_SEARCH_ACTION_SCHEMA_VERSION
+    assert (
+        manifest["search_action_schema_version"] == STRICT_SEARCH_ACTION_SCHEMA_VERSION
+    )
     assert manifest["trajectory_schema_version"] == STRICT_TRAJECTORY_SCHEMA_VERSION
     assert manifest["reward_contract_version"] == STRICT_REWARD_CONTRACT_VERSION
     assert manifest["score_contract_version"] == STRICT_SCORE_CONTRACT_VERSION
-    assert manifest["joint_score_formula"] == "linear_blend(prior_score, realization_score)"
-    assert tuple(manifest["joint_score_components"]) == ("prior_score", "realization_score")
+    assert (
+        manifest["joint_score_formula"]
+        == "linear_blend(prior_score, realization_score)"
+    )
+    assert tuple(manifest["joint_score_components"]) == (
+        "prior_score",
+        "realization_score",
+    )
     assert manifest["allows_extra_bonus_terms"] is False
     assert manifest["policy_emits_one_action_per_turn"] is True
     assert manifest["interactive_rollout_required"] is True

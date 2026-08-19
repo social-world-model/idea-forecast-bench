@@ -1,4 +1,5 @@
 """Tests for forecaster/inference/deduplication.py"""
+
 from __future__ import annotations
 
 import pytest
@@ -10,7 +11,9 @@ from forecaster.inference.deduplication import (
 from forecaster.models import Innovation, JointCandidate
 
 
-def _make_innovation(base: str = "transformer", op: str = "extend", gap: str = "efficiency") -> Innovation:
+def _make_innovation(
+    base: str = "transformer", op: str = "extend", gap: str = "efficiency"
+) -> Innovation:
     return Innovation(base_direction=base, operator=op, gap=gap)
 
 

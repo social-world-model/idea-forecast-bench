@@ -1,4 +1,5 @@
 """Tests for strict trajectory-based realization reward."""
+
 from __future__ import annotations
 
 from forecaster.config import RealizationConfig
@@ -55,7 +56,9 @@ def _make_trajectory(
         steps=(
             RealizationTrajectoryStep(
                 action=SearchAction(action_type="search", query=search_query),
-                observation=tuple(_make_observation(paper) for paper in surfaced_papers),
+                observation=tuple(
+                    _make_observation(paper) for paper in surfaced_papers
+                ),
                 selected_evidence_ids=(),
             ),
             RealizationTrajectoryStep(
@@ -129,7 +132,9 @@ def test_strict_trajectory_reward_has_zero_evidence_quality_without_selection() 
     assert reward.evidence_quality == 0.0
 
 
-def test_strict_trajectory_reward_operator_and_coherence_depend_only_on_proposal_text() -> None:
+def test_strict_trajectory_reward_operator_and_coherence_depend_only_on_proposal_text() -> (
+    None
+):
     good = _make_paper(
         "paper-good",
         "Grounded Retrieval Planning",

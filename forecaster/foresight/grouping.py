@@ -10,6 +10,7 @@ Asserts (load-bearing — raise, not warn):
   * within a group, all G rollouts share identical (cutoff_t, innovation),
   * G >= 2.
 """
+
 from __future__ import annotations
 
 import json

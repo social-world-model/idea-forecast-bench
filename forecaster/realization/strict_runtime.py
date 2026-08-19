@@ -1,4 +1,5 @@
 """Strict realization runtime built on the interactive search environment."""
+
 from __future__ import annotations
 
 import json
@@ -66,10 +67,13 @@ def _resolve_search_env(
 ) -> dict[str, int]:
     payload = dict(search_env_payload or {})
     return {
-        "max_search_steps": int(payload.get("max_search_steps", max_search_steps) or max_search_steps),
+        "max_search_steps": int(
+            payload.get("max_search_steps", max_search_steps) or max_search_steps
+        ),
         "top_k": int(payload.get("top_k", top_k) or top_k),
         "max_selected_evidence": int(
-            payload.get("max_selected_evidence", max_selected_evidence) or max_selected_evidence
+            payload.get("max_selected_evidence", max_selected_evidence)
+            or max_selected_evidence
         ),
     }
 
@@ -84,8 +88,12 @@ def build_strict_interactive_messages(
     resolved_state = state or initialize_search_state(innovation)
     contract = strict_search_contract()
     env = _resolve_search_env(search_env_payload)
-    action_history = [search_action_to_dict(action) for action in resolved_state.action_history]
-    previous_observation = [search_observation_to_dict(obs) for obs in resolved_state.last_observation]
+    action_history = [
+        search_action_to_dict(action) for action in resolved_state.action_history
+    ]
+    previous_observation = [
+        search_observation_to_dict(obs) for obs in resolved_state.last_observation
+    ]
     system_prompt = (
         "You are an interactive research policy inside a strict search environment. "
         "Return ONLY one JSON object for the NEXT action. "
@@ -144,7 +152,9 @@ def parse_search_actions_completion(text: str) -> list[SearchAction] | None:
     if not isinstance(rows, list):
         return None
     try:
-        return [search_action_from_dict(item) for item in rows if isinstance(item, dict)]
+        return [
+            search_action_from_dict(item) for item in rows if isinstance(item, dict)
+        ]
     except ValueError:
         return None
 
@@ -173,7 +183,9 @@ def _strict_completion_invalid_reason(text: str) -> str:
 
 def serialize_search_action_completion(action: SearchAction) -> str:
     """Serialize a strict single-step action completion."""
-    return json.dumps(search_action_to_dict(action), ensure_ascii=False, separators=(",", ":"))
+    return json.dumps(
+        search_action_to_dict(action), ensure_ascii=False, separators=(",", ":")
+    )
 
 
 def serialize_strict_rollout_completion(trajectory: RealizationTrajectory) -> str:
@@ -201,7 +213,9 @@ def parse_strict_rollout_completion(text: str) -> RealizationTrajectory | None:
         return None
 
 
-def _heuristic_proposal_text(innovation: Innovation, selected_evidence: list[PaperRecord]) -> str:
+def _heuristic_proposal_text(
+    innovation: Innovation, selected_evidence: list[PaperRecord]
+) -> str:
     title = f"{innovation.base_direction.title()} via {innovation.operator.title()}"
     evidence_clause = (
         f" It builds on evidence from {', '.join(paper.title for paper in selected_evidence[:2])}."
@@ -222,13 +236,18 @@ def _heuristic_next_action(
     max_search_steps: int,
     max_selected_evidence: int,
 ) -> SearchAction:
-    planned_queries = build_default_search_queries(state.innovation, max_search_steps=max_search_steps)
+    planned_queries = build_default_search_queries(
+        state.innovation, max_search_steps=max_search_steps
+    )
     for query in planned_queries:
         if query not in state.search_queries:
             return SearchAction(action_type="search", query=query)
 
     for paper_id in state.surfaced_paper_ids:
-        if paper_id not in state.selected_evidence_ids and len(state.selected_evidence_ids) < max_selected_evidence:
+        if (
+            paper_id not in state.selected_evidence_ids
+            and len(state.selected_evidence_ids) < max_selected_evidence
+        ):
             return SearchAction(action_type="select", paper_id=paper_id)
 
     paper_lookup = {paper.paper_id: paper for paper in papers}
@@ -261,7 +280,9 @@ def _generate_local_completion(
     if resolved_base_model_name is None and adapter_config_path.exists():
         resolved_base_model_name = _detect_base_model(model_name_or_path)
 
-    model, tokenizer = _load_local_model(model_name_or_path, base_model_name=resolved_base_model_name)
+    model, tokenizer = _load_local_model(
+        model_name_or_path, base_model_name=resolved_base_model_name
+    )
     deps = _require_local_generation_stack()
     torch = deps["torch"]
 
@@ -325,7 +346,9 @@ def generate_strict_policy_completion(
     )
     if realization_model_path:
         if not Path(realization_model_path).exists():
-            raise FileNotFoundError(f"Realization artifact path does not exist: {realization_model_path}")
+            raise FileNotFoundError(
+                f"Realization artifact path does not exist: {realization_model_path}"
+            )
         return _generate_local_completion(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
@@ -337,7 +360,9 @@ def generate_strict_policy_completion(
             seed=seed,
         )
     if llm_client is None or not str(model or "").strip():
-        raise ValueError("Strict policy completion requires either a realization_model_path or llm_client/model.")
+        raise ValueError(
+            "Strict policy completion requires either a realization_model_path or llm_client/model."
+        )
     response_text, _ = get_response_from_llm(
         user_prompt,
         llm_client,
@@ -364,7 +389,9 @@ def _score_conditioned_completion_with_model(
     torch = deps["torch"]
     import torch.nn.functional as F
 
-    prompt_text = _apply_chat_template(tokenizer, f"{system_prompt}\n\n{user_prompt}".strip(), None)
+    prompt_text = _apply_chat_template(
+        tokenizer, f"{system_prompt}\n\n{user_prompt}".strip(), None
+    )
     prompt_encoded = tokenizer([prompt_text], return_tensors="pt")
     prompt_len = prompt_encoded["input_ids"].shape[1]
     encoded = tokenizer([f"{prompt_text}{completion_text}"], return_tensors="pt")
@@ -377,10 +404,14 @@ def _score_conditioned_completion_with_model(
     if score_temperature > 0 and score_temperature != 1.0:
         logits = logits / score_temperature
     target_ids = encoded["input_ids"][:, 1:]
-    target_log_probs = F.log_softmax(logits, dim=-1).gather(
-        dim=-1,
-        index=target_ids.unsqueeze(-1),
-    ).squeeze(-1)
+    target_log_probs = (
+        F.log_softmax(logits, dim=-1)
+        .gather(
+            dim=-1,
+            index=target_ids.unsqueeze(-1),
+        )
+        .squeeze(-1)
+    )
     target_start = max(0, prompt_len - 1)
     conditioned = target_log_probs[:, target_start:]
     if conditioned.numel() == 0:
@@ -390,7 +421,9 @@ def _score_conditioned_completion_with_model(
     return float(conditioned.mean().item())
 
 
-def _advance_state_from_step_trace(state: SearchState, step: RealizationTrajectoryStep) -> SearchState:
+def _advance_state_from_step_trace(
+    state: SearchState, step: RealizationTrajectoryStep
+) -> SearchState:
     surfaced_ids = step.surfaced_paper_ids or (
         state.surfaced_paper_ids
         + tuple(
@@ -534,7 +567,9 @@ def run_strict_realization_rollout(
     )
     state = initialize_search_state(innovation)
     steps: list[RealizationTrajectoryStep] = []
-    max_policy_turns = max(1, env["max_search_steps"] + env["max_selected_evidence"] + 1)
+    max_policy_turns = max(
+        1, env["max_search_steps"] + env["max_selected_evidence"] + 1
+    )
 
     for _ in range(max_policy_turns):
         system_prompt, user_prompt = build_strict_interactive_messages(
@@ -610,6 +645,10 @@ def run_strict_realization_rollout(
         invalid_reason=state.invalid_reason,
     )
     paper_lookup = {paper.paper_id: paper for paper in papers}
-    selected_ids = trajectory.result.selected_evidence_ids if trajectory.result is not None else ()
-    selected_evidence = [paper_lookup[paper_id] for paper_id in selected_ids if paper_id in paper_lookup]
+    selected_ids = (
+        trajectory.result.selected_evidence_ids if trajectory.result is not None else ()
+    )
+    selected_evidence = [
+        paper_lookup[paper_id] for paper_id in selected_ids if paper_id in paper_lookup
+    ]
     return trajectory, selected_evidence

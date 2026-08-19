@@ -34,7 +34,15 @@ def _isolate_strategy_store(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(daily_pipeline.strategy_store, "PROJECT_ROOT", tmp_path)
 
 
-def _write_markdown(path: Path, *, paper_id: str, title: str, date: str, keywords: list[str], summary: str) -> None:
+def _write_markdown(
+    path: Path,
+    *,
+    paper_id: str,
+    title: str,
+    date: str,
+    keywords: list[str],
+    summary: str,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     content = (
         f"# {title}\n\n"
@@ -72,10 +80,14 @@ def _fake_generation(monkeypatch) -> None:
         )
 
     monkeypatch.setattr(strategy_store, "run_generation_sync", _run_generation)
-    monkeypatch.setattr(daily_pipeline.strategy_store, "run_generation_sync", _run_generation)
+    monkeypatch.setattr(
+        daily_pipeline.strategy_store, "run_generation_sync", _run_generation
+    )
 
 
-def test_daily_pipeline_updates_daily_eval_and_leaderboard(monkeypatch, tmp_path) -> None:
+def test_daily_pipeline_updates_daily_eval_and_leaderboard(
+    monkeypatch, tmp_path
+) -> None:
     _isolate_strategy_store(monkeypatch, tmp_path)
     _fake_generation(monkeypatch)
 
@@ -156,7 +168,9 @@ def test_daily_pipeline_updates_daily_eval_and_leaderboard(monkeypatch, tmp_path
     assert updated["generation"]["cutoff_date"] == "2026-03-03"
 
 
-def test_daily_pipeline_skips_eval_without_previous_generation(monkeypatch, tmp_path) -> None:
+def test_daily_pipeline_skips_eval_without_previous_generation(
+    monkeypatch, tmp_path
+) -> None:
     _isolate_strategy_store(monkeypatch, tmp_path)
     _fake_generation(monkeypatch)
 
@@ -197,7 +211,9 @@ def test_daily_pipeline_skips_eval_without_previous_generation(monkeypatch, tmp_
     assert updated["generation_status"] == "done"
 
 
-def test_daily_pipeline_writes_zero_hit_when_no_new_papers(monkeypatch, tmp_path) -> None:
+def test_daily_pipeline_writes_zero_hit_when_no_new_papers(
+    monkeypatch, tmp_path
+) -> None:
     _isolate_strategy_store(monkeypatch, tmp_path)
     _fake_generation(monkeypatch)
 

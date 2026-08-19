@@ -1,4 +1,5 @@
 """Tests for forecaster/inference/scoring.py"""
+
 from __future__ import annotations
 
 import math
@@ -36,7 +37,9 @@ def _make_paper(paper_id: str, summary: str) -> PaperRecord:
     )
 
 
-def _make_memory_store_with(innovation: Innovation, frequency: int = 3, recency_score: float = 0.8) -> MemoryStore:
+def _make_memory_store_with(
+    innovation: Innovation, frequency: int = 3, recency_score: float = 0.8
+) -> MemoryStore:
     entry = MemoryEntry(
         innovation=innovation,
         source_paper_id="paper_123",
@@ -121,7 +124,12 @@ class TestComputeRealizationScore:
     def test_compute_realization_score_good_proposal(self) -> None:
         """Good proposal returns higher score than empty proposal."""
         innovation = _make_innovation(operator="extend")
-        evidence = [_make_paper("p1", "transformer attention extension for long sequences training evaluation")]
+        evidence = [
+            _make_paper(
+                "p1",
+                "transformer attention extension for long sequences training evaluation",
+            )
+        ]
         config = RealizationConfig()
 
         good_text = (
@@ -152,7 +160,9 @@ class TestComputeRealizationScore:
         innovation = _make_innovation()
         config = RealizationConfig()
 
-        score = compute_realization_score("Some proposal text here.", innovation, [], config)
+        score = compute_realization_score(
+            "Some proposal text here.", innovation, [], config
+        )
 
         assert isinstance(score, float)
 
@@ -224,11 +234,17 @@ class TestComputeJointScore:
     def test_compute_joint_score_popularity_weight_zero_is_unchanged(self) -> None:
         """When popularity_weight=0.0 (default), bonus has no effect."""
         config_default = InferenceConfig(prior_weight=0.4, realization_weight=0.6)
-        config_explicit_zero = InferenceConfig(prior_weight=0.4, realization_weight=0.6, popularity_weight=0.0)
+        config_explicit_zero = InferenceConfig(
+            prior_weight=0.4, realization_weight=0.6, popularity_weight=0.0
+        )
 
         score_no_bonus = compute_joint_score(-0.7, -0.4, config_default)
-        score_bonus_default = compute_joint_score(-0.7, -0.4, config_default, popularity_bonus=1.0)
-        score_bonus_explicit_zero = compute_joint_score(-0.7, -0.4, config_explicit_zero, popularity_bonus=1.0)
+        score_bonus_default = compute_joint_score(
+            -0.7, -0.4, config_default, popularity_bonus=1.0
+        )
+        score_bonus_explicit_zero = compute_joint_score(
+            -0.7, -0.4, config_explicit_zero, popularity_bonus=1.0
+        )
 
         assert score_no_bonus == pytest.approx(score_bonus_default)
         assert score_no_bonus == pytest.approx(score_bonus_explicit_zero)

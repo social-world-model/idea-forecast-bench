@@ -1,4 +1,5 @@
 """Tests for the strict interactive realization runtime."""
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -46,7 +47,9 @@ def test_build_default_search_queries_is_bounded_and_unique() -> None:
     assert len(set(queries)) == len(queries)
 
 
-def test_run_strict_realization_rollout_executes_search_select_and_finish_stepwise() -> None:
+def test_run_strict_realization_rollout_executes_search_select_and_finish_stepwise() -> (
+    None
+):
     papers = [
         _make_paper(
             "paper-1",
@@ -78,13 +81,21 @@ def test_run_strict_realization_rollout_executes_search_select_and_finish_stepwi
 
     assert trajectory.invalid_reason is None
     assert trajectory.result is not None
-    assert trajectory.result.search_queries == ("graph reasoning long-horizon planning",)
+    assert trajectory.result.search_queries == (
+        "graph reasoning long-horizon planning",
+    )
     assert trajectory.result.proposal_text == "Strict Proposal\nProposal body"
-    assert [step.action.action_type for step in trajectory.steps] == ["search", "select", "finish"]
+    assert [step.action.action_type for step in trajectory.steps] == [
+        "search",
+        "select",
+        "finish",
+    ]
     assert [paper.paper_id for paper in selected_evidence] == ["paper-1"]
 
 
-def test_run_strict_realization_rollout_feeds_previous_observation_only_after_first_step() -> None:
+def test_run_strict_realization_rollout_feeds_previous_observation_only_after_first_step() -> (
+    None
+):
     papers = [
         _make_paper(
             "paper-1",
@@ -145,7 +156,9 @@ def test_score_strict_realization_trajectory_aggregates_per_step_conditionals() 
         innovation=_make_innovation(),
         steps=(
             RealizationTrajectoryStep(
-                action=SearchAction(action_type="search", query="graph reasoning planning"),
+                action=SearchAction(
+                    action_type="search", query="graph reasoning planning"
+                ),
                 prompt_system="system",
                 prompt_user="step-0",
                 observation=(
@@ -160,7 +173,9 @@ def test_score_strict_realization_trajectory_aggregates_per_step_conditionals() 
                 selected_evidence_ids=(),
             ),
             RealizationTrajectoryStep(
-                action=SearchAction(action_type="finish", proposal_text="Strict Proposal\nProposal body"),
+                action=SearchAction(
+                    action_type="finish", proposal_text="Strict Proposal\nProposal body"
+                ),
                 prompt_system="system",
                 prompt_user="step-1",
                 observation=(),
@@ -175,12 +190,15 @@ def test_score_strict_realization_trajectory_aggregates_per_step_conditionals() 
         ),
     )
 
-    with patch(
-        "forecaster.realization.strict_runtime._load_local_model",
-        return_value=(object(), object()),
-    ), patch(
-        "forecaster.realization.strict_runtime._score_conditioned_completion_with_model",
-        side_effect=[-0.2, -0.4],
+    with (
+        patch(
+            "forecaster.realization.strict_runtime._load_local_model",
+            return_value=(object(), object()),
+        ),
+        patch(
+            "forecaster.realization.strict_runtime._score_conditioned_completion_with_model",
+            side_effect=[-0.2, -0.4],
+        ),
     ):
         score = score_strict_realization_trajectory(
             trajectory,
@@ -192,12 +210,16 @@ def test_score_strict_realization_trajectory_aggregates_per_step_conditionals() 
     assert score == (-0.2 + -0.4) / 2
 
 
-def test_score_strict_realization_trajectory_depends_on_observation_conditioning() -> None:
+def test_score_strict_realization_trajectory_depends_on_observation_conditioning() -> (
+    None
+):
     base_trajectory = RealizationTrajectory(
         innovation=_make_innovation(),
         steps=(
             RealizationTrajectoryStep(
-                action=SearchAction(action_type="finish", proposal_text="Strict Proposal\nProposal body"),
+                action=SearchAction(
+                    action_type="finish", proposal_text="Strict Proposal\nProposal body"
+                ),
                 prompt_system="system",
                 prompt_user="step with paper-1",
                 observation=(),
@@ -215,7 +237,9 @@ def test_score_strict_realization_trajectory_depends_on_observation_conditioning
         innovation=_make_innovation(),
         steps=(
             RealizationTrajectoryStep(
-                action=SearchAction(action_type="finish", proposal_text="Strict Proposal\nProposal body"),
+                action=SearchAction(
+                    action_type="finish", proposal_text="Strict Proposal\nProposal body"
+                ),
                 prompt_system="system",
                 prompt_user="step with paper-2",
                 observation=(),
@@ -233,12 +257,15 @@ def test_score_strict_realization_trajectory_depends_on_observation_conditioning
     def _score_side_effect(*, user_prompt, **kwargs):  # type: ignore[no-untyped-def]
         return -0.2 if "paper-1" in user_prompt else -0.8
 
-    with patch(
-        "forecaster.realization.strict_runtime._load_local_model",
-        return_value=(object(), object()),
-    ), patch(
-        "forecaster.realization.strict_runtime._score_conditioned_completion_with_model",
-        side_effect=_score_side_effect,
+    with (
+        patch(
+            "forecaster.realization.strict_runtime._load_local_model",
+            return_value=(object(), object()),
+        ),
+        patch(
+            "forecaster.realization.strict_runtime._score_conditioned_completion_with_model",
+            side_effect=_score_side_effect,
+        ),
     ):
         first = score_strict_realization_trajectory(
             base_trajectory,

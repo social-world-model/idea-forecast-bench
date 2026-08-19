@@ -62,17 +62,29 @@ class PolicyRLStrategy(IdeaStrategy):
             predictions.append(coerce_prediction(item, idx))
             if len(predictions) >= top_k:
                 break
-        return [dataclasses.replace(p, rank=idx) for idx, p in enumerate(predictions, start=1)]
+        return [
+            dataclasses.replace(p, rank=idx)
+            for idx, p in enumerate(predictions, start=1)
+        ]
 
     def _resolve_selection_config(self, manifest: dict[str, Any]) -> SelectionConfig:
-        path = str(manifest.get("selection_config_path") or "").strip() or self.selection_config
+        path = (
+            str(manifest.get("selection_config_path") or "").strip()
+            or self.selection_config
+        )
         return load_selection_config(path)
 
     @staticmethod
-    def _sampling_plan(selection_config: SelectionConfig, default_temperature: float | None) -> list[dict[str, Any]]:
-        temperatures = list(selection_config.temperature_schedule) or [default_temperature or 0.8]
+    def _sampling_plan(
+        selection_config: SelectionConfig, default_temperature: float | None
+    ) -> list[dict[str, Any]]:
+        temperatures = list(selection_config.temperature_schedule) or [
+            default_temperature or 0.8
+        ]
         top_ps = list(selection_config.top_p_schedule) or [0.9]
-        combinations = [(temperature, top_p) for temperature in temperatures for top_p in top_ps]
+        combinations = [
+            (temperature, top_p) for temperature in temperatures for top_p in top_ps
+        ]
         if not combinations:
             combinations = [(default_temperature or 0.8, 0.9)]
 
@@ -84,7 +96,9 @@ class PolicyRLStrategy(IdeaStrategy):
                     "candidate_sample_index": idx,
                     "sampling_temperature": float(temperature),
                     "sampling_top_p": float(top_p),
-                    "context_shuffle_seed": idx if selection_config.enable_context_shuffle else None,
+                    "context_shuffle_seed": idx
+                    if selection_config.enable_context_shuffle
+                    else None,
                 }
             )
         return plan
@@ -117,7 +131,9 @@ class PolicyRLStrategy(IdeaStrategy):
         candidates: list[IdeaPrediction] = []
         for sample in self._sampling_plan(selection_config, temperature):
             predictions = generate_local_predictions(
-                train_papers=self._shuffle_train_papers(train_papers, sample["context_shuffle_seed"]),
+                train_papers=self._shuffle_train_papers(
+                    train_papers, sample["context_shuffle_seed"]
+                ),
                 cutoff_month=cutoff_month,
                 top_k=1,
                 model_name_or_path=checkpoint_path,
@@ -132,11 +148,16 @@ class PolicyRLStrategy(IdeaStrategy):
                 fallback_to_heuristic=False,
             )
             for prediction in predictions[:1]:
-                candidates.append(dataclasses.replace(prediction, metadata={
-                    "checkpoint_path": checkpoint_path,
-                    **sample,
-                    **prediction.metadata,
-                }))
+                candidates.append(
+                    dataclasses.replace(
+                        prediction,
+                        metadata={
+                            "checkpoint_path": checkpoint_path,
+                            **sample,
+                            **prediction.metadata,
+                        },
+                    )
+                )
         return candidates
 
     def _generate_candidate_pool_from_model(
@@ -152,7 +173,9 @@ class PolicyRLStrategy(IdeaStrategy):
         candidates: list[IdeaPrediction] = []
         for sample in self._sampling_plan(selection_config, temperature):
             predictions = generate_predictions(
-                train_papers=self._shuffle_train_papers(train_papers, sample["context_shuffle_seed"]),
+                train_papers=self._shuffle_train_papers(
+                    train_papers, sample["context_shuffle_seed"]
+                ),
                 cutoff_month=cutoff_month,
                 top_k=1,
                 model_name=model_name,
@@ -163,10 +186,15 @@ class PolicyRLStrategy(IdeaStrategy):
                 fallback_to_heuristic=False,
             )
             for prediction in predictions[:1]:
-                candidates.append(dataclasses.replace(prediction, metadata={
-                    **sample,
-                    **prediction.metadata,
-                }))
+                candidates.append(
+                    dataclasses.replace(
+                        prediction,
+                        metadata={
+                            **sample,
+                            **prediction.metadata,
+                        },
+                    )
+                )
         return candidates
 
     def generate(
@@ -178,18 +206,21 @@ class PolicyRLStrategy(IdeaStrategy):
         manifest = self._load_manifest() if self.policy_manifest_path else {}
         static_predictions = manifest.get("static_predictions") or {}
         if isinstance(static_predictions, dict):
-            from_manifest = self._from_static_predictions(static_predictions.get(cutoff_month), top_k=top_k)
+            from_manifest = self._from_static_predictions(
+                static_predictions.get(cutoff_month), top_k=top_k
+            )
             if from_manifest:
                 return from_manifest
 
         if isinstance(manifest.get("predictions"), list):
-            from_manifest = self._from_static_predictions(manifest.get("predictions"), top_k=top_k)
+            from_manifest = self._from_static_predictions(
+                manifest.get("predictions"), top_k=top_k
+            )
             if from_manifest:
                 return from_manifest
 
         resolved_predictor_config = (
-            str(manifest.get("predictor_config") or "").strip()
-            or self.predictor_config
+            str(manifest.get("predictor_config") or "").strip() or self.predictor_config
         )
         resolved_selection_config = self._resolve_selection_config(manifest)
         resolved_temperature = (
@@ -202,6 +233,7 @@ class PolicyRLStrategy(IdeaStrategy):
             )
         )
         import os as _os
+
         checkpoint_path = str(manifest.get("checkpoint_path") or "").strip()
         # When LIBENCH_POLICY_RL_REMOTE=1 bypass the local-checkpoint path so
         # generation goes through the OpenAI-compatible client (routed to a
@@ -249,12 +281,22 @@ class PolicyRLStrategy(IdeaStrategy):
                 resolved_selection_config,
                 top_k=top_k,
             )
-        policy_stage = str(manifest.get("trainer") or manifest.get("stage") or "policy_rl")
+        policy_stage = str(
+            manifest.get("trainer") or manifest.get("stage") or "policy_rl"
+        )
         return [
-            dataclasses.replace(p, rank=idx, metadata={
-                "policy_stage": policy_stage,
-                **({"policy_manifest_path": self.policy_manifest_path} if self.policy_manifest_path else {}),
-                **p.metadata,
-            })
+            dataclasses.replace(
+                p,
+                rank=idx,
+                metadata={
+                    "policy_stage": policy_stage,
+                    **(
+                        {"policy_manifest_path": self.policy_manifest_path}
+                        if self.policy_manifest_path
+                        else {}
+                    ),
+                    **p.metadata,
+                },
+            )
             for idx, p in enumerate(predictions[:top_k], start=1)
         ]

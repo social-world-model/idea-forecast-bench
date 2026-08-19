@@ -15,6 +15,7 @@ Gates (any failure ⇒ 0.0):
 Retrieve from future_index[cutoff_t] (top-R) → rubric-conditioned judge
 (`forecaster.foresight.judge`). Return max of the judge scores.
 """
+
 from __future__ import annotations
 
 import logging
@@ -56,12 +57,15 @@ class ForesightRewardConfig:
     0.10 ≈ "at least one keyword present"). Tune up if rollouts produce
     too many false positives.
     """
+
     retrieval_top_k: int = 5
     grounding_threshold: float = 0.45
     grounding_top_k: int = 5
     grounding_require_citations: bool = False
     operator_threshold: float = 0.10
-    fail_open_on_index_miss: bool = False  # if True, return 0.0 with WARN; else strict fail
+    fail_open_on_index_miss: bool = (
+        False  # if True, return 0.0 with WARN; else strict fail
+    )
 
 
 @dataclass
@@ -108,16 +112,23 @@ class ForesightContext:
 
     # -------- lookups --------
 
-    def rubric_for(self, topic_id: str, *, operator_closed: str | None = None) -> Rubric | None:
+    def rubric_for(
+        self, topic_id: str, *, operator_closed: str | None = None
+    ) -> Rubric | None:
         r = self.rubrics.get(topic_id)
         if r is None:
             return None
-        if operator_closed and r.operator_focus and operator_closed not in r.operator_focus:
+        if (
+            operator_closed
+            and r.operator_focus
+            and operator_closed not in r.operator_focus
+        ):
             # The rubric is tuned for a different operator focus — caller can
             # still use it, but log so a refresh can be triggered upstream.
             logger.debug(
                 "rubric for topic=%s does not target operator=%s",
-                topic_id, operator_closed,
+                topic_id,
+                operator_closed,
             )
         return r
 
@@ -154,9 +165,8 @@ class RewardPayload:
         # `topic_id` may be present at top-level or under metadata; otherwise
         # recover it from target_future_paper_id via the context's map (the
         # dataset's extra_info drops topic_id because HindsightSample does).
-        topic_id = (
-            str(extra_info.get("topic_id") or "")
-            or str(extra_info.get("topic") or "")
+        topic_id = str(extra_info.get("topic_id") or "") or str(
+            extra_info.get("topic") or ""
         )
         if not topic_id and paper_to_topic:
             tfpid = str(extra_info.get("target_future_paper_id") or "")
@@ -167,7 +177,9 @@ class RewardPayload:
             topic_id=topic_id,
             innovation=innovation,
             operator_closed=op_closed,
-            prompt_mode=str(extra_info.get("prompt_mode") or "z_conditioned_realization"),
+            prompt_mode=str(
+                extra_info.get("prompt_mode") or "z_conditioned_realization"
+            ),
         )
 
 
@@ -211,7 +223,9 @@ def compute_foresight_reward(
             diag["gate"] = "grounding"
             diag["reason"] = f"history_index missing for cutoff={payload.cutoff_date}"
             return 0.0, diag
-        logger.warning("no history index for cutoff=%s; failing open", payload.cutoff_date)
+        logger.warning(
+            "no history index for cutoff=%s; failing open", payload.cutoff_date
+        )
     elif not grounded(
         payload.rollout_text,
         history,
@@ -232,7 +246,9 @@ def compute_foresight_reward(
         threshold=ctx.config.operator_threshold,
     ):
         diag["gate"] = "operator"
-        diag["reason"] = f"rollout did not exhibit operator={payload.innovation.operator}"
+        diag["reason"] = (
+            f"rollout did not exhibit operator={payload.innovation.operator}"
+        )
         return 0.0, diag
 
     # ------------------- retrieve from future index -------------------
@@ -240,9 +256,13 @@ def compute_foresight_reward(
     if future is None or future.size == 0:
         if not ctx.config.fail_open_on_index_miss:
             diag["gate"] = "future"
-            diag["reason"] = f"future_index missing/empty for cutoff={payload.cutoff_date}"
+            diag["reason"] = (
+                f"future_index missing/empty for cutoff={payload.cutoff_date}"
+            )
             return 0.0, diag
-        logger.warning("no future index for cutoff=%s; failing open", payload.cutoff_date)
+        logger.warning(
+            "no future index for cutoff=%s; failing open", payload.cutoff_date
+        )
         diag["gate"] = "future"
         diag["reason"] = "future index unavailable; failing open"
         return 0.0, diag
@@ -274,6 +294,7 @@ def compute_foresight_reward(
     # within-group gradient toward the future-idea distribution. hits are sorted
     # desc, so hits[0][1] is the closest cosine sim.
     import os
+
     _sim_w = float(os.environ.get("REWARD_SIM_SHAPING", "0.0") or 0.0)
     best_sim = float(hits[0][1]) if hits else 0.0
     reward = best_judge + _sim_w * max(0.0, best_sim)
@@ -302,6 +323,7 @@ def compute_score_v2(
     """
     if isinstance(extra_info, str):
         import json
+
         try:
             extra = json.loads(extra_info) if extra_info else {}
         except json.JSONDecodeError:
@@ -323,9 +345,15 @@ def compute_score_v2(
         _DBG_N += 1
         logger.warning(
             "[foresight-diag #%d] reward=%.3f gate=%s reason=%s | cutoff=%s topic=%r op=%r len=%d head=%r",
-            _DBG_N, reward, _diag.get("gate"), _diag.get("reason"),
-            payload.cutoff_date, payload.topic_id, payload.operator_closed,
-            len(payload.rollout_text), payload.rollout_text[:200],
+            _DBG_N,
+            reward,
+            _diag.get("gate"),
+            _diag.get("reason"),
+            payload.cutoff_date,
+            payload.topic_id,
+            payload.operator_closed,
+            len(payload.rollout_text),
+            payload.rollout_text[:200],
         )
     return float(reward)
 

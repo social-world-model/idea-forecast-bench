@@ -127,14 +127,18 @@ def validate_record(record: dict[str, Any], file_label: str) -> list[ValidationI
     date_value = record.get("date")
     if isinstance(date_value, str) and not DATE_RE.match(date_value):
         issues.append(
-            ValidationIssue("error", file_label, "Invalid date format; expected YYYY-MM")
+            ValidationIssue(
+                "error", file_label, "Invalid date format; expected YYYY-MM"
+            )
         )
 
     for list_field in ["authors", "keywords", "next_stage_ideas"]:
         value = record.get(list_field)
         if not isinstance(value, list):
             issues.append(
-                ValidationIssue("error", file_label, f"Field '{list_field}' must be a list")
+                ValidationIssue(
+                    "error", file_label, f"Field '{list_field}' must be a list"
+                )
             )
             continue
         if not all(isinstance(item, str) and item.strip() for item in value):
@@ -150,7 +154,9 @@ def validate_record(record: dict[str, Any], file_label: str) -> list[ValidationI
         value = record.get(text_field)
         if isinstance(value, str) and value.strip() and len(value.strip()) < 20:
             issues.append(
-                ValidationIssue("warning", file_label, f"Field '{text_field}' is very short")
+                ValidationIssue(
+                    "warning", file_label, f"Field '{text_field}' is very short"
+                )
             )
 
     return issues
@@ -180,7 +186,9 @@ def write_validation_log(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Index markdown papers into canonical JSONL.")
+    parser = argparse.ArgumentParser(
+        description="Index markdown papers into canonical JSONL."
+    )
     parser.add_argument(
         "--input-dir",
         type=Path,
@@ -232,7 +240,9 @@ def main() -> None:
 
         record_issues = validate_record(record, label)
         issues.extend(record_issues)
-        totals["warnings"] += sum(1 for issue in record_issues if issue.level == "warning")
+        totals["warnings"] += sum(
+            1 for issue in record_issues if issue.level == "warning"
+        )
 
         if any(issue.level == "error" for issue in record_issues):
             totals["invalid_records"] += 1

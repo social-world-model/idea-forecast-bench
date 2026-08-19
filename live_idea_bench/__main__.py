@@ -42,18 +42,39 @@ _EXAMPLES = _REPO_ROOT / "examples"
 # __main__ with sys.argv rewritten, so its existing argparse handles the flags.
 _COMMANDS: dict[str, tuple[str, str]] = {
     # benchmark (examples/live-idea-bench/)
-    "benchmark": ("live-idea-bench/run_domain_backtest.py", "Run a domain-separated backtest."),
-    "judge-eval": ("live-idea-bench/llm_judge_eval.py", "Retrieve-then-judge LLM evaluation of predictions."),
+    "benchmark": (
+        "live-idea-bench/run_domain_backtest.py",
+        "Run a domain-separated backtest.",
+    ),
+    "judge-eval": (
+        "live-idea-bench/llm_judge_eval.py",
+        "Retrieve-then-judge LLM evaluation of predictions.",
+    ),
     # MDF forecaster
-    "hindsight": ("forecaster/run_topic_hindsight.py", "Extract latent-innovation training labels."),
+    "hindsight": (
+        "forecaster/run_topic_hindsight.py",
+        "Extract latent-innovation training labels.",
+    ),
     "train-prior": ("forecaster/run_prior_sft.py", "SFT the innovation prior."),
-    "train": ("forecaster/run_policy_rl_training.py", "GRPO-train the realization policy."),
-    "infer": ("forecaster/run_joint_inference.py", "Joint inference: prior -> realize -> select."),
+    "train": (
+        "forecaster/run_policy_rl_training.py",
+        "GRPO-train the realization policy.",
+    ),
+    "infer": (
+        "forecaster/run_joint_inference.py",
+        "Joint inference: prior -> realize -> select.",
+    ),
     "eval": ("forecaster/eval.py", "Evaluate a trained forecaster."),
     # single-metric ablation
-    "ablate": ("forecaster/train_grpo_metric.py", "Single-metric GRPO: soft/coverage/novelty."),
+    "ablate": (
+        "forecaster/train_grpo_metric.py",
+        "Single-metric GRPO: soft/coverage/novelty.",
+    ),
     # analysis (examples/live-idea-bench/)
-    "analysis": ("live-idea-bench/analysis_leakage.py", "Evaluation-validity analyses (citation/coauthor/leakage)."),
+    "analysis": (
+        "live-idea-bench/analysis_leakage.py",
+        "Evaluation-validity analyses (citation/coauthor/leakage).",
+    ),
 }
 
 # `analysis` is a small family; let the user pick which one (default: leakage).

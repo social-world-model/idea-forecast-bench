@@ -240,7 +240,11 @@ def create_client(model: str) -> tuple[Any, str]:
 
 def _sanitize_text(text: str) -> str:
     """Remove null bytes and control characters that cause JSON parse errors in API requests."""
-    return "".join(ch for ch in text if ch == "\n" or ch == "\t" or (ord(ch) >= 32 and ord(ch) != 127))
+    return "".join(
+        ch
+        for ch in text
+        if ch == "\n" or ch == "\t" or (ord(ch) >= 32 and ord(ch) != 127)
+    )
 
 
 def get_response_from_llm(
@@ -298,7 +302,8 @@ def get_response_from_llm(
         # replay mode, key not in cache → fall through to live API (safety fallback)
         logger.warning(
             "batch replay: cache miss for key=%s model=%s — falling back to live API",
-            _key[:12], model,
+            _key[:12],
+            model,
         )
     # ── End batch-mode interception ────────────────────────────────────────────
 
@@ -328,6 +333,7 @@ def get_response_from_llm(
         ]
     elif _is_openai_model(model):
         import os as _os
+
         new_msg_history = msg_history + [{"role": "user", "content": msg}]
         request_kwargs: dict[str, Any] = {
             "model": model,
@@ -402,6 +408,7 @@ def get_response_from_llm(
         # <think>...</think>; strip it so downstream JSON parsing isn't fooled.
         if "<think>" in content:
             import re
+
             content = re.sub(
                 r"<think>.*?</think>", "", content, flags=re.DOTALL | re.IGNORECASE
             ).strip()
@@ -466,7 +473,7 @@ def get_response_from_llm(
 
         with torch.no_grad():
             generated = model_obj.generate(**generate_kwargs)
-        output_ids = generated[0][len(encoded["input_ids"][0]):].tolist()
+        output_ids = generated[0][len(encoded["input_ids"][0]) :].tolist()
         content = tokenizer.decode(output_ids, skip_special_tokens=True).strip()
         new_msg_history = new_msg_history + [{"role": "assistant", "content": content}]
     else:
@@ -483,6 +490,8 @@ def get_response_from_llm(
 
     logger.debug(
         "LLM | model=%s | chars=%d | preview=%s",
-        model, len(content), content[:300].replace("\n", " "),
+        model,
+        len(content),
+        content[:300].replace("\n", " "),
     )
     return content, new_msg_history

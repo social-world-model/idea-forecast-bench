@@ -5,7 +5,9 @@ from pathlib import Path
 from live_idea_bench.papers import load_papers_from_markdown, parse_markdown_paper
 
 
-def test_parse_markdown_paper_extracts_sample_style_abstract_and_references(tmp_path: Path) -> None:
+def test_parse_markdown_paper_extracts_sample_style_abstract_and_references(
+    tmp_path: Path,
+) -> None:
     path = tmp_path / "2403.12345.md"
     path.write_text(
         (
@@ -31,17 +33,23 @@ def test_parse_markdown_paper_extracts_sample_style_abstract_and_references(tmp_
     assert paper.month == "2024-03"
     assert paper.published_date == "2024-03-31"
     assert "Ada Lovelace" not in paper.summary
-    assert paper.summary.startswith("We ground forecasting models with bibliography evidence.")
+    assert paper.summary.startswith(
+        "We ground forecasting models with bibliography evidence."
+    )
     assert "This second paragraph still belongs to the abstract." in paper.summary
     assert paper.references == [
-        {"text": "Foundational Work on Retrieval. continued context about the same reference."},
+        {
+            "text": "Foundational Work on Retrieval. continued context about the same reference."
+        },
         {"text": "Evidence Selection for Forecasting."},
     ]
     assert paper.citations == []
     assert paper.keywords[:3] == ["retrieval", "augmented", "forecasting"]
 
 
-def test_parse_markdown_paper_reads_preamble_metadata_and_parent_month(tmp_path: Path) -> None:
+def test_parse_markdown_paper_reads_preamble_metadata_and_parent_month(
+    tmp_path: Path,
+) -> None:
     path = tmp_path / "2024-11" / "agent-forecasting.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -67,7 +75,9 @@ def test_parse_markdown_paper_reads_preamble_metadata_and_parent_month(tmp_path:
     assert paper.metadata["source_url"] == "https://example.com/paper-agent-001"
 
 
-def test_load_papers_from_markdown_skips_body_file_without_any_date_signal(tmp_path: Path) -> None:
+def test_load_papers_from_markdown_skips_body_file_without_any_date_signal(
+    tmp_path: Path,
+) -> None:
     dated_path = tmp_path / "2024-12" / "good-paper.md"
     dated_path.parent.mkdir(parents=True, exist_ok=True)
     dated_path.write_text(

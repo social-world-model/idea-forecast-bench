@@ -1,4 +1,5 @@
 """ForecasterPipeline: orchestrates all 4 phases of the forecasting method."""
+
 from __future__ import annotations
 
 import json
@@ -249,7 +250,9 @@ class ForecasterPipeline:
                     "innovation_count": len(innovations),
                     "proposal_count": len(proposals),
                     "future_match_count": sum(
-                        1 for event in delayed_matches if bool(event.get("future_support_confirmed"))
+                        1
+                        for event in delayed_matches
+                        if bool(event.get("future_support_confirmed"))
                     ),
                 }
             )
@@ -344,9 +347,7 @@ class ForecasterPipeline:
                 skip_alignment_check=(dry_run or not use_strict_mode),
                 hindsight_samples=hindsight_samples,
             )
-            manifest_path = str(
-                Path(realization_output_dir) / "pipeline_manifest.json"
-            )
+            manifest_path = str(Path(realization_output_dir) / "pipeline_manifest.json")
             logger.info("Realization training complete. Manifest: %s", manifest_path)
             return manifest_path
         except Exception as exc:
@@ -380,9 +381,7 @@ class ForecasterPipeline:
         """
         llm_client, model = create_client(self.llm_model)
 
-        training_papers = [
-            p for p in self.papers if p.month <= cutoff_month
-        ]
+        training_papers = [p for p in self.papers if p.month <= cutoff_month]
 
         logger.info(
             "Running joint inference: %d innovations, %d training papers, "
@@ -474,7 +473,9 @@ class ForecasterPipeline:
             prior_checkpoint = self.run_prior_training(training_hindsight_samples)
             bootstrap_prior_checkpoint = prior_checkpoint
         elif not skip_training:
-            logger.info("Phase 2: No legal training hindsight samples; skipping prior SFT.")
+            logger.info(
+                "Phase 2: No legal training hindsight samples; skipping prior SFT."
+            )
         else:
             logger.info("Phase 2: Skipping prior SFT training (skip_training=True).")
 
@@ -489,13 +490,17 @@ class ForecasterPipeline:
             )
             realization_model_path = _extract_realization_model_path(manifest_path)
             if realization_model_path:
-                logger.info("Phase 3 artifact: realization model at %s", realization_model_path)
+                logger.info(
+                    "Phase 3 artifact: realization model at %s", realization_model_path
+                )
             else:
                 if use_strict_eval:
                     raise RuntimeError(
                         "Strict mode requires a realization artifact for joint inference."
                     )
-                logger.info("Phase 3: No realization model checkpoint found; Phase 4 will use demo LLM fallback.")
+                logger.info(
+                    "Phase 3: No realization model checkpoint found; Phase 4 will use demo LLM fallback."
+                )
                 fallback_events.append(
                     {
                         "phase": "realization",
@@ -504,7 +509,9 @@ class ForecasterPipeline:
                     }
                 )
         elif not skip_training:
-            logger.info("Phase 3: No train cutoffs available; skipping realization training.")
+            logger.info(
+                "Phase 3: No train cutoffs available; skipping realization training."
+            )
         else:
             logger.info("Phase 3: Skipping realization training (skip_training=True).")
             if not realization_model_path and not use_strict_eval:
@@ -539,9 +546,7 @@ class ForecasterPipeline:
         proposals: list[ScoredProposal] = []
         if last_cutoff:
             base_memory_samples = (
-                training_hindsight_samples
-                if use_strict_eval
-                else hindsight_samples
+                training_hindsight_samples if use_strict_eval else hindsight_samples
             )
             self._memory_store = build_memory_store_from_hindsight_samples(
                 base_memory_samples,
@@ -551,18 +556,27 @@ class ForecasterPipeline:
                 latest_refresh_cutoff = sorted(refresh_memory_snapshots)[-1]
                 latest_refresh_memory = refresh_memory_snapshots[latest_refresh_cutoff]
                 utility_overrides = {
-                    entry.source_paper_id: (float(entry.utility_score), dict(entry.metadata))
+                    entry.source_paper_id: (
+                        float(entry.utility_score),
+                        dict(entry.metadata),
+                    )
                     for entry in latest_refresh_memory.inventory.entries
                 }
-                self._memory_store = self._memory_store.apply_utility_overrides(utility_overrides)
-            pre_inference_memory_path = snapshot_dir / f"{last_cutoff}_pre_inference.json"
+                self._memory_store = self._memory_store.apply_utility_overrides(
+                    utility_overrides
+                )
+            pre_inference_memory_path = (
+                snapshot_dir / f"{last_cutoff}_pre_inference.json"
+            )
             self._memory_store.persist(pre_inference_memory_path)
             self._memory_store.persist(self.output_dir / "memory_inventory.json")
 
             logger.info("Phase 4: Joint inference at cutoff %s.", last_cutoff)
             training_papers = [p for p in self.papers if p.month <= last_cutoff]
 
-            if use_strict_eval and (not prior_checkpoint or not Path(prior_checkpoint).exists()):
+            if use_strict_eval and (
+                not prior_checkpoint or not Path(prior_checkpoint).exists()
+            ):
                 raise RuntimeError(
                     "Strict mode requires a legal prior checkpoint for innovation sampling."
                 )
@@ -600,7 +614,8 @@ class ForecasterPipeline:
                             f"Strict mode prior sampling failed: {exc}"
                         ) from exc
                     logger.warning(
-                        "Prior sampling failed (%s); falling back to heuristic demo path.", exc
+                        "Prior sampling failed (%s); falling back to heuristic demo path.",
+                        exc,
                     )
                     innovations = _heuristic_innovations(
                         training_papers, n=self.inference_config.num_candidates
@@ -614,7 +629,9 @@ class ForecasterPipeline:
                         }
                     )
             else:
-                logger.info("No prior checkpoint available; using heuristic innovations.")
+                logger.info(
+                    "No prior checkpoint available; using heuristic innovations."
+                )
                 innovations = _heuristic_innovations(
                     training_papers, n=self.inference_config.num_candidates
                 )
@@ -646,7 +663,9 @@ class ForecasterPipeline:
                     delayed_matches,
                     cutoff_month=last_cutoff,
                 )
-                post_update_memory_path = snapshot_dir / f"{last_cutoff}_post_update.json"
+                post_update_memory_path = (
+                    snapshot_dir / f"{last_cutoff}_post_update.json"
+                )
                 self._memory_store.persist(post_update_memory_path)
                 self._memory_store.persist(self.output_dir / "memory_inventory.json")
                 logger.info("Delayed utility update applied; memory persisted.")
@@ -813,7 +832,9 @@ def _persist_runtime_contract(
             "realization_model_path": realization_model_path or "",
             "memory_snapshot_dir": str(output_dir / "memory_snapshots"),
             "memory_inventory": str(output_dir / "memory_inventory.json"),
-            "prior_refresh_manifest": str(output_dir / "prior_refresh" / "refresh_manifest.json"),
+            "prior_refresh_manifest": str(
+                output_dir / "prior_refresh" / "refresh_manifest.json"
+            ),
         },
         "fallback_events": list(fallback_events or []),
     }
@@ -834,10 +855,12 @@ def _score_proposals_for_delayed_feedback(
     if not proposals:
         return []
 
-    train_papers, future_papers, _future_end_month, future_end_date = split_train_future_by_cutoff(
-        papers=papers,
-        cutoff_month=cutoff_month,
-        horizon_months=horizon_months,
+    train_papers, future_papers, _future_end_month, future_end_date = (
+        split_train_future_by_cutoff(
+            papers=papers,
+            cutoff_month=cutoff_month,
+            horizon_months=horizon_months,
+        )
     )
     if not future_papers:
         return []
@@ -858,18 +881,13 @@ def _score_proposals_for_delayed_feedback(
         cutoff_date=month_start_date(cutoff_month),
         future_end_date=future_end_date,
     )
-    match_by_rank = {
-        int(match.prediction_rank): match
-        for match in scored.matches
-    }
+    match_by_rank = {int(match.prediction_rank): match for match in scored.matches}
     events: list[dict[str, Any]] = []
     for index, proposal in enumerate(proposals, start=1):
         prediction_rank = int(proposal.rank or index)
         match = match_by_rank.get(prediction_rank)
         matched_future_ids = (
-            [str(match.paper_id)]
-            if match and match.is_match and match.paper_id
-            else []
+            [str(match.paper_id)] if match and match.is_match and match.paper_id else []
         )
         events.append(
             {
@@ -877,7 +895,8 @@ def _score_proposals_for_delayed_feedback(
                 "matched_future_paper_ids": matched_future_ids,
                 "future_match_score": float(match.score) if match else 0.0,
                 "future_match_lead_time": float(match.lead_time) if match else 0.0,
-                "future_match_reasoning": (match.matched_reasoning if match else None) or "",
+                "future_match_reasoning": (match.matched_reasoning if match else None)
+                or "",
                 "future_support_confirmed": bool(matched_future_ids),
             }
         )
@@ -899,8 +918,7 @@ def _apply_delayed_utility_update(
     updated = memory_store
     ema_alpha = 0.3
     match_by_rank = {
-        int(event.get("proposal_rank", 0)): event
-        for event in future_match_events
+        int(event.get("proposal_rank", 0)): event for event in future_match_events
     }
     for proposal in proposals:
         match_event = match_by_rank.get(int(proposal.rank), {})
@@ -918,12 +936,16 @@ def _apply_delayed_utility_update(
                 and inn.operator == proposal.innovation.operator
                 and inn.gap == proposal.innovation.gap
             ):
-                new_utility = (ema_alpha * utility_delta) + ((1.0 - ema_alpha) * entry.utility_score)
+                new_utility = (ema_alpha * utility_delta) + (
+                    (1.0 - ema_alpha) * entry.utility_score
+                )
                 event = {
                     "cutoff_month": cutoff_month or "",
                     "source_paper_id": entry.source_paper_id,
                     "proposal_rank": int(proposal.rank),
-                    "proposal_title": proposal.proposal_text.splitlines()[0].strip() if proposal.proposal_text.strip() else "",
+                    "proposal_title": proposal.proposal_text.splitlines()[0].strip()
+                    if proposal.proposal_text.strip()
+                    else "",
                     "proposal_text": proposal.proposal_text,
                     "proposal_prior_score": float(proposal.prior_score),
                     "proposal_realization_score": float(proposal.realization_score),
@@ -931,9 +953,15 @@ def _apply_delayed_utility_update(
                     "evidence_paper_ids": list(proposal.evidence_paper_ids),
                     "matched_future_paper_ids": matched_future_ids,
                     "future_support_confirmed": matched,
-                    "future_match_score": float(match_event.get("future_match_score", 0.0) or 0.0),
-                    "future_match_lead_time": float(match_event.get("future_match_lead_time", 0.0) or 0.0),
-                    "future_match_reasoning": str(match_event.get("future_match_reasoning", "") or ""),
+                    "future_match_score": float(
+                        match_event.get("future_match_score", 0.0) or 0.0
+                    ),
+                    "future_match_lead_time": float(
+                        match_event.get("future_match_lead_time", 0.0) or 0.0
+                    ),
+                    "future_match_reasoning": str(
+                        match_event.get("future_match_reasoning", "") or ""
+                    ),
                     "utility_delta": float(utility_delta),
                     "pre_update_utility": float(entry.utility_score),
                     "post_update_utility": float(new_utility),
@@ -971,7 +999,9 @@ def _heuristic_innovations(
     innovations: list[Innovation] = []
     for paper in papers:
         keywords = paper.keywords or []
-        base_direction = " ".join(keywords[:3]) if keywords else " ".join(paper.title.split()[:5])
+        base_direction = (
+            " ".join(keywords[:3]) if keywords else " ".join(paper.title.split()[:5])
+        )
         gap = paper.summary[:100] if paper.summary else paper.title
         innovation = Innovation(
             base_direction=base_direction,

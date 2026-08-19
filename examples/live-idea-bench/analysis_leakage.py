@@ -19,6 +19,7 @@ Usage:
         --input memory_prompting_backtest.json predictor_llm_backtest.json \\
         --output leakage_report.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -119,7 +120,9 @@ def _analyze(data: dict, label: str) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--input", nargs="+", required=True,
+        "--input",
+        nargs="+",
+        required=True,
         help="canonical run_domain_backtest.py output JSON files",
     )
     parser.add_argument("--output", default="leakage_report.json")

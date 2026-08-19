@@ -8,6 +8,7 @@ forecast() composition.
 This module deliberately does no model loading itself; it composes with
 whatever loader the existing sampler exposes.
 """
+
 from __future__ import annotations
 
 import logging

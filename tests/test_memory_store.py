@@ -1,4 +1,5 @@
 """Tests for MemoryStore (TDD: RED phase)."""
+
 from __future__ import annotations
 
 import tempfile
@@ -15,7 +16,10 @@ from forecaster.prior.memory import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
-def _make_innovation(base: str = "diffusion models", op: str = "extend", gap: str = "No gap.") -> Innovation:
+
+def _make_innovation(
+    base: str = "diffusion models", op: str = "extend", gap: str = "No gap."
+) -> Innovation:
     return Innovation(base_direction=base, operator=op, gap=gap)
 
 
@@ -30,6 +34,7 @@ def _make_store_with_entries(n: int, current_month: str = "2024-01") -> MemorySt
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 def test_empty_creates_empty_store():
     store = MemoryStore.empty("2024-01")
@@ -84,8 +89,19 @@ def test_query_ranking_higher_recency_ranked_higher():
     store = store.append(inn_low, source_paper_id="old", month="2023-01")
     # Manually create a store where we control recency scores via inventory
     from forecaster.models import MemoryEntry, MemoryInventory
-    entry_low = MemoryEntry(innovation=inn_low, source_paper_id="old", timestamp_month="2023-01", recency_score=0.1)
-    entry_high = MemoryEntry(innovation=inn_high, source_paper_id="new", timestamp_month="2024-01", recency_score=0.9)
+
+    entry_low = MemoryEntry(
+        innovation=inn_low,
+        source_paper_id="old",
+        timestamp_month="2023-01",
+        recency_score=0.1,
+    )
+    entry_high = MemoryEntry(
+        innovation=inn_high,
+        source_paper_id="new",
+        timestamp_month="2024-01",
+        recency_score=0.9,
+    )
     inv = MemoryInventory(entries=(entry_low, entry_high), last_updated_month="2024-01")
     store = MemoryStore(inv)
     results = store.query(2, recency_weight=1.0)
@@ -111,7 +127,9 @@ def test_query_utility_can_change_ranking():
         utility_score=0.0,
     )
     store = MemoryStore(
-        MemoryInventory(entries=(high_utility, high_recency), last_updated_month="2024-01")
+        MemoryInventory(
+            entries=(high_utility, high_recency), last_updated_month="2024-01"
+        )
     )
 
     results = store.query(2)
@@ -125,8 +143,12 @@ def test_decay_recency_reduces_scores():
     original_scores = [e.recency_score for e in store.inventory.entries]
     decayed = store.decay_recency("2024-06")
     new_scores = [e.recency_score for e in decayed.inventory.entries]
-    assert all(new <= orig for new, orig in zip(new_scores, original_scores, strict=False))
-    assert any(new < orig for new, orig in zip(new_scores, original_scores, strict=False))
+    assert all(
+        new <= orig for new, orig in zip(new_scores, original_scores, strict=False)
+    )
+    assert any(
+        new < orig for new, orig in zip(new_scores, original_scores, strict=False)
+    )
 
 
 def test_decay_recency_returns_new_store():
@@ -171,7 +193,9 @@ def test_persist_and_load_roundtrip():
         loaded = MemoryStore.load(path)
     assert loaded.size == store.size
     assert loaded.inventory.last_updated_month == store.inventory.last_updated_month
-    for orig, loaded_entry in zip(store.inventory.entries, loaded.inventory.entries, strict=False):
+    for orig, loaded_entry in zip(
+        store.inventory.entries, loaded.inventory.entries, strict=False
+    ):
         assert orig.innovation == loaded_entry.innovation
         assert orig.frequency == loaded_entry.frequency
 
@@ -227,12 +251,15 @@ def test_build_memory_store_from_hindsight_samples_filters_future_sources():
 
     store = build_memory_store_from_hindsight_samples([visible, hidden], "2024-02")
 
-    assert [entry.source_paper_id for entry in store.inventory.entries] == ["visible-paper"]
+    assert [entry.source_paper_id for entry in store.inventory.entries] == [
+        "visible-paper"
+    ]
 
 
 # ---------------------------------------------------------------------------
 # Phase 5: Chronology guard tests
 # ---------------------------------------------------------------------------
+
 
 def test_load_with_cutoff_warns_when_memory_newer(tmp_path, caplog):  # type: ignore[no-untyped-def]
     """MemoryStore.load with cutoff_month warns when memory is newer than cutoff."""
@@ -280,12 +307,15 @@ def test_load_without_cutoff_never_warns(tmp_path, caplog):  # type: ignore[no-u
 # Phase 4: Delayed utility update integration tests
 # ---------------------------------------------------------------------------
 
+
 def test_apply_delayed_utility_update_increases_utility_on_match():
     """_apply_delayed_utility_update raises utility for actual future support."""
     from forecaster.models import Innovation, ScoredProposal
     from forecaster.orchestrator import _apply_delayed_utility_update
 
-    innovation = Innovation(base_direction="neural network", operator="extend", gap="efficiency")
+    innovation = Innovation(
+        base_direction="neural network", operator="extend", gap="efficiency"
+    )
     store = MemoryStore.empty("2024-01")
     store = store.append(innovation, source_paper_id="src-paper-1", month="2024-01")
 
@@ -323,7 +353,9 @@ def test_apply_delayed_utility_update_decreases_utility_on_no_match():
     from forecaster.models import Innovation, ScoredProposal
     from forecaster.orchestrator import _apply_delayed_utility_update
 
-    innovation = Innovation(base_direction="neural network", operator="extend", gap="efficiency")
+    innovation = Innovation(
+        base_direction="neural network", operator="extend", gap="efficiency"
+    )
     store = MemoryStore.empty("2024-01")
     store = store.append(innovation, source_paper_id="src-paper-1", month="2024-01")
     # Set a positive utility first
@@ -394,8 +426,14 @@ def test_apply_delayed_utility_update_records_provenance():
     from forecaster.models import ScoredProposal
     from forecaster.orchestrator import _apply_delayed_utility_update
 
-    innovation = Innovation(base_direction="retrieval agent", operator="compose", gap="ground long-horizon planning")
-    store = MemoryStore.empty("2024-01").append(innovation, source_paper_id="src-1", month="2024-01")
+    innovation = Innovation(
+        base_direction="retrieval agent",
+        operator="compose",
+        gap="ground long-horizon planning",
+    )
+    store = MemoryStore.empty("2024-01").append(
+        innovation, source_paper_id="src-1", month="2024-01"
+    )
     proposal = ScoredProposal(
         innovation=innovation,
         proposal_text="Grounded Retrieval Agent\nUse retrieval evidence to plan better.",

@@ -26,6 +26,7 @@ Full mode, synchronous (slow but works with Anthropic / Gemini too)::
         --input-dir data/papers --output-dir output/ \\
         --mode full --model claude-3-5-sonnet-20241022
 """
+
 from __future__ import annotations
 
 import argparse
@@ -180,6 +181,7 @@ def run_topic_hindsight(
     already_extracted = _load_already_extracted(jsonl_path)
     if already_extracted:
         import logging
+
         logging.getLogger(__name__).info(
             "Resuming: %d targets already extracted, skipping them.",
             len(already_extracted),
@@ -218,7 +220,9 @@ def run_topic_hindsight(
 
         # Build a target lookup to enrich output rows
         target_index = {
-            encode_custom_id(t["topic_id"], t["episode_id"], str(t["future_paper_id"])): t
+            encode_custom_id(
+                t["topic_id"], t["episode_id"], str(t["future_paper_id"])
+            ): t
             for t in targets
         }
         # Also need paper metadata for title / published_date
@@ -245,7 +249,9 @@ def run_topic_hindsight(
                     "cutoff_date": target["cutoff_date"],
                     "future_paper_id": str(target["future_paper_id"]),
                     "future_paper_title": paper.title if paper else "",
-                    "future_paper_published_date": paper.published_date if paper else "",
+                    "future_paper_published_date": paper.published_date
+                    if paper
+                    else "",
                     "innovation": innovation_to_dict(innovation),
                     "context_paper_count": len(train_papers),
                 }
@@ -276,8 +282,11 @@ def run_topic_hindsight(
         # Synchronous path (sequential LLM calls, works for any provider)
         # -----------------------------------------------------------------
         new_targets = [
-            t for t in targets
-            if encode_custom_id(t["topic_id"], t["episode_id"], str(t["future_paper_id"]))
+            t
+            for t in targets
+            if encode_custom_id(
+                t["topic_id"], t["episode_id"], str(t["future_paper_id"])
+            )
             not in already_extracted
         ]
 
@@ -289,7 +298,9 @@ def run_topic_hindsight(
             # Open in append mode for incremental writes (supports resume on crash)
             with jsonl_path.open("a", encoding="utf-8") as fh:
                 for target in new_targets:
-                    topic_papers = list(context.grouped_papers.get(target["topic_id"], ()))
+                    topic_papers = list(
+                        context.grouped_papers.get(target["topic_id"], ())
+                    )
                     train_papers, future_papers, _, _ = split_train_future_by_cutoff(
                         papers=topic_papers,
                         cutoff_date=target["cutoff_date"],
@@ -350,9 +361,15 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Hindsight innovation extraction (preview or full, sync or batch)."
     )
-    parser.add_argument("--input-dir", required=True, help="Directory of paper markdown files.")
-    parser.add_argument("--output-dir", required=True, help="Directory for output files.")
-    parser.add_argument("--manifest-path", default=None, help="Optional pre-built manifest.json.")
+    parser.add_argument(
+        "--input-dir", required=True, help="Directory of paper markdown files."
+    )
+    parser.add_argument(
+        "--output-dir", required=True, help="Directory for output files."
+    )
+    parser.add_argument(
+        "--manifest-path", default=None, help="Optional pre-built manifest.json."
+    )
     parser.add_argument("--topics-config", default=DEFAULT_TOPICS_CONFIG_PATH)
     parser.add_argument("--model", default="gpt-5.4")
     parser.add_argument(
@@ -371,7 +388,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--batch",
         action="store_true",
         help="Use the OpenAI Batch API instead of sequential synchronous calls. "
-             "Requires an OpenAI model (gpt-4o* or gpt-5*).",
+        "Requires an OpenAI model (gpt-4o* or gpt-5*).",
     )
     parser.add_argument(
         "--max-retry-rounds",

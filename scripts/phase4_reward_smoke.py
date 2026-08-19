@@ -8,6 +8,7 @@ Demonstrates:
     the TRL contract `reward_fn(completions, **kwargs) -> list[float]`.
   * Four representative completions exercise the four sanity cases.
 """
+
 from __future__ import annotations
 
 import json
@@ -26,13 +27,16 @@ from forecaster.foresight.trainer_wiring import (
 )
 from live_idea_bench.models import PaperRecord
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
 logger = logging.getLogger("phase4_smoke")
 
 
 @dataclass
 class StubConfig:
     """Stand-in for OnlineRLTrainConfig — only the fields make_reward_fn reads."""
+
     reward_mode: str = "foresight"
     foresight_artifact_dir: str = ""
     foresight_embedder: str = "hashing:128"
@@ -50,26 +54,40 @@ def main() -> int:
         # ---- build a tiny corpus + indices ----
         papers = [
             PaperRecord(
-                paper_id="hist1", title="Dense passage retrieval baseline",
-                month="2024-04", summary="Dense passage retrieval for RAG.",
-                keywords=["rag"], source_path="", published_date="2024-04-15",
+                paper_id="hist1",
+                title="Dense passage retrieval baseline",
+                month="2024-04",
+                summary="Dense passage retrieval for RAG.",
+                keywords=["rag"],
+                source_path="",
+                published_date="2024-04-15",
             ),
             PaperRecord(
-                paper_id="hist2", title="Hybrid sparse-dense retrievers",
-                month="2024-05", summary="Hybrid sparse-dense retrievers.",
-                keywords=["rag"], source_path="", published_date="2024-05-20",
+                paper_id="hist2",
+                title="Hybrid sparse-dense retrievers",
+                month="2024-05",
+                summary="Hybrid sparse-dense retrievers.",
+                keywords=["rag"],
+                source_path="",
+                published_date="2024-05-20",
             ),
             PaperRecord(
-                paper_id="future1", title="RAG meets time series",
+                paper_id="future1",
+                title="RAG meets time series",
                 month="2024-08",
                 summary="Retrieval-augmented forecasting; novel extension.",
-                keywords=["rag"], source_path="", published_date="2024-08-15",
+                keywords=["rag"],
+                source_path="",
+                published_date="2024-08-15",
             ),
             PaperRecord(
-                paper_id="future2", title="Composed retrievers for agents",
+                paper_id="future2",
+                title="Composed retrievers for agents",
                 month="2024-08",
                 summary="Composition of retrievers and planners; new pipeline.",
-                keywords=["rag"], source_path="", published_date="2024-08-20",
+                keywords=["rag"],
+                source_path="",
+                published_date="2024-08-20",
             ),
         ]
         embedder = HashingEmbedder(dim=128, seed=11)
@@ -81,18 +99,22 @@ def main() -> int:
             save_dir=indices_dir,
         )
         bundle = bundles["2024-06-30"]
-        logger.info("history.size=%d future.size=%d",
-                    bundle.history.size, bundle.future.size)
+        logger.info(
+            "history.size=%d future.size=%d", bundle.history.size, bundle.future.size
+        )
 
         # ---- write a synthetic rubric ----
         save_rubric(
             Rubric(
-                topic_id="rag", cutoff_t="2024-06-30",
+                topic_id="rag",
+                cutoff_t="2024-06-30",
                 criteria=(
                     "Must explicitly extend retrieval or compose retrievers with another component.",
                     "Must identify a concrete gap or limitation in pre-cutoff RAG work.",
                 ),
-                must_not=("Restates long-standing baselines without a novel operator.",),
+                must_not=(
+                    "Restates long-standing baselines without a novel operator.",
+                ),
                 operator_focus=("limitation_extension", "method_composition"),
                 version=1,
                 metadata=stamp_metadata(model="smoke"),
@@ -108,25 +130,39 @@ def main() -> int:
         # ---- four representative completions ----
         completions = [
             # 1. Real emerged-style idea
-            ("We extend retrieval with a novel time-series adaptation, "
-             "building on hist1's dense retriever to introduce a long-context "
-             "retrieval-extension layer."),
+            (
+                "We extend retrieval with a novel time-series adaptation, "
+                "building on hist1's dense retriever to introduce a long-context "
+                "retrieval-extension layer."
+            ),
             # 2. Legacy-style idea (operator wrong: 'transfer' rollout while z=extend)
-            ("This work proposes a brand new benchmark for retrieval-augmented agents."),
+            (
+                "This work proposes a brand new benchmark for retrieval-augmented agents."
+            ),
             # 3. Cites a non-existent paper
             ("Building on arxiv:9999.99999, we propose a new retrieval extension."),
             # 4. Long-standing framing (should be operator-fine but judge-low)
-            ("Long-standing established line of retrieval-augmented work, "
-             "building on hist1 with no new operator or gap."),
+            (
+                "Long-standing established line of retrieval-augmented work, "
+                "building on hist1 with no new operator or gap."
+            ),
         ]
         extra_infos = []
         for _ in range(4):
-            extra_infos.append(json.dumps({
-                "cutoff_date": "2024-06-30",
-                "topic_id": "rag",
-                "innovation": {"base_direction": "rag", "operator": "extend", "gap": "x"},
-                "prompt_mode": "z_conditioned_realization",
-            }))
+            extra_infos.append(
+                json.dumps(
+                    {
+                        "cutoff_date": "2024-06-30",
+                        "topic_id": "rag",
+                        "innovation": {
+                            "base_direction": "rag",
+                            "operator": "extend",
+                            "gap": "x",
+                        },
+                        "prompt_mode": "z_conditioned_realization",
+                    }
+                )
+            )
 
         rewards = reward_fn(completions, extra_info=extra_infos)
         logger.info("rewards: %s", rewards)

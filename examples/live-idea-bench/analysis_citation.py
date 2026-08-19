@@ -17,6 +17,7 @@ Usage:
         --output citation_report.json \\
         [--s2-key YOUR_SEMANTIC_SCHOLAR_API_KEY]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -99,13 +100,15 @@ def _analyze(data: dict, api_key: str | None, delay: float) -> dict:
                     future_ids.add(cand["paper_id"])
             if not hit_ids or not train_ids:
                 continue
-            hit_samples.append({
-                "topic_id": topic_id,
-                "cutoff": cutoff,
-                "train_ids": train_ids,
-                "hit_ids": sorted(hit_ids),
-                "future_ids": sorted(future_ids - hit_ids),  # non-hit control
-            })
+            hit_samples.append(
+                {
+                    "topic_id": topic_id,
+                    "cutoff": cutoff,
+                    "train_ids": train_ids,
+                    "hit_ids": sorted(hit_ids),
+                    "future_ids": sorted(future_ids - hit_ids),  # non-hit control
+                }
+            )
 
     total_hit = total_hit_with_cite = 0
     total_ctrl = total_ctrl_with_cite = 0
@@ -152,10 +155,14 @@ def _analyze(data: dict, api_key: str | None, delay: float) -> dict:
         "target": "train_window",
         "hit_papers_checked": total_hit,
         "hit_papers_with_citation": total_hit_with_cite,
-        "hit_citation_rate": round(total_hit_with_cite / total_hit, 4) if total_hit else None,
+        "hit_citation_rate": round(total_hit_with_cite / total_hit, 4)
+        if total_hit
+        else None,
         "control_papers_checked": total_ctrl,
         "control_papers_with_citation": total_ctrl_with_cite,
-        "control_citation_rate": round(total_ctrl_with_cite / total_ctrl, 4) if total_ctrl else None,
+        "control_citation_rate": round(total_ctrl_with_cite / total_ctrl, 4)
+        if total_ctrl
+        else None,
         "interpretation": (
             "Hit papers cite their training-window papers more than control "
             "→ predictions capture genuine research continuity"
@@ -167,10 +174,17 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True, help="llmjudge output JSON")
     parser.add_argument("--output", default="citation_report.json")
-    parser.add_argument("--s2-key", default=None,
-                        help="Semantic Scholar API key (optional; higher rate limit)")
-    parser.add_argument("--delay", type=float, default=DEFAULT_DELAY,
-                        help="Seconds between API requests (default 1.1)")
+    parser.add_argument(
+        "--s2-key",
+        default=None,
+        help="Semantic Scholar API key (optional; higher rate limit)",
+    )
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=DEFAULT_DELAY,
+        help="Seconds between API requests (default 1.1)",
+    )
     args = parser.parse_args()
 
     data = json.loads(Path(args.input).read_text(encoding="utf-8"))
@@ -182,12 +196,16 @@ def main() -> int:
     result["source"] = args.input
 
     print(f"\n=== Citation Analysis: {label} ===")
-    print(f"  Hit papers:     {result['hit_papers_checked']} checked, "
-          f"{result['hit_papers_with_citation']} cite train "
-          f"(rate={result['hit_citation_rate']})")
-    print(f"  Control papers: {result['control_papers_checked']} checked, "
-          f"{result['control_papers_with_citation']} cite train "
-          f"(rate={result['control_citation_rate']})")
+    print(
+        f"  Hit papers:     {result['hit_papers_checked']} checked, "
+        f"{result['hit_papers_with_citation']} cite train "
+        f"(rate={result['hit_citation_rate']})"
+    )
+    print(
+        f"  Control papers: {result['control_papers_checked']} checked, "
+        f"{result['control_papers_with_citation']} cite train "
+        f"(rate={result['control_citation_rate']})"
+    )
 
     Path(args.output).write_text(
         json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8"

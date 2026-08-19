@@ -49,9 +49,13 @@ def idea_text(prediction: IdeaPrediction | dict[str, object] | str) -> str:
         rationale = str(prediction.get("rationale", ""))
         approach = str(prediction.get("approach", ""))
         key_terms = prediction.get("key_terms") or prediction.get("keywords") or []
-        key_terms_text = " ".join(str(term).strip() for term in key_terms if str(term).strip())
+        key_terms_text = " ".join(
+            str(term).strip() for term in key_terms if str(term).strip()
+        )
         return f"{title} {rationale} {approach} {key_terms_text}".strip()
-    key_terms_text = " ".join(term.strip() for term in prediction.key_terms if term.strip())
+    key_terms_text = " ".join(
+        term.strip() for term in prediction.key_terms if term.strip()
+    )
     return f"{prediction.title} {prediction.rationale} {prediction.approach} {key_terms_text}".strip()
 
 
@@ -97,7 +101,9 @@ def _llm_similarity(
     clean_idea = _sanitize(idea)
     clean_context = _sanitize(context[:max_chars])
     raw, _ = get_response_from_llm(
-        msg=similarity_config.user_prompt_template.format(idea=clean_idea, context=clean_context),
+        msg=similarity_config.user_prompt_template.format(
+            idea=clean_idea, context=clean_context
+        ),
         client=client,
         model=resolved_model,
         system_message=similarity_config.system_prompt,
@@ -109,7 +115,9 @@ def _llm_similarity(
     # Fail loud on a parse miss: silently scoring 0.0 marks a genuinely
     # high-similarity pair as a non-match and corrupts the benchmark
     # metrics. No-fallback policy — surface the malformed judge output.
-    score_match = re.search(r"(?im)\**\s*score\s*\**\s*:?\s*\**\s*(0?\.\d+|[01](?:\.\d+)?)", raw)
+    score_match = re.search(
+        r"(?im)\**\s*score\s*\**\s*:?\s*\**\s*(0?\.\d+|[01](?:\.\d+)?)", raw
+    )
     if not score_match:
         raise ValueError(
             f"LLM judge ({resolved_model}) returned no parseable 'Score:' line; "
@@ -126,7 +134,11 @@ def _llm_similarity(
 
 def _sanitize(text: str) -> str:
     """Remove null bytes and non-printable control characters that break JSON serialization."""
-    return "".join(ch for ch in text if ch == "\n" or ch == "\t" or (ord(ch) >= 32 and ord(ch) != 127))
+    return "".join(
+        ch
+        for ch in text
+        if ch == "\n" or ch == "\t" or (ord(ch) >= 32 and ord(ch) != 127)
+    )
 
 
 def _embedding_similarity(
@@ -162,7 +174,9 @@ def _embedding_similarity(
     last_exc: Exception | None = None
     for attempt in range(max_retries):
         try:
-            resp = client.embeddings.create(model=model, input=[clean_idea, truncated_context])
+            resp = client.embeddings.create(
+                model=model, input=[clean_idea, truncated_context]
+            )
             a, b = resp.data[0].embedding, resp.data[1].embedding
             dot = sum(x * y for x, y in zip(a, b, strict=False))
             na = math.sqrt(sum(x * x for x in a))
@@ -171,10 +185,10 @@ def _embedding_similarity(
             return MatchResult(score=score, engine_name=f"embedding:voyage:{model}")
         except Exception as exc:  # noqa: BLE001 — retried below, re-raised on exhaustion
             last_exc = exc
-            wait = 2 ** attempt  # 1, 2, 4, 8, 16, 32, 64 seconds
+            wait = 2**attempt  # 1, 2, 4, 8, 16, 32, 64 seconds
             if attempt < max_retries - 1:
                 logger.warning(
-                    f"Voyage embedding call failed (attempt {attempt+1}/{max_retries}), retrying in {wait}s. Error: {exc}"
+                    f"Voyage embedding call failed (attempt {attempt + 1}/{max_retries}), retrying in {wait}s. Error: {exc}"
                 )
                 time.sleep(wait)
     raise RuntimeError(
@@ -197,7 +211,14 @@ def compute_similarity(
 
     engine = resolved_similarity.engine.lower().strip()
     if engine == "llm":
-        return _llm_similarity(idea, context, resolved_similarity, resolved_runtime, model_name=model_name, reasoning_effort=reasoning_effort)
+        return _llm_similarity(
+            idea,
+            context,
+            resolved_similarity,
+            resolved_runtime,
+            model_name=model_name,
+            reasoning_effort=reasoning_effort,
+        )
     if engine == "embedding":
         return _embedding_similarity(idea, context, resolved_runtime)
 
@@ -226,8 +247,16 @@ def is_match(
     # hybrid (default) — reuse the components computed in compute_similarity so
     # the match decision and the sort score (max(semantic, keyword)) are derived
     # from the exact same numbers; no recompute, no greedy-selection drift.
-    semantic = result.semantic if result.semantic is not None else _hybrid_similarity(idea, context)
-    keyword = result.keyword if result.keyword is not None else _keyword_overlap(idea, context)
+    semantic = (
+        result.semantic
+        if result.semantic is not None
+        else _hybrid_similarity(idea, context)
+    )
+    keyword = (
+        result.keyword
+        if result.keyword is not None
+        else _keyword_overlap(idea, context)
+    )
     return (
         semantic >= similarity_config.semantic_threshold
         or keyword >= similarity_config.keyword_threshold
@@ -266,7 +295,9 @@ def _lead_time_fraction(
     cutoff_ord = date_to_ordinal(cutoff_date)
     future_end_ord = date_to_ordinal(future_end_date)
     horizon = max(1, future_end_ord - cutoff_ord)
-    lead_time_days = max(0, date_to_ordinal(get_paper_published_date(paper)) - cutoff_ord)
+    lead_time_days = max(
+        0, date_to_ordinal(get_paper_published_date(paper)) - cutoff_ord
+    )
     return max(0.0, min(1.0, lead_time_days / horizon))
 
 
@@ -329,7 +360,9 @@ def score_prediction_list(
             for fut in as_completed(futures):
                 scored_candidates.append(fut.result())
 
-        scored_candidates.sort(key=lambda item: (item[1].score, item[0].paper_id), reverse=True)
+        scored_candidates.sort(
+            key=lambda item: (item[1].score, item[0].paper_id), reverse=True
+        )
 
         duplicate_candidate_ids = [
             paper.paper_id
@@ -368,7 +401,9 @@ def score_prediction_list(
             future_end_date=future_end_date,
         )
         matched_lead_times.append(lead_time)
-        paper_popularity = popularity_weights.get(paper.paper_id, 0.0) if popularity_weights else 0.0
+        paper_popularity = (
+            popularity_weights.get(paper.paper_id, 0.0) if popularity_weights else 0.0
+        )
         matches.append(
             PredictionMatchDetail(
                 prediction_rank=pred.rank,
@@ -386,18 +421,28 @@ def score_prediction_list(
     hit_at_k = 1.0 if matched_ranks else 0.0
     # coverage_at_k: matched / |future_papers| (old recall_at_k formula). Bounded
     # above by min(k, |future|)/|future|; cannot reach 1.0 when |future| > k.
-    coverage_at_k = (len(matched_paper_ids) / len(future_papers)) if future_papers else 0.0
+    coverage_at_k = (
+        (len(matched_paper_ids) / len(future_papers)) if future_papers else 0.0
+    )
     # recall_at_k: true recall — matched / min(k, |future_papers|). Denominator is
     # the max number of distinct future papers the top-k predictions could match.
     recall_denominator = min(k, len(future_papers))
-    recall_at_k = (len(matched_paper_ids) / recall_denominator) if recall_denominator > 0 else 0.0
-    precision_at_k = (len(matched_paper_ids) / max(1, min(k, len(top_preds)))) if top_preds else 0.0
+    recall_at_k = (
+        (len(matched_paper_ids) / recall_denominator) if recall_denominator > 0 else 0.0
+    )
+    precision_at_k = (
+        (len(matched_paper_ids) / max(1, min(k, len(top_preds)))) if top_preds else 0.0
+    )
     mrr = (1.0 / min(matched_ranks)) if matched_ranks else 0.0
     # Novelty/diversity are intentionally lexical and engine-independent (the
     # match engine above may be Voyage/LLM; these stay free + deterministic).
-    novelty = lexical_novelty_at_k(top_preds, [paper_text(paper) for paper in train_papers], k)
+    novelty = lexical_novelty_at_k(
+        top_preds, [paper_text(paper) for paper in train_papers], k
+    )
     diversity = lexical_diversity_at_k(top_preds, k)
-    lead_time = sum(matched_lead_times) / len(matched_lead_times) if matched_lead_times else 0.0
+    lead_time = (
+        sum(matched_lead_times) / len(matched_lead_times) if matched_lead_times else 0.0
+    )
     duplicate_rate = (duplicate_blocked / len(top_preds)) if top_preds else 0.0
 
     # Popularity-weighted metrics — only non-zero when popularity_weights are provided
@@ -411,17 +456,25 @@ def score_prediction_list(
         ]
         if matched_popularities:
             weighted_hit = max(matched_popularities)
-            weighted_precision = sum(matched_popularities) / max(1, min(k, len(top_preds)))
+            weighted_precision = sum(matched_popularities) / max(
+                1, min(k, len(top_preds))
+            )
             # weighted MRR: 1/rank of first matched * that match's popularity
             first_match = next(
                 (m for m in matches if m.is_match),
                 None,
             )
             if first_match is not None:
-                weighted_mrr_val = (1.0 / first_match.prediction_rank) * first_match.matched_paper_popularity
-        total_pop_mass = sum(popularity_weights.get(p.paper_id, 0.0) for p in future_papers)
+                weighted_mrr_val = (
+                    1.0 / first_match.prediction_rank
+                ) * first_match.matched_paper_popularity
+        total_pop_mass = sum(
+            popularity_weights.get(p.paper_id, 0.0) for p in future_papers
+        )
         matched_pop_mass = sum(matched_popularities)
-        popularity_recall = matched_pop_mass / total_pop_mass if total_pop_mass > 0 else 0.0
+        popularity_recall = (
+            matched_pop_mass / total_pop_mass if total_pop_mass > 0 else 0.0
+        )
 
     return ScoredPredictionList(
         evaluation=EvaluationResult(
@@ -443,7 +496,9 @@ def score_prediction_list(
         ),
         matches=matches,
         unmatched_future_paper_ids=[
-            paper.paper_id for paper in future_papers if paper.paper_id not in used_paper_ids
+            paper.paper_id
+            for paper in future_papers
+            if paper.paper_id not in used_paper_ids
         ],
     )
 
@@ -489,7 +544,10 @@ def lexical_diversity_at_k(predictions: list[IdeaPrediction], k: int) -> float:
     distances: list[float] = []
     for i in range(len(top_preds)):
         for j in range(i + 1, len(top_preds)):
-            distances.append(1.0 - _hybrid_similarity(idea_text(top_preds[i]), idea_text(top_preds[j])))
+            distances.append(
+                1.0
+                - _hybrid_similarity(idea_text(top_preds[i]), idea_text(top_preds[j]))
+            )
     return sum(distances) / len(distances)
 
 

@@ -17,6 +17,7 @@ Usage:
         --output coauthor_report.json \\
         [--s2-key YOUR_SEMANTIC_SCHOLAR_API_KEY]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -148,7 +149,9 @@ def _analyze(data: dict, api_key: str | None, delay: float) -> dict:
         try:
             from scipy.stats import mannwhitneyu
 
-            stat, pval = mannwhitneyu(hit_overlaps, ctrl_overlaps, alternative="greater")
+            stat, pval = mannwhitneyu(
+                hit_overlaps, ctrl_overlaps, alternative="greater"
+            )
             result["overlap_test"] = {
                 "test": "Mann-Whitney U (hit > control)",
                 "statistic": round(float(stat), 4),
@@ -158,7 +161,9 @@ def _analyze(data: dict, api_key: str | None, delay: float) -> dict:
         except ImportError:
             result["overlap_test"] = {
                 "test": "mean comparison (scipy not available)",
-                "delta": round((_mean(hit_overlaps) or 0) - (_mean(ctrl_overlaps) or 0), 4),
+                "delta": round(
+                    (_mean(hit_overlaps) or 0) - (_mean(ctrl_overlaps) or 0), 4
+                ),
             }
 
     result["interpretation"] = (
@@ -172,10 +177,17 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True, help="llmjudge output JSON")
     parser.add_argument("--output", default="coauthor_report.json")
-    parser.add_argument("--s2-key", default=None,
-                        help="Semantic Scholar API key (optional; higher rate limit)")
-    parser.add_argument("--delay", type=float, default=DEFAULT_DELAY,
-                        help="Seconds between API requests (default 1.1)")
+    parser.add_argument(
+        "--s2-key",
+        default=None,
+        help="Semantic Scholar API key (optional; higher rate limit)",
+    )
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=DEFAULT_DELAY,
+        help="Seconds between API requests (default 1.1)",
+    )
     args = parser.parse_args()
 
     data = json.loads(Path(args.input).read_text(encoding="utf-8"))

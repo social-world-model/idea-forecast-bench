@@ -49,11 +49,23 @@ def _paper(
 
 
 def _prediction(rank: int, title: str, rationale: str) -> IdeaPrediction:
-    return IdeaPrediction(rank=rank, title=title, rationale=rationale, approach=rationale)
+    return IdeaPrediction(
+        rank=rank, title=title, rationale=rationale, approach=rationale
+    )
 
 
-def test_evaluate_predictions_uses_one_to_one_matching_for_duplicate_future_hits() -> None:
-    train = [_paper("train-1", "2024-01", "Old baseline", "old baseline methods", published_date="2024-01-01")]
+def test_evaluate_predictions_uses_one_to_one_matching_for_duplicate_future_hits() -> (
+    None
+):
+    train = [
+        _paper(
+            "train-1",
+            "2024-01",
+            "Old baseline",
+            "old baseline methods",
+            published_date="2024-01-01",
+        )
+    ]
     future = [
         _paper(
             "future-1",
@@ -99,12 +111,18 @@ def test_llm_judge_raises_on_unparseable_score(monkeypatch) -> None:
     from live_idea_bench.config import Config
 
     monkeypatch.setattr(similarity_module, "create_client", lambda m: (object(), m))
-    cfg = SimilarityConfig(engine="llm", llm_match_threshold=0.7,
-                           system_prompt="s", user_prompt_template="{idea}|{context}")
+    cfg = SimilarityConfig(
+        engine="llm",
+        llm_match_threshold=0.7,
+        system_prompt="s",
+        user_prompt_template="{idea}|{context}",
+    )
     rt = Config()
 
     def _reply(text):
-        monkeypatch.setattr(similarity_module, "get_response_from_llm", lambda **_k: (text, []))
+        monkeypatch.setattr(
+            similarity_module, "get_response_from_llm", lambda **_k: (text, [])
+        )
         return similarity_module._llm_similarity("idea", "ctx", cfg, rt)
 
     # Broadened parsing: bold / lowercase / leading dot all succeed.
@@ -121,10 +139,14 @@ def test_hybrid_is_match_reuses_match_result_components() -> None:
     recompute, so the match decision and the sort score use the same numbers.
     A result whose keyword>=threshold but semantic<threshold must still match,
     and a result missing the components must fall back to recompute."""
-    cfg = SimilarityConfig(engine="hybrid", semantic_threshold=0.5, keyword_threshold=0.3)
+    cfg = SimilarityConfig(
+        engine="hybrid", semantic_threshold=0.5, keyword_threshold=0.3
+    )
 
     # compute_similarity populates semantic+keyword on the result.
-    res = compute_similarity("graph retrieval agents", "graph retrieval agents for planning", cfg)
+    res = compute_similarity(
+        "graph retrieval agents", "graph retrieval agents for planning", cfg
+    )
     assert res.semantic is not None and res.keyword is not None
 
     # Stored-component path: keyword above threshold, semantic below -> match.
@@ -142,24 +164,54 @@ def test_coverage_and_recall_diverge_when_future_exceeds_k() -> None:
     """coverage_at_k uses |future| as denominator; recall_at_k uses min(k,|future|).
     With |future| > k they must diverge: coverage is depressed by the large pool,
     recall is a true [0,1] hit-rate over what the top-k could reach."""
-    train = [_paper("train-1", "2024-01", "Old", "old text", published_date="2024-01-01")]
+    train = [
+        _paper("train-1", "2024-01", "Old", "old text", published_date="2024-01-01")
+    ]
     # 4 future papers, only 1 lexically matchable; k=1.
     future = [
-        _paper("f-1", "2024-02", "Neural retrieval", "neural retrieval methods", published_date="2024-02-15"),
-        _paper("f-2", "2024-02", "Protein folding", "protein folding simulation", published_date="2024-02-16"),
-        _paper("f-3", "2024-02", "Climate model", "climate ocean modeling", published_date="2024-02-17"),
-        _paper("f-4", "2024-02", "Robotics grasp", "robot grasp planning", published_date="2024-02-18"),
+        _paper(
+            "f-1",
+            "2024-02",
+            "Neural retrieval",
+            "neural retrieval methods",
+            published_date="2024-02-15",
+        ),
+        _paper(
+            "f-2",
+            "2024-02",
+            "Protein folding",
+            "protein folding simulation",
+            published_date="2024-02-16",
+        ),
+        _paper(
+            "f-3",
+            "2024-02",
+            "Climate model",
+            "climate ocean modeling",
+            published_date="2024-02-17",
+        ),
+        _paper(
+            "f-4",
+            "2024-02",
+            "Robotics grasp",
+            "robot grasp planning",
+            published_date="2024-02-18",
+        ),
     ]
     predictions = [_prediction(1, "Neural retrieval", "neural retrieval methods")]
 
     scored = score_prediction_list(
-        predictions=predictions, train_papers=train, future_papers=future, k=1,
-        cutoff_date="2024-02-01", future_end_date="2024-03-31",
+        predictions=predictions,
+        train_papers=train,
+        future_papers=future,
+        k=1,
+        cutoff_date="2024-02-01",
+        future_end_date="2024-03-31",
     )
     ev = scored.evaluation
     assert ev.matched_paper_ids == ["f-1"]
-    assert ev.coverage_at_k == pytest.approx(1 / 4)        # matched / |future|
-    assert ev.recall_at_k == pytest.approx(1 / 1)          # matched / min(k, |future|)
+    assert ev.coverage_at_k == pytest.approx(1 / 4)  # matched / |future|
+    assert ev.recall_at_k == pytest.approx(1 / 1)  # matched / min(k, |future|)
     assert ev.coverage_at_k < ev.recall_at_k
     assert 0.0 <= ev.coverage_at_k <= 1.0
     assert 0.0 <= ev.recall_at_k <= 1.0
@@ -167,9 +219,23 @@ def test_coverage_and_recall_diverge_when_future_exceeds_k() -> None:
 
 def test_weighted_metrics_without_popularity_weights_default_to_zero() -> None:
     """When no popularity_weights passed, weighted metrics default to 0.0 (opt-in)."""
-    train = [_paper("train-1", "2024-01", "Old paper", "old paper text", published_date="2024-01-01")]
+    train = [
+        _paper(
+            "train-1",
+            "2024-01",
+            "Old paper",
+            "old paper text",
+            published_date="2024-01-01",
+        )
+    ]
     future = [
-        _paper("future-1", "2024-02", "Neural retrieval", "neural retrieval methods", published_date="2024-02-15")
+        _paper(
+            "future-1",
+            "2024-02",
+            "Neural retrieval",
+            "neural retrieval methods",
+            published_date="2024-02-15",
+        )
     ]
     predictions = [_prediction(1, "Neural retrieval", "neural retrieval methods")]
 
@@ -190,10 +256,30 @@ def test_weighted_metrics_without_popularity_weights_default_to_zero() -> None:
 
 def test_weighted_metrics_with_popularity_weights_computes_correctly() -> None:
     """When popularity_weights are provided, all 4 weighted metrics are computed."""
-    train = [_paper("train-1", "2024-01", "Old paper", "old paper text", published_date="2024-01-01")]
+    train = [
+        _paper(
+            "train-1",
+            "2024-01",
+            "Old paper",
+            "old paper text",
+            published_date="2024-01-01",
+        )
+    ]
     future = [
-        _paper("future-1", "2024-02", "Neural retrieval", "neural retrieval methods", published_date="2024-02-15"),
-        _paper("future-2", "2024-03", "Graph attention", "graph attention networks", published_date="2024-03-01"),
+        _paper(
+            "future-1",
+            "2024-02",
+            "Neural retrieval",
+            "neural retrieval methods",
+            published_date="2024-02-15",
+        ),
+        _paper(
+            "future-2",
+            "2024-03",
+            "Graph attention",
+            "graph attention networks",
+            published_date="2024-03-01",
+        ),
     ]
     predictions = [_prediction(1, "Neural retrieval", "neural retrieval methods")]
     popularity_weights = {"future-1": 0.8, "future-2": 0.3}
@@ -213,19 +299,43 @@ def test_weighted_metrics_with_popularity_weights_computes_correctly() -> None:
     assert scored.evaluation.weighted_precision_at_k == pytest.approx(0.8)  # 0.8/1
     assert scored.evaluation.weighted_mrr == pytest.approx(0.8)  # 1/1 * 0.8
     # popularity_recall = 0.8 / (0.8 + 0.3) ≈ 0.727
-    assert scored.evaluation.popularity_recall_at_k == pytest.approx(0.8 / 1.1, rel=1e-3)
+    assert scored.evaluation.popularity_recall_at_k == pytest.approx(
+        0.8 / 1.1, rel=1e-3
+    )
 
 
 def test_popular_match_scores_higher_weighted_mrr_than_obscure_match() -> None:
     """Matching a popular paper yields higher weighted_mrr than matching an obscure one."""
-    train = [_paper("train-1", "2024-01", "Baseline", "baseline text", published_date="2024-01-01")]
+    train = [
+        _paper(
+            "train-1",
+            "2024-01",
+            "Baseline",
+            "baseline text",
+            published_date="2024-01-01",
+        )
+    ]
     future_popular = [
-        _paper("pop-1", "2024-02", "Transformer attention", "transformer attention mechanisms", published_date="2024-02-15")
+        _paper(
+            "pop-1",
+            "2024-02",
+            "Transformer attention",
+            "transformer attention mechanisms",
+            published_date="2024-02-15",
+        )
     ]
     future_obscure = [
-        _paper("obs-1", "2024-02", "Transformer attention", "transformer attention mechanisms", published_date="2024-02-15")
+        _paper(
+            "obs-1",
+            "2024-02",
+            "Transformer attention",
+            "transformer attention mechanisms",
+            published_date="2024-02-15",
+        )
     ]
-    predictions = [_prediction(1, "Transformer attention", "transformer attention mechanisms")]
+    predictions = [
+        _prediction(1, "Transformer attention", "transformer attention mechanisms")
+    ]
 
     scored_popular = score_prediction_list(
         predictions=predictions,
@@ -242,15 +352,37 @@ def test_popular_match_scores_higher_weighted_mrr_than_obscure_match() -> None:
         popularity_weights={"obs-1": 0.1},
     )
 
-    assert scored_popular.evaluation.weighted_mrr > scored_obscure.evaluation.weighted_mrr
+    assert (
+        scored_popular.evaluation.weighted_mrr > scored_obscure.evaluation.weighted_mrr
+    )
 
 
 def test_popularity_recall_at_k_accounts_for_total_popularity_mass() -> None:
     """popularity_recall = matched weight sum / total weight sum across all future papers."""
-    train = [_paper("train-1", "2024-01", "Baseline", "baseline text", published_date="2024-01-01")]
+    train = [
+        _paper(
+            "train-1",
+            "2024-01",
+            "Baseline",
+            "baseline text",
+            published_date="2024-01-01",
+        )
+    ]
     future = [
-        _paper("f-1", "2024-02", "Big impact paper", "big impact methods", published_date="2024-02-15"),
-        _paper("f-2", "2024-03", "Tiny unknown paper", "tiny unknown ideas", published_date="2024-03-01"),
+        _paper(
+            "f-1",
+            "2024-02",
+            "Big impact paper",
+            "big impact methods",
+            published_date="2024-02-15",
+        ),
+        _paper(
+            "f-2",
+            "2024-03",
+            "Tiny unknown paper",
+            "tiny unknown ideas",
+            published_date="2024-03-01",
+        ),
     ]
     # Only predict the unpopular one
     predictions = [_prediction(1, "Tiny unknown paper", "tiny unknown ideas")]
@@ -265,15 +397,29 @@ def test_popularity_recall_at_k_accounts_for_total_popularity_mass() -> None:
     )
 
     # popularity_recall = 0.1 / (1.0 + 0.1) ≈ 0.0909
-    assert scored.evaluation.popularity_recall_at_k == pytest.approx(0.1 / 1.1, rel=1e-3)
+    assert scored.evaluation.popularity_recall_at_k == pytest.approx(
+        0.1 / 1.1, rel=1e-3
+    )
     # But hit_at_k is still 1.0 (matched something)
     assert scored.evaluation.hit_at_k == 1.0
 
 
 def test_matched_paper_popularity_stored_in_match_detail() -> None:
     """PredictionMatchDetail should store the popularity of the matched paper."""
-    train = [_paper("train-1", "2024-01", "Baseline", "baseline", published_date="2024-01-01")]
-    future = [_paper("f-1", "2024-02", "Diffusion models", "diffusion models review", published_date="2024-02-15")]
+    train = [
+        _paper(
+            "train-1", "2024-01", "Baseline", "baseline", published_date="2024-01-01"
+        )
+    ]
+    future = [
+        _paper(
+            "f-1",
+            "2024-02",
+            "Diffusion models",
+            "diffusion models review",
+            published_date="2024-02-15",
+        )
+    ]
     predictions = [_prediction(1, "Diffusion models", "diffusion models review")]
     popularity_weights = {"f-1": 0.75}
 
@@ -291,7 +437,15 @@ def test_matched_paper_popularity_stored_in_match_detail() -> None:
 
 
 def test_score_prediction_list_exposes_match_details_and_unmatched_papers() -> None:
-    train = [_paper("train-1", "2024-01", "Old baseline", "old baseline methods", published_date="2024-01-01")]
+    train = [
+        _paper(
+            "train-1",
+            "2024-01",
+            "Old baseline",
+            "old baseline methods",
+            published_date="2024-01-01",
+        )
+    ]
     future = [
         _paper(
             "future-1",

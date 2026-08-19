@@ -1,4 +1,5 @@
 """Tests for hindsight dataset builder."""
+
 from __future__ import annotations
 
 import logging
@@ -44,8 +45,7 @@ def _make_innovation(idx: int = 0) -> Innovation:
 
 # Build a small paper corpus spanning 3 months
 TRAIN_PAPERS = [
-    _make_paper(f"train-{i:03d}", f"Train Paper {i}", month="2024-01")
-    for i in range(5)
+    _make_paper(f"train-{i:03d}", f"Train Paper {i}", month="2024-01") for i in range(5)
 ]
 FUTURE_PAPERS_FEB = [
     _make_paper(f"fut-feb-{i:03d}", f"Future Feb Paper {i}", month="2024-02")
@@ -144,7 +144,9 @@ class TestBuildHindsightDataset:
                 "forecaster.hindsight.dataset_builder.extract_innovation",
                 side_effect=_side_effect,
             ),
-            caplog.at_level(logging.WARNING, logger="forecaster.hindsight.dataset_builder"),
+            caplog.at_level(
+                logging.WARNING, logger="forecaster.hindsight.dataset_builder"
+            ),
         ):
             samples = build_hindsight_dataset(
                 papers=ALL_PAPERS,
@@ -157,8 +159,13 @@ class TestBuildHindsightDataset:
             )
 
         # At least one warning should have been logged about failure
-        warning_messages = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
-        assert any("skip" in msg.lower() or "fail" in msg.lower() or "error" in msg.lower() for msg in warning_messages)
+        warning_messages = [
+            r.message for r in caplog.records if r.levelno >= logging.WARNING
+        ]
+        assert any(
+            "skip" in msg.lower() or "fail" in msg.lower() or "error" in msg.lower()
+            for msg in warning_messages
+        )
 
         # Remaining papers should still produce samples
         assert isinstance(samples, list)
@@ -229,10 +236,11 @@ class TestBuildHindsightDataset:
         ]
         captured_titles: list[str] = []
 
-        def _capture_references(future_paper, context_papers, llm_client, model, config):  # type: ignore[no-untyped-def]
+        def _capture_references(
+            future_paper, context_papers, llm_client, model, config
+        ):  # type: ignore[no-untyped-def]
             captured_titles.extend(
-                str(reference.get("title", ""))
-                for reference in future_paper.references
+                str(reference.get("title", "")) for reference in future_paper.references
             )
             return _make_innovation(99)
 

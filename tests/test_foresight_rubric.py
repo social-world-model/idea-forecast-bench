@@ -1,4 +1,5 @@
 """Tests for rubric schema + judge prompt + validation AUC."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -78,7 +79,7 @@ def test_parse_rubric_response_strict():
 
 
 def test_parse_rubric_response_handles_code_fence():
-    raw = "```json\n{\"criteria\": [\"x\"], \"must_not\": []}\n```"
+    raw = '```json\n{"criteria": ["x"], "must_not": []}\n```'
     crit, _ = parse_rubric_response(raw)
     assert crit == ("x",)
 
@@ -93,7 +94,8 @@ def test_parse_rubric_response_rejects_empty_criteria():
 
 def test_judge_user_prompt_includes_rubric_and_inputs():
     r = Rubric(
-        topic_id="rag", cutoff_t="2024-06-30",
+        topic_id="rag",
+        cutoff_t="2024-06-30",
         criteria=("uses retrieval",),
     )
     prompt = build_judge_user_prompt("my idea", "paper content", r)
@@ -114,8 +116,12 @@ def test_judge_prompt_uses_soft_must_not_penalty_not_hard_ceiling():
       2) at most once / no accumulation,
       3) floor at 0.
     """
-    r = Rubric(topic_id="rag", cutoff_t="2024-06-30",
-               criteria=("uses retrieval",), must_not=("no fine-tuning",))
+    r = Rubric(
+        topic_id="rag",
+        cutoff_t="2024-06-30",
+        criteria=("uses retrieval",),
+        must_not=("no fine-tuning",),
+    )
     prompt = build_judge_user_prompt("idea", "candidate", r)
     lower = prompt.lower()
     assert "subtract" in lower
@@ -215,7 +221,7 @@ def test_validate_rubric_fails_on_low_auc():
     r = Rubric(topic_id="rag", cutoff_t="2024-06-30", criteria=("x",))
 
     def scoring(idea: str, candidate: str) -> float:
-        return 0.5     # everything tied → AUC = 0.5
+        return 0.5  # everything tied → AUC = 0.5
 
     judge = RubricJudge(scorer=StubScorer(fn=scoring))
     pairs = [
@@ -252,10 +258,12 @@ def test_validate_rubric_flags_leakage_even_with_high_auc():
         LabeledPair("i", "neg_b", 0),
         LabeledPair("i", "neg_c", 0),
         LabeledPair("i", "neg_d", 0),
-        LabeledPair("i", "neg_leak_paper", 0),  # one leaked negative scoring above pos median
+        LabeledPair(
+            "i", "neg_leak_paper", 0
+        ),  # one leaked negative scoring above pos median
     ]
     report, _ = validate_rubric(r, pairs, judge=judge, threshold=0.70)
-    assert report.auc >= 0.70          # mostly separates despite the one leak
+    assert report.auc >= 0.70  # mostly separates despite the one leak
     assert report.leakage_hits == 1
-    assert not report.passed           # leakage trumps high AUC
+    assert not report.passed  # leakage trumps high AUC
     assert report.leakage_examples[0]["score"] == pytest.approx(0.95)

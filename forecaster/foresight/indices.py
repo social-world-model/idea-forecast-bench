@@ -10,6 +10,7 @@ Two index types per training cutoff t:
 Index storage is intentionally minimal (numpy arrays + JSON metadata).
 A faiss/hnsw backend can be swapped in later behind the `search()` API.
 """
+
 from __future__ import annotations
 
 import json
@@ -249,7 +250,10 @@ def build_future_index(
             context=f"future_index@{cutoff_date}",
         )
     idx = build_index_from_papers(
-        future_papers, embedder, kind="future", cutoff_date=cutoff_date,
+        future_papers,
+        embedder,
+        kind="future",
+        cutoff_date=cutoff_date,
     )
     return idx  # type: ignore[return-value]
 
@@ -262,7 +266,10 @@ def build_history_index(
 ) -> HistoryIndex:
     """Build X_{<=t} index. Used by the grounding gate."""
     return build_index_from_papers(  # type: ignore[return-value]
-        history_papers, embedder, kind="history", cutoff_date=cutoff_date,
+        history_papers,
+        embedder,
+        kind="history",
+        cutoff_date=cutoff_date,
     )
 
 
@@ -329,8 +336,11 @@ def build_cutoff_indices(
             history_index.save(save_path / f"history_{cutoff_date}.npz")
         logger.info(
             "cutoff=%s future=%d history=%d (horizon=%dmo, future_end=%s)",
-            cutoff_date, future_index.size, history_index.size,
-            horizon_months, future_end_date,
+            cutoff_date,
+            future_index.size,
+            history_index.size,
+            horizon_months,
+            future_end_date,
         )
     return bundles
 

@@ -7,6 +7,7 @@ Each gate is a small, side-effect-free predicate that the new
   * grounded(rollout_text, history_index, embedder, threshold) -> bool
   * operator_consistent(rollout_text, z_operator, threshold) -> bool
 """
+
 from __future__ import annotations
 
 import logging
@@ -36,7 +37,9 @@ def format_ok(
 ) -> bool:
     """Pass-through of the existing parser. False iff parsing produces None."""
     prediction, _proposal = coerce_reward_prediction(
-        rollout_text, prompt_mode=prompt_mode, innovation=innovation,
+        rollout_text,
+        prompt_mode=prompt_mode,
+        innovation=innovation,
     )
     return prediction is not None
 
@@ -49,7 +52,7 @@ _CITATION_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\barxiv[:\s\-]*([0-9]{4}\.[0-9]{4,6})\b", re.IGNORECASE),
     re.compile(r"\b([0-9]{4}\.[0-9]{4,6})\b"),
     re.compile(r"\[([A-Za-z0-9_]{4,40})\]"),
-    re.compile(r"\b(10\.\d{4,9}/[\w\.\-]+)\b"),                # DOI
+    re.compile(r"\b(10\.\d{4,9}/[\w\.\-]+)\b"),  # DOI
 )
 
 
@@ -111,7 +114,12 @@ def grounded(
             return False
         best = hits[0][1]
         if best < threshold:
-            logger.debug("grounding miss: citation=%s best=%.3f thresh=%.3f", cit, best, threshold)
+            logger.debug(
+                "grounding miss: citation=%s best=%.3f thresh=%.3f",
+                cit,
+                best,
+                threshold,
+            )
             return False
     return True
 

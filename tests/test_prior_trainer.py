@@ -1,4 +1,5 @@
 """Tests for prior target-only training labels."""
+
 from __future__ import annotations
 
 from forecaster.prior.prompting import render_prior_chat_transcript

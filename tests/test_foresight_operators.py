@@ -1,4 +1,5 @@
 """Tests for the closed operator inventory + free-text mapping."""
+
 from __future__ import annotations
 
 from forecaster.foresight.operators import (

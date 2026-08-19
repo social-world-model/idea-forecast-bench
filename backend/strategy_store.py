@@ -28,6 +28,7 @@ STRATEGIES_DIR.mkdir(exist_ok=True)
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
+
 def _path(strategy_id: str) -> Path:
     return STRATEGIES_DIR / f"{strategy_id}.json"
 
@@ -69,7 +70,9 @@ def _normalize_params(
                 raw_params.get("min_keyword_freq", 2), 2
             )
     else:
-        if raw_params.get("model_name") in {None, ""} and raw_params.get("model_id") not in {None, ""}:
+        if raw_params.get("model_name") in {None, ""} and raw_params.get(
+            "model_id"
+        ) not in {None, ""}:
             normalized_params["model_name"] = raw_params.get("model_id")
         normalized_params.setdefault("model_name", DEFAULT_MODEL_NAME)
         normalized_params.setdefault("predictor_config", "predictor.yaml")
@@ -102,10 +105,14 @@ def _normalize_prediction(raw: object, rank_fallback: int) -> dict | None:
         return round(min(1.0, max(0.0, resolved)), 4)
 
     confidence = _coerce_score(
-        raw.get("confidence", raw.get("Confidence", raw.get("score", raw.get("Score", 0.0)))),
+        raw.get(
+            "confidence", raw.get("Confidence", raw.get("score", raw.get("Score", 0.0)))
+        ),
         default=0.0,
     )
-    score = _coerce_score(raw.get("score", raw.get("Score", confidence)), default=confidence)
+    score = _coerce_score(
+        raw.get("score", raw.get("Score", confidence)), default=confidence
+    )
 
     try:
         rank = int(raw.get("rank", rank_fallback))
@@ -120,7 +127,9 @@ def _normalize_prediction(raw: object, rank_fallback: int) -> dict | None:
         "score": score,
         "confidence": confidence,
         "key_terms": [str(term).strip() for term in key_terms_raw if str(term).strip()],
-        "metadata": raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {},
+        "metadata": raw.get("metadata")
+        if isinstance(raw.get("metadata"), dict)
+        else {},
     }
 
 
@@ -197,11 +206,17 @@ def _normalize_topic_run(topic_run: object) -> dict | None:
     normalized = dict(topic_run)
     normalized["topic_id"] = str(normalized.get("topic_id") or "").strip()
     normalized["topic_name"] = str(normalized.get("topic_name") or "").strip()
-    normalized["matched_paper_count"] = _coerce_int(normalized.get("matched_paper_count", 0), 0)
-    normalized["generation_status"] = _normalize_status(normalized.get("generation_status"))
+    normalized["matched_paper_count"] = _coerce_int(
+        normalized.get("matched_paper_count", 0), 0
+    )
+    normalized["generation_status"] = _normalize_status(
+        normalized.get("generation_status")
+    )
     normalized["backtest_status"] = _normalize_status(normalized.get("backtest_status"))
     normalized["generation"] = _normalize_generation(normalized.get("generation"))
-    normalized["backtest_result"] = _normalize_backtest_result(normalized.get("backtest_result"))
+    normalized["backtest_result"] = _normalize_backtest_result(
+        normalized.get("backtest_result")
+    )
     normalized["generation_error"] = (
         str(normalized.get("generation_error")).strip()
         if normalized.get("generation_error") not in {None, ""}
@@ -229,7 +244,9 @@ def _normalize_topic_runs(topic_runs: object) -> list[dict]:
     return normalized
 
 
-def _aggregate_topic_backtest_summary(topic_runs: list[dict]) -> dict[str, float] | None:
+def _aggregate_topic_backtest_summary(
+    topic_runs: list[dict],
+) -> dict[str, float] | None:
     summaries: list[tuple[dict[str, Any], int]] = []
     for topic_run in topic_runs:
         summary = (topic_run.get("backtest_result") or {}).get("summary") or {}
@@ -271,7 +288,9 @@ def _configured_topics() -> list[TopicDefinition]:
     return load_topics()
 
 
-def _seed_topic_runs(topics: list[TopicDefinition], existing_runs: object) -> list[dict]:
+def _seed_topic_runs(
+    topics: list[TopicDefinition], existing_runs: object
+) -> list[dict]:
     existing_by_id = {
         topic_run["topic_id"]: topic_run
         for topic_run in _normalize_topic_runs(existing_runs)
@@ -283,11 +302,17 @@ def _seed_topic_runs(topics: list[TopicDefinition], existing_runs: object) -> li
             {
                 "topic_id": topic.id,
                 "topic_name": topic.name,
-                "matched_paper_count": _coerce_int(current.get("matched_paper_count", 0), 0),
-                "generation_status": _normalize_status(current.get("generation_status")),
+                "matched_paper_count": _coerce_int(
+                    current.get("matched_paper_count", 0), 0
+                ),
+                "generation_status": _normalize_status(
+                    current.get("generation_status")
+                ),
                 "backtest_status": _normalize_status(current.get("backtest_status")),
                 "generation": _normalize_generation(current.get("generation")),
-                "backtest_result": _normalize_backtest_result(current.get("backtest_result")),
+                "backtest_result": _normalize_backtest_result(
+                    current.get("backtest_result")
+                ),
                 "generation_error": current.get("generation_error"),
                 "backtest_error": current.get("backtest_error"),
             }
@@ -303,9 +328,13 @@ def _normalize_strategy(strategy: dict) -> dict:
     normalized["strategy_name"] = strategy_name
     normalized["params"] = _normalize_params(strategy_name, strategy.get("params"))
     normalized["generation"] = _normalize_generation(strategy.get("generation"))
-    normalized["backtest_result"] = _normalize_backtest_result(strategy.get("backtest_result"))
+    normalized["backtest_result"] = _normalize_backtest_result(
+        strategy.get("backtest_result")
+    )
     normalized["topic_runs"] = _normalize_topic_runs(strategy.get("topic_runs"))
-    normalized["daily_evaluation"] = _normalize_evaluation(strategy.get("daily_evaluation"))
+    normalized["daily_evaluation"] = _normalize_evaluation(
+        strategy.get("daily_evaluation")
+    )
     normalized.setdefault("leaderboard_score", None)
     normalized.setdefault("last_daily_run_at", None)
     normalized.setdefault("last_generation_cutoff_month", None)
@@ -346,6 +375,7 @@ def _sort_key(s: dict) -> tuple:
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def list_strategies() -> list[dict]:
     strategies = []
@@ -396,8 +426,8 @@ def create_strategy(data: dict) -> dict:
         "created_at": datetime.now().isoformat(),
         "backtest_status": "pending",
         "generation_status": "pending",
-        "backtest_result": None,    # { summary: {...}, windows: [...] }
-        "generation": None,         # { cutoff_date: str, cutoff_month: str, predictions: [...] }
+        "backtest_result": None,  # { summary: {...}, windows: [...] }
+        "generation": None,  # { cutoff_date: str, cutoff_month: str, predictions: [...] }
         "topic_runs": [],
         "leaderboard_score": None,
         "daily_evaluation": None,
@@ -426,6 +456,7 @@ def delete_strategy(strategy_id: str) -> bool:
 
 
 # ── Engine helpers ─────────────────────────────────────────────────────────────
+
 
 def _resolve_data_dir(s: dict) -> Path:
     raw_data_dir = (s.get("config") or {}).get("data_dir", "")
@@ -476,7 +507,9 @@ def _classify_strategy_papers(
 
 
 def _aggregate_mode_status(topic_runs: list[dict], mode: str) -> str:
-    statuses = [_normalize_status(topic_run.get(f"{mode}_status")) for topic_run in topic_runs]
+    statuses = [
+        _normalize_status(topic_run.get(f"{mode}_status")) for topic_run in topic_runs
+    ]
     if not statuses:
         return "pending"
     if any(status == "running" for status in statuses):
@@ -500,6 +533,7 @@ def _collect_mode_errors(topic_runs: list[dict], mode: str) -> str | None:
 
 # ── Synchronous execution (used for seeding / testing) ───────────────────────
 
+
 def run_backtest_sync(strategy_id: str) -> None:
     """Run backtest synchronously and persist the result."""
     from live_idea_bench.strategy.execution import run_strategy_backtest
@@ -519,7 +553,9 @@ def run_backtest_sync(strategy_id: str) -> None:
         topic_runs = _seed_topic_runs(topics, s.get("topic_runs"))
 
         for topic_run in topic_runs:
-            topic_run["matched_paper_count"] = len(topic_papers.get(topic_run["topic_id"], []))
+            topic_run["matched_paper_count"] = len(
+                topic_papers.get(topic_run["topic_id"], [])
+            )
             topic_run["backtest_status"] = "running"
             topic_run["backtest_result"] = None
             topic_run["backtest_error"] = None
@@ -558,11 +594,14 @@ def run_backtest_sync(strategy_id: str) -> None:
             },
         )
     except Exception as e:
-        update_strategy(strategy_id, {
-            "backtest_status": "failed",
-            "backtest_result": None,
-            "backtest_error": str(e),
-        })
+        update_strategy(
+            strategy_id,
+            {
+                "backtest_status": "failed",
+                "backtest_result": None,
+                "backtest_error": str(e),
+            },
+        )
 
 
 def run_generation_sync(strategy_id: str, cutoff_date: str | None = None) -> None:
@@ -592,7 +631,9 @@ def run_generation_sync(strategy_id: str, cutoff_date: str | None = None) -> Non
         topic_runs = _seed_topic_runs(topics, s.get("topic_runs"))
 
         for topic_run in topic_runs:
-            topic_run["matched_paper_count"] = len(topic_papers.get(topic_run["topic_id"], []))
+            topic_run["matched_paper_count"] = len(
+                topic_papers.get(topic_run["topic_id"], [])
+            )
             topic_run["generation_status"] = "running"
             topic_run["generation"] = None
             topic_run["generation_error"] = None
@@ -635,12 +676,18 @@ def run_generation_sync(strategy_id: str, cutoff_date: str | None = None) -> Non
             },
         )
     except Exception as e:
-        update_strategy(strategy_id, {
-            "generation_status": "failed",
-            "generation": None,
-            "generation_error": str(e),
-        })
+        update_strategy(
+            strategy_id,
+            {
+                "generation_status": "failed",
+                "generation": None,
+                "generation_error": str(e),
+            },
+        )
+
+
 # ── Demo seeding ───────────────────────────────────────────────────────────────
+
 
 def seed_demo_strategies() -> None:
     """Seed demo strategies and run their backtests if no strategies exist yet."""
@@ -694,9 +741,11 @@ def seed_demo_strategies() -> None:
         summary = _aggregate_topic_backtest_summary(result.get("topic_runs") or [])
         if summary is None:
             summary = (result.get("backtest_result") or {}).get("summary", {})
-        print(f"    → status={result.get('backtest_status')}  "
-              f"windows={summary.get('windows', 0)}  "
-              f"avg_hit@k={summary.get('avg_hit_at_k', 0)}")
+        print(
+            f"    → status={result.get('backtest_status')}  "
+            f"windows={summary.get('windows', 0)}  "
+            f"avg_hit@k={summary.get('avg_hit_at_k', 0)}"
+        )
 
 
 def has_leaderboard_baseline() -> bool:
@@ -712,10 +761,20 @@ def has_leaderboard_baseline() -> bool:
 def bootstrap_backtest_if_missing() -> dict:
     strategies = list_strategies()
     if not strategies:
-        return {"triggered": False, "reason": "no_strategies", "count": 0, "strategy_ids": []}
+        return {
+            "triggered": False,
+            "reason": "no_strategies",
+            "count": 0,
+            "strategy_ids": [],
+        }
 
     if has_leaderboard_baseline():
-        return {"triggered": False, "reason": "baseline_exists", "count": 0, "strategy_ids": []}
+        return {
+            "triggered": False,
+            "reason": "baseline_exists",
+            "count": 0,
+            "strategy_ids": [],
+        }
 
     executed_ids = []
     for strategy in strategies:

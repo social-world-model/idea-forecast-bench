@@ -1,4 +1,5 @@
 """Build the hindsight dataset D_z = {(X_<=t, z_tilde_{t+1})}."""
+
 from __future__ import annotations
 
 import json
@@ -132,6 +133,10 @@ def load_hindsight_samples_jsonl(path: str | Path) -> list[HindsightSample]:
             )
         )
     samples.sort(
-        key=lambda s: (s.cutoff_month, s.future_paper_published_date, s.future_paper_id),
+        key=lambda s: (
+            s.cutoff_month,
+            s.future_paper_published_date,
+            s.future_paper_id,
+        ),
     )
     return samples

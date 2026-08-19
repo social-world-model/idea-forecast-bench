@@ -1,4 +1,5 @@
 """Tests for forecaster package public API (Phase 6)."""
+
 from __future__ import annotations
 
 
@@ -36,6 +37,7 @@ def test_forecaster_imports() -> None:
 def test_forecaster_pipeline_importable() -> None:
     """ForecasterPipeline must be importable from forecaster."""
     from forecaster import ForecasterPipeline
+
     assert ForecasterPipeline is not None
 
 
@@ -54,10 +56,13 @@ def test_forecaster_all_exports() -> None:
     import forecaster
 
     for name in forecaster.__all__:
-        assert hasattr(forecaster, name), f"Symbol {name!r} missing from forecaster module"
+        assert hasattr(forecaster, name), (
+            f"Symbol {name!r} missing from forecaster module"
+        )
 
 
 def test_forecaster_strategy_in_strategy_init() -> None:
     """ForecasterStrategy should be importable from live_idea_bench.strategy."""
     from live_idea_bench.strategy import ForecasterStrategy  # noqa: F401
+
     assert ForecasterStrategy is not None

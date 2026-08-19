@@ -37,21 +37,53 @@ def build_parser() -> argparse.ArgumentParser:
         default="keyword_trend",
         help="Strategy name (keyword_trend, predictor_llm, or policy_rl).",
     )
-    parser.add_argument("--recent-months", type=int, default=3, help="Recent window used by strategy.")
-    parser.add_argument("--min-keyword-freq", type=int, default=2, help="Minimum keyword frequency.")
-    parser.add_argument("--model-name", type=str, help="Optional model override for predictor_llm.")
-    parser.add_argument("--predictor-config", type=str, default="predictor.yaml", help="Predictor prompt config.")
-    parser.add_argument("--similarity-config", type=str, default="similarity.yaml", help="Similarity prompt config.")
-    parser.add_argument("--temperature", type=float, help="Optional temperature override.")
-    parser.add_argument("--policy-manifest-path", type=str, help="Optional RL policy manifest for policy_rl.")
-    parser.add_argument("--top-k", type=int, default=5, help="Number of ideas to generate.")
+    parser.add_argument(
+        "--recent-months", type=int, default=3, help="Recent window used by strategy."
+    )
+    parser.add_argument(
+        "--min-keyword-freq", type=int, default=2, help="Minimum keyword frequency."
+    )
+    parser.add_argument(
+        "--model-name", type=str, help="Optional model override for predictor_llm."
+    )
+    parser.add_argument(
+        "--predictor-config",
+        type=str,
+        default="predictor.yaml",
+        help="Predictor prompt config.",
+    )
+    parser.add_argument(
+        "--similarity-config",
+        type=str,
+        default="similarity.yaml",
+        help="Similarity prompt config.",
+    )
+    parser.add_argument(
+        "--temperature", type=float, help="Optional temperature override."
+    )
+    parser.add_argument(
+        "--policy-manifest-path",
+        type=str,
+        help="Optional RL policy manifest for policy_rl.",
+    )
+    parser.add_argument(
+        "--top-k", type=int, default=5, help="Number of ideas to generate."
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    p_generate = subparsers.add_parser("generate", help="Generate ideas at one cutoff month.")
-    p_generate.add_argument("--cutoff-month", type=str, required=True, help="Cutoff month in YYYY-MM.")
-    p_generate.add_argument("--start-month", type=str, help="Optional lower bound month for loading papers.")
-    p_generate.add_argument("--end-month", type=str, help="Optional upper bound month for loading papers.")
+    p_generate = subparsers.add_parser(
+        "generate", help="Generate ideas at one cutoff month."
+    )
+    p_generate.add_argument(
+        "--cutoff-month", type=str, required=True, help="Cutoff month in YYYY-MM."
+    )
+    p_generate.add_argument(
+        "--start-month", type=str, help="Optional lower bound month for loading papers."
+    )
+    p_generate.add_argument(
+        "--end-month", type=str, help="Optional upper bound month for loading papers."
+    )
     p_generate.add_argument(
         "--output",
         type=str,
@@ -59,11 +91,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output JSON path.",
     )
 
-    p_backtest = subparsers.add_parser("backtest", help="Run rolling backtest with strategy.")
-    p_backtest.add_argument("--horizon-months", type=int, default=3, help="Future horizon length.")
-    p_backtest.add_argument("--min-train-papers", type=int, default=6, help="Minimum papers before a cutoff.")
-    p_backtest.add_argument("--start-month", type=str, help="Optional lower bound month for backtest.")
-    p_backtest.add_argument("--end-month", type=str, help="Optional upper bound month for backtest.")
+    p_backtest = subparsers.add_parser(
+        "backtest", help="Run rolling backtest with strategy."
+    )
+    p_backtest.add_argument(
+        "--horizon-months", type=int, default=3, help="Future horizon length."
+    )
+    p_backtest.add_argument(
+        "--min-train-papers",
+        type=int,
+        default=6,
+        help="Minimum papers before a cutoff.",
+    )
+    p_backtest.add_argument(
+        "--start-month", type=str, help="Optional lower bound month for backtest."
+    )
+    p_backtest.add_argument(
+        "--end-month", type=str, help="Optional upper bound month for backtest."
+    )
     p_backtest.add_argument(
         "--output",
         type=str,
@@ -166,13 +211,17 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     _write_json(output_path, payload)
 
     summary_obj = report.get("summary", {})
-    summary = cast(dict[str, object], summary_obj) if isinstance(summary_obj, dict) else {}
+    summary = (
+        cast(dict[str, object], summary_obj) if isinstance(summary_obj, dict) else {}
+    )
     print("Backtest finished: {} windows".format(summary.get("windows", 0)))
-    print("avg_hit_at_k={}, avg_recall_at_k={}, avg_mrr={}".format(
-        summary.get("avg_hit_at_k", 0.0),
-        summary.get("avg_recall_at_k", 0.0),
-        summary.get("avg_mrr", 0.0),
-    ))
+    print(
+        "avg_hit_at_k={}, avg_recall_at_k={}, avg_mrr={}".format(
+            summary.get("avg_hit_at_k", 0.0),
+            summary.get("avg_recall_at_k", 0.0),
+            summary.get("avg_mrr", 0.0),
+        )
+    )
     print(f"Saved to {output_path}")
     return 0
 

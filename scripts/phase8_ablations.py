@@ -11,6 +11,7 @@ Two modes:
 Writes reports/results.md (main table + ablation tables) and
 reports/results.json.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -27,7 +28,9 @@ from forecaster.foresight.ablations import (
     baseline_set,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
 logger = logging.getLogger("phase8")
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -59,14 +62,14 @@ def smoke_evaluator(cfg: AblationConfig) -> AblationResult:
         base["novelty"] *= 0.95
     elif cfg.reward_variant == "raw_judge":
         base["hit_at_k"] *= 0.95
-        base["mmd_to_truth"] *= 1.20      # raw-judge tends to drift more
+        base["mmd_to_truth"] *= 1.20  # raw-judge tends to drift more
     if cfg.decomposition_variant == "single_shot_k":
         base["diversity"] *= 0.85
     if cfg.rubric_variant == "co_evolve":
         base["hit_at_k"] *= 1.02
         base["wasserstein_to_truth"] *= 0.95
     if cfg.gate_variant != "both":
-        base["hit_at_k"] *= 0.93           # losing gates -> reward gameable
+        base["hit_at_k"] *= 0.93  # losing gates -> reward gameable
     return AblationResult(config=cfg, metrics=base, notes="smoke stub")
 
 

@@ -1,4 +1,5 @@
 """Tests for forecaster/prior/sampler.py (Gap 2 – LoRA loading fix)."""
+
 from __future__ import annotations
 
 import json
@@ -11,6 +12,7 @@ from forecaster.config import InferenceConfig
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_memory_store() -> MagicMock:
     store = MagicMock()
@@ -25,9 +27,7 @@ def _make_inference_config(num_candidates: int = 2) -> InferenceConfig:
 def _write_adapter_config(directory: Path, base_model_id: str) -> None:
     """Write a minimal adapter_config.json to simulate PEFT's save_pretrained output."""
     config = {"base_model_name_or_path": base_model_id, "peft_type": "LORA"}
-    (directory / "adapter_config.json").write_text(
-        json.dumps(config), encoding="utf-8"
-    )
+    (directory / "adapter_config.json").write_text(json.dumps(config), encoding="utf-8")
 
 
 def _valid_innovation_json(direction: str = "test direction") -> str:
@@ -40,8 +40,11 @@ def _valid_innovation_json(direction: str = "test direction") -> str:
 # Tests for _detect_base_model
 # ---------------------------------------------------------------------------
 
+
 class TestDetectBaseModel:
-    def test_returns_base_model_id_when_adapter_config_present(self, tmp_path: Path) -> None:
+    def test_returns_base_model_id_when_adapter_config_present(
+        self, tmp_path: Path
+    ) -> None:
         """_detect_base_model should return the base_model_name_or_path field."""
         from forecaster.prior.sampler import _detect_base_model
 
@@ -79,6 +82,7 @@ class TestDetectBaseModel:
 # Tests for sample_innovations with LoRA adapter checkpoint
 # ---------------------------------------------------------------------------
 
+
 class TestSampleInnovationsLoRAPath:
     """sample_innovations should load via PeftModel when adapter_config.json is present.
 
@@ -110,11 +114,16 @@ class TestSampleInnovationsLoRAPath:
         """Model mock that generates n_seqs fake token sequences."""
         fake_model = MagicMock()
         fake_model.device = "cpu"
-        fake_model.generate.return_value = [self._make_fake_seq() for _ in range(n_seqs)]
+        fake_model.generate.return_value = [
+            self._make_fake_seq() for _ in range(n_seqs)
+        ]
         return fake_model
 
     def _make_ml_mocks(
-        self, fake_tokenizer: MagicMock, fake_base_model: MagicMock, fake_peft_model: MagicMock
+        self,
+        fake_tokenizer: MagicMock,
+        fake_base_model: MagicMock,
+        fake_peft_model: MagicMock,
     ) -> dict:
         """Build sys.modules-ready mocks for torch, transformers, peft."""
         fake_peft_cls = MagicMock()
@@ -146,12 +155,16 @@ class TestSampleInnovationsLoRAPath:
             "torch": fake_torch,
         }
 
-    def test_peft_model_loaded_when_adapter_config_present(self, tmp_path: Path) -> None:
+    def test_peft_model_loaded_when_adapter_config_present(
+        self, tmp_path: Path
+    ) -> None:
         """PeftModel.from_pretrained should be called with base model and adapter path."""
         _write_adapter_config(tmp_path, "Qwen/Qwen2.5-3B-Instruct")
 
         innovation_json = _valid_innovation_json("peft direction")
-        fake_base_model = self._make_fake_model(n_seqs=0)  # not directly used for generation
+        fake_base_model = self._make_fake_model(
+            n_seqs=0
+        )  # not directly used for generation
         fake_peft_model = self._make_fake_model(n_seqs=2)
         fake_tokenizer = self._make_fake_tokenizer(innovation_json)
         ml = self._make_ml_mocks(fake_tokenizer, fake_base_model, fake_peft_model)
@@ -160,16 +173,28 @@ class TestSampleInnovationsLoRAPath:
 
         from forecaster.prior import sampler as sampler_mod
 
-        with patch.dict(
-            sys.modules,
-            {"torch": ml["torch"], "transformers": ml["transformers"], "peft": ml["peft_module"]},
-        ), patch.object(
-            sampler_mod,
-            "_load_prompt_config",
-            return_value={"system_prompt": "sys", "input_template": "tmpl {memory_summary}"},
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "torch": ml["torch"],
+                    "transformers": ml["transformers"],
+                    "peft": ml["peft_module"],
+                },
+            ),
+            patch.object(
+                sampler_mod,
+                "_load_prompt_config",
+                return_value={
+                    "system_prompt": "sys",
+                    "input_template": "tmpl {memory_summary}",
+                },
+            ),
         ):
             sampler_mod.sample_innovations(
-                str(tmp_path), _make_memory_store(), _make_inference_config(num_candidates=2)
+                str(tmp_path),
+                _make_memory_store(),
+                _make_inference_config(num_candidates=2),
             )
 
         ml["peft_cls"].from_pretrained.assert_called_once_with(
@@ -178,7 +203,9 @@ class TestSampleInnovationsLoRAPath:
             torch_dtype=ml["auto_model_cls"].from_pretrained.return_value.dtype,
         )
 
-    def test_auto_model_loaded_directly_when_no_adapter_config(self, tmp_path: Path) -> None:
+    def test_auto_model_loaded_directly_when_no_adapter_config(
+        self, tmp_path: Path
+    ) -> None:
         """AutoModelForCausalLM.from_pretrained should be called directly when no adapter."""
         # No adapter_config.json — direct load path
 
@@ -190,16 +217,28 @@ class TestSampleInnovationsLoRAPath:
 
         from forecaster.prior import sampler as sampler_mod
 
-        with patch.dict(
-            sys.modules,
-            {"torch": ml["torch"], "transformers": ml["transformers"], "peft": ml["peft_module"]},
-        ), patch.object(
-            sampler_mod,
-            "_load_prompt_config",
-            return_value={"system_prompt": "sys", "input_template": "tmpl {memory_summary}"},
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "torch": ml["torch"],
+                    "transformers": ml["transformers"],
+                    "peft": ml["peft_module"],
+                },
+            ),
+            patch.object(
+                sampler_mod,
+                "_load_prompt_config",
+                return_value={
+                    "system_prompt": "sys",
+                    "input_template": "tmpl {memory_summary}",
+                },
+            ),
         ):
             sampler_mod.sample_innovations(
-                str(tmp_path), _make_memory_store(), _make_inference_config(num_candidates=1)
+                str(tmp_path),
+                _make_memory_store(),
+                _make_inference_config(num_candidates=1),
             )
 
         # PeftModel.from_pretrained must NOT have been called
@@ -211,6 +250,7 @@ class TestSampleInnovationsLoRAPath:
 # ---------------------------------------------------------------------------
 # Tests for trainer.py – prior_metadata.json is written
 # ---------------------------------------------------------------------------
+
 
 class TestTrainPriorMetadata:
     def test_prior_metadata_written_after_save(self, tmp_path: Path) -> None:
@@ -251,24 +291,29 @@ class TestTrainPriorMetadata:
         fake_ds.map.return_value = fake_ds
         fake_datasets_module.Dataset.from_dict.return_value = fake_ds
 
-        with patch.dict(
-            sys.modules,
-            {
-                "torch": fake_torch,
-                "transformers": fake_transformers,
-                "peft": fake_peft_module,
-                "datasets": fake_datasets_module,
-            },
-        ), patch(
-            "forecaster.prior.trainer._load_system_prompt",
-            return_value="system prompt",
-        ), patch(
-            "forecaster.prior.trainer._build_hf_dataset",
-            return_value=fake_ds,
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "torch": fake_torch,
+                    "transformers": fake_transformers,
+                    "peft": fake_peft_module,
+                    "datasets": fake_datasets_module,
+                },
+            ),
+            patch(
+                "forecaster.prior.trainer._load_system_prompt",
+                return_value="system prompt",
+            ),
+            patch(
+                "forecaster.prior.trainer._build_hf_dataset",
+                return_value=fake_ds,
+            ),
         ):
             import importlib
 
             from forecaster.prior import trainer as trainer_mod
+
             importlib.reload(trainer_mod)
 
             result = trainer_mod.train_prior(

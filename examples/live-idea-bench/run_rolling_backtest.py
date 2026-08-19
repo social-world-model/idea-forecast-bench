@@ -15,8 +15,12 @@ def parse_args() -> argparse.Namespace:
             "{artifacts_dir}, {window_dir}."
         )
     )
-    parser.add_argument("--start", required=True, help="Start month, format YYYY-MM or YYMM.")
-    parser.add_argument("--end", required=True, help="End month, format YYYY-MM or YYMM.")
+    parser.add_argument(
+        "--start", required=True, help="Start month, format YYYY-MM or YYMM."
+    )
+    parser.add_argument(
+        "--end", required=True, help="End month, format YYYY-MM or YYMM."
+    )
     parser.add_argument(
         "--window-months",
         type=int,
@@ -104,7 +108,9 @@ def main() -> None:
     )
     state = runner.run(windows)
 
-    completed = sum(1 for v in state["windows"].values() if v.get("status") == "completed")
+    completed = sum(
+        1 for v in state["windows"].values() if v.get("status") == "completed"
+    )
     failed = sum(1 for v in state["windows"].values() if v.get("status") == "failed")
     print(
         f"Finished. completed={completed}, failed={failed}, "

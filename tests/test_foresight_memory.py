@@ -1,4 +1,5 @@
 """Tests for build_memory(papers_before_t) -> str."""
+
 from __future__ import annotations
 
 from forecaster.foresight.memory import build_memory
@@ -50,9 +51,7 @@ def test_recency_window_orders_buckets():
 
 
 def test_max_entries_caps_output():
-    papers = [
-        _make(f"p{i}", month="2024-05", topic=f"t{i}") for i in range(50)
-    ]
+    papers = [_make(f"p{i}", month="2024-05", topic=f"t{i}") for i in range(50)]
     out = build_memory(papers, cutoff_t="2024-06-30", max_entries=5)
     bullet_count = sum(1 for ln in out.splitlines() if ln.startswith("- "))
     assert bullet_count == 5

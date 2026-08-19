@@ -12,6 +12,7 @@ Caching is process-local: callers passing identical texts (same hash) skip
 re-encoding. This matters for the soft-reward path where each prediction is
 embedded once per training step and reused across candidate retrieval.
 """
+
 from __future__ import annotations
 
 import hashlib

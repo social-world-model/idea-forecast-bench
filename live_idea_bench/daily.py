@@ -47,8 +47,13 @@ def coerce_prediction(raw: dict[str, Any], rank_fallback: int) -> IdeaPrediction
         title=str(raw.get("title", "")),
         rationale=str(raw.get("rationale", "")),
         approach=str(raw.get("approach", "")),
-        score=_maybe_float(raw.get("score", raw.get("Score", raw.get("confidence", 0.0)))) or 0.0,
-        confidence=_maybe_float(raw.get("confidence", raw.get("Confidence", raw.get("score")))),
+        score=_maybe_float(
+            raw.get("score", raw.get("Score", raw.get("confidence", 0.0)))
+        )
+        or 0.0,
+        confidence=_maybe_float(
+            raw.get("confidence", raw.get("Confidence", raw.get("score")))
+        ),
         key_terms=[str(term).strip() for term in key_terms_raw if str(term).strip()],
         metadata=(raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}),
     )
@@ -67,7 +72,9 @@ def compute_popularity_leaderboard_score(daily_eval: dict[str, Any]) -> float:
     """
     w_hit_raw = daily_eval.get("weighted_hit_at_k")
     w_mrr_raw = daily_eval.get("weighted_mrr")
-    w_hit = float(w_hit_raw if w_hit_raw is not None else daily_eval.get("hit_at_k", 0.0))
+    w_hit = float(
+        w_hit_raw if w_hit_raw is not None else daily_eval.get("hit_at_k", 0.0)
+    )
     w_mrr = float(w_mrr_raw if w_mrr_raw is not None else daily_eval.get("mrr", 0.0))
     return round((0.7 * w_hit) + (0.3 * w_mrr), 4)
 
@@ -117,11 +124,17 @@ def _topic_generations(strategy: dict[str, Any]) -> list[dict[str, Any]]:
         (_resolve_generation_cutoff(topic_generation), topic_generation)
         for topic_generation in generations
     ]
-    valid = [(cutoff, topic_generation) for cutoff, topic_generation in resolved if cutoff]
+    valid = [
+        (cutoff, topic_generation) for cutoff, topic_generation in resolved if cutoff
+    ]
     if not valid:
         return []
     latest_cutoff = max(cutoff for cutoff, _ in valid)
-    return [topic_generation for cutoff, topic_generation in valid if cutoff == latest_cutoff]
+    return [
+        topic_generation
+        for cutoff, topic_generation in valid
+        if cutoff == latest_cutoff
+    ]
 
 
 def evaluate_previous_generation(
@@ -149,7 +162,8 @@ def evaluate_previous_generation(
     future = [
         paper
         for paper in papers
-        if paper.paper_id in new_paper_ids and date_to_ordinal(get_paper_published_date(paper)) > cutoff_ord
+        if paper.paper_id in new_paper_ids
+        and date_to_ordinal(get_paper_published_date(paper)) > cutoff_ord
     ]
 
     predictions = []

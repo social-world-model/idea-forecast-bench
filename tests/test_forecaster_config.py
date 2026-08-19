@@ -1,4 +1,5 @@
 """Tests for forecaster config loaders."""
+
 from __future__ import annotations
 
 import pytest
@@ -78,7 +79,11 @@ class TestRealizationConfigDefaults:
 
     def test_weights_sum_to_one(self) -> None:
         cfg = RealizationConfig()
-        total = cfg.evidence_accuracy_weight + cfg.operator_adherence_weight + cfg.coherence_weight
+        total = (
+            cfg.evidence_accuracy_weight
+            + cfg.operator_adherence_weight
+            + cfg.coherence_weight
+        )
         assert total == pytest.approx(1.0)
 
 
@@ -109,10 +114,18 @@ class TestInferenceConfigDefaults:
             InferenceConfig(runtime_mode="strict_eval", popularity_weight=0.1)
 
     def test_strict_init_rejects_non_conditional_score_methods(self) -> None:
-        with pytest.raises(ValueError, match="prior_score_method must be 'conditional_logprob'"):
-            InferenceConfig(runtime_mode="strict_eval", prior_score_method="heuristic_memory")
-        with pytest.raises(ValueError, match="realization_score_method must be 'conditional_logprob'"):
-            InferenceConfig(runtime_mode="strict_eval", realization_score_method="paper_reward")
+        with pytest.raises(
+            ValueError, match="prior_score_method must be 'conditional_logprob'"
+        ):
+            InferenceConfig(
+                runtime_mode="strict_eval", prior_score_method="heuristic_memory"
+            )
+        with pytest.raises(
+            ValueError, match="realization_score_method must be 'conditional_logprob'"
+        ):
+            InferenceConfig(
+                runtime_mode="strict_eval", realization_score_method="paper_reward"
+            )
 
     def test_demo_mode_still_allows_popularity_weight(self) -> None:
         cfg = InferenceConfig(runtime_mode="demo", popularity_weight=0.2)
@@ -174,7 +187,11 @@ class TestLoadRealizationConfig:
 
     def test_weights_sum_to_one_from_yaml(self) -> None:
         cfg = load_realization_config("realization.yaml")
-        total = cfg.evidence_accuracy_weight + cfg.operator_adherence_weight + cfg.coherence_weight
+        total = (
+            cfg.evidence_accuracy_weight
+            + cfg.operator_adherence_weight
+            + cfg.coherence_weight
+        )
         assert total == pytest.approx(1.0)
 
 

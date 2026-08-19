@@ -1,4 +1,5 @@
 """Tests for forecaster/realization/proposal_generator.py"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -38,8 +39,14 @@ def _make_innovation(
 class TestGenerateProposal:
     def test_build_realization_messages_include_context_and_evidence(self) -> None:
         innovation = _make_innovation()
-        context = [_make_paper("ctx1", "Historical Paper", "historical context for the idea")]
-        evidence = [_make_paper("p1", "Efficient Attention", "attention mechanism for long sequences")]
+        context = [
+            _make_paper("ctx1", "Historical Paper", "historical context for the idea")
+        ]
+        evidence = [
+            _make_paper(
+                "p1", "Efficient Attention", "attention mechanism for long sequences"
+            )
+        ]
 
         system_prompt, user_prompt = build_realization_messages(
             innovation,
@@ -56,7 +63,11 @@ class TestGenerateProposal:
 
     def test_generate_proposal_returns_string(self) -> None:
         innovation = _make_innovation()
-        evidence = [_make_paper("p1", "Efficient Attention", "attention mechanism for long sequences")]
+        evidence = [
+            _make_paper(
+                "p1", "Efficient Attention", "attention mechanism for long sequences"
+            )
+        ]
         config = RealizationConfig()
 
         mock_client = MagicMock()
@@ -92,7 +103,10 @@ class TestGenerateProposal:
             return ("Title\nBody text here.", [])
 
         mock_client = MagicMock()
-        with patch("forecaster.realization.proposal_generator.get_response_from_llm", side_effect=fake_llm):
+        with patch(
+            "forecaster.realization.proposal_generator.get_response_from_llm",
+            side_effect=fake_llm,
+        ):
             generate_proposal(
                 innovation=innovation,
                 evidence=evidence,
@@ -193,7 +207,9 @@ class TestProposalToIdeaPrediction:
 class TestGenerateProposalLocalModel:
     """Phase 1: generate_proposal dispatches to local model when realization_model_path given."""
 
-    def test_generate_proposal_uses_local_model_when_path_provided(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    def test_generate_proposal_uses_local_model_when_path_provided(
+        self, tmp_path
+    ) -> None:  # type: ignore[no-untyped-def]
         """When realization_model_path exists, uses _generate_proposal_local, not LLM client."""
         from forecaster.config import RealizationConfig
 
@@ -204,14 +220,16 @@ class TestGenerateProposalLocalModel:
         config = RealizationConfig()
         mock_client = MagicMock()
 
-        with patch(
-            "forecaster.realization.proposal_generator._generate_proposal_local",
-            return_value="Local Model Title\nLocal body text.",
-        ) as mock_local, \
-        patch(
-            "forecaster.realization.proposal_generator.get_response_from_llm",
-            return_value=("LLM response", []),
-        ) as mock_llm:
+        with (
+            patch(
+                "forecaster.realization.proposal_generator._generate_proposal_local",
+                return_value="Local Model Title\nLocal body text.",
+            ) as mock_local,
+            patch(
+                "forecaster.realization.proposal_generator.get_response_from_llm",
+                return_value=("LLM response", []),
+            ) as mock_llm,
+        ):
             result = generate_proposal(
                 innovation=innovation,
                 evidence=[],
@@ -236,14 +254,17 @@ class TestGenerateProposalLocalModel:
         config = RealizationConfig()
         mock_client = MagicMock()
 
-        with patch(
-            "forecaster.realization.proposal_generator._generate_proposal_local",
-            side_effect=RuntimeError("GPU OOM"),
-        ), \
-        patch(
-            "forecaster.realization.proposal_generator.get_response_from_llm",
-            return_value=("LLM fallback response", []),
-        ) as mock_llm, pytest.raises(RuntimeError, match="artifact generation failed"):
+        with (
+            patch(
+                "forecaster.realization.proposal_generator._generate_proposal_local",
+                side_effect=RuntimeError("GPU OOM"),
+            ),
+            patch(
+                "forecaster.realization.proposal_generator.get_response_from_llm",
+                return_value=("LLM fallback response", []),
+            ) as mock_llm,
+            pytest.raises(RuntimeError, match="artifact generation failed"),
+        ):
             generate_proposal(
                 innovation=innovation,
                 evidence=[],
@@ -255,7 +276,9 @@ class TestGenerateProposalLocalModel:
 
         mock_llm.assert_not_called()
 
-    def test_generate_proposal_can_fallback_when_config_explicitly_allows_it(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    def test_generate_proposal_can_fallback_when_config_explicitly_allows_it(
+        self, tmp_path
+    ) -> None:  # type: ignore[no-untyped-def]
         """Legacy fallback remains opt-in only."""
         ckpt_dir = tmp_path / "realization_ckpt"
         ckpt_dir.mkdir()
@@ -264,14 +287,16 @@ class TestGenerateProposalLocalModel:
         config = RealizationConfig(allow_artifact_fallback_to_llm=True)
         mock_client = MagicMock()
 
-        with patch(
-            "forecaster.realization.proposal_generator._generate_proposal_local",
-            side_effect=RuntimeError("GPU OOM"),
-        ), \
-        patch(
-            "forecaster.realization.proposal_generator.get_response_from_llm",
-            return_value=("LLM fallback response", []),
-        ) as mock_llm:
+        with (
+            patch(
+                "forecaster.realization.proposal_generator._generate_proposal_local",
+                side_effect=RuntimeError("GPU OOM"),
+            ),
+            patch(
+                "forecaster.realization.proposal_generator.get_response_from_llm",
+                return_value=("LLM fallback response", []),
+            ) as mock_llm,
+        ):
             result = generate_proposal(
                 innovation=innovation,
                 evidence=[],
@@ -292,12 +317,14 @@ class TestGenerateProposalLocalModel:
         config = RealizationConfig()
         mock_client = MagicMock()
 
-        with patch(
-            "forecaster.realization.proposal_generator._generate_proposal_local",
-        ) as mock_local, \
-        patch(
-            "forecaster.realization.proposal_generator.get_response_from_llm",
-            return_value=("LLM response", []),
+        with (
+            patch(
+                "forecaster.realization.proposal_generator._generate_proposal_local",
+            ) as mock_local,
+            patch(
+                "forecaster.realization.proposal_generator.get_response_from_llm",
+                return_value=("LLM response", []),
+            ),
         ):
             generate_proposal(
                 innovation=innovation,

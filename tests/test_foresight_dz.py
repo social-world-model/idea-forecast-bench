@@ -1,4 +1,5 @@
 """Tests for D_z augmentation (hindsight JSONL -> D_z)."""
+
 from __future__ import annotations
 
 import json
@@ -45,7 +46,11 @@ def test_augment_drops_test_window_rows_and_maps_operator(tmp_path: Path):
             "future_paper_id": "p_other",
             "future_paper_title": "Analyze Paper",
             "future_paper_published_date": "2024-06-10",
-            "innovation": {"base_direction": "agents", "operator": "analyze", "gap": "z"},
+            "innovation": {
+                "base_direction": "agents",
+                "operator": "analyze",
+                "gap": "z",
+            },
             "context_paper_count": 100,
         },
     ]
@@ -55,7 +60,9 @@ def test_augment_drops_test_window_rows_and_maps_operator(tmp_path: Path):
     _write_jsonl(in_path, raw)
 
     summary = augment_hindsight_rows(
-        in_path, out_path, summary_path=summary_path,
+        in_path,
+        out_path,
+        summary_path=summary_path,
     )
     rows = load_dz_rows(out_path)
 

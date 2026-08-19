@@ -15,6 +15,7 @@ Single LLM call per window. Retrieval is deterministic (hybrid
 semantic+keyword similarity from `live_idea_bench.similarity`), keeping
 the baseline batch-friendly and reproducible across re-runs.
 """
+
 from __future__ import annotations
 
 import json
@@ -46,9 +47,12 @@ _FORECAST_SYSTEM = (
 def _build_query(train_papers: list[PaperRecord], cutoff_month: str) -> str:
     """Build a query from recent papers — the dominant topics the field is moving toward."""
     cutoff_idx = month_to_index(cutoff_month)
-    recent_start_idx = month_to_index(add_months(cutoff_month, -(_QUERY_RECENT_MONTHS - 1)))
+    recent_start_idx = month_to_index(
+        add_months(cutoff_month, -(_QUERY_RECENT_MONTHS - 1))
+    )
     recent = [
-        paper for paper in train_papers
+        paper
+        for paper in train_papers
         if recent_start_idx <= month_to_index(paper.month) <= cutoff_idx
     ]
     if not recent:
@@ -182,7 +186,7 @@ class RetrievalPromptingStrategy(IdeaStrategy):
         query = _build_query(train_papers, cutoff_month)
         retrieved = _retrieve(query, train_papers, self.retrieval_top_n)
         if not retrieved:
-            retrieved = train_papers[-self.retrieval_top_n:]
+            retrieved = train_papers[-self.retrieval_top_n :]
 
         client, resolved_model = create_client(self.model_name)
         prompt = _build_forecast_prompt(retrieved, cutoff_month, top_k)
@@ -198,10 +202,12 @@ class RetrievalPromptingStrategy(IdeaStrategy):
 
         if len(predictions) < top_k:
             import sys
+
             print(
                 f"[retrieval_prompting WARNING] cutoff={cutoff_month}: got "
                 f"{len(predictions)}/{top_k} predictions — retrying",
-                file=sys.stderr, flush=True,
+                file=sys.stderr,
+                flush=True,
             )
             extra_raw, _ = get_response_from_llm(
                 msg=prompt,

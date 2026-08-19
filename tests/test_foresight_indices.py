@@ -1,4 +1,5 @@
 """Tests for FutureIndex / HistoryIndex + cutoff orchestrator."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -66,7 +67,7 @@ def test_future_index_refuses_test_window_papers():
     emb = HashingEmbedder(dim=32, seed=3)
     papers = [
         _paper("ok", "2024-09-15", "rag"),
-        _paper("bad", "2024-10-15", "rag"),   # crosses the hard limit
+        _paper("bad", "2024-10-15", "rag"),  # crosses the hard limit
     ]
     with pytest.raises(AssertionError):
         build_future_index(papers, emb, cutoff_date="2024-07-01")
@@ -86,7 +87,7 @@ def test_build_cutoff_indices_handles_two_cutoffs():
     papers = [
         _paper("hist_1", "2023-02-01", "rag"),
         _paper("hist_2", "2023-03-15", "rag"),
-        _paper("fut_1", "2023-05-01", "rag"),   # in future of cutoff 2023-03
+        _paper("fut_1", "2023-05-01", "rag"),  # in future of cutoff 2023-03
         _paper("fut_2", "2023-06-15", "agents"),
         _paper("late", "2024-09-30", "agents"),  # in future of cutoff 2024-06
     ]

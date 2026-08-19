@@ -37,7 +37,9 @@ def test_create_strategy_policy_rl() -> None:
     assert strategy.policy_manifest_path == "/tmp/policy.json"
 
 
-def test_policy_rl_strategy_uses_static_predictions_from_manifest(tmp_path: Path) -> None:
+def test_policy_rl_strategy_uses_static_predictions_from_manifest(
+    tmp_path: Path,
+) -> None:
     manifest_path = tmp_path / "policy.json"
     manifest_path.write_text(
         json.dumps(
@@ -127,7 +129,9 @@ def test_policy_rl_strategy_uses_base_model_name_for_local_checkpoint(
             )
         ]
 
-    monkeypatch.setattr(local_generation, "generate_local_predictions", _fake_generate_local_predictions)
+    monkeypatch.setattr(
+        local_generation, "generate_local_predictions", _fake_generate_local_predictions
+    )
     strategy = PolicyRLStrategy(policy_manifest_path=str(manifest_path))
 
     predictions = strategy.generate(
@@ -186,14 +190,20 @@ def test_policy_rl_strategy_uses_sampling_schedule_for_candidate_pool(
             )
         ]
 
-    monkeypatch.setattr(policy_rl_module, "generate_predictions", _fake_generate_predictions)
+    monkeypatch.setattr(
+        policy_rl_module, "generate_predictions", _fake_generate_predictions
+    )
     strategy = PolicyRLStrategy(
         model_name="gpt-4o-mini",
         selection_config=str(selection_path),
     )
 
     predictions = strategy.generate(
-        train_papers=[_paper("p1", "2024-05"), _paper("p2", "2024-05"), _paper("p3", "2024-05")],
+        train_papers=[
+            _paper("p1", "2024-05"),
+            _paper("p2", "2024-05"),
+            _paper("p3", "2024-05"),
+        ],
         cutoff_month="2024-06",
         top_k=2,
     )
@@ -203,4 +213,6 @@ def test_policy_rl_strategy_uses_sampling_schedule_for_candidate_pool(
     assert {call["top_p"] for call in calls} == {0.8, 0.95}
     assert any(call["train_paper_ids"] != ["p1", "p2", "p3"] for call in calls)
     assert len(predictions) == 2
-    assert all("candidate_sample_index" in prediction.metadata for prediction in predictions)
+    assert all(
+        "candidate_sample_index" in prediction.metadata for prediction in predictions
+    )

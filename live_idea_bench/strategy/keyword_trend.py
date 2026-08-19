@@ -41,12 +41,16 @@ class KeywordTrendStrategy(IdeaStrategy):
             return []
 
         cutoff_idx = month_to_index(cutoff_month)
-        recent_start_idx = month_to_index(add_months(cutoff_month, -(self.recent_months - 1)))
+        recent_start_idx = month_to_index(
+            add_months(cutoff_month, -(self.recent_months - 1))
+        )
         overall = Counter()
         recent = Counter()
 
         for paper in train_papers:
-            unique_keys = _unique_ordered([keyword.lower() for keyword in paper.keywords if keyword.strip()])
+            unique_keys = _unique_ordered(
+                [keyword.lower() for keyword in paper.keywords if keyword.strip()]
+            )
             for key in unique_keys:
                 if key in self.stop_terms:
                     continue
@@ -85,11 +89,16 @@ class KeywordTrendStrategy(IdeaStrategy):
                     }
                 )
 
-        scored.sort(key=lambda item: (-item["score"], -item["recent_count"], item["keyword"]))
+        scored.sort(
+            key=lambda item: (-item["score"], -item["recent_count"], item["keyword"])
+        )
         results: list[IdeaPrediction] = []
         for rank, item in enumerate(scored[:top_k], start=1):
             keyword = item["keyword"]
-            confidence = min(0.99, 0.35 + (0.08 * item["recent_count"]) + (0.02 * item["total_count"]))
+            confidence = min(
+                0.99,
+                0.35 + (0.08 * item["recent_count"]) + (0.02 * item["total_count"]),
+            )
             results.append(
                 IdeaPrediction(
                     rank=rank,

@@ -1,4 +1,5 @@
 """Sample innovation candidates from the trained prior model."""
+
 from __future__ import annotations
 
 import json
@@ -38,7 +39,7 @@ def _parse_innovation(text: str) -> Innovation | None:
         end = text.find("}", search_from)
         if end == -1:
             break
-        candidate = text[start:end + 1]
+        candidate = text[start : end + 1]
         try:
             return innovation_from_json(candidate)
         except (json.JSONDecodeError, KeyError, TypeError, ValueError):
@@ -50,7 +51,9 @@ def _parse_innovation(text: str) -> Innovation | None:
 
 def _build_prompt(system_prompt: str, input_template: str, memory_store: Any) -> str:
     memory_summary = memory_store.format_for_prompt()
-    user_content = render_prior_user_prompt(memory_summary, input_template=input_template)
+    user_content = render_prior_user_prompt(
+        memory_summary, input_template=input_template
+    )
     return render_prior_chat_transcript(
         system_prompt=system_prompt,
         user_prompt=user_content,
@@ -107,17 +110,24 @@ def _load_prior_model_and_tokenizer(model_path_str: str) -> tuple[Any, Any]:
             tokenizer.pad_token = tokenizer.eos_token
 
         import torch as _torch
+
         base_model = AutoModelForCausalLM.from_pretrained(
             base_model_id,
-            torch_dtype=_torch.bfloat16 if _torch.cuda.is_available() else _torch.float32,
+            torch_dtype=_torch.bfloat16
+            if _torch.cuda.is_available()
+            else _torch.float32,
             device_map="auto",
         )
         model = peft.PeftModel.from_pretrained(
-            base_model, model_path_str,
+            base_model,
+            model_path_str,
             torch_dtype=base_model.dtype,
         )
     else:
-        logger.info("No adapter_config.json found; loading model directly from %r.", model_path_str)
+        logger.info(
+            "No adapter_config.json found; loading model directly from %r.",
+            model_path_str,
+        )
         tokenizer = AutoTokenizer.from_pretrained(model_path_str)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
@@ -162,7 +172,9 @@ def build_prior_scorer(
     prompt_encoded = tokenizer([prompt], return_tensors="pt", add_special_tokens=False)
     prompt_ids = prompt_encoded["input_ids"]
     prompt_len = prompt_ids.shape[1]
-    normalization = str(getattr(config, "score_normalization", "per_token")).strip().lower()
+    normalization = (
+        str(getattr(config, "score_normalization", "per_token")).strip().lower()
+    )
     temperature = float(getattr(config, "score_temperature", 1.0) or 1.0)
     if temperature <= 0:
         temperature = 1.0
@@ -180,10 +192,14 @@ def build_prior_scorer(
         if temperature != 1.0:
             logits = logits / temperature
         target_ids = encoded["input_ids"][:, 1:]
-        target_log_probs = F.log_softmax(logits, dim=-1).gather(
-            dim=-1,
-            index=target_ids.unsqueeze(-1),
-        ).squeeze(-1)
+        target_log_probs = (
+            F.log_softmax(logits, dim=-1)
+            .gather(
+                dim=-1,
+                index=target_ids.unsqueeze(-1),
+            )
+            .squeeze(-1)
+        )
 
         target_start = max(0, prompt_len - 1)
         conditioned_log_probs = target_log_probs[:, target_start:]
@@ -199,6 +215,7 @@ def build_prior_scorer(
 def _sglang_prior_url() -> str | None:
     """Return the SGLang server URL for prior model if set."""
     import os
+
     url = os.environ.get("SGLANG_PRIOR_URL", "").strip()
     return url if url else None
 

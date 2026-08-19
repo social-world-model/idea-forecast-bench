@@ -21,6 +21,7 @@ Usage:
         --output /tmp/mp_judge_test.json \\
         --topics llm_pretraining --max-windows 2
 """
+
 from __future__ import annotations
 
 import argparse
@@ -52,19 +53,19 @@ from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-VOYAGE_BASE_URL  = "https://api.voyageai.com/v1"
-EMBED_MODEL      = "voyage-3-large"
-DEFAULT_JUDGE    = "gpt-4.1-mini"
-DEFAULT_TOP_R    = 10
+VOYAGE_BASE_URL = "https://api.voyageai.com/v1"
+EMBED_MODEL = "voyage-3-large"
+DEFAULT_JUDGE = "gpt-4.1-mini"
+DEFAULT_TOP_R = 10
 DEFAULT_CLUSTER_K = 5
-BATCH_SIZE       = 128
-MAX_CHARS        = 4000
-MAX_EMBED_RETRY  = 12
-MAX_JUDGE_RETRY  = 3
+BATCH_SIZE = 128
+MAX_CHARS = 4000
+MAX_EMBED_RETRY = 12
+MAX_JUDGE_RETRY = 3
 
 # Match: P + M >= MATCH_PM_THRESHOLD AND S >= MATCH_S_THRESHOLD
-MATCH_PM_THRESHOLD = 5   # out of 6
-MATCH_S_THRESHOLD  = 2   # specificity must be meaningful
+MATCH_PM_THRESHOLD = 5  # out of 6
+MATCH_S_THRESHOLD = 2  # specificity must be meaningful
 
 JUDGE_SYSTEM = """\
 You are an expert scientific reviewer. You are given a PREDICTED research direction -- a forecast made before the paper was published -- and a PUBLISHED paper. Your task is to judge whether the published paper is a realization of that prediction.
@@ -409,7 +410,11 @@ def _judge_fingerprint(judge_model: str) -> str:
     h.update(b"\x00")
     # Decode config: different max_tokens / temperature / thinking produce
     # non-comparable decisions, so they must change the cache namespace.
-    h.update(repr((JUDGE_MAX_TOKENS, JUDGE_TEMPERATURE, _judge_enable_thinking(judge_model))).encode())
+    h.update(
+        repr(
+            (JUDGE_MAX_TOKENS, JUDGE_TEMPERATURE, _judge_enable_thinking(judge_model))
+        ).encode()
+    )
     return h.hexdigest()[:12]
 
 
@@ -432,13 +437,15 @@ def _embed_batch(
         for attempt in range(MAX_EMBED_RETRY):
             try:
                 resp = client.embeddings.create(model=model, input=batch)
-                vecs = [item.embedding for item in sorted(resp.data, key=lambda x: x.index)]
+                vecs = [
+                    item.embedding for item in sorted(resp.data, key=lambda x: x.index)
+                ]
                 results.extend(vecs)
                 break
             except Exception as exc:
-                wait = 2 ** attempt
+                wait = 2**attempt
                 if attempt < MAX_EMBED_RETRY - 1:
-                    print(f"\n  [embed retry {attempt+1}] {exc}", flush=True)
+                    print(f"\n  [embed retry {attempt + 1}] {exc}", flush=True)
                     time.sleep(wait)
                 else:
                     raise
@@ -447,8 +454,8 @@ def _embed_batch(
 
 def _cosine(a: list[float], b: list[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b, strict=False))
-    na  = math.sqrt(sum(x * x for x in a))
-    nb  = math.sqrt(sum(x * x for x in b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(x * x for x in b))
     return max(0.0, min(1.0, dot / (na * nb))) if na and nb else 0.0
 
 
@@ -486,6 +493,7 @@ def _cluster_coverage(
     try:
         import numpy as np
         from sklearn.cluster import KMeans
+
         X = np.array(future_vecs)
         labels = KMeans(n_clusters=k, n_init=5, random_state=0).fit_predict(X)
     except Exception:
@@ -494,9 +502,7 @@ def _cluster_coverage(
         k = n
 
     matched_clusters = {
-        labels[i]
-        for i, pid in enumerate(future_ids)
-        if pid in matched_ids
+        labels[i] for i, pid in enumerate(future_ids) if pid in matched_ids
     }
     return round(len(matched_clusters) / k, 4)
 
@@ -519,12 +525,12 @@ def _call_judge(
     judge_model: str,
 ) -> dict[str, Any]:
     user_msg = JUDGE_USER_TMPL.format(
-        pred_title    = pred.title,
-        pred_rationale= pred.rationale[:600],
-        pred_approach = pred.approach[:400],
-        pred_terms    = ", ".join(pred.key_terms),
-        paper_title   = paper_title,
-        paper_abstract= paper_abstract[:800],
+        pred_title=pred.title,
+        pred_rationale=pred.rationale[:600],
+        pred_approach=pred.approach[:400],
+        pred_terms=", ".join(pred.key_terms),
+        paper_title=paper_title,
+        paper_abstract=paper_abstract[:800],
     )
     last_problem = ""
     for attempt in range(MAX_JUDGE_RETRY):
@@ -533,7 +539,7 @@ def _call_judge(
                 "model": judge_model,
                 "messages": [
                     {"role": "system", "content": JUDGE_SYSTEM},
-                    {"role": "user",   "content": user_msg},
+                    {"role": "user", "content": user_msg},
                 ],
                 "temperature": JUDGE_TEMPERATURE,
                 "max_tokens": JUDGE_MAX_TOKENS,
@@ -541,7 +547,9 @@ def _call_judge(
             # Qwen3.5 judges default to "thinking" mode, which burns the token
             # budget on <think> tokens before the PROBLEM_MATCH/... lines.
             if "qwen" in judge_model.lower():
-                create_kwargs["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
+                create_kwargs["extra_body"] = {
+                    "chat_template_kwargs": {"enable_thinking": False}
+                }
             resp = judge_client.chat.completions.create(**create_kwargs)
             content = resp.choices[0].message.content or ""
             # Strip any chain-of-thought block before parsing so a reasoning
@@ -558,9 +566,15 @@ def _call_judge(
                 # failure and retry; only after retries give up explicitly.
                 last_problem = f"missing dims {missing}"
                 if attempt < MAX_JUDGE_RETRY - 1:
-                    print(f"\n  [judge parse-retry {attempt+1}] {last_problem}", flush=True)
+                    print(
+                        f"\n  [judge parse-retry {attempt + 1}] {last_problem}",
+                        flush=True,
+                    )
                     continue
-                print(f"\n  [judge PARSE-FAILED] {last_problem} — recording parse_failed", flush=True)
+                print(
+                    f"\n  [judge PARSE-FAILED] {last_problem} — recording parse_failed",
+                    flush=True,
+                )
                 return {
                     "match": False,
                     "problem_score": None,
@@ -572,9 +586,11 @@ def _call_judge(
                 }
 
             problem = scores["PROBLEM_MATCH"]
-            method  = scores["METHOD_MATCH"]
+            method = scores["METHOD_MATCH"]
             specificity = scores["SPECIFICITY"]
-            match_val = (problem + method >= MATCH_PM_THRESHOLD) and (specificity >= MATCH_S_THRESHOLD)
+            match_val = (problem + method >= MATCH_PM_THRESHOLD) and (
+                specificity >= MATCH_S_THRESHOLD
+            )
 
             reasoning = ""
             for line in parse_target.splitlines():
@@ -592,9 +608,9 @@ def _call_judge(
                 "parse_failed": False,
             }
         except Exception as exc:
-            wait = 2 ** attempt
+            wait = 2**attempt
             if attempt < MAX_JUDGE_RETRY - 1:
-                print(f"\n  [judge retry {attempt+1}] {exc}", flush=True)
+                print(f"\n  [judge retry {attempt + 1}] {exc}", flush=True)
                 time.sleep(wait)
             else:
                 print(f"\n  [judge FAILED] {exc} — treating as NO", flush=True)
@@ -624,7 +640,8 @@ def _call_judge(
 def _load_predictions(raw: list[dict]) -> list[IdeaPrediction]:
     return [
         IdeaPrediction(
-            rank=p["rank"], title=p["title"],
+            rank=p["rank"],
+            title=p["title"],
             rationale=p.get("rationale", ""),
             approach=p.get("approach", ""),
             score=p.get("score", 0.0),
@@ -692,8 +709,11 @@ def _process_window(
             if paper is None:
                 d = {
                     "match": False,
-                    "problem_score": 0, "method_score": 0, "specificity_score": 0,
-                    "reasoning": "paper not found", "raw": "",
+                    "problem_score": 0,
+                    "method_score": 0,
+                    "specificity_score": 0,
+                    "reasoning": "paper not found",
+                    "raw": "",
                 }
             else:
                 d = _call_judge(
@@ -735,39 +755,45 @@ def _process_window(
         elif candidates and candidates[0][0] in judge_results:
             rep_decision = judge_results[candidates[0][0]][1]
         else:
-            rep_decision = {"problem_score": 0, "method_score": 0, "specificity_score": 0}
+            rep_decision = {
+                "problem_score": 0,
+                "method_score": 0,
+                "specificity_score": 0,
+            }
 
         novelty = _novelty_score(pred_vec, train_vecs)
         pred_vecs_for_novelty.append(pred_vec)
 
-        per_pred_out.append({
-            "rank": pred.rank,
-            "title": pred.title,
-            "is_match": matched_paper_id is not None,
-            "matched_paper_id": matched_paper_id,
-            "matched_reasoning": matched_reasoning,
-            "problem_score": rep_decision["problem_score"],
-            "method_score": rep_decision["method_score"],
-            "specificity_score": rep_decision["specificity_score"],
-            "novelty": novelty,
-            "top_candidates": [
-                {
-                    "paper_id": pid,
-                    "embed_score": round(judge_results[pid][0], 4),
-                    "llm_match": judge_results[pid][1]["match"],
-                    "problem_score": judge_results[pid][1]["problem_score"],
-                    "method_score": judge_results[pid][1]["method_score"],
-                    "specificity_score": judge_results[pid][1]["specificity_score"],
-                    "reasoning": judge_results[pid][1]["reasoning"],
-                }
-                for pid, _ in candidates
-                if pid in judge_results
-            ],
-        })
+        per_pred_out.append(
+            {
+                "rank": pred.rank,
+                "title": pred.title,
+                "is_match": matched_paper_id is not None,
+                "matched_paper_id": matched_paper_id,
+                "matched_reasoning": matched_reasoning,
+                "problem_score": rep_decision["problem_score"],
+                "method_score": rep_decision["method_score"],
+                "specificity_score": rep_decision["specificity_score"],
+                "novelty": novelty,
+                "top_candidates": [
+                    {
+                        "paper_id": pid,
+                        "embed_score": round(judge_results[pid][0], 4),
+                        "llm_match": judge_results[pid][1]["match"],
+                        "problem_score": judge_results[pid][1]["problem_score"],
+                        "method_score": judge_results[pid][1]["method_score"],
+                        "specificity_score": judge_results[pid][1]["specificity_score"],
+                        "reasoning": judge_results[pid][1]["reasoning"],
+                    }
+                    for pid, _ in candidates
+                    if pid in judge_results
+                ],
+            }
+        )
 
     matched_ranks = [p["rank"] for p in per_pred_out if p["is_match"]]
-    hit_at_k  = 1.0 if matched_ranks else 0.0
-    mrr       = 1.0 / matched_ranks[0] if matched_ranks else 0.0
+    hit_at_k = 1.0 if matched_ranks else 0.0
+    mrr = 1.0 / matched_ranks[0] if matched_ranks else 0.0
     precision = len(matched_ranks) / top_k if top_k else 0.0
 
     # Soft score: average (problem + method + specificity) / 9 across matched
@@ -778,15 +804,23 @@ def _process_window(
     if matched_preds:
         soft_score = round(
             sum(
-                ((p.get("problem_score") or 0) + (p.get("method_score") or 0) + (p.get("specificity_score") or 0)) / 9.0
+                (
+                    (p.get("problem_score") or 0)
+                    + (p.get("method_score") or 0)
+                    + (p.get("specificity_score") or 0)
+                )
+                / 9.0
                 for p in matched_preds
-            ) / len(matched_preds),
+            )
+            / len(matched_preds),
             4,
         )
 
-    avg_novelty = round(
-        sum(p["novelty"] for p in per_pred_out) / len(per_pred_out), 4
-    ) if per_pred_out else 0.0
+    avg_novelty = (
+        round(sum(p["novelty"] for p in per_pred_out) / len(per_pred_out), 4)
+        if per_pred_out
+        else 0.0
+    )
 
     # Cluster coverage: how many future-paper clusters did any hit prediction cover?
     matched_ids = {p["matched_paper_id"] for p in per_pred_out if p["matched_paper_id"]}
@@ -794,27 +828,29 @@ def _process_window(
     coverage = _cluster_coverage(future_vecs, matched_ids, future_paper_ids, cluster_k)
 
     return {
-        "cutoff_month":    cutoff,
-        "cutoff_date":     window_data.get("cutoff_date", ""),
+        "cutoff_month": cutoff,
+        "cutoff_date": window_data.get("cutoff_date", ""),
         "future_end_month": window_data.get("future_end_month", ""),
-        "train_papers":    window_data.get("train_papers", 0),
+        "train_papers": window_data.get("train_papers", 0),
         # arXiv IDs of the training-window papers, so the citation/coauthor
         # validity analyses can target the train community (not a global union).
         "train_paper_ids": list(train_paper_ids),
-        "future_papers":   len(future_papers),
+        "future_papers": len(future_papers),
         # Telemetry: fraction of judge calls whose score lines could not be
         # parsed (and were recorded as parse_failed rather than silently scored).
         # A high value invalidates the window — surfaced so it isn't hidden.
-        "judge_calls":         judge_calls,
+        "judge_calls": judge_calls,
         "judge_parse_failures": judge_parse_failures,
-        "judge_parse_failure_rate": round(judge_parse_failures / judge_calls, 4) if judge_calls else 0.0,
+        "judge_parse_failure_rate": round(judge_parse_failures / judge_calls, 4)
+        if judge_calls
+        else 0.0,
         "evaluation": {
-            "hit_at_k":         round(hit_at_k, 4),
-            "mrr":              round(mrr, 4),
-            "precision_at_k":   round(precision, 4),
-            "soft_score":       soft_score,
+            "hit_at_k": round(hit_at_k, 4),
+            "mrr": round(mrr, 4),
+            "precision_at_k": round(precision, 4),
+            "soft_score": soft_score,
             "cluster_coverage": coverage,
-            "avg_novelty":      avg_novelty,
+            "avg_novelty": avg_novelty,
         },
         "per_prediction": per_pred_out,
     }
@@ -847,13 +883,17 @@ def _process_topic(
         }
 
     # Batch-embed all topic papers once (use state cache)
-    missing_ids    = [p.paper_id for p in scoped_papers if state.get_paper_vec(p.paper_id) is None]
+    missing_ids = [
+        p.paper_id for p in scoped_papers if state.get_paper_vec(p.paper_id) is None
+    ]
     missing_papers = [p for p in scoped_papers if p.paper_id in set(missing_ids)]
     if missing_papers:
         print(f"  [{topic_id}] embedding {len(missing_papers)} papers ...", flush=True)
         texts = [_sanitize(paper_text(p)[:MAX_CHARS]) for p in missing_papers]
-        vecs  = _embed_batch(texts, embed_client)
-        state.set_paper_vecs(list(zip([p.paper_id for p in missing_papers], vecs, strict=False)))
+        vecs = _embed_batch(texts, embed_client)
+        state.set_paper_vecs(
+            list(zip([p.paper_id for p in missing_papers], vecs, strict=False))
+        )
 
     paper_vecs: dict[str, list[float]] = {
         p.paper_id: state.get_paper_vec(p.paper_id)
@@ -886,7 +926,7 @@ def _process_topic(
             continue
 
         print(
-            f"  [{topic_id}] window {wi+1}/{len(saved_windows)} cutoff={cutoff} "
+            f"  [{topic_id}] window {wi + 1}/{len(saved_windows)} cutoff={cutoff} "
             f"future={len(future)} ...",
             flush=True,
         )
@@ -920,13 +960,13 @@ def _process_topic(
         return round(sum(vals) / len(vals), 4)
 
     summary = {
-        "windows":              len(windows_out),
-        "avg_hit_at_k":         _avg("hit_at_k"),
-        "avg_mrr":              _avg("mrr"),
-        "avg_precision_at_k":   _avg("precision_at_k"),
-        "avg_soft_score":       _avg("soft_score"),
+        "windows": len(windows_out),
+        "avg_hit_at_k": _avg("hit_at_k"),
+        "avg_mrr": _avg("mrr"),
+        "avg_precision_at_k": _avg("precision_at_k"),
+        "avg_soft_score": _avg("soft_score"),
         "avg_cluster_coverage": _avg("cluster_coverage"),
-        "avg_novelty":          _avg("avg_novelty"),
+        "avg_novelty": _avg("avg_novelty"),
     }
     print(
         f"  [{topic_id}] done — hit@k={summary['avg_hit_at_k']:.4f}  "
@@ -947,27 +987,53 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Evaluate predictions with retrieve+LLM-judge pipeline."
     )
-    parser.add_argument("--input-json",   required=True)
-    parser.add_argument("--papers-dir",   required=True)
-    parser.add_argument("--output",       required=True)
-    parser.add_argument("--state-file",   default=None,
-                        help="Checkpoint file (default: <output>.state.json)")
-    parser.add_argument("--top-r",        type=int, default=DEFAULT_TOP_R,
-                        help="Number of candidates to retrieve per prediction")
-    parser.add_argument("--cluster-k",    type=int, default=DEFAULT_CLUSTER_K,
-                        help="Number of clusters for future-paper diversity coverage")
-    parser.add_argument("--judge-model",  default=DEFAULT_JUDGE)
-    parser.add_argument("--judge-base-url", default=None,
-                        help="Base URL for judge model API (e.g. http://localhost:8000/v1)")
-    parser.add_argument("--embed-model",  default=EMBED_MODEL)
-    parser.add_argument("--workers",      type=int, default=8,
-                        help="Parallel LLM judge threads per window")
-    parser.add_argument("--topic-workers", type=int, default=4,
-                        help="Parallel topics processed simultaneously")
-    parser.add_argument("--topics",       default=None,
-                        help="Comma-separated topic IDs to process (default: all)")
-    parser.add_argument("--max-windows",  type=int, default=None,
-                        help="Max windows per topic (for testing)")
+    parser.add_argument("--input-json", required=True)
+    parser.add_argument("--papers-dir", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument(
+        "--state-file",
+        default=None,
+        help="Checkpoint file (default: <output>.state.json)",
+    )
+    parser.add_argument(
+        "--top-r",
+        type=int,
+        default=DEFAULT_TOP_R,
+        help="Number of candidates to retrieve per prediction",
+    )
+    parser.add_argument(
+        "--cluster-k",
+        type=int,
+        default=DEFAULT_CLUSTER_K,
+        help="Number of clusters for future-paper diversity coverage",
+    )
+    parser.add_argument("--judge-model", default=DEFAULT_JUDGE)
+    parser.add_argument(
+        "--judge-base-url",
+        default=None,
+        help="Base URL for judge model API (e.g. http://localhost:8000/v1)",
+    )
+    parser.add_argument("--embed-model", default=EMBED_MODEL)
+    parser.add_argument(
+        "--workers", type=int, default=8, help="Parallel LLM judge threads per window"
+    )
+    parser.add_argument(
+        "--topic-workers",
+        type=int,
+        default=4,
+        help="Parallel topics processed simultaneously",
+    )
+    parser.add_argument(
+        "--topics",
+        default=None,
+        help="Comma-separated topic IDs to process (default: all)",
+    )
+    parser.add_argument(
+        "--max-windows",
+        type=int,
+        default=None,
+        help="Max windows per topic (for testing)",
+    )
     parser.add_argument("--topics-config", default=None)
     args = parser.parse_args()
 
@@ -1002,8 +1068,12 @@ def main() -> int:
         timeout=60.0,
     )
 
-    out_path   = Path(args.output)
-    state_path = Path(args.state_file) if args.state_file else out_path.with_suffix(".state.json")
+    out_path = Path(args.output)
+    state_path = (
+        Path(args.state_file)
+        if args.state_file
+        else out_path.with_suffix(".state.json")
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     judge_fp = _judge_fingerprint(args.judge_model)
@@ -1012,11 +1082,11 @@ def main() -> int:
     atexit.register(state.force_flush)
 
     saved = json.loads(Path(args.input_json).read_text(encoding="utf-8"))
-    cfg   = saved.get("config", {})
-    start_month    = cfg.get("start_month",    "2023-01")
-    end_month      = cfg.get("end_month",      "2025-06")
+    cfg = saved.get("config", {})
+    start_month = cfg.get("start_month", "2023-01")
+    end_month = cfg.get("end_month", "2025-06")
     horizon_months = cfg.get("horizon_months", 3)
-    top_k          = cfg.get("top_k",          5)
+    top_k = cfg.get("top_k", 5)
 
     print(f"Loading papers from {args.papers_dir} ...", flush=True)
     papers = load_papers_from_markdown(
@@ -1024,23 +1094,27 @@ def main() -> int:
     )
     print(f"Loaded {len(papers)} papers", flush=True)
 
-    topics  = load_topics(args.topics_config)
+    topics = load_topics(args.topics_config)
     grouped = classify_papers_by_topic(papers, topics)
 
     if args.topics:
         topic_filter = {t.strip() for t in args.topics.split(",")}
         topics = [t for t in topics if t.id in topic_filter]
-        print(f"Running on {len(topics)} topic(s): {[t.id for t in topics]}", flush=True)
+        print(
+            f"Running on {len(topics)} topic(s): {[t.id for t in topics]}", flush=True
+        )
 
     topic_results: dict[str, Any] = {}
     total_windows = 0
 
     def _run_topic(topic):
         saved_topic = saved.get("topic_results", {}).get(topic.id, {})
-        scoped      = grouped.get(topic.id, [])
+        scoped = grouped.get(topic.id, [])
         if not scoped or not saved_topic.get("backtest"):
             return topic.id, {
-                "topic_name": topic.name, "paper_count": len(scoped), "backtest": None
+                "topic_name": topic.name,
+                "paper_count": len(scoped),
+                "backtest": None,
             }
         return _process_topic(
             topic_id=topic.id,
@@ -1072,7 +1146,7 @@ def main() -> int:
 
     aggregate = _compute_aggregate(topic_results)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Aggregate: {total_windows} windows | judge={args.judge_model}")
     for k, v in aggregate.items():
         print(f"  {k}: {v:.4f}")
@@ -1088,8 +1162,12 @@ def _compute_aggregate(topic_results: dict) -> dict[str, float]:
     return weighted_mean_over_topics(
         topic_results,
         (
-            "avg_hit_at_k", "avg_mrr", "avg_precision_at_k",
-            "avg_soft_score", "avg_cluster_coverage", "avg_novelty",
+            "avg_hit_at_k",
+            "avg_mrr",
+            "avg_precision_at_k",
+            "avg_soft_score",
+            "avg_cluster_coverage",
+            "avg_novelty",
         ),
     )
 
@@ -1103,18 +1181,18 @@ def _write_output(
     aggregate: dict | None = None,
 ) -> None:
     payload = {
-        "mode":              "llm_judge_eval",
-        "source_json":       args.input_json,
-        "embed_model":       args.embed_model,
-        "judge_model":       args.judge_model,
-        "top_r":             args.top_r,
-        "cluster_k":         args.cluster_k,
-        "match_pm_threshold":  MATCH_PM_THRESHOLD,
-        "match_s_threshold":   MATCH_S_THRESHOLD,
-        "config":            cfg,
-        "total_windows":     total_windows,
+        "mode": "llm_judge_eval",
+        "source_json": args.input_json,
+        "embed_model": args.embed_model,
+        "judge_model": args.judge_model,
+        "top_r": args.top_r,
+        "cluster_k": args.cluster_k,
+        "match_pm_threshold": MATCH_PM_THRESHOLD,
+        "match_s_threshold": MATCH_S_THRESHOLD,
+        "config": cfg,
+        "total_windows": total_windows,
         "aggregate_summary": aggregate or _compute_aggregate(topic_results),
-        "topic_results":     topic_results,
+        "topic_results": topic_results,
     }
     tmp = out_path.with_suffix(".tmp")
     tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")

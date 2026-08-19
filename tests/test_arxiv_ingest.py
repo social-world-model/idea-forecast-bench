@@ -36,7 +36,9 @@ class _FakeResponse:
         return None
 
 
-def test_ingest_latest_arxiv_papers_writes_markdown_and_is_idempotent(monkeypatch, tmp_path) -> None:
+def test_ingest_latest_arxiv_papers_writes_markdown_and_is_idempotent(
+    monkeypatch, tmp_path
+) -> None:
     monkeypatch.setattr(
         arxiv_ingest.requests,
         "get",

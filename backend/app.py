@@ -114,7 +114,13 @@ _bootstrap_leaderboard_async()
 
 
 class APIError(Exception):
-    def __init__(self, message: str, status_code: int = 400, code: str = "bad_request", details: Any = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        status_code: int = 400,
+        code: str = "bad_request",
+        details: Any = None,
+    ) -> None:
         super().__init__(message)
         self.message = message
         self.status_code = status_code
@@ -167,6 +173,7 @@ def handle_unexpected_error(error: Exception):
     }
     return jsonify(payload), 500
 
+
 def _read_views() -> int:
     if not os.path.exists(VIEWS_FILE):
         return 0
@@ -201,10 +208,18 @@ def healthz():
 @app.route("/metrics", methods=["GET"])
 def metrics():
     strategies = list_strategies()
-    backtest_done = sum(1 for strategy in strategies if strategy.get("backtest_status") == "done")
-    backtest_running = sum(1 for strategy in strategies if strategy.get("backtest_status") == "running")
-    generation_done = sum(1 for strategy in strategies if strategy.get("generation_status") == "done")
-    generation_running = sum(1 for strategy in strategies if strategy.get("generation_status") == "running")
+    backtest_done = sum(
+        1 for strategy in strategies if strategy.get("backtest_status") == "done"
+    )
+    backtest_running = sum(
+        1 for strategy in strategies if strategy.get("backtest_status") == "running"
+    )
+    generation_done = sum(
+        1 for strategy in strategies if strategy.get("generation_status") == "done"
+    )
+    generation_running = sum(
+        1 for strategy in strategies if strategy.get("generation_status") == "running"
+    )
     return jsonify(
         {
             "strategies_total": len(strategies),

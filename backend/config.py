@@ -6,7 +6,7 @@ KEYWORDS = [
     "Multimodal Visual Reasoning",
     "GUI /computer use / web agent",
     "Optimizer",
-    "Time-series forcasting"
+    "Time-series forcasting",
 ]
 
 # OpenReview Settings
@@ -18,4 +18,4 @@ VENUE_ID = f"ICLR.cc/{ICLR_YEAR}/Conference"
 
 # Generation Settings
 NUM_PAPERS_TO_FETCH = 5
-MODEL = "gpt-4o-mini" # Options: "gpt-4o", "gpt-4-turbo", "gemini-1.5-pro", "claude-3-5-sonnet-20240620"
+MODEL = "gpt-4o-mini"  # Options: "gpt-4o", "gpt-4-turbo", "gemini-1.5-pro", "claude-3-5-sonnet-20240620"

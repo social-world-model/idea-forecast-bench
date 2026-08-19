@@ -83,6 +83,7 @@ _TWO_ROUND_STRATEGIES = {
 
 # ── Paper loading ──────────────────────────────────────────────────────────────
 
+
 def _load_papers_cached(args, input_dir: Path):
     import hashlib
     import pickle
@@ -97,7 +98,9 @@ def _load_papers_cached(args, input_dir: Path):
         with open(cache_path, "rb") as f:
             c = pickle.load(f)
         papers, topics, grouped = c["papers"], c["topics"], c["grouped"]
-        print(f"Loaded {len(papers)} papers [{args.start_month}–{args.end_month}] (cached)")
+        print(
+            f"Loaded {len(papers)} papers [{args.start_month}–{args.end_month}] (cached)"
+        )
     else:
         print(f"Loading papers from {input_dir} ...")
         papers = load_papers_from_markdown(
@@ -121,6 +124,7 @@ def _load_papers_cached(args, input_dir: Path):
 
 
 # ── Collect phase ──────────────────────────────────────────────────────────────
+
 
 def _collect_requests(
     strategy_obj,
@@ -202,6 +206,7 @@ def _collect_requests(
 
 # ── Batch API helpers ──────────────────────────────────────────────────────────
 
+
 def _build_batch_jsonl(
     requests_dict: dict,
     default_model: str,
@@ -227,12 +232,16 @@ def _build_batch_jsonl(
             body["max_tokens"] = MAX_BATCH_TOKENS
             if req.get("temperature") is not None:
                 body["temperature"] = req["temperature"]
-        lines.append(json.dumps({
-            "custom_id": key,
-            "method": "POST",
-            "url": "/v1/chat/completions",
-            "body": body,
-        }))
+        lines.append(
+            json.dumps(
+                {
+                    "custom_id": key,
+                    "method": "POST",
+                    "url": "/v1/chat/completions",
+                    "body": body,
+                }
+            )
+        )
     return "\n".join(lines)
 
 
@@ -246,8 +255,10 @@ def _submit_batch(
     jsonl_path = batch_dir / f"{label}_requests.jsonl"
     jsonl_path.write_text(jsonl_content, encoding="utf-8")
     size_kb = len(jsonl_content.encode()) // 1024
-    print(f"  [batch] uploading {jsonl_path.name} ({size_kb} KB, "
-          f"{jsonl_content.count(chr(10)) + 1} requests) ...")
+    print(
+        f"  [batch] uploading {jsonl_path.name} ({size_kb} KB, "
+        f"{jsonl_content.count(chr(10)) + 1} requests) ..."
+    )
 
     with open(jsonl_path, "rb") as f:
         file_obj = oai_client.files.create(file=f, purpose="batch")
@@ -333,6 +344,7 @@ def _download_results(
 
 # ── Replay phase ───────────────────────────────────────────────────────────────
 
+
 def _replay_backtest(
     strategy_obj,
     topics,
@@ -350,7 +362,11 @@ def _replay_backtest(
     def _worker(topic):
         scoped = grouped.get(topic.id, [])
         if not scoped:
-            return topic.id, {"topic_name": topic.name, "paper_count": 0, "backtest": None}
+            return topic.id, {
+                "topic_name": topic.name,
+                "paper_count": 0,
+                "backtest": None,
+            }
         batch_set_replay(full_cache)
         try:
             result = backtest(
@@ -362,7 +378,11 @@ def _replay_backtest(
             )
         except Exception as e:
             print(f"  [replay] {topic.id}: {e}", flush=True)
-            return topic.id, {"topic_name": topic.name, "paper_count": len(scoped), "backtest": None}
+            return topic.id, {
+                "topic_name": topic.name,
+                "paper_count": len(scoped),
+                "backtest": None,
+            }
         finally:
             batch_clear()
 
@@ -372,7 +392,11 @@ def _replay_backtest(
             f"hit@k={s.get('avg_hit_at_k', 0):.4f}  mrr={s.get('avg_mrr', 0):.4f}",
             flush=True,
         )
-        return topic.id, {"topic_name": topic.name, "paper_count": len(scoped), "backtest": result}
+        return topic.id, {
+            "topic_name": topic.name,
+            "paper_count": len(scoped),
+            "backtest": result,
+        }
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = [pool.submit(_worker, t) for t in topics]
@@ -395,6 +419,7 @@ def _replay_backtest(
 
 # ── Output saving ──────────────────────────────────────────────────────────────
 
+
 def _save_output(
     topic_results: dict,
     total_windows: int,
@@ -406,6 +431,7 @@ def _save_output(
     resolved = args.model_name
     if args.strategy == "predictor_llm":
         from live_idea_bench.config import load_predictor_config, load_runtime_config
+
         pc = load_predictor_config()
         rc = load_runtime_config()
         resolved = args.model_name or pc.default_model or rc.model_name
@@ -413,8 +439,12 @@ def _save_output(
     weighted = weighted_mean_over_topics(
         topic_results,
         (
-            "avg_hit_at_k", "avg_recall_at_k", "avg_precision_at_k",
-            "avg_mrr", "avg_novelty", "avg_diversity",
+            "avg_hit_at_k",
+            "avg_recall_at_k",
+            "avg_precision_at_k",
+            "avg_mrr",
+            "avg_novelty",
+            "avg_diversity",
         ),
     )
 
@@ -442,13 +472,14 @@ def _save_output(
     )
     print(f"\nSaved to {output_path}")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Aggregate: {total_windows} windows")
     for k, v in weighted.items():
         print(f"  {k}: {v:.4f}")
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -474,16 +505,22 @@ def main() -> int:
     parser.add_argument("--workers", type=int, default=8)
     # ── batch-specific args ───────────────────────────────────────────────────
     parser.add_argument(
-        "--batch-dir", type=str, default=None,
+        "--batch-dir",
+        type=str,
+        default=None,
         help="Directory for intermediate batch files.  "
-             "Default: logs/batch/{strategy}_{timestamp}/",
+        "Default: logs/batch/{strategy}_{timestamp}/",
     )
     parser.add_argument(
-        "--poll-interval", type=int, default=60,
+        "--poll-interval",
+        type=int,
+        default=60,
         help="Seconds between batch status polls (default 60).",
     )
     parser.add_argument(
-        "--max-wait-hours", type=int, default=24,
+        "--max-wait-hours",
+        type=int,
+        default=24,
         help="Max hours to wait for batch completion (default 24).",
     )
     args = parser.parse_args()
@@ -492,6 +529,7 @@ def main() -> int:
     _tmp_sim_cfg = None
     if args.similarity_engine:
         import tempfile
+
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".yaml", delete=False, prefix="sim_override_"
         ) as _tmp_sim_cfg:
@@ -542,6 +580,7 @@ def main() -> int:
         print("ERROR: OPENAI_API_KEY not set")
         return 1
     import openai
+
     oai_client = openai.OpenAI(api_key=api_key)
     model_for_batch = args.model_name or "gpt-5.4"
 
@@ -573,7 +612,11 @@ def main() -> int:
         if req_key not in state:
             print(f"\n[{label}] Phase 1 — collecting requests ...")
             requests = _collect_requests(
-                strategy_obj, topics, grouped, bt_config, args,
+                strategy_obj,
+                topics,
+                grouped,
+                bt_config,
+                args,
                 replay_cache=replay_cache,
                 system_prefix=system_prefix,
                 workers=args.workers,

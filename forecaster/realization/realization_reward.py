@@ -1,4 +1,5 @@
 """Extended reward function for the realization GRPO training."""
+
 from __future__ import annotations
 
 import logging
@@ -61,24 +62,109 @@ def _hybrid_similarity(a: str, b: str) -> float:
 
 # Keywords associated with each operator type
 _OPERATOR_KEYWORDS: dict[str, list[str]] = {
-    "extend": ["extend", "extension", "improvement", "building upon", "build upon", "improves", "enhance", "enhanced"],
-    "transfer": ["transfer", "adaptation", "adapt", "domain", "new domain", "cross-domain", "applied to"],
-    "compose": ["combination", "compose", "composition", "integration", "integrate", "combined", "combining"],
-    "benchmark": ["benchmark", "evaluation", "evaluate", "dataset", "assess", "assessment", "test suite"],
-    "analyze": ["analysis", "analyze", "study", "investigation", "investigate", "examine", "empirical"],
-    "simplify": ["simplif", "efficient", "efficiency", "lightweight", "streamline", "compact", "reduction"],
-    "scale": ["scaling", "scale", "large-scale", "capacity", "billion", "massive", "scal"],
-    "adapt": ["adaptation", "adapt", "fine-tuning", "finetun", "customiz", "personaliz"],
+    "extend": [
+        "extend",
+        "extension",
+        "improvement",
+        "building upon",
+        "build upon",
+        "improves",
+        "enhance",
+        "enhanced",
+    ],
+    "transfer": [
+        "transfer",
+        "adaptation",
+        "adapt",
+        "domain",
+        "new domain",
+        "cross-domain",
+        "applied to",
+    ],
+    "compose": [
+        "combination",
+        "compose",
+        "composition",
+        "integration",
+        "integrate",
+        "combined",
+        "combining",
+    ],
+    "benchmark": [
+        "benchmark",
+        "evaluation",
+        "evaluate",
+        "dataset",
+        "assess",
+        "assessment",
+        "test suite",
+    ],
+    "analyze": [
+        "analysis",
+        "analyze",
+        "study",
+        "investigation",
+        "investigate",
+        "examine",
+        "empirical",
+    ],
+    "simplify": [
+        "simplif",
+        "efficient",
+        "efficiency",
+        "lightweight",
+        "streamline",
+        "compact",
+        "reduction",
+    ],
+    "scale": [
+        "scaling",
+        "scale",
+        "large-scale",
+        "capacity",
+        "billion",
+        "massive",
+        "scal",
+    ],
+    "adapt": [
+        "adaptation",
+        "adapt",
+        "fine-tuning",
+        "finetun",
+        "customiz",
+        "personaliz",
+    ],
 }
 
 # Minimum proposal length to be considered coherent
 _MIN_COHERENT_CHARS = 100
 # Technical vocabulary indicators
 _TECHNICAL_TOKENS = {
-    "model", "training", "method", "approach", "architecture", "evaluation",
-    "dataset", "baseline", "performance", "experiment", "results", "accuracy",
-    "loss", "gradient", "layer", "attention", "transformer", "encoder", "decoder",
-    "embedding", "token", "sequence", "benchmark", "metric", "objective",
+    "model",
+    "training",
+    "method",
+    "approach",
+    "architecture",
+    "evaluation",
+    "dataset",
+    "baseline",
+    "performance",
+    "experiment",
+    "results",
+    "accuracy",
+    "loss",
+    "gradient",
+    "layer",
+    "attention",
+    "transformer",
+    "encoder",
+    "decoder",
+    "embedding",
+    "token",
+    "sequence",
+    "benchmark",
+    "metric",
+    "objective",
 }
 
 
@@ -258,7 +344,9 @@ def evaluate_strict_trajectory_reward(
             return build_invalid_trajectory_reward("selected_paper_id_not_surfaced")
         paper = paper_lookup.get(paper_id)
         if paper is None:
-            return build_invalid_trajectory_reward("selected_paper_id_missing_from_corpus")
+            return build_invalid_trajectory_reward(
+                "selected_paper_id_missing_from_corpus"
+            )
         selected_evidence.append(paper)
 
     proposal_text = trajectory.result.proposal_text.strip()
@@ -270,7 +358,9 @@ def evaluate_strict_trajectory_reward(
         if selected_evidence
         else 0.0
     )
-    operator_adherence = compute_operator_adherence(proposal_text, trajectory.innovation)
+    operator_adherence = compute_operator_adherence(
+        proposal_text, trajectory.innovation
+    )
     proposal_coherence = compute_coherence_score(proposal_text, trajectory.innovation)
     reward = (
         config.evidence_accuracy_weight * evidence_quality

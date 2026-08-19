@@ -9,6 +9,7 @@ your own judge" objection.
   * impact_stratified_breakdown(rows, bucket_fn) — slice metrics by
     citation count / impact bucket.
 """
+
 from __future__ import annotations
 
 import logging

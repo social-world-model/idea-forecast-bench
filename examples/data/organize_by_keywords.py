@@ -8,14 +8,49 @@ from live_idea_bench import group_by_keywords, load_json
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Group papers by keywords and optionally organize files.")
-    parser.add_argument("--input", type=str, default="../keywords_results.json", help="Path to the keywords results JSON file.")
-    parser.add_argument("--output", type=str, default="keyword_subsets.json", help="Path to the output grouped JSON file.")
-    parser.add_argument("--min_papers", type=int, default=1, help="Minimum number of papers a keyword must have to be processed.")
-    parser.add_argument("--organize_dir", type=str, help="If provided, will also create a directory structure with symlinks/copies.")
-    parser.add_argument("--mode", choices=["symlink", "copy"], default="symlink", help="Mode for --organize_dir: symlink or copy.")
-    parser.add_argument("--target_keywords", type=str, help="Comma-separated list or path to a file containing target category names.")
-    parser.add_argument("--fuzzy_threshold", type=float, default=0.6, help="Fuzzy matching threshold (0.0 to 1.0).")
+    parser = argparse.ArgumentParser(
+        description="Group papers by keywords and optionally organize files."
+    )
+    parser.add_argument(
+        "--input",
+        type=str,
+        default="../keywords_results.json",
+        help="Path to the keywords results JSON file.",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="keyword_subsets.json",
+        help="Path to the output grouped JSON file.",
+    )
+    parser.add_argument(
+        "--min_papers",
+        type=int,
+        default=1,
+        help="Minimum number of papers a keyword must have to be processed.",
+    )
+    parser.add_argument(
+        "--organize_dir",
+        type=str,
+        help="If provided, will also create a directory structure with symlinks/copies.",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["symlink", "copy"],
+        default="symlink",
+        help="Mode for --organize_dir: symlink or copy.",
+    )
+    parser.add_argument(
+        "--target_keywords",
+        type=str,
+        help="Comma-separated list or path to a file containing target category names.",
+    )
+    parser.add_argument(
+        "--fuzzy_threshold",
+        type=float,
+        default=0.6,
+        help="Fuzzy matching threshold (0.0 to 1.0).",
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -50,14 +85,14 @@ def main():
         results,
         target_categories=targets,
         fuzzy_threshold=args.fuzzy_threshold,
-        min_papers=args.min_papers
+        min_papers=args.min_papers,
     )
 
     print(f"Found {len(final_keyword_map)} resulting categories.")
 
     # Always save the JSON file
     output_json.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_json, 'w', encoding='utf-8') as f:
+    with open(output_json, "w", encoding="utf-8") as f:
         json.dump(final_keyword_map, f, indent=2, ensure_ascii=False)
     print(f"Grouped JSON saved to {output_json}")
 
@@ -71,7 +106,9 @@ def main():
         processed_count = 0
         for keyword, files in final_keyword_map.items():
             # Clean for filesystem safety
-            fs_safe_name = "".join([c if c.isalnum() or c in (" ", "-", "_") else "_" for c in keyword]).strip()
+            fs_safe_name = "".join(
+                [c if c.isalnum() or c in (" ", "-", "_") else "_" for c in keyword]
+            ).strip()
             fs_safe_name = fs_safe_name[:50].strip()
 
             keyword_dir = output_base / fs_safe_name
@@ -91,12 +128,17 @@ def main():
                     elif args.mode == "copy":
                         shutil.copy2(src_path, dest_path)
                 except Exception as e:
-                    print(f"  Error processing {src_path.name} for category '{keyword}': {e}")
+                    print(
+                        f"  Error processing {src_path.name} for category '{keyword}': {e}"
+                    )
 
             processed_count += 1
             if processed_count % 100 == 0:
-                print(f"  Processed {processed_count}/{len(final_keyword_map)} categories...")
+                print(
+                    f"  Processed {processed_count}/{len(final_keyword_map)} categories..."
+                )
         print(f"Successfully organized subsets in: {output_base}")
+
 
 if __name__ == "__main__":
     main()

@@ -18,6 +18,7 @@ Usage::
 The wrapper script ``scripts/forecaster/run_three_grpo.sh`` orchestrates the
 three sequential runs and manages the local judge vLLM server lifecycle.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -33,6 +34,7 @@ import torch  # noqa: E402
 
 if torch.cuda.is_available():
     torch.cuda.set_device(0)
+
 
 # TRL's VLLMClient defaults to group_port=51216 for NCCL handshake. Three
 # parallel runs collide on this port. Patch the default from env var
@@ -69,6 +71,7 @@ def _patch_vllm_client_group_port() -> None:
     # TRL 1.4+ path: VLLMGeneration.__init__ also has group_port default.
     try:
         from trl.generation import vllm_generation as _vg
+
         _orig_vg_init = _vg.VLLMGeneration.__init__
 
         def _patched_vg_init(self, *args, **kwargs):
@@ -157,6 +160,7 @@ def _build_synthetic_hindsight(
             )
     return samples
 
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 log = logging.getLogger("forecaster.train_grpo_metric")
 
@@ -164,17 +168,35 @@ _VALID_MODES = {"soft", "coverage", "novelty"}
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="GRPO training with a single eval-metric reward.")
-    p.add_argument("--model", default="qwen3.5-9b", help="Model alias from forecaster.realization.model_zoo.")
+    p = argparse.ArgumentParser(
+        description="GRPO training with a single eval-metric reward."
+    )
+    p.add_argument(
+        "--model",
+        default="qwen3.5-9b",
+        help="Model alias from forecaster.realization.model_zoo.",
+    )
     p.add_argument("--papers", required=True, help="Directory of markdown papers.")
     p.add_argument("--output-dir", required=True, help="Top-level output directory.")
-    p.add_argument("--reward-mode", required=True, choices=sorted(_VALID_MODES),
-                   help="Which eval metric to optimize as the GRPO reward.")
-    p.add_argument("--start-month", default="2023-01", help="Lower month bound (YYYY-MM).")
-    p.add_argument("--end-month", default="2024-09", help="Upper month bound (YYYY-MM).")
+    p.add_argument(
+        "--reward-mode",
+        required=True,
+        choices=sorted(_VALID_MODES),
+        help="Which eval metric to optimize as the GRPO reward.",
+    )
+    p.add_argument(
+        "--start-month", default="2023-01", help="Lower month bound (YYYY-MM)."
+    )
+    p.add_argument(
+        "--end-month", default="2024-09", help="Upper month bound (YYYY-MM)."
+    )
     p.add_argument("--max-episodes", type=int, default=None, help="Cap GRPO episodes.")
-    p.add_argument("--max-grpo-rows", type=int, default=None, help="Cap GRPO training rows.")
-    p.add_argument("--num-generations", type=int, default=None, help="GRPO group size G.")
+    p.add_argument(
+        "--max-grpo-rows", type=int, default=None, help="Cap GRPO training rows."
+    )
+    p.add_argument(
+        "--num-generations", type=int, default=None, help="GRPO group size G."
+    )
     p.add_argument("--max-completion-length", type=int, default=None)
     p.add_argument("--max-prompt-length", type=int, default=None)
     p.add_argument("--grpo-epochs", type=int, default=None)
@@ -182,9 +204,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--use-vllm-server", action="store_true")
     p.add_argument("--vllm-server-host", default="localhost")
     p.add_argument("--vllm-server-port", type=int, default=8765)
-    p.add_argument("--skip-alignment-check", action="store_true", default=True,
-                   help="Bypass the online reward alignment gate (single-metric rewards "
-                        "won't correlate with the composite benchmark).")
+    p.add_argument(
+        "--skip-alignment-check",
+        action="store_true",
+        default=True,
+        help="Bypass the online reward alignment gate (single-metric rewards "
+        "won't correlate with the composite benchmark).",
+    )
     return p
 
 
@@ -241,7 +267,9 @@ def main() -> int:
 
     log.info("Generating synthetic hindsight samples (no LLM call) ...")
     hindsight_samples = _build_synthetic_hindsight(papers, episode_config)
-    log.info("Built %d synthetic hindsight samples across episodes.", len(hindsight_samples))
+    log.info(
+        "Built %d synthetic hindsight samples across episodes.", len(hindsight_samples)
+    )
 
     grpo_dir = output_dir / "realization_grpo"
     log.info("Launching pipeline with reward_mode=%s ...", args.reward_mode)

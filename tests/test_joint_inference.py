@@ -1,4 +1,5 @@
 """Tests for forecaster/inference/algorithm.py"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -63,7 +64,11 @@ class TestRunJointInference:
     def test_run_joint_inference_returns_scored_proposals(self) -> None:
         """Function returns a list of ScoredProposal objects."""
         innovations = [_make_innovation()]
-        papers = [_make_paper("p1", "attention mechanism for long document sequences training")]
+        papers = [
+            _make_paper(
+                "p1", "attention mechanism for long document sequences training"
+            )
+        ]
         memory_store = _make_memory_store()
         llm_client = MagicMock()
         inference_config = InferenceConfig(runtime_mode="demo", top_k=5)
@@ -161,7 +166,9 @@ class TestRunJointInference:
         memory_store = MemoryStore.empty("2024-01")
         llm_client = MagicMock()
         # Use high dedup threshold so distinct proposals are not collapsed
-        inference_config = InferenceConfig(runtime_mode="demo", top_k=5, dedup_threshold=0.99)
+        inference_config = InferenceConfig(
+            runtime_mode="demo", top_k=5, dedup_threshold=0.99
+        )
         realization_config = RealizationConfig()
 
         call_count = 0
@@ -202,11 +209,15 @@ class TestRunJointInference:
         memory_store = MemoryStore.empty("2024-01")
         llm_client = MagicMock()
         # Use very low threshold to force deduplication
-        inference_config = InferenceConfig(runtime_mode="demo", top_k=10, dedup_threshold=0.5)
+        inference_config = InferenceConfig(
+            runtime_mode="demo", top_k=10, dedup_threshold=0.5
+        )
         realization_config = RealizationConfig()
 
         # All LLM calls return identical text
-        with patch(_PATCH_TARGET, return_value=("Identical Proposal\nSame body text.", [])):
+        with patch(
+            _PATCH_TARGET, return_value=("Identical Proposal\nSame body text.", [])
+        ):
             result = run_joint_inference(
                 innovations=innovations,
                 papers=papers,
@@ -246,14 +257,23 @@ class TestRunJointInference:
     def test_run_joint_inference_uses_prior_model_scorer_when_available(self) -> None:
         """With prior_model_path, the main path should use model-based prior scoring."""
         innovations = [_make_innovation()]
-        papers = [_make_paper("p1", "attention mechanism for long document sequences training")]
+        papers = [
+            _make_paper(
+                "p1", "attention mechanism for long document sequences training"
+            )
+        ]
         memory_store = MemoryStore.empty("2024-01")
         llm_client = MagicMock()
         inference_config = InferenceConfig(runtime_mode="demo", top_k=5)
         realization_config = RealizationConfig()
 
-        with patch(_PATCH_TARGET, return_value=_MOCK_LLM_RESPONSE), \
-             patch("forecaster.inference.algorithm.build_prior_scorer", return_value=lambda innovation: -0.25):
+        with (
+            patch(_PATCH_TARGET, return_value=_MOCK_LLM_RESPONSE),
+            patch(
+                "forecaster.inference.algorithm.build_prior_scorer",
+                return_value=lambda innovation: -0.25,
+            ),
+        ):
             result = run_joint_inference(
                 innovations=innovations,
                 papers=papers,
@@ -268,7 +288,9 @@ class TestRunJointInference:
         assert result[0].prior_score == pytest.approx(-0.25)
         assert result[0].metadata["prior_score_source"] == "model_conditional_logprob"
 
-    def test_run_joint_inference_output_changes_with_realization_artifact(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    def test_run_joint_inference_output_changes_with_realization_artifact(
+        self, tmp_path
+    ) -> None:  # type: ignore[no-untyped-def]
         """Phase 4 should consume the provided realization artifact end to end."""
         artifact_a = tmp_path / "artifact_a"
         artifact_b = tmp_path / "artifact_b"
@@ -276,16 +298,25 @@ class TestRunJointInference:
         artifact_b.mkdir()
 
         innovations = [_make_innovation()]
-        papers = [_make_paper("p1", "attention mechanism for long document sequences training")]
+        papers = [
+            _make_paper(
+                "p1", "attention mechanism for long document sequences training"
+            )
+        ]
         memory_store = MemoryStore.empty("2024-01")
         llm_client = MagicMock()
-        inference_config = InferenceConfig(runtime_mode="demo", top_k=5, dedup_threshold=0.99)
+        inference_config = InferenceConfig(
+            runtime_mode="demo", top_k=5, dedup_threshold=0.99
+        )
         realization_config = RealizationConfig()
 
         def _local_side_effect(*, realization_model_path, **kwargs):  # type: ignore[no-untyped-def]
             return f"{Path(realization_model_path).name}\nDeterministic body"
 
-        with patch("forecaster.realization.proposal_generator._generate_proposal_local", side_effect=_local_side_effect):
+        with patch(
+            "forecaster.realization.proposal_generator._generate_proposal_local",
+            side_effect=_local_side_effect,
+        ):
             result_a = run_joint_inference(
                 innovations=innovations,
                 papers=papers,
@@ -312,7 +343,11 @@ class TestRunJointInference:
     def test_run_joint_inference_strict_mode_requires_artifacts(self) -> None:
         """Strict mode should fail closed instead of using demo-time fallbacks."""
         innovations = [_make_innovation()]
-        papers = [_make_paper("p1", "attention mechanism for long document sequences training")]
+        papers = [
+            _make_paper(
+                "p1", "attention mechanism for long document sequences training"
+            )
+        ]
 
         with pytest.raises(ValueError, match="prior_model_path"):
             run_joint_inference(
@@ -325,11 +360,17 @@ class TestRunJointInference:
                 realization_config=RealizationConfig(),
             )
 
-    def test_run_joint_inference_strict_mode_rejects_popularity_scorer(self, tmp_path: Path) -> None:
+    def test_run_joint_inference_strict_mode_rejects_popularity_scorer(
+        self, tmp_path: Path
+    ) -> None:
         with pytest.raises(ValueError, match="does not allow popularity_scorer"):
             run_joint_inference(
                 innovations=[_make_innovation()],
-                papers=[_make_paper("p1", "attention mechanism for long document sequences training")],
+                papers=[
+                    _make_paper(
+                        "p1", "attention mechanism for long document sequences training"
+                    )
+                ],
                 memory_store=MemoryStore.empty("2024-01"),
                 llm_client=MagicMock(),
                 model="gpt-4o",
@@ -340,7 +381,9 @@ class TestRunJointInference:
                 realization_model_path=str(tmp_path),
             )
 
-    def test_run_joint_inference_strict_mode_raises_when_realization_scorer_fails(self, tmp_path: Path) -> None:
+    def test_run_joint_inference_strict_mode_raises_when_realization_scorer_fails(
+        self, tmp_path: Path
+    ) -> None:
         """Strict mode should not silently revert to proxy realization scoring."""
         artifact_dir = tmp_path / "realization"
         artifact_dir.mkdir()
@@ -354,11 +397,17 @@ class TestRunJointInference:
                 "forecaster.inference.algorithm.build_strict_realization_scorer",
                 side_effect=RuntimeError("broken scorer"),
             ),
-            pytest.raises(RuntimeError, match="Strict realization scorer initialization failed"),
+            pytest.raises(
+                RuntimeError, match="Strict realization scorer initialization failed"
+            ),
         ):
             run_joint_inference(
                 innovations=[_make_innovation()],
-                papers=[_make_paper("p1", "attention mechanism for long document sequences training")],
+                papers=[
+                    _make_paper(
+                        "p1", "attention mechanism for long document sequences training"
+                    )
+                ],
                 memory_store=MemoryStore.empty("2024-01"),
                 llm_client=MagicMock(),
                 model="gpt-4o",
@@ -368,7 +417,9 @@ class TestRunJointInference:
                 realization_model_path=str(artifact_dir),
             )
 
-    def test_run_joint_inference_strict_mode_persists_search_metadata(self, tmp_path: Path) -> None:
+    def test_run_joint_inference_strict_mode_persists_search_metadata(
+        self, tmp_path: Path
+    ) -> None:
         """Strict runtime should persist the interactive search trace into proposal metadata."""
         artifact_dir = tmp_path / "realization"
         artifact_dir.mkdir()
@@ -376,7 +427,9 @@ class TestRunJointInference:
             innovation=_make_innovation(),
             steps=(
                 RealizationTrajectoryStep(
-                    action=SearchAction(action_type="search", query="attention efficiency"),
+                    action=SearchAction(
+                        action_type="search", query="attention efficiency"
+                    ),
                     observation=(
                         SearchObservation(
                             paper_id="p1",
@@ -388,7 +441,9 @@ class TestRunJointInference:
                     selected_evidence_ids=(),
                 ),
                 RealizationTrajectoryStep(
-                    action=SearchAction(action_type="finish", proposal_text="Strict Proposal\nBody"),
+                    action=SearchAction(
+                        action_type="finish", proposal_text="Strict Proposal\nBody"
+                    ),
                     observation=(),
                     selected_evidence_ids=("p1",),
                 ),
@@ -400,19 +455,35 @@ class TestRunJointInference:
             ),
         )
 
-        with patch(
-            "forecaster.inference.algorithm.build_prior_scorer",
-            return_value=lambda innovation: -0.2,
-        ), patch(
-            "forecaster.inference.algorithm.build_strict_realization_scorer",
-            return_value=lambda trajectory: -0.3,
-        ), patch(
-            "forecaster.inference.algorithm.run_strict_realization_rollout",
-            return_value=(trajectory, [_make_paper("p1", "attention mechanism for long document sequences training")]),
+        with (
+            patch(
+                "forecaster.inference.algorithm.build_prior_scorer",
+                return_value=lambda innovation: -0.2,
+            ),
+            patch(
+                "forecaster.inference.algorithm.build_strict_realization_scorer",
+                return_value=lambda trajectory: -0.3,
+            ),
+            patch(
+                "forecaster.inference.algorithm.run_strict_realization_rollout",
+                return_value=(
+                    trajectory,
+                    [
+                        _make_paper(
+                            "p1",
+                            "attention mechanism for long document sequences training",
+                        )
+                    ],
+                ),
+            ),
         ):
             result = run_joint_inference(
                 innovations=[_make_innovation()],
-                papers=[_make_paper("p1", "attention mechanism for long document sequences training")],
+                papers=[
+                    _make_paper(
+                        "p1", "attention mechanism for long document sequences training"
+                    )
+                ],
                 memory_store=MemoryStore.empty("2024-01"),
                 llm_client=MagicMock(),
                 model="gpt-4o",
@@ -427,9 +498,14 @@ class TestRunJointInference:
         assert result[0].metadata["selected_evidence_ids"] == ["p1"]
         assert result[0].metadata["evidence_paper_ids"] == ["p1"]
         assert result[0].metadata["policy_rollout"]
-        assert result[0].metadata["strict_trajectory"]["steps"][0]["action"]["action_type"] == "search"
+        assert (
+            result[0].metadata["strict_trajectory"]["steps"][0]["action"]["action_type"]
+            == "search"
+        )
         assert result[0].joint_score == pytest.approx((0.4 * -0.2) + (0.6 * -0.3))
-        assert result[0].metadata["strict_score_contract"]["joint_score_components"] == (
+        assert result[0].metadata["strict_score_contract"][
+            "joint_score_components"
+        ] == (
             "prior_score",
             "realization_score",
         )

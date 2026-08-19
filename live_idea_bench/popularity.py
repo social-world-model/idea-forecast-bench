@@ -3,6 +3,7 @@
 Fetches citation counts and normalizes them into [0, 1] weights.
 All functions gracefully degrade — API failures return zero citations.
 """
+
 from __future__ import annotations
 
 import json
@@ -39,14 +40,18 @@ def load_popularity_cache(cache_path: Path) -> dict[str, Any]:
     except FileNotFoundError:
         return {}
     except (json.JSONDecodeError, OSError):
-        logger.warning("Popularity cache at %s is corrupt or unreadable; ignoring.", cache_path)
+        logger.warning(
+            "Popularity cache at %s is corrupt or unreadable; ignoring.", cache_path
+        )
         return {}
 
 
 def save_popularity_cache(cache_path: Path, data: dict[str, Any]) -> None:
     """Persist citation data dict to JSON at cache_path."""
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    cache_path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +165,9 @@ def fetch_popularity_batch(
     for pid in paper_ids:
         if pid in cache:
             entry = cache[pid]
-            result[pid] = int(entry.get("citation_count", 0)) if isinstance(entry, dict) else 0
+            result[pid] = (
+                int(entry.get("citation_count", 0)) if isinstance(entry, dict) else 0
+            )
         else:
             missing.append(pid)
 
@@ -208,4 +215,7 @@ def enrich_papers_with_popularity(
     paper_ids = [p.paper_id for p in papers]
     raw_counts = fetch_popularity_batch(paper_ids, cache_path=cache_path)
     normalized = normalize_popularity_scores(raw_counts)
-    return {pid: compute_popularity_weight(score, floor=floor) for pid, score in normalized.items()}
+    return {
+        pid: compute_popularity_weight(score, floor=floor)
+        for pid, score in normalized.items()
+    }

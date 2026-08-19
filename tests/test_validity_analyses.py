@@ -5,6 +5,7 @@ they are loaded by path. These tests cover the schema guard, the leakage
 bucketing fix (by per-match lead_time, not the constant horizon), and the
 co-author self-author exclusion — without hitting the Semantic Scholar API.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -30,10 +31,9 @@ def _canonical_window(matches):
 def test_leakage_buckets_by_lead_time_not_horizon() -> None:
     leakage = _load("analysis_leakage")
     # Early matches (small lead_time) all hit; late matches (large lead_time) miss.
-    matches = (
-        [{"is_match": True, "lead_time": 0.1} for _ in range(5)]
-        + [{"is_match": False, "lead_time": 0.9} for _ in range(5)]
-    )
+    matches = [{"is_match": True, "lead_time": 0.1} for _ in range(5)] + [
+        {"is_match": False, "lead_time": 0.9} for _ in range(5)
+    ]
     r = leakage._analyze(_canonical_window(matches), "demo")
     assert r["buckets"]["early"]["match_rate"] == 1.0
     assert r["buckets"]["late"]["match_rate"] == 0.0
@@ -69,8 +69,17 @@ def test_citation_schema_guard_rejects_canonical_and_missing_train_ids() -> None
     with pytest.raises(SystemExit, match="train_paper_ids"):
         citation._require_llmjudge_schema(old, "x.json")
     # valid llm_judge schema -> passes
-    good = {"topic_results": {"t1": {"backtest": {"windows": [
-        {"per_prediction": [], "train_paper_ids": ["2401.0001"]}]}}}}
+    good = {
+        "topic_results": {
+            "t1": {
+                "backtest": {
+                    "windows": [
+                        {"per_prediction": [], "train_paper_ids": ["2401.0001"]}
+                    ]
+                }
+            }
+        }
+    }
     citation._require_llmjudge_schema(good, "x.json")  # no raise
 
 
@@ -83,14 +92,30 @@ def test_coauthor_overlap_excludes_self_authors(monkeypatch) -> None:
         "train-1": {"A", "B"},
         "hit-1": {"A", "C"},
     }
-    monkeypatch.setattr(coauthor, "_get_authors", lambda pid, *_a, **_k: authors.get(pid, set()))
+    monkeypatch.setattr(
+        coauthor, "_get_authors", lambda pid, *_a, **_k: authors.get(pid, set())
+    )
 
-    data = {"topic_results": {"t1": {"backtest": {"windows": [{
-        "train_paper_ids": ["train-1"],
-        "per_prediction": [
-            {"is_match": True, "matched_paper_id": "hit-1", "top_candidates": []},
-        ],
-    }]}}}}
+    data = {
+        "topic_results": {
+            "t1": {
+                "backtest": {
+                    "windows": [
+                        {
+                            "train_paper_ids": ["train-1"],
+                            "per_prediction": [
+                                {
+                                    "is_match": True,
+                                    "matched_paper_id": "hit-1",
+                                    "top_candidates": [],
+                                },
+                            ],
+                        }
+                    ]
+                }
+            }
+        }
+    }
     r = coauthor._analyze(data, api_key=None, delay=0.0)
     # hit paper's own author A is excluded from the pool -> no trivial overlap.
     assert r["hit_author_overlap_mean"] == 0.0

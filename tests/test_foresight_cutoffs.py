@@ -1,4 +1,5 @@
 """Tests for the train/test window leakage invariants."""
+
 from __future__ import annotations
 
 import pytest
@@ -57,9 +58,13 @@ def test_yyyy_mm_parses_as_first_of_month():
 
 def test_no_test_window_leakage_pass():
     # All dates strictly before the hard limit.
-    assert_no_test_window_leakage([
-        "2023-04-15", "2024-09-30", "2024-08-01",
-    ])
+    assert_no_test_window_leakage(
+        [
+            "2023-04-15",
+            "2024-09-30",
+            "2024-08-01",
+        ]
+    )
 
 
 def test_no_test_window_leakage_catches_oct_first():

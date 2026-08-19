@@ -48,11 +48,15 @@ class RLTrainerRunner(ABC):
     backend_name: str = "unknown"
 
     @abstractmethod
-    def prepare(self, common_context: PreparedRLContext, **kwargs: Any) -> TrainerPreparedArtifacts:
+    def prepare(
+        self, common_context: PreparedRLContext, **kwargs: Any
+    ) -> TrainerPreparedArtifacts:
         raise NotImplementedError
 
     @abstractmethod
-    def train(self, prepared_artifacts: TrainerPreparedArtifacts, **kwargs: Any) -> dict[str, Any]:
+    def train(
+        self, prepared_artifacts: TrainerPreparedArtifacts, **kwargs: Any
+    ) -> dict[str, Any]:
         raise NotImplementedError
 
 
@@ -62,14 +66,19 @@ def _serialize_for_fingerprint(value: Any) -> Any:
     if isinstance(value, Path):
         return str(value.resolve())
     if isinstance(value, dict):
-        return {str(key): _serialize_for_fingerprint(inner) for key, inner in sorted(value.items(), key=lambda item: str(item[0]))}
+        return {
+            str(key): _serialize_for_fingerprint(inner)
+            for key, inner in sorted(value.items(), key=lambda item: str(item[0]))
+        }
     if isinstance(value, (list, tuple)):
         return [_serialize_for_fingerprint(item) for item in value]
     return value
 
 
 def build_config_fingerprint(payload: dict[str, Any]) -> str:
-    canonical = json.dumps(_serialize_for_fingerprint(payload), ensure_ascii=False, sort_keys=True)
+    canonical = json.dumps(
+        _serialize_for_fingerprint(payload), ensure_ascii=False, sort_keys=True
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -129,8 +138,12 @@ def build_policy_manifest(
         payload["prepared_parquet_path"] = str(prepared_parquet_path)
     if diagnostics:
         payload["diagnostics"] = diagnostics
-        payload["parse_failure_rate"] = float(diagnostics.get("parse_failure_rate", 0.0))
-        payload["invalid_completion_rate"] = float(diagnostics.get("invalid_completion_rate", 0.0))
+        payload["parse_failure_rate"] = float(
+            diagnostics.get("parse_failure_rate", 0.0)
+        )
+        payload["invalid_completion_rate"] = float(
+            diagnostics.get("invalid_completion_rate", 0.0)
+        )
     return payload
 
 

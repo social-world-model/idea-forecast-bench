@@ -6,6 +6,7 @@ We monkey-patch the function to return a real bool, then re-invoke
 ``trl.scripts.vllm_serve`` as if it were called directly via
 ``python -m trl.scripts.vllm_serve``.
 """
+
 from __future__ import annotations
 
 

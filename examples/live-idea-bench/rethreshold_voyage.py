@@ -9,6 +9,7 @@ Usage:
         --output logs/baselines/keyword_trend_voyage_t60.json \
         --threshold 0.60
 """
+
 from __future__ import annotations
 
 import argparse
@@ -51,22 +52,31 @@ def _recompute_window(window: dict, threshold: float, top_k: int) -> dict:
 
 def _summarize(windows: list[dict]) -> dict:
     if not windows:
-        return {"windows": 0, "avg_hit_at_k": 0.0, "avg_recall_at_k": 0.0,
-                "avg_precision_at_k": 0.0, "avg_mrr": 0.0}
+        return {
+            "windows": 0,
+            "avg_hit_at_k": 0.0,
+            "avg_recall_at_k": 0.0,
+            "avg_precision_at_k": 0.0,
+            "avg_mrr": 0.0,
+        }
     n = len(windows)
     return {
         "windows": n,
-        "avg_hit_at_k":       round(sum(w["evaluation"]["hit_at_k"]       for w in windows) / n, 4),
-        "avg_recall_at_k":    round(sum(w["evaluation"]["recall_at_k"]    for w in windows) / n, 4),
-        "avg_precision_at_k": round(sum(w["evaluation"]["precision_at_k"] for w in windows) / n, 4),
-        "avg_mrr":            round(sum(w["evaluation"]["mrr"]             for w in windows) / n, 4),
+        "avg_hit_at_k": round(sum(w["evaluation"]["hit_at_k"] for w in windows) / n, 4),
+        "avg_recall_at_k": round(
+            sum(w["evaluation"]["recall_at_k"] for w in windows) / n, 4
+        ),
+        "avg_precision_at_k": round(
+            sum(w["evaluation"]["precision_at_k"] for w in windows) / n, 4
+        ),
+        "avg_mrr": round(sum(w["evaluation"]["mrr"] for w in windows) / n, 4),
     }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input",     required=True)
-    parser.add_argument("--output",    required=True)
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--output", required=True)
     parser.add_argument("--threshold", type=float, required=True)
     args = parser.parse_args()
 
@@ -83,7 +93,9 @@ def main() -> None:
             new_topic_results[tid] = tval
             continue
 
-        new_windows = [_recompute_window(w, args.threshold, top_k) for w in bt["windows"]]
+        new_windows = [
+            _recompute_window(w, args.threshold, top_k) for w in bt["windows"]
+        ]
         summary = _summarize(new_windows)
         total_windows += summary["windows"]
 

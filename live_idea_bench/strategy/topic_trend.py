@@ -8,6 +8,7 @@ Compared to KeywordTrendStrategy (single keyword), this operates at the
 *cluster* level — a topic is a coherent group of co-occurring keywords that
 collectively describe a research direction.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -21,10 +22,27 @@ from live_idea_bench.similarity import _sanitize
 from live_idea_bench.strategy.base import IdeaStrategy
 
 _STOP = {
-    "cs", "ml", "ai", "arxiv", "machine learning", "deep learning",
-    "neural network", "neural networks", "learning", "model", "models",
-    "paper", "method", "methods", "approach", "based", "using", "new",
-    "large", "language", "llm",
+    "cs",
+    "ml",
+    "ai",
+    "arxiv",
+    "machine learning",
+    "deep learning",
+    "neural network",
+    "neural networks",
+    "learning",
+    "model",
+    "models",
+    "paper",
+    "method",
+    "methods",
+    "approach",
+    "based",
+    "using",
+    "new",
+    "large",
+    "language",
+    "llm",
 }
 
 _DEFAULT_MODEL = "gpt-4o"
@@ -50,7 +68,11 @@ def _build_clusters(
     cooccur: Counter[tuple[str, str]] = Counter()
 
     for paper in train_papers:
-        kws = [_clean_keyword(k) for k in paper.keywords if _clean_keyword(k) not in _STOP and len(_clean_keyword(k)) > 2]
+        kws = [
+            _clean_keyword(k)
+            for k in paper.keywords
+            if _clean_keyword(k) not in _STOP and len(_clean_keyword(k)) > 2
+        ]
         kws = list(dict.fromkeys(kws))  # deduplicate order-preserving
         for kw in kws:
             keyword_freq[kw] += 1
@@ -85,7 +107,9 @@ def _build_clusters(
         groups[find(kw)].append(kw)
 
     # Sort members by frequency descending
-    clusters = [sorted(members, key=lambda k: -keyword_freq[k]) for members in groups.values()]
+    clusters = [
+        sorted(members, key=lambda k: -keyword_freq[k]) for members in groups.values()
+    ]
     # Sort clusters by total frequency
     clusters.sort(key=lambda c: -sum(keyword_freq[k] for k in c))
     return clusters[:_MAX_CLUSTERS]
@@ -162,6 +186,7 @@ def _llm_predict_for_cluster(
             items = payload["ideas"]
     except json.JSONDecodeError:
         import re
+
         m = re.search(r"\[.*\]", raw, re.DOTALL)
         if m:
             with contextlib.suppress(json.JSONDecodeError):
@@ -226,7 +251,10 @@ class TopicTrendStrategy(IdeaStrategy):
 
         # Score and rank clusters
         scored = [
-            (cluster, _score_cluster(cluster, train_papers, cutoff_month, self.recent_months))
+            (
+                cluster,
+                _score_cluster(cluster, train_papers, cutoff_month, self.recent_months),
+            )
             for cluster in clusters
         ]
         scored.sort(key=lambda x: -x[1])

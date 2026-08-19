@@ -31,14 +31,12 @@ def test_trend_gain_respects_recent_months_param() -> None:
     """
     # 3 papers outside the recent window (before 2025-01)
     old_papers = [
-        _paper(f"old-{i}", f"2024-{7 + i:02d}", ["transformer"])
-        for i in range(3)
+        _paper(f"old-{i}", f"2024-{7 + i:02d}", ["transformer"]) for i in range(3)
     ]
     # 3 papers inside the recent window (2025-01 to 2025-03)
     # recent_months=6, cutoff=2025-06  →  recent window starts at 2025-01
     recent_papers = [
-        _paper(f"new-{i}", f"2025-{1 + i:02d}", ["transformer"])
-        for i in range(3)
+        _paper(f"new-{i}", f"2025-{1 + i:02d}", ["transformer"]) for i in range(3)
     ]
 
     strategy = KeywordTrendStrategy(recent_months=6, min_keyword_freq=2)

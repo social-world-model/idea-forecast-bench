@@ -1,4 +1,5 @@
 """Generate research proposals from innovation triples and evidence."""
+
 from __future__ import annotations
 
 import logging
@@ -16,6 +17,7 @@ from live_idea_bench.models import IdeaPrediction, PaperRecord
 logger = logging.getLogger(__name__)
 
 PROMPT_FILE = Path(__file__).parent.parent / "prompt" / "realization.yaml"
+
 
 def strip_think_block(text: str) -> str:
     """Strip Qwen3.5 thinking-mode reasoning from a generated completion.
@@ -186,7 +188,7 @@ def _generate_proposal_local(
         top_k=20,
         repetition_penalty=1.5,
     )
-    output_ids = generated[0][len(encoded["input_ids"][0]):].tolist()
+    output_ids = generated[0][len(encoded["input_ids"][0]) :].tolist()
     decoded = tokenizer.decode(output_ids, skip_special_tokens=True)
     return strip_think_block(decoded).strip()
 
@@ -198,11 +200,13 @@ def _sglang_api_url() -> str | None:
     The server must be launched separately (e.g., from the eval-sglang conda env).
     """
     import os
+
     url = os.environ.get("SGLANG_URL", "").strip()
     if not url:
         return None
     try:
         import urllib.request
+
         urllib.request.urlopen(f"{url}/v1/models", timeout=2)
         return url
     except Exception:
@@ -233,7 +237,13 @@ def generate_proposals_batch(
     prompt_data = _load_prompt()
     prompts: list[str] = []
     for innovation, evidence in innovations_and_evidence:
-        user_msg = _build_user_message(prompt_data, innovation, evidence, context_papers=context_papers, config=config)
+        user_msg = _build_user_message(
+            prompt_data,
+            innovation,
+            evidence,
+            context_papers=context_papers,
+            config=config,
+        )
         prompts.append(f"{prompt_data['system_prompt']}\n\n{user_msg}".strip())
 
     # --- SGLang API fast path (~10x faster than HF generate) ---
@@ -246,6 +256,7 @@ def generate_proposals_batch(
     if sglang_url:
         try:
             import openai
+
             client = openai.OpenAI(base_url=f"{sglang_url}/v1", api_key="none")
             models = client.models.list()
             model_id = models.data[0].id if models.data else "default"
@@ -283,7 +294,9 @@ def generate_proposals_batch(
     if resolved_base is None and adapter_path.exists():
         resolved_base = _detect_base_model(realization_model_path)
 
-    model, tokenizer = _load_local_model(realization_model_path, base_model_name=resolved_base)
+    model, tokenizer = _load_local_model(
+        realization_model_path, base_model_name=resolved_base
+    )
     deps = _require_local_generation_stack()
     torch = deps["torch"]
 
@@ -292,7 +305,9 @@ def generate_proposals_batch(
     tokenizer.padding_side = "left"
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
-    encoded = tokenizer(chat_prompts, return_tensors="pt", padding=True, truncation=True)
+    encoded = tokenizer(
+        chat_prompts, return_tensors="pt", padding=True, truncation=True
+    )
     encoded = {k: v.to(model.device) for k, v in encoded.items()}
 
     with torch.no_grad():
@@ -310,7 +325,7 @@ def generate_proposals_batch(
 
     results = []
     for seq in generated:
-        output_ids = seq[encoded["input_ids"].shape[1]:].tolist()
+        output_ids = seq[encoded["input_ids"].shape[1] :].tolist()
         decoded = tokenizer.decode(output_ids, skip_special_tokens=True)
         results.append(strip_think_block(decoded).strip())
 
@@ -325,11 +340,13 @@ def _sglang_api_url() -> str | None:
     The server must be launched separately (e.g., from the eval-sglang conda env).
     """
     import os
+
     url = os.environ.get("SGLANG_URL", "").strip()
     if not url:
         return None
     try:
         import urllib.request
+
         urllib.request.urlopen(f"{url}/v1/models", timeout=2)
         return url
     except Exception:
@@ -422,10 +439,14 @@ def score_local_proposal(
     if score_temperature > 0 and score_temperature != 1.0:
         logits = logits / score_temperature
     target_ids = encoded["input_ids"][:, 1:]
-    target_log_probs = F.log_softmax(logits, dim=-1).gather(
-        dim=-1,
-        index=target_ids.unsqueeze(-1),
-    ).squeeze(-1)
+    target_log_probs = (
+        F.log_softmax(logits, dim=-1)
+        .gather(
+            dim=-1,
+            index=target_ids.unsqueeze(-1),
+        )
+        .squeeze(-1)
+    )
     target_start = max(0, prompt_len - 1)
     conditioned = target_log_probs[:, target_start:]
     if conditioned.numel() == 0:
