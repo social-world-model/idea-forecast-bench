@@ -153,7 +153,7 @@ API keys (set as needed for the providers you use): `OPENAI_API_KEY`, `ANTHROPIC
   eval end to end. The GRPO step defaults to the gated foresight reward used for the
   reported results, which needs a prebuilt artifact dir (`output/foresight_artifacts/{indices,rubrics}`):
   provide a paper corpus, run the hindsight pipeline to produce `data/topic_hindsight/dz.jsonl`,
-  build the indices with `build_indices.py`, then generate validated rubrics
+  build the indices with `examples/forecaster/build_indices.py`, then generate validated rubrics
   (`forecaster/foresight/README.md` has the full sequence). If those artifacts are
   missing the script stops before training with the build instructions. To run the
   whole pipeline end to end on a fresh clone without that prerequisite, use the
@@ -161,7 +161,7 @@ API keys (set as needed for the providers you use): `OPENAI_API_KEY`, `ANTHROPIC
 - **Single-metric ablation:** `scripts/forecaster/run_three_grpo.sh` drives the
   single-metric GRPO runs (soft / coverage / novelty); it uses its own reward and
   needs no foresight artifacts. Phase-by-phase smoke checks for the foresight method
-  are in `scripts/phase*_*.py` (documented in `forecaster/foresight/README.md`).
+  are in `examples/forecaster/phase*_*.py` (documented in `forecaster/foresight/README.md`).
 - **Web app:** `python backend/app.py` (API) and `cd frontend && npm install && npm start` (UI).
 
 ## Citation

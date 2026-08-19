@@ -4,7 +4,7 @@ Each ablation flips a single switch on the foresight reward + context.
 A run is described by an `AblationConfig` row; the runner produces an
 identically-shaped row of metrics. This module owns *only* the toggles
 and the metric-record shape; the actual eval harness lives in
-scripts/phase8_ablations.py.
+examples/forecaster/phase8_ablations.py.
 """
 
 from __future__ import annotations

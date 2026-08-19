@@ -12,7 +12,7 @@ The previous version built the community from the hit papers' own candidate pool
 exclude self-authors — both forced a non-trivial overlap regardless of leakage.
 
 Usage:
-    python examples/live-idea-bench/analysis_coauthor.py \\
+    python examples/benchmark/analysis_coauthor.py \\
         --input memory_prompting_llmjudge.json \\
         --output coauthor_report.json \\
         [--s2-key YOUR_SEMANTIC_SCHOLAR_API_KEY]

@@ -23,7 +23,7 @@
 #
 # Usage:
 #   export OPENAI_API_KEY=sk-...
-#   bash scripts/live-idea-bench/run_new_baselines_batch.sh
+#   bash scripts/benchmark/run_new_baselines_batch.sh
 #
 # Resume support: if a run is interrupted, just re-run with the same BATCH_ROOT
 # (or the auto-generated batch dir printed on the first run). Completed phases
@@ -74,7 +74,7 @@ run_strategy() {
   echo "  batch_dir        = $batch_dir"
   echo "========================================================================"
 
-  "$PYTHON_BIN" examples/live-idea-bench/run_batch_backtest.py \
+  "$PYTHON_BIN" examples/benchmark/run_batch_backtest.py \
     --input-dir "$INPUT_DIR" \
     --strategy "$strategy" \
     --model-name "$MODEL_NAME" \

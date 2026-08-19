@@ -1,6 +1,6 @@
 """Tests for the LLM-judge score parsing + fingerprint (C2/C7/NEW-2 fixes).
 
-examples/live-idea-bench/llm_judge_eval.py is a path-run script (not an
+examples/benchmark/llm_judge_eval.py is a path-run script (not an
 importable package), so it is loaded by path. These tests cover the hardened
 SCORE_RE, the partial-parse fail-loud behavior (no silent backfill to 1), the
 <think>-stripping, and the decode-config-sensitive judge fingerprint — without
@@ -13,10 +13,7 @@ import importlib.util
 from pathlib import Path
 
 _JUDGE_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "examples"
-    / "live-idea-bench"
-    / "llm_judge_eval.py"
+    Path(__file__).resolve().parents[1] / "examples" / "benchmark" / "llm_judge_eval.py"
 )
 
 

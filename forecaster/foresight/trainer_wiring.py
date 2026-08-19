@@ -143,7 +143,7 @@ def build_foresight_context(
     _hint = (
         "reward_mode=foresight needs prebuilt artifacts under "
         f"{root}/ (per-cutoff future/history indices + validated rubrics). "
-        "Build them first — see forecaster/foresight/README.md and build_indices.py "
+        "Build them first — see forecaster/foresight/README.md and examples/forecaster/build_indices.py "
         "— or set reward_mode: legacy in config/forecaster/grpo_train.yaml to use "
         "the fixed-weight composite reward instead."
     )

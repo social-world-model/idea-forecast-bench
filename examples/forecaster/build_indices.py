@@ -2,7 +2,7 @@
 Local embedder (sentence-transformer allenai-specter). Run on one GPU.
 
 Usage:
-    python build_indices.py \
+    python examples/forecaster/build_indices.py \
         --papers-dir data/csml/raw_markdown \
         --dz data/topic_hindsight/dz.jsonl \
         --art output/foresight_artifacts

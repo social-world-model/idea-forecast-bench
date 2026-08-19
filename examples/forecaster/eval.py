@@ -120,7 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--voyage",
         action="store_true",
-        help="After main eval, also run examples/live-idea-bench/reeval_voyage.py to produce "
+        help="After main eval, also run examples/benchmark/reeval_voyage.py to produce "
         "paper-comparable scores. Requires VOYAGE_API_KEY in environment.",
     )
     p.add_argument(

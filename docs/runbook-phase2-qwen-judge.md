@@ -13,7 +13,7 @@ from "we tuned the scale until the gate passed".
 
 - 1 × GPU with ≥ 22 GB free (Qwen3.5-9B in bf16 is ~18 GB + KV cache).
 - Working dir = repo root.
-- conda env `ideabench` activated (or use `/home/jiayey3/.conda/envs/ideabench/bin/python` directly).
+- the project environment activated (or point `PYTHON_BIN` at its interpreter).
 - `Qwen/Qwen3.5-9B` weights either cached at `~/.cache/huggingface/hub/` or downloadable.
 
 ## 1. Pull the branch on the new box
@@ -51,7 +51,7 @@ export JUDGE_BASE_URL=http://127.0.0.1:30000/v1
 export JUDGE_MODEL=qwen3.5-9b-instruct
 export JUDGE_API_KEY=EMPTY     # SGLang doesn't require auth; the openai SDK still needs a string.
 
-PYTHONPATH=. python scripts/phase2_rubric_validation.py \
+PYTHONPATH=. python examples/forecaster/phase2_rubric_validation.py \
     --mode live \
     --n-topics 5 \
     --n-per-class 8 \

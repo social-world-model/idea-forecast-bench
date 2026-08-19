@@ -41,13 +41,13 @@ _EXAMPLES = _REPO_ROOT / "examples"
 # command -> (relative script path, one-line help). The script is executed as
 # __main__ with sys.argv rewritten, so its existing argparse handles the flags.
 _COMMANDS: dict[str, tuple[str, str]] = {
-    # benchmark (examples/live-idea-bench/)
+    # benchmark (examples/benchmark/)
     "benchmark": (
-        "live-idea-bench/run_domain_backtest.py",
+        "benchmark/run_domain_backtest.py",
         "Run a domain-separated backtest.",
     ),
     "judge-eval": (
-        "live-idea-bench/llm_judge_eval.py",
+        "benchmark/llm_judge_eval.py",
         "Retrieve-then-judge LLM evaluation of predictions.",
     ),
     # MDF forecaster
@@ -70,18 +70,18 @@ _COMMANDS: dict[str, tuple[str, str]] = {
         "forecaster/train_grpo_metric.py",
         "Single-metric GRPO: soft/coverage/novelty.",
     ),
-    # analysis (examples/live-idea-bench/)
+    # analysis (examples/benchmark/)
     "analysis": (
-        "live-idea-bench/analysis_leakage.py",
+        "benchmark/analysis_leakage.py",
         "Evaluation-validity analyses (citation/coauthor/leakage).",
     ),
 }
 
 # `analysis` is a small family; let the user pick which one (default: leakage).
 _ANALYSIS_VARIANTS = {
-    "leakage": "live-idea-bench/analysis_leakage.py",
-    "citation": "live-idea-bench/analysis_citation.py",
-    "coauthor": "live-idea-bench/analysis_coauthor.py",
+    "leakage": "benchmark/analysis_leakage.py",
+    "citation": "benchmark/analysis_citation.py",
+    "coauthor": "benchmark/analysis_coauthor.py",
 }
 
 

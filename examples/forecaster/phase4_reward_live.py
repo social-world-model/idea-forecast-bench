@@ -64,7 +64,7 @@ def main() -> int:
     if not src_rubric_path.exists():
         raise SystemExit(
             f"rubric for topic={args.topic!r} not found at {src_rubric_path}. "
-            "Run scripts/phase2_rubric_validation.py --mode live first."
+            "Run examples/forecaster/phase2_rubric_validation.py --mode live first."
         )
 
     with tempfile.TemporaryDirectory() as td:

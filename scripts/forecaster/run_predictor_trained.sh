@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # Run the predictor_llm strategy with a TRAINED Qwen3.5-9B LoRA adapter.
 # Serves base Qwen3.5-9B + the adapter via vLLM (--enable-lora, no merge),
 # routes the predictor to it through OPENAI_BASE_URL + a gpt-5-* alias
@@ -13,7 +14,7 @@
 #     port         : vLLM HTTP port
 #
 # Env overrides:
-#   PYTHON_BIN   /home/max7/.conda/envs/idea-grpo/bin/python
+#   PYTHON_BIN   python interpreter to use (default: `python` from PATH)
 #   BASE_MODEL   Qwen/Qwen3.5-9B
 #   PAPERS       data/csml/raw_markdown
 #   EVAL_START   2024-10   EVAL_END 2025-03   (held-out window; train was 2023-01..2024-09)
@@ -27,7 +28,7 @@ ADAPTER="${2:?need adapter_path}"
 GPU="${3:?need gpu}"
 PORT="${4:?need port}"
 
-PYTHON_BIN="${PYTHON_BIN:-/home/max7/.conda/envs/idea-grpo/bin/python}"
+PYTHON_BIN="${PYTHON_BIN:-python}"
 export PATH="$(dirname "${PYTHON_BIN}"):${PATH}"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3.5-9B}"
 PAPERS="${PAPERS:-data/csml/raw_markdown}"
@@ -99,7 +100,7 @@ done
 export OPENAI_BASE_URL="http://localhost:${PORT}/v1"
 export OPENAI_API_KEY="EMPTY"
 echo "[predict] running run_domain_backtest.py ..."
-"${PYTHON_BIN}" examples/live-idea-bench/run_domain_backtest.py \
+"${PYTHON_BIN}" examples/benchmark/run_domain_backtest.py \
   --strategy predictor_llm \
   --model-name "${ALIAS}" \
   --input-dir "${PAPERS}" \
