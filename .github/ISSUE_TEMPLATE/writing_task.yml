@@ -21,4 +21,4 @@ body:
     id: additional-information
     attributes:
       label: Additional Information
-      description: Give us some additional information on the writing task like exptected length, main content, etc.
+      description: Give us some additional information on the writing task like expected length, main content, etc.

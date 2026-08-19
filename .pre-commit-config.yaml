@@ -1,40 +1,45 @@
+# Single source of truth for lint/format. CI runs exactly these hooks via
+# `pre-commit run --all-files`, so "green locally" and "green in CI" cannot
+# diverge. Before this, ruff was pinned to 0.1.5 in CI, ^0.3.0 in pyproject
+# and 0.15.x locally -- three tools, three rulesets, three answers.
+#
+# mypy deliberately does NOT run here. The mirrors-mypy hook installs mypy in
+# an isolated venv without the project's dependencies, so it cannot resolve
+# third-party imports and reports misleading results. It runs in CI from the
+# poetry environment instead (.github/workflows/ci.yml, `typecheck` job).
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-toml
-      - id: check-added-large-files
       - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
       - id: detect-private-key
       - id: mixed-line-ending
 
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.0.1
-    hooks:
-      - id: prettier
-        types_or: [html, javascript, css, markdown, yaml, json]
-
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.3.0
+    rev: v0.15.22
     hooks:
-      - id: ruff
-        args: [--fix]
+      # No --fix: a lint gate must report, not rewrite.
+      - id: ruff-check
       - id: ruff-format
+        args: [--check]
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.3.0
     hooks:
-      - id: mypy
-        additional_dependencies:
-          - pydantic>=2.8.2
-          - types-setuptools
-          - types-pyyaml
+      - id: codespell
+        additional_dependencies: [tomli]
+        args: [--toml, pyproject.toml]
 
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v3.14.1
+    rev: v3.29.1
     hooks:
       - id: commitizen
         stages: [commit-msg]

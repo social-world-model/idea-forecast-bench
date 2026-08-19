@@ -121,7 +121,7 @@ pkill -f "sglang.launch_server"
 ## Why these flags / why this judge
 
 - The judge is the **base** Qwen3.5-9B Instruct (no LoRA): we evaluate
-  separating capability of the JUDGE, not of the policy. Re-using the
+  separating capability of the JUDGE, not of the policy. Reusing the
   trained policy as the judge would be fitting-the-test-to-the-answer.
 - `MUST_NOT_PENALTY = 0.2` is a constant in `forecaster/foresight/judge.py`;
   the prompt enforces "subtract once, floor at 0". Do not tune.

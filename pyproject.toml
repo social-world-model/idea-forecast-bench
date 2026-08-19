@@ -140,8 +140,19 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 
 [tool.codespell]
-ignore-words-list = "dout, te, indicies, astroid, ehr, unparseable"
-skip = ["data"]
+# ehr = Electronic Health Records; unparseable is a legitimate spelling. Both
+# were false positives that failed the old codespell workflow.
+ignore-words-list = "dout, te, indicies, astroid, ehr, unparseable, disjointness, integrat, expandin, socio-economic"
+# Lockfiles and vendored assets are machine-generated: package names there are
+# not prose and must not be "corrected".
+skip = [
+    "*/data/*",
+    "*.lock",
+    "*package-lock.json",
+    "*/node_modules/*",
+    "*/build/*",
+    "*/.git/*",
+]
 
 [tool.ruff]
 line-length = 88

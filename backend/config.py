@@ -6,7 +6,7 @@ KEYWORDS = [
     "Multimodal Visual Reasoning",
     "GUI /computer use / web agent",
     "Optimizer",
-    "Time-series forcasting",
+    "Time-series forecasting",
 ]
 
 # OpenReview Settings
