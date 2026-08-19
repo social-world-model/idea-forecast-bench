@@ -20,6 +20,10 @@ jobs:
     name: analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
     permissions:
+      # A job-level `permissions:` block REPLACES the workflow default, so
+      # `contents: read` has to be repeated here or actions/checkout gets no
+      # token and fails with "repository not found".
+      contents: read
       security-events: write
       actions: read
     strategy:
