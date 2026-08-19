@@ -2,6 +2,7 @@
 
 | Document | What it covers |
 |---|---|
+| [architecture.md](architecture.md) | How the two packages relate, where code lives, and the two environments |
 | [new-machine-setup.md](new-machine-setup.md) | Bringing up a fresh GPU box for MDF training |
 | [runbook-phase2-qwen-judge.md](runbook-phase2-qwen-judge.md) | Running the Qwen judge for rubric validation |
 | [backend-api.md](backend-api.md) | The optional Flask API's endpoints and payloads |

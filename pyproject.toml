@@ -71,7 +71,12 @@ optional = true
 [tool.poetry.group.forecaster.dependencies]
 torch = ">=2.0"
 transformers = ">=4.40"
-trl = ">=0.9"
+# The realization trainer needs GRPOTrainer, which landed in trl 0.14, and the
+# entry scripts branch explicitly on TRL 1.0/1.4 APIs (GRPOConfig without
+# max_prompt_length, GRPOConfig.vllm_group_port). The old ">=0.9" floor
+# resolved to trl 0.11.4, which has no GRPOTrainer at all -- so the documented
+# `python -m live_idea_bench train` could not run against the locked version.
+trl = ">=1.4"
 peft = ">=0.10"
 datasets = ">=2.18"
 accelerate = ">=0.27"

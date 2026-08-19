@@ -126,6 +126,8 @@ backend/  frontend/   # Optional web app (Flask API + React UI), not gated by CI
 ```
 
 `examples/` holds Python and `scripts/` holds shell — see CONTRIBUTING.md.
+For how the two packages relate and why there are two environments, see
+[docs/architecture.md](docs/architecture.md).
 
 ---
 

@@ -4,10 +4,11 @@ import dataclasses
 import json
 import random
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from forecaster.realization.config import SelectionConfig, load_selection_config
-from forecaster.realization.selection import select_top_k_predictions
+if TYPE_CHECKING:
+    from forecaster.realization.config import SelectionConfig
+
 from live_idea_bench.daily import coerce_prediction
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.predictor import generate_predictions
@@ -68,6 +69,11 @@ class PolicyRLStrategy(IdeaStrategy):
         ]
 
     def _resolve_selection_config(self, manifest: dict[str, Any]) -> SelectionConfig:
+        # Imported lazily: live_idea_bench must not import forecaster at module
+        # import time, or the two packages form a cycle (see the note in
+        # forecaster/__init__.py).
+        from forecaster.realization.config import load_selection_config
+
         path = (
             str(manifest.get("selection_config_path") or "").strip()
             or self.selection_config
@@ -253,6 +259,8 @@ class PolicyRLStrategy(IdeaStrategy):
                     or None
                 ),
             )
+            from forecaster.realization.selection import select_top_k_predictions
+
             selected = select_top_k_predictions(
                 candidates,
                 train_papers,
@@ -274,6 +282,8 @@ class PolicyRLStrategy(IdeaStrategy):
                 temperature=resolved_temperature,
                 selection_config=resolved_selection_config,
             )
+            from forecaster.realization.selection import select_top_k_predictions
+
             predictions = select_top_k_predictions(
                 candidates,
                 train_papers,
