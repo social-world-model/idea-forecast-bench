@@ -146,4 +146,9 @@ Honest list; none of these are hidden behind a passing check.
   `foresight/reward.py`.
 - **`forecaster/realization/verl/`** is named after a training backend the
   project does not use; the trl runner imports its dataset helper.
-- **`frontend/`** is on deprecated `react-scripts` and is not a CI gate.
+- **`frontend/`** is on deprecated `react-scripts` and is not a CI gate; its
+  transitive tree carries advisories that cannot be fixed without migrating
+  off CRA, so `npm audit` runs report-only.
+- **No CodeQL.** Uploading its results needs GitHub Advanced Security, which
+  is not enabled on this repository. `Security` runs `pip-audit` instead; add
+  CodeQL once Settings → Code security → Code scanning is on.

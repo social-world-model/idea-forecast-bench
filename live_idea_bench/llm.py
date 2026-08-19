@@ -164,6 +164,28 @@ def _is_local_model(model: str) -> bool:
     return resolve_model_reference(model) is not None
 
 
+def _stream_idle_timeout() -> Any:
+    """Per-phase HTTP timeout for the OpenAI-compatible clients.
+
+    With ``stream=True`` the OpenAI SDK does not surface an APITimeoutError on
+    a long server hang unless the underlying HTTP client has per-phase
+    timeouts, so a plain float is not enough.
+
+    The Timeout class has to come from the same HTTP library the installed
+    openai SDK uses: openai >= 3 vendors httpx2, older releases use httpx.
+    Building it from the wrong one hands the client a foreign object.
+    """
+    import importlib
+
+    for module_name in ("httpx2", "httpx"):
+        try:
+            http_lib = importlib.import_module(module_name)
+        except ImportError:
+            continue
+        return http_lib.Timeout(connect=30.0, read=120.0, write=60.0, pool=60.0)
+    raise ImportError("neither httpx2 nor httpx is installed; openai requires one")
+
+
 def create_client(model: str) -> tuple[Any, str]:
     if _is_anthropic_model(model):
         import anthropic
@@ -188,14 +210,10 @@ def create_client(model: str) -> tuple[Any, str]:
         return openai.OpenAI(api_key=api_key, base_url=base_url), model
 
     if _is_together_model(model):
-        import httpx
         import openai
 
         api_key = _require_api_key("TOGETHER_API_KEY", model)
-        # Stream-idle hard timeout: with stream=True the OpenAI SDK never
-        # surfaces an APITimeoutError on long server hangs unless we set
-        # per-phase timeouts on the underlying httpx client.
-        timeout = httpx.Timeout(connect=30.0, read=120.0, write=60.0, pool=60.0)
+        timeout = _stream_idle_timeout()
         return (
             openai.OpenAI(
                 api_key=api_key,
@@ -207,11 +225,10 @@ def create_client(model: str) -> tuple[Any, str]:
         )
 
     if _is_deepseek_official_model(model):
-        import httpx
         import openai
 
         api_key = _require_api_key("DEEPSEEK_API_KEY", model)
-        timeout = httpx.Timeout(connect=30.0, read=120.0, write=60.0, pool=60.0)
+        timeout = _stream_idle_timeout()
         return (
             openai.OpenAI(
                 api_key=api_key,
