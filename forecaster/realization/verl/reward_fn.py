@@ -1,25 +1,19 @@
 from __future__ import annotations
 
-from functools import lru_cache
 import json
-from pathlib import Path
-import sys
+from functools import lru_cache
 from typing import Any
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(PROJECT_ROOT))
-
-from live_idea_bench.models import PaperRecord
 from forecaster.config import RealizationConfig, load_realization_config
 from forecaster.models import innovation_from_dict
 from forecaster.realization.config import load_reward_config
 from forecaster.realization.reward import (
     build_invalid_reward_evaluation,
     coerce_reward_prediction,
-    evaluate_strict_completion_reward,
     evaluate_rl_reward,
+    evaluate_strict_completion_reward,
 )
+from live_idea_bench.models import PaperRecord
 
 
 @lru_cache(maxsize=8)
@@ -57,7 +51,9 @@ def compute_score(
     try:
         train_papers = [PaperRecord(**row) for row in payload.get("train_papers", [])]
         future_papers = [PaperRecord(**row) for row in payload.get("future_papers", [])]
-        evidence_papers = [PaperRecord(**row) for row in payload.get("evidence_papers", [])]
+        evidence_papers = [
+            PaperRecord(**row) for row in payload.get("evidence_papers", [])
+        ]
         metric_train_papers = [
             PaperRecord(**row) for row in payload.get("metric_train_papers", [])
         ]
@@ -69,7 +65,8 @@ def compute_score(
     try:
         innovation = (
             innovation_from_dict(payload.get("innovation", {}))
-            if isinstance(payload.get("innovation", {}), dict) and payload.get("innovation")
+            if isinstance(payload.get("innovation", {}), dict)
+            and payload.get("innovation")
             else None
         )
     except (TypeError, KeyError, ValueError):
@@ -78,7 +75,8 @@ def compute_score(
         realization_config_payload = payload.get("realization_config", {})
         realization_config = (
             RealizationConfig(**realization_config_payload)
-            if isinstance(realization_config_payload, dict) and realization_config_payload
+            if isinstance(realization_config_payload, dict)
+            and realization_config_payload
             else load_realization_config(realization_config_path)
         )
     except (TypeError, ValueError):
@@ -91,7 +89,9 @@ def compute_score(
             train_papers=train_papers,
             reward_config=reward_config,
             realization_config=realization_config,
-            search_env_payload=payload.get("search_env") if isinstance(payload.get("search_env"), dict) else None,
+            search_env_payload=payload.get("search_env")
+            if isinstance(payload.get("search_env"), dict)
+            else None,
         )
         return strict_reward.total_reward
     prediction, proposal_text = coerce_reward_prediction(
@@ -108,10 +108,14 @@ def compute_score(
     mode = str(getattr(reward_config, "mode", "composite") or "composite").lower()
     use_metric_papers = mode in {"soft", "coverage", "novelty"}
     train_for_reward = (
-        metric_train_papers if use_metric_papers and metric_train_papers else train_papers
+        metric_train_papers
+        if use_metric_papers and metric_train_papers
+        else train_papers
     )
     future_for_reward = (
-        metric_future_papers if use_metric_papers and metric_future_papers else future_papers
+        metric_future_papers
+        if use_metric_papers and metric_future_papers
+        else future_papers
     )
     evaluation = evaluate_rl_reward(
         predictions=[prediction],

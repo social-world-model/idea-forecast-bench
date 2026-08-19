@@ -1,4 +1,5 @@
 """Prompt construction for hindsight innovation extraction."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -38,7 +39,9 @@ def _build_context_summary(
     lines: list[str] = []
     for i, paper in enumerate(truncated, start=1):
         keywords = ", ".join((paper.keywords or [])[:5]) or "n/a"
-        summary = " ".join((paper.summary or "").split())[:240] or "(no summary available)"
+        summary = (
+            " ".join((paper.summary or "").split())[:240] or "(no summary available)"
+        )
         lines.append(
             f"{i}. {paper.title} ({paper.month})\n"
             f"   Keywords: {keywords}\n"
@@ -58,11 +61,15 @@ def _format_reference_entry(entry: dict[str, Any]) -> str:
     authors_raw = entry.get("authors")
     authors = ""
     if isinstance(authors_raw, list):
-        authors = ", ".join(str(author).strip() for author in authors_raw if str(author).strip())
+        authors = ", ".join(
+            str(author).strip() for author in authors_raw if str(author).strip()
+        )
     elif authors_raw is not None:
         authors = str(authors_raw).strip()
     year = str(entry.get("year") or entry.get("date") or "").strip()
-    note = str(entry.get("context") or entry.get("note") or entry.get("reason") or "").strip()
+    note = str(
+        entry.get("context") or entry.get("note") or entry.get("reason") or ""
+    ).strip()
 
     parts = [title or "(untitled reference)"]
     if authors:

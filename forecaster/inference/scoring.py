@@ -1,20 +1,21 @@
 """Scoring functions for joint inference."""
+
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from live_idea_bench.models import PaperRecord
-
-from forecaster.models import Innovation, RealizationTrajectory
 from forecaster.config import (
     InferenceConfig,
     RealizationConfig,
     validate_inference_config,
 )
-from forecaster.realization.realization_reward import compute_realization_reward
+from forecaster.models import Innovation, RealizationTrajectory
 from forecaster.realization.proposal_generator import score_local_proposal
+from forecaster.realization.realization_reward import compute_realization_reward
 from forecaster.realization.strict_runtime import score_strict_realization_trajectory
+from live_idea_bench.models import PaperRecord
 
 if TYPE_CHECKING:
     from forecaster.prior.memory import MemoryStore
@@ -40,6 +41,7 @@ def _semantic_similarity(text_a: str, text_b: str) -> float:
     avoiding any heavy ML dependency. Returns a value in [0, 1].
     """
     from live_idea_bench.similarity import _hybrid_similarity, _keyword_overlap
+
     semantic = _hybrid_similarity(text_a, text_b)
     keyword = _keyword_overlap(text_a, text_b)
     return max(semantic, keyword)
@@ -54,7 +56,7 @@ def _normalized_utility(value: float) -> float:
     return _clamp01(0.5 + (0.5 * math.tanh(value)))
 
 
-def compute_prior_score(innovation: Innovation, memory_store: "MemoryStore") -> float:
+def compute_prior_score(innovation: Innovation, memory_store: MemoryStore) -> float:
     """Compute the explicit heuristic fallback prior score for an innovation.
 
     The fallback is calibrated into a log-like scale so it is comparable to the
@@ -116,8 +118,14 @@ def build_realization_scorer(
     inference_config: InferenceConfig,
 ) -> Callable[[str, Innovation, list[PaperRecord]], float]:
     """Build a scorer for log p(y | z, X) under the served realization artifact."""
-    normalization = str(getattr(inference_config, "score_normalization", "per_token")).strip().lower()
-    score_temperature = float(getattr(inference_config, "score_temperature", 1.0) or 1.0)
+    normalization = (
+        str(getattr(inference_config, "score_normalization", "per_token"))
+        .strip()
+        .lower()
+    )
+    score_temperature = float(
+        getattr(inference_config, "score_temperature", 1.0) or 1.0
+    )
 
     def score(
         proposal_text: str,
@@ -143,8 +151,14 @@ def build_strict_realization_scorer(
     inference_config: InferenceConfig,
 ) -> Callable[[RealizationTrajectory], float]:
     """Build a scorer for strict stepwise rollouts under the shared strict prompt."""
-    normalization = str(getattr(inference_config, "score_normalization", "per_token")).strip().lower()
-    score_temperature = float(getattr(inference_config, "score_temperature", 1.0) or 1.0)
+    normalization = (
+        str(getattr(inference_config, "score_normalization", "per_token"))
+        .strip()
+        .lower()
+    )
+    score_temperature = float(
+        getattr(inference_config, "score_temperature", 1.0) or 1.0
+    )
 
     def score(
         trajectory: RealizationTrajectory,
@@ -167,7 +181,9 @@ def compute_joint_score(
     popularity_bonus: float = 0.0,
 ) -> float:
     """Compute the calibrated linear joint score from Algorithm 1."""
-    total_weight = config.prior_weight + config.realization_weight + config.popularity_weight
+    total_weight = (
+        config.prior_weight + config.realization_weight + config.popularity_weight
+    )
     if total_weight <= 0:
         return float("-inf")
     numerator = (
@@ -192,7 +208,9 @@ def compute_strict_joint_score(
     total_weight = config.prior_weight + config.realization_weight
     if total_weight <= 0:
         return float("-inf")
-    numerator = (config.prior_weight * prior_score) + (config.realization_weight * realization_score)
+    numerator = (config.prior_weight * prior_score) + (
+        config.realization_weight * realization_score
+    )
     if not math.isclose(total_weight, 1.0):
         return numerator / total_weight
     return numerator

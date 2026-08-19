@@ -3,12 +3,13 @@
 Config dataclasses are mutable (not frozen), following the same pattern as
 live_idea_bench/config.py and forecaster/realization/config.py.
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 import yaml
 
@@ -20,6 +21,8 @@ STRICT_REALIZATION_SCORE_METHOD = "conditional_logprob"
 STRICT_JOINT_SCORE_MODE = "linear_blend"
 STRICT_POPULARITY_WEIGHT = 0.0
 STRICT_JOINT_SCORE_COMPONENTS: tuple[str, str] = ("prior_score", "realization_score")
+
+_ConfigT = TypeVar("_ConfigT")
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +136,7 @@ def _resolve_forecaster_config_path(name_or_path: str) -> Path:
     return (DEFAULT_FORECASTER_CONFIG_DIR / path.name).resolve()
 
 
-def _load_config(name_or_path: str, model_class: type[Any]) -> Any:
+def _load_config(name_or_path: str, model_class: type[_ConfigT]) -> _ConfigT:
     payload = _read_yaml(_resolve_forecaster_config_path(name_or_path))
     try:
         return model_class(**payload)
@@ -170,23 +173,31 @@ def validate_inference_config(config: InferenceConfig) -> None:
         return
 
     errors: list[str] = []
-    if str(getattr(config, "prior_score_method", "") or "").strip().lower() != STRICT_PRIOR_SCORE_METHOD:
+    if (
+        str(getattr(config, "prior_score_method", "") or "").strip().lower()
+        != STRICT_PRIOR_SCORE_METHOD
+    ):
         errors.append(f"prior_score_method must be {STRICT_PRIOR_SCORE_METHOD!r}")
     if (
         str(getattr(config, "realization_score_method", "") or "").strip().lower()
         != STRICT_REALIZATION_SCORE_METHOD
     ):
-        errors.append(f"realization_score_method must be {STRICT_REALIZATION_SCORE_METHOD!r}")
-    if str(getattr(config, "joint_score_mode", "") or "").strip().lower() != STRICT_JOINT_SCORE_MODE:
+        errors.append(
+            f"realization_score_method must be {STRICT_REALIZATION_SCORE_METHOD!r}"
+        )
+    if (
+        str(getattr(config, "joint_score_mode", "") or "").strip().lower()
+        != STRICT_JOINT_SCORE_MODE
+    ):
         errors.append(f"joint_score_mode must be {STRICT_JOINT_SCORE_MODE!r}")
-    popularity_weight = float(getattr(config, "popularity_weight", STRICT_POPULARITY_WEIGHT) or 0.0)
+    popularity_weight = float(
+        getattr(config, "popularity_weight", STRICT_POPULARITY_WEIGHT) or 0.0
+    )
     if not math.isclose(popularity_weight, STRICT_POPULARITY_WEIGHT, abs_tol=1e-12):
         errors.append("popularity_weight must be 0.0")
 
     if errors:
-        raise ValueError(
-            "Strict inference config requires: " + "; ".join(errors) + "."
-        )
+        raise ValueError("Strict inference config requires: " + "; ".join(errors) + ".")
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +213,7 @@ def load_hindsight_config(name_or_path: str = "hindsight.yaml") -> HindsightConf
 def load_prior_config(name_or_path: str = "prior.yaml") -> PriorConfig:
     """Load PriorConfig from a YAML file (uses only PriorConfig fields)."""
     payload = _read_yaml(_resolve_forecaster_config_path(name_or_path))
-    prior_fields = {f for f in PriorConfig.__dataclass_fields__}
+    prior_fields = set(PriorConfig.__dataclass_fields__)
     filtered = {k: v for k, v in payload.items() if k in prior_fields}
     try:
         return PriorConfig(**filtered)
@@ -216,7 +227,7 @@ def load_prior_config(name_or_path: str = "prior.yaml") -> PriorConfig:
 def load_sft_train_config(name_or_path: str = "prior.yaml") -> SFTTrainConfig:
     """Load SFTTrainConfig from a YAML file (uses only SFTTrainConfig fields)."""
     payload = _read_yaml(_resolve_forecaster_config_path(name_or_path))
-    sft_fields = {f for f in SFTTrainConfig.__dataclass_fields__}
+    sft_fields = set(SFTTrainConfig.__dataclass_fields__)
     filtered = {k: v for k, v in payload.items() if k in sft_fields}
     try:
         return SFTTrainConfig(**filtered)
@@ -227,7 +238,9 @@ def load_sft_train_config(name_or_path: str = "prior.yaml") -> SFTTrainConfig:
         ) from exc
 
 
-def load_realization_config(name_or_path: str = "realization.yaml") -> RealizationConfig:
+def load_realization_config(
+    name_or_path: str = "realization.yaml",
+) -> RealizationConfig:
     """Load RealizationConfig from a YAML file."""
     return _load_config(name_or_path, RealizationConfig)
 

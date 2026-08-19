@@ -14,16 +14,13 @@ Usage:
         --papers-dir data/csml/raw_markdown \
         --output-dir output/joint_inference
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import logging
-import sys
 from pathlib import Path
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT_ROOT))
 
 from forecaster.config import InferenceConfig, RealizationConfig
 from forecaster.hindsight.dataset_builder import load_hindsight_samples_jsonl
@@ -41,9 +38,17 @@ log = logging.getLogger("joint_inference")
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="Joint inference: prior + realization → proposals.")
-    p.add_argument("--prior-checkpoint", required=True, help="Path to trained prior SFT checkpoint")
-    p.add_argument("--realization-checkpoint", required=True, help="Path to trained GRPO realization checkpoint")
+    p = argparse.ArgumentParser(
+        description="Joint inference: prior + realization → proposals."
+    )
+    p.add_argument(
+        "--prior-checkpoint", required=True, help="Path to trained prior SFT checkpoint"
+    )
+    p.add_argument(
+        "--realization-checkpoint",
+        required=True,
+        help="Path to trained GRPO realization checkpoint",
+    )
     p.add_argument("--hindsight", required=True, help="Path to hindsight_samples.jsonl")
     p.add_argument("--papers-dir", required=True, help="Papers markdown directory")
     p.add_argument("--output-dir", required=True, help="Output directory")
@@ -57,7 +62,7 @@ def main() -> int:
 
     # Load hindsight and build memory
     samples = load_hindsight_samples_jsonl(args.hindsight)
-    last_cutoff = sorted(set(s.cutoff_month for s in samples))[-1]
+    last_cutoff = sorted({s.cutoff_month for s in samples})[-1]
     log.info("Eval cutoff: %s", last_cutoff)
 
     memory = build_memory_store_from_hindsight_samples(samples, last_cutoff)
@@ -79,7 +84,9 @@ def main() -> int:
 
     # Load papers
     papers = load_papers_from_markdown(
-        Path(args.papers_dir), start_month=args.start_month, end_month=args.end_month,
+        Path(args.papers_dir),
+        start_month=args.start_month,
+        end_month=args.end_month,
     )
     training_papers = [p for p in papers if p.month <= last_cutoff]
     log.info("Loaded %d papers (%d before cutoff)", len(papers), len(training_papers))
@@ -87,7 +94,10 @@ def main() -> int:
     # Run joint inference (Algorithm 1) — all local, no LLM API fallback
     real_cfg = RealizationConfig(allow_artifact_fallback_to_llm=False)
 
-    log.info("Running joint inference with realization_checkpoint=%s", args.realization_checkpoint)
+    log.info(
+        "Running joint inference with realization_checkpoint=%s",
+        args.realization_checkpoint,
+    )
     proposals = run_joint_inference(
         innovations=innovations,
         papers=training_papers,
@@ -106,9 +116,13 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
 
     # Save raw innovations
-    (out / "sampled_innovations.json").write_text(json.dumps(
-        [innovation_to_dict(i) for i in innovations], indent=2, ensure_ascii=False,
-    ))
+    (out / "sampled_innovations.json").write_text(
+        json.dumps(
+            [innovation_to_dict(i) for i in innovations],
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
 
     # Save scored proposals
     proposals_data = [
@@ -123,7 +137,9 @@ def main() -> int:
         }
         for sp in proposals
     ]
-    (out / "scored_proposals.json").write_text(json.dumps(proposals_data, indent=2, ensure_ascii=False))
+    (out / "scored_proposals.json").write_text(
+        json.dumps(proposals_data, indent=2, ensure_ascii=False)
+    )
 
     # Build predictions in reeval_voyage format
     topics = load_topics()
@@ -133,19 +149,31 @@ def main() -> int:
     for topic in topics:
         scoped = grouped.get(topic.id, [])
         if not scoped:
-            topic_results[topic.id] = {"topic_name": topic.name, "paper_count": 0, "backtest": None}
+            topic_results[topic.id] = {
+                "topic_name": topic.name,
+                "paper_count": 0,
+                "backtest": None,
+            }
             continue
         train, future, future_end, _ = split_train_future_by_cutoff(
-            papers=scoped, cutoff_month=last_cutoff, horizon_months=args.horizon_months,
+            papers=scoped,
+            cutoff_month=last_cutoff,
+            horizon_months=args.horizon_months,
         )
         if not future:
-            topic_results[topic.id] = {"topic_name": topic.name, "paper_count": len(scoped), "backtest": None}
+            topic_results[topic.id] = {
+                "topic_name": topic.name,
+                "paper_count": len(scoped),
+                "backtest": None,
+            }
             continue
 
         preds = [
             {
                 "rank": i + 1,
-                "title": sp.proposal_text.splitlines()[0] if sp.proposal_text.strip() else f"{sp.innovation.operator}: {sp.innovation.base_direction}",
+                "title": sp.proposal_text.splitlines()[0]
+                if sp.proposal_text.strip()
+                else f"{sp.innovation.operator}: {sp.innovation.base_direction}",
                 "rationale": sp.innovation.gap,
                 "approach": f"{sp.innovation.operator} on {sp.innovation.base_direction}",
                 "score": sp.joint_score,
@@ -159,25 +187,35 @@ def main() -> int:
             "paper_count": len(scoped),
             "backtest": {
                 "summary": {"windows": 1},
-                "windows": [{
-                    "cutoff_month": last_cutoff,
-                    "cutoff_date": f"{last_cutoff}-01",
-                    "future_end_month": future_end,
-                    "train_papers": len(train),
-                    "future_papers": len(future),
-                    "predictions": preds,
-                }],
+                "windows": [
+                    {
+                        "cutoff_month": last_cutoff,
+                        "cutoff_date": f"{last_cutoff}-01",
+                        "future_end_month": future_end,
+                        "train_papers": len(train),
+                        "future_papers": len(future),
+                        "predictions": preds,
+                    }
+                ],
             },
         }
 
     pred_path = out / "predictions_for_eval.json"
-    pred_path.write_text(json.dumps({
-        "config": {
-            "start_month": args.start_month, "end_month": args.end_month,
-            "horizon_months": args.horizon_months, "top_k": args.top_k,
-        },
-        "topic_results": topic_results,
-    }, indent=2, ensure_ascii=False))
+    pred_path.write_text(
+        json.dumps(
+            {
+                "config": {
+                    "start_month": args.start_month,
+                    "end_month": args.end_month,
+                    "horizon_months": args.horizon_months,
+                    "top_k": args.top_k,
+                },
+                "topic_results": topic_results,
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
     log.info("Saved predictions: %s", pred_path)
     return 0
 

@@ -1,49 +1,48 @@
 """ForecasterPipeline: orchestrates all 4 phases of the forecasting method."""
+
 from __future__ import annotations
 
-from dataclasses import replace
 import json
 import logging
+from dataclasses import replace
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, cast
 
-from live_idea_bench.backtest import split_train_future_by_cutoff
-from live_idea_bench.models import PaperRecord
-from live_idea_bench.llm import create_client
-from live_idea_bench.papers import month_start_date
-from live_idea_bench.similarity import score_prediction_list
-
+from forecaster.config import (
+    HindsightConfig,
+    InferenceConfig,
+    PriorConfig,
+    RealizationConfig,
+    SFTTrainConfig,
+    load_hindsight_config,
+    load_inference_config,
+    load_prior_config,
+    load_realization_config,
+    load_sft_train_config,
+    strict_inference_score_contract,
+)
+from forecaster.hindsight.dataset_builder import build_hindsight_dataset
+from forecaster.inference.algorithm import run_joint_inference as run_joint_inference_fn
 from forecaster.models import (
     HindsightSample,
     Innovation,
     ScoredProposal,
     innovation_schema_contract,
 )
-from forecaster.prior.sampler import sample_innovations
-from forecaster.realization.proposal_generator import proposal_to_idea_prediction
-from forecaster.config import (
-    HindsightConfig,
-    PriorConfig,
-    SFTTrainConfig,
-    RealizationConfig,
-    InferenceConfig,
-    strict_inference_score_contract,
-    load_hindsight_config,
-    load_prior_config,
-    load_sft_train_config,
-    load_realization_config,
-    load_inference_config,
-)
 from forecaster.prior.memory import (
     MemoryStore,
     build_memory_store_from_hindsight_samples,
     hindsight_sample_available_by_cutoff,
 )
-from forecaster.hindsight.dataset_builder import build_hindsight_dataset
+from forecaster.prior.sampler import sample_innovations
 from forecaster.prior.sft_dataset import build_sft_samples, save_sft_dataset
 from forecaster.prior.trainer import train_prior
-from forecaster.inference.algorithm import run_joint_inference as run_joint_inference_fn
-
+from forecaster.realization.proposal_generator import proposal_to_idea_prediction
+from live_idea_bench.backtest import split_train_future_by_cutoff
+from live_idea_bench.llm import create_client
+from live_idea_bench.models import PaperRecord
+from live_idea_bench.papers import month_start_date
+from live_idea_bench.similarity import score_prediction_list
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +158,11 @@ class ForecasterPipeline:
             sft_samples = build_sft_samples(
                 hindsight_samples,
                 max_memory_entries=max_mem,
-                memory_snapshots_by_cutoff=memory_snapshots_by_cutoff,
+                # `dict` is invariant, so `dict[str, MemoryStore]` is not a
+                # `dict[str, object]`; the callee only reads the mapping.
+                memory_snapshots_by_cutoff=cast(
+                    "dict[str, object]", memory_snapshots_by_cutoff
+                ),
             )
 
         prior_output_dir = self.output_dir / output_subdir
@@ -251,7 +254,9 @@ class ForecasterPipeline:
                     "innovation_count": len(innovations),
                     "proposal_count": len(proposals),
                     "future_match_count": sum(
-                        1 for event in delayed_matches if bool(event.get("future_support_confirmed"))
+                        1
+                        for event in delayed_matches
+                        if bool(event.get("future_support_confirmed"))
                     ),
                 }
             )
@@ -273,7 +278,7 @@ class ForecasterPipeline:
                     "bootstrap_prior_checkpoint": bootstrap_prior_checkpoint,
                     "refresh_prior_checkpoint": refresh_checkpoint,
                     "realization_model_path": realization_model_path,
-                    "train_cutoffs": list(sorted(train_cutoffs)),
+                    "train_cutoffs": sorted(train_cutoffs),
                     "memory_snapshot_dir": str(memory_snapshot_dir.resolve()),
                     "replay_events": replay_events,
                 },
@@ -298,14 +303,13 @@ class ForecasterPipeline:
 
         Delegates to the existing RL pipeline. Returns manifest path or None.
         """
-        from forecaster.realization.pipeline import run_policy_rl_pipeline
         from forecaster.realization.config import (
-            load_episode_build_config,
             load_candidate_generation_config,
+            load_episode_build_config,
             load_reward_config,
             load_selection_config,
         )
-        from forecaster.realization.trainers import create_trainer_runner
+        from forecaster.realization.pipeline import run_policy_rl_pipeline
 
         realization_output_dir = str(self.output_dir / "realization_grpo")
         resolved_model = model_name or "gpt-4o-mini"
@@ -329,7 +333,7 @@ class ForecasterPipeline:
             reward_config = load_reward_config()
             selection_config = load_selection_config()
 
-            manifest = run_policy_rl_pipeline(
+            run_policy_rl_pipeline(
                 self.papers,
                 trainer="grpo",
                 model_name=resolved_model,
@@ -347,9 +351,7 @@ class ForecasterPipeline:
                 skip_alignment_check=(dry_run or not use_strict_mode),
                 hindsight_samples=hindsight_samples,
             )
-            manifest_path = str(
-                Path(realization_output_dir) / "pipeline_manifest.json"
-            )
+            manifest_path = str(Path(realization_output_dir) / "pipeline_manifest.json")
             logger.info("Realization training complete. Manifest: %s", manifest_path)
             return manifest_path
         except Exception as exc:
@@ -363,8 +365,8 @@ class ForecasterPipeline:
         cutoff_month: str,
         innovations: list[Innovation],
         *,
-        prior_model_path: Optional[str] = None,
-        realization_model_path: Optional[str] = None,
+        prior_model_path: str | None = None,
+        realization_model_path: str | None = None,
     ) -> list[ScoredProposal]:
         """Phase 4: run Algorithm 1 for joint inference.
 
@@ -383,9 +385,7 @@ class ForecasterPipeline:
         """
         llm_client, model = create_client(self.llm_model)
 
-        training_papers = [
-            p for p in self.papers if p.month <= cutoff_month
-        ]
+        training_papers = [p for p in self.papers if p.month <= cutoff_month]
 
         logger.info(
             "Running joint inference: %d innovations, %d training papers, "
@@ -477,11 +477,13 @@ class ForecasterPipeline:
             prior_checkpoint = self.run_prior_training(training_hindsight_samples)
             bootstrap_prior_checkpoint = prior_checkpoint
         elif not skip_training:
-            logger.info("Phase 2: No legal training hindsight samples; skipping prior SFT.")
+            logger.info(
+                "Phase 2: No legal training hindsight samples; skipping prior SFT."
+            )
         else:
             logger.info("Phase 2: Skipping prior SFT training (skip_training=True).")
 
-        realization_model_path: Optional[str] = None
+        realization_model_path: str | None = None
         if not skip_training and train_cutoffs:
             logger.info("Phase 3: Realization GRPO training.")
             manifest_path = self.run_realization_training(
@@ -492,13 +494,17 @@ class ForecasterPipeline:
             )
             realization_model_path = _extract_realization_model_path(manifest_path)
             if realization_model_path:
-                logger.info("Phase 3 artifact: realization model at %s", realization_model_path)
+                logger.info(
+                    "Phase 3 artifact: realization model at %s", realization_model_path
+                )
             else:
                 if use_strict_eval:
                     raise RuntimeError(
                         "Strict mode requires a realization artifact for joint inference."
                     )
-                logger.info("Phase 3: No realization model checkpoint found; Phase 4 will use demo LLM fallback.")
+                logger.info(
+                    "Phase 3: No realization model checkpoint found; Phase 4 will use demo LLM fallback."
+                )
                 fallback_events.append(
                     {
                         "phase": "realization",
@@ -507,7 +513,9 @@ class ForecasterPipeline:
                     }
                 )
         elif not skip_training:
-            logger.info("Phase 3: No train cutoffs available; skipping realization training.")
+            logger.info(
+                "Phase 3: No train cutoffs available; skipping realization training."
+            )
         else:
             logger.info("Phase 3: Skipping realization training (skip_training=True).")
             if not realization_model_path and not use_strict_eval:
@@ -542,9 +550,7 @@ class ForecasterPipeline:
         proposals: list[ScoredProposal] = []
         if last_cutoff:
             base_memory_samples = (
-                training_hindsight_samples
-                if use_strict_eval
-                else hindsight_samples
+                training_hindsight_samples if use_strict_eval else hindsight_samples
             )
             self._memory_store = build_memory_store_from_hindsight_samples(
                 base_memory_samples,
@@ -553,19 +559,28 @@ class ForecasterPipeline:
             if use_strict_eval and refresh_memory_snapshots:
                 latest_refresh_cutoff = sorted(refresh_memory_snapshots)[-1]
                 latest_refresh_memory = refresh_memory_snapshots[latest_refresh_cutoff]
-                utility_overrides = {
-                    entry.source_paper_id: (float(entry.utility_score), dict(entry.metadata))
+                utility_overrides: dict[str, tuple[float, dict[str, Any] | None]] = {
+                    entry.source_paper_id: (
+                        float(entry.utility_score),
+                        dict(entry.metadata),
+                    )
                     for entry in latest_refresh_memory.inventory.entries
                 }
-                self._memory_store = self._memory_store.apply_utility_overrides(utility_overrides)
-            pre_inference_memory_path = snapshot_dir / f"{last_cutoff}_pre_inference.json"
+                self._memory_store = self._memory_store.apply_utility_overrides(
+                    utility_overrides
+                )
+            pre_inference_memory_path = (
+                snapshot_dir / f"{last_cutoff}_pre_inference.json"
+            )
             self._memory_store.persist(pre_inference_memory_path)
             self._memory_store.persist(self.output_dir / "memory_inventory.json")
 
             logger.info("Phase 4: Joint inference at cutoff %s.", last_cutoff)
             training_papers = [p for p in self.papers if p.month <= last_cutoff]
 
-            if use_strict_eval and (not prior_checkpoint or not Path(prior_checkpoint).exists()):
+            if use_strict_eval and (
+                not prior_checkpoint or not Path(prior_checkpoint).exists()
+            ):
                 raise RuntimeError(
                     "Strict mode requires a legal prior checkpoint for innovation sampling."
                 )
@@ -603,7 +618,8 @@ class ForecasterPipeline:
                             f"Strict mode prior sampling failed: {exc}"
                         ) from exc
                     logger.warning(
-                        "Prior sampling failed (%s); falling back to heuristic demo path.", exc
+                        "Prior sampling failed (%s); falling back to heuristic demo path.",
+                        exc,
                     )
                     innovations = _heuristic_innovations(
                         training_papers, n=self.inference_config.num_candidates
@@ -617,7 +633,9 @@ class ForecasterPipeline:
                         }
                     )
             else:
-                logger.info("No prior checkpoint available; using heuristic innovations.")
+                logger.info(
+                    "No prior checkpoint available; using heuristic innovations."
+                )
                 innovations = _heuristic_innovations(
                     training_papers, n=self.inference_config.num_candidates
                 )
@@ -649,7 +667,9 @@ class ForecasterPipeline:
                     delayed_matches,
                     cutoff_month=last_cutoff,
                 )
-                post_update_memory_path = snapshot_dir / f"{last_cutoff}_post_update.json"
+                post_update_memory_path = (
+                    snapshot_dir / f"{last_cutoff}_post_update.json"
+                )
                 self._memory_store.persist(post_update_memory_path)
                 self._memory_store.persist(self.output_dir / "memory_inventory.json")
                 logger.info("Delayed utility update applied; memory persisted.")
@@ -700,7 +720,7 @@ class ForecasterPipeline:
 # ---------------------------------------------------------------------------
 
 
-def _extract_realization_model_path(manifest_path: Optional[str]) -> Optional[str]:
+def _extract_realization_model_path(manifest_path: str | None) -> str | None:
     """Extract the trained realization model path from the pipeline manifest.
 
     The manifest's trainer_output_dir is where the GRPO-trained realization
@@ -714,7 +734,11 @@ def _extract_realization_model_path(manifest_path: Optional[str]) -> Optional[st
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
         trainer_output_dir = payload.get("trainer_output_dir", "")
-        if trainer_output_dir and Path(trainer_output_dir).exists():
+        if (
+            isinstance(trainer_output_dir, str)
+            and trainer_output_dir
+            and Path(trainer_output_dir).exists()
+        ):
             return trainer_output_dir
     except Exception:
         pass
@@ -816,7 +840,9 @@ def _persist_runtime_contract(
             "realization_model_path": realization_model_path or "",
             "memory_snapshot_dir": str(output_dir / "memory_snapshots"),
             "memory_inventory": str(output_dir / "memory_inventory.json"),
-            "prior_refresh_manifest": str(output_dir / "prior_refresh" / "refresh_manifest.json"),
+            "prior_refresh_manifest": str(
+                output_dir / "prior_refresh" / "refresh_manifest.json"
+            ),
         },
         "fallback_events": list(fallback_events or []),
     }
@@ -837,10 +863,12 @@ def _score_proposals_for_delayed_feedback(
     if not proposals:
         return []
 
-    train_papers, future_papers, _future_end_month, future_end_date = split_train_future_by_cutoff(
-        papers=papers,
-        cutoff_month=cutoff_month,
-        horizon_months=horizon_months,
+    train_papers, future_papers, _future_end_month, future_end_date = (
+        split_train_future_by_cutoff(
+            papers=papers,
+            cutoff_month=cutoff_month,
+            horizon_months=horizon_months,
+        )
     )
     if not future_papers:
         return []
@@ -861,18 +889,13 @@ def _score_proposals_for_delayed_feedback(
         cutoff_date=month_start_date(cutoff_month),
         future_end_date=future_end_date,
     )
-    match_by_rank = {
-        int(match.prediction_rank): match
-        for match in scored.matches
-    }
+    match_by_rank = {int(match.prediction_rank): match for match in scored.matches}
     events: list[dict[str, Any]] = []
     for index, proposal in enumerate(proposals, start=1):
         prediction_rank = int(proposal.rank or index)
         match = match_by_rank.get(prediction_rank)
         matched_future_ids = (
-            [str(match.paper_id)]
-            if match and match.is_match and match.paper_id
-            else []
+            [str(match.paper_id)] if match and match.is_match and match.paper_id else []
         )
         events.append(
             {
@@ -880,7 +903,8 @@ def _score_proposals_for_delayed_feedback(
                 "matched_future_paper_ids": matched_future_ids,
                 "future_match_score": float(match.score) if match else 0.0,
                 "future_match_lead_time": float(match.lead_time) if match else 0.0,
-                "future_match_reasoning": (match.matched_reasoning if match else None) or "",
+                "future_match_reasoning": (match.matched_reasoning if match else None)
+                or "",
                 "future_support_confirmed": bool(matched_future_ids),
             }
         )
@@ -902,8 +926,7 @@ def _apply_delayed_utility_update(
     updated = memory_store
     ema_alpha = 0.3
     match_by_rank = {
-        int(event.get("proposal_rank", 0)): event
-        for event in future_match_events
+        int(event.get("proposal_rank", 0)): event for event in future_match_events
     }
     for proposal in proposals:
         match_event = match_by_rank.get(int(proposal.rank), {})
@@ -921,12 +944,16 @@ def _apply_delayed_utility_update(
                 and inn.operator == proposal.innovation.operator
                 and inn.gap == proposal.innovation.gap
             ):
-                new_utility = (ema_alpha * utility_delta) + ((1.0 - ema_alpha) * entry.utility_score)
+                new_utility = (ema_alpha * utility_delta) + (
+                    (1.0 - ema_alpha) * entry.utility_score
+                )
                 event = {
                     "cutoff_month": cutoff_month or "",
                     "source_paper_id": entry.source_paper_id,
                     "proposal_rank": int(proposal.rank),
-                    "proposal_title": proposal.proposal_text.splitlines()[0].strip() if proposal.proposal_text.strip() else "",
+                    "proposal_title": proposal.proposal_text.splitlines()[0].strip()
+                    if proposal.proposal_text.strip()
+                    else "",
                     "proposal_text": proposal.proposal_text,
                     "proposal_prior_score": float(proposal.prior_score),
                     "proposal_realization_score": float(proposal.realization_score),
@@ -934,9 +961,15 @@ def _apply_delayed_utility_update(
                     "evidence_paper_ids": list(proposal.evidence_paper_ids),
                     "matched_future_paper_ids": matched_future_ids,
                     "future_support_confirmed": matched,
-                    "future_match_score": float(match_event.get("future_match_score", 0.0) or 0.0),
-                    "future_match_lead_time": float(match_event.get("future_match_lead_time", 0.0) or 0.0),
-                    "future_match_reasoning": str(match_event.get("future_match_reasoning", "") or ""),
+                    "future_match_score": float(
+                        match_event.get("future_match_score", 0.0) or 0.0
+                    ),
+                    "future_match_lead_time": float(
+                        match_event.get("future_match_lead_time", 0.0) or 0.0
+                    ),
+                    "future_match_reasoning": str(
+                        match_event.get("future_match_reasoning", "") or ""
+                    ),
                     "utility_delta": float(utility_delta),
                     "pre_update_utility": float(entry.utility_score),
                     "post_update_utility": float(new_utility),
@@ -974,7 +1007,9 @@ def _heuristic_innovations(
     innovations: list[Innovation] = []
     for paper in papers:
         keywords = paper.keywords or []
-        base_direction = " ".join(keywords[:3]) if keywords else " ".join(paper.title.split()[:5])
+        base_direction = (
+            " ".join(keywords[:3]) if keywords else " ".join(paper.title.split()[:5])
+        )
         gap = paper.summary[:100] if paper.summary else paper.title
         innovation = Innovation(
             base_direction=base_direction,

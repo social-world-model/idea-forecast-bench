@@ -20,11 +20,12 @@ Two LLM calls per window:
 The two system prefixes are intentionally distinct from MemoryPromptingStrategy
 so the batch runner can route the two rounds independently.
 """
+
 from __future__ import annotations
 
 import json
 import re
-from typing import List
+from typing import Any
 
 from live_idea_bench.llm import create_client, get_response_from_llm
 from live_idea_bench.models import IdeaPrediction, PaperRecord
@@ -35,9 +36,7 @@ _DEFAULT_MODEL = "gpt-4o"
 _MAX_COMPRESS_PAPERS = 60
 _SUMMARY_TARGET_SENTENCES = 8
 
-_COMPRESS_SYSTEM = (
-    "You are a research summarizer. Output a single short paragraph; no preamble, no bullets."
-)
+_COMPRESS_SYSTEM = "You are a research summarizer. Output a single short paragraph; no preamble, no bullets."
 _FORECAST_SYSTEM = (
     "You are a research forecasting assistant working from a compressed historical summary. "
     "Return only valid JSON matching the requested schema."
@@ -73,7 +72,7 @@ def _build_forecast_prompt(summary: str, cutoff_month: str, top_k: int) -> str:
 
 
 def _parse_predictions(raw: str, top_k: int) -> list[IdeaPrediction]:
-    items: list[dict] = []
+    items: list[dict[str, Any]] = []
     try:
         payload = json.loads(raw.strip())
         if isinstance(payload, list):
@@ -127,10 +126,10 @@ class SummaryPromptingStrategy(IdeaStrategy):
 
     def generate(
         self,
-        train_papers: List[PaperRecord],
+        train_papers: list[PaperRecord],
         cutoff_month: str,
         top_k: int,
-    ) -> List[IdeaPrediction]:
+    ) -> list[IdeaPrediction]:
         if not train_papers:
             return []
 
@@ -160,10 +159,12 @@ class SummaryPromptingStrategy(IdeaStrategy):
 
         if len(predictions) < top_k:
             import sys
+
             print(
                 f"[summary_prompting WARNING] cutoff={cutoff_month}: got "
                 f"{len(predictions)}/{top_k} predictions — retrying",
-                file=sys.stderr, flush=True,
+                file=sys.stderr,
+                flush=True,
             )
             extra_raw, _ = get_response_from_llm(
                 msg=forecast_prompt,

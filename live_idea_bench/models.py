@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
@@ -10,12 +10,12 @@ class PaperRecord:
     title: str
     month: str
     summary: str
-    keywords: List[str]
+    keywords: list[str]
     source_path: str
     published_date: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    references: List[Dict[str, Any]] = field(default_factory=list)
-    citations: List[Dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    references: list[dict[str, Any]] = field(default_factory=list)
+    citations: list[dict[str, Any]] = field(default_factory=list)
     popularity_score: float = 0.0
 
 
@@ -27,8 +27,8 @@ class IdeaPrediction:
     approach: str = ""
     score: float = 0.0
     confidence: float | None = None
-    key_terms: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    key_terms: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -39,8 +39,8 @@ class EvaluationResult:
     mrr: float
     novelty: float
     diversity: float
-    matched_prediction_ranks: List[int]
-    matched_paper_ids: List[str]
+    matched_prediction_ranks: list[int]
+    matched_paper_ids: list[str]
     # coverage_at_k = matched / len(future_papers): fraction of ALL future papers
     # hit by the top-k predictions. Upper-bounded by min(k, |future|)/|future|, so
     # it is NOT a true recall when |future| > k (it cannot reach 1.0). Kept for
@@ -63,46 +63,46 @@ class BacktestWindowResult:
     future_end_date: str
     train_papers: int
     future_papers: int
-    predictions: List[IdeaPrediction]
+    predictions: list[IdeaPrediction]
     evaluation: EvaluationResult
-    matches: List["PredictionMatchDetail"] = field(default_factory=list)
+    matches: list[PredictionMatchDetail] = field(default_factory=list)
     # arXiv IDs of the training-window papers (date <= cutoff). Stored so the
     # citation/co-author validity analyses can target the train community
     # instead of a global candidate union. train_papers (the int count) is kept.
-    train_paper_ids: List[str] = field(default_factory=list)
+    train_paper_ids: list[str] = field(default_factory=list)
 
 
 @dataclass
 class MatchResult:
     score: float
-    reasoning: Optional[str] = None
+    reasoning: str | None = None
     engine_name: str = "hybrid"
-    paper_id: Optional[str] = None
+    paper_id: str | None = None
     # Hybrid-engine component scores, populated only by the hybrid branch of
     # compute_similarity. is_match (hybrid) reads these so the match decision
     # uses the exact same numbers as the sort score (no recompute / no drift).
-    semantic: Optional[float] = None
-    keyword: Optional[float] = None
+    semantic: float | None = None
+    keyword: float | None = None
 
 
 @dataclass
 class PredictionMatchDetail:
     prediction_rank: int
     prediction_title: str
-    paper_id: Optional[str] = None
+    paper_id: str | None = None
     score: float = 0.0
     is_match: bool = False
     lead_time: float = 0.0
-    matched_reasoning: Optional[str] = None
-    duplicate_candidate_paper_ids: List[str] = field(default_factory=list)
+    matched_reasoning: str | None = None
+    duplicate_candidate_paper_ids: list[str] = field(default_factory=list)
     matched_paper_popularity: float = 0.0
 
 
 @dataclass
 class ScoredPredictionList:
     evaluation: EvaluationResult
-    matches: List[PredictionMatchDetail] = field(default_factory=list)
-    unmatched_future_paper_ids: List[str] = field(default_factory=list)
+    matches: list[PredictionMatchDetail] = field(default_factory=list)
+    unmatched_future_paper_ids: list[str] = field(default_factory=list)
 
 
 @dataclass

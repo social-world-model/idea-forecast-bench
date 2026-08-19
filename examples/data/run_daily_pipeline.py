@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
-from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.append(str(PROJECT_ROOT))
-
-from backend.services.daily_pipeline import PipelineAlreadyRunningError, run_daily_pipeline  # noqa: E402
+from backend.services.daily_pipeline import (  # noqa: E402
+    PipelineAlreadyRunningError,
+    run_daily_pipeline,
+)
 
 
 def main() -> int:

@@ -3,19 +3,13 @@ from __future__ import annotations
 import json
 import os
 import secrets
-import sys
 import threading
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any
 
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 
-# Add project root to path
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(project_root)
-
-from backend import config
 from backend.strategy_store import (
     bootstrap_backtest_if_missing,
     create_strategy,
@@ -29,7 +23,8 @@ from backend.strategy_store import (
 
 app = Flask(__name__)
 
-VIEWS_FILE = os.path.join(project_root, "data", "views.json")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+VIEWS_FILE = os.path.join(PROJECT_ROOT, "data", "views.json")
 
 
 def _env_flag(name: str, default: bool) -> bool:
@@ -50,7 +45,7 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-def _cors_origins() -> List[str]:
+def _cors_origins() -> list[str]:
     raw = os.environ.get("LIVE_IDEA_CORS_ORIGINS", "").strip()
     if raw:
         return [origin.strip() for origin in raw.split(",") if origin.strip()]
@@ -74,7 +69,11 @@ def _request_admin_token() -> str:
 
 
 def _auth_bypass_enabled() -> bool:
-    return app.testing or bool(os.environ.get("PYTEST_CURRENT_TEST"))
+    # Only Flask's own testing flag, which a test client sets explicitly.
+    # This used to also honour the PYTEST_CURRENT_TEST environment variable,
+    # which meant admin auth on every write endpoint could be switched off by
+    # anything able to set an env var in the server's process.
+    return bool(app.testing)
 
 
 def _is_protected_write_request() -> bool:
@@ -115,7 +114,13 @@ _bootstrap_leaderboard_async()
 
 
 class APIError(Exception):
-    def __init__(self, message: str, status_code: int = 400, code: str = "bad_request", details: Any = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        status_code: int = 400,
+        code: str = "bad_request",
+        details: Any = None,
+    ) -> None:
         super().__init__(message)
         self.message = message
         self.status_code = status_code
@@ -124,7 +129,7 @@ class APIError(Exception):
 
 
 @app.before_request
-def guard_protected_write_endpoints():
+def guard_protected_write_endpoints() -> None:
     if not _is_protected_write_request() or _auth_bypass_enabled():
         return None
 
@@ -143,7 +148,7 @@ def guard_protected_write_endpoints():
 
 
 @app.errorhandler(APIError)
-def handle_api_error(error: APIError):
+def handle_api_error(error: APIError) -> tuple[Response, int]:
     payload = {
         "error": {
             "code": error.code,
@@ -156,7 +161,7 @@ def handle_api_error(error: APIError):
 
 
 @app.errorhandler(Exception)
-def handle_unexpected_error(error: Exception):
+def handle_unexpected_error(error: Exception) -> tuple[Response, int]:
     app.logger.exception("Unhandled server error")
     payload = {
         "error": {
@@ -168,11 +173,12 @@ def handle_unexpected_error(error: Exception):
     }
     return jsonify(payload), 500
 
+
 def _read_views() -> int:
     if not os.path.exists(VIEWS_FILE):
         return 0
     try:
-        with open(VIEWS_FILE, "r", encoding="utf-8") as fh:
+        with open(VIEWS_FILE, encoding="utf-8") as fh:
             payload = json.load(fh)
         return int(payload.get("views", 0))
     except Exception:
@@ -187,7 +193,7 @@ def _write_views(views: int) -> None:
 
 @app.route("/healthz", methods=["GET"])
 @app.route("/api/health", methods=["GET", "POST"])
-def healthz():
+def healthz() -> Response | tuple[Response, int]:
     if request.method == "POST":
         return jsonify({"error": "Method not allowed"}), 405
     return jsonify(
@@ -200,12 +206,20 @@ def healthz():
 
 
 @app.route("/metrics", methods=["GET"])
-def metrics():
+def metrics() -> Response:
     strategies = list_strategies()
-    backtest_done = sum(1 for strategy in strategies if strategy.get("backtest_status") == "done")
-    backtest_running = sum(1 for strategy in strategies if strategy.get("backtest_status") == "running")
-    generation_done = sum(1 for strategy in strategies if strategy.get("generation_status") == "done")
-    generation_running = sum(1 for strategy in strategies if strategy.get("generation_status") == "running")
+    backtest_done = sum(
+        1 for strategy in strategies if strategy.get("backtest_status") == "done"
+    )
+    backtest_running = sum(
+        1 for strategy in strategies if strategy.get("backtest_status") == "running"
+    )
+    generation_done = sum(
+        1 for strategy in strategies if strategy.get("generation_status") == "done"
+    )
+    generation_running = sum(
+        1 for strategy in strategies if strategy.get("generation_status") == "running"
+    )
     return jsonify(
         {
             "strategies_total": len(strategies),
@@ -219,7 +233,7 @@ def metrics():
 
 
 @app.route("/api/views", methods=["GET", "POST"])
-def api_views():
+def api_views() -> Response:
     views = _read_views()
     if request.method == "POST":
         views += 1
@@ -228,7 +242,7 @@ def api_views():
 
 
 @app.route("/api/strategies", methods=["GET", "POST"])
-def api_strategies():
+def api_strategies() -> Response | tuple[Response, int]:
     if request.method == "GET":
         return jsonify(list_strategies())
 
@@ -238,7 +252,7 @@ def api_strategies():
 
 
 @app.route("/api/strategies/<strategy_id>", methods=["GET", "DELETE"])
-def api_strategy(strategy_id: str):
+def api_strategy(strategy_id: str) -> Response | tuple[str, int]:
     if request.method == "GET":
         strategy = get_strategy(strategy_id)
         if strategy is None:
@@ -252,7 +266,7 @@ def api_strategy(strategy_id: str):
 
 
 @app.route("/api/strategies/<strategy_id>/status", methods=["GET"])
-def api_strategy_status(strategy_id: str):
+def api_strategy_status(strategy_id: str) -> Response:
     strategy = get_strategy(strategy_id)
     if strategy is None:
         raise APIError("strategy not found", status_code=404, code="not_found")
@@ -267,7 +281,7 @@ def api_strategy_status(strategy_id: str):
 
 
 @app.route("/api/strategies/<strategy_id>/backtest", methods=["POST"])
-def api_strategy_backtest(strategy_id: str):
+def api_strategy_backtest(strategy_id: str) -> tuple[Response, int]:
     strategy = get_strategy(strategy_id)
     if strategy is None:
         raise APIError("strategy not found", status_code=404, code="not_found")
@@ -284,7 +298,7 @@ def api_strategy_backtest(strategy_id: str):
 
 
 @app.route("/api/strategies/<strategy_id>/generate", methods=["POST"])
-def api_strategy_generate(strategy_id: str):
+def api_strategy_generate(strategy_id: str) -> tuple[Response, int]:
     strategy = get_strategy(strategy_id)
     if strategy is None:
         raise APIError("strategy not found", status_code=404, code="not_found")

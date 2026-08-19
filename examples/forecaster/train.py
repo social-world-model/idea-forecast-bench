@@ -18,21 +18,23 @@ Usage:
         --papers data/csml/raw_markdown \\
         --output-dir output/forecaster_qwen3.5-2b
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import logging
-import sys
 from dataclasses import replace
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT_ROOT))
-
 from forecaster.config import SFTTrainConfig  # noqa: E402
-from forecaster.hindsight.dataset_builder import load_hindsight_samples_jsonl  # noqa: E402
-from forecaster.prior.sft_dataset import build_sft_samples, save_sft_dataset  # noqa: E402
+from forecaster.hindsight.dataset_builder import (
+    load_hindsight_samples_jsonl,  # noqa: E402
+)
+from forecaster.prior.sft_dataset import (  # noqa: E402
+    build_sft_samples,
+    save_sft_dataset,
+)
 from forecaster.prior.trainer import train_prior  # noqa: E402
 from forecaster.realization import (  # noqa: E402
     load_candidate_generation_config,
@@ -45,6 +47,8 @@ from forecaster.realization.model_zoo import resolve_small_model  # noqa: E402
 from forecaster.realization.pipeline import run_policy_rl_pipeline  # noqa: E402
 from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 log = logging.getLogger("forecaster.train")
 
@@ -53,21 +57,36 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Train the forecaster (Prior SFT + Realization GRPO) with Unsloth."
     )
-    p.add_argument("--model", default="qwen3.5-2b", help="Model preset alias (see model_zoo).")
-    p.add_argument("--hindsight", required=True, help="Path to hindsight_samples.jsonl.")
+    p.add_argument(
+        "--model", default="qwen3.5-2b", help="Model preset alias (see model_zoo)."
+    )
+    p.add_argument(
+        "--hindsight", required=True, help="Path to hindsight_samples.jsonl."
+    )
     p.add_argument(
         "--papers",
         default=str(PROJECT_ROOT.parent / "md_mineru"),
         help="Directory of markdown papers (default: ../md_mineru relative to repo root).",
     )
     p.add_argument("--output-dir", required=True, help="Top-level output directory.")
-    p.add_argument("--start-month", default=None, help="Lower bound month for loading papers.")
-    p.add_argument("--end-month", default=None, help="Upper bound month for loading papers.")
-    p.add_argument("--max-episodes", type=int, default=None, help="Cap GRPO episodes for quick runs.")
     p.add_argument(
-        "--max-grpo-rows", type=int, default=None,
+        "--start-month", default=None, help="Lower bound month for loading papers."
+    )
+    p.add_argument(
+        "--end-month", default=None, help="Upper bound month for loading papers."
+    )
+    p.add_argument(
+        "--max-episodes",
+        type=int,
+        default=None,
+        help="Cap GRPO episodes for quick runs.",
+    )
+    p.add_argument(
+        "--max-grpo-rows",
+        type=int,
+        default=None,
         help="Hard cap on the number of GRPO training rows (one row per hindsight sample). "
-             "Use this for smoke tests — --max-episodes only caps episode count, not rows.",
+        "Use this for smoke tests — --max-episodes only caps episode count, not rows.",
     )
     # Prior SFT overrides
     p.add_argument("--prior-epochs", type=int, default=3)
@@ -77,27 +96,57 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--prior-lora-r", type=int, default=16)
     p.add_argument("--max-memory-entries", type=int, default=10)
     # GRPO overrides
-    p.add_argument("--grpo-epochs", type=int, default=None, help="Override num_train_epochs for GRPO.")
-    p.add_argument("--grpo-lr", type=float, default=None, help="Override learning_rate for GRPO.")
-    p.add_argument("--num-generations", type=int, default=None, help="GRPO group size G (must fit in VRAM).")
-    p.add_argument("--max-completion-length", type=int, default=None, help="Override GRPO max_completion_length.")
     p.add_argument(
-        "--max-prompt-length", type=int, default=None,
+        "--grpo-epochs",
+        type=int,
+        default=None,
+        help="Override num_train_epochs for GRPO.",
+    )
+    p.add_argument(
+        "--grpo-lr", type=float, default=None, help="Override learning_rate for GRPO."
+    )
+    p.add_argument(
+        "--num-generations",
+        type=int,
+        default=None,
+        help="GRPO group size G (must fit in VRAM).",
+    )
+    p.add_argument(
+        "--max-completion-length",
+        type=int,
+        default=None,
+        help="Override GRPO max_completion_length.",
+    )
+    p.add_argument(
+        "--max-prompt-length",
+        type=int,
+        default=None,
         help="Override prompt length budget (used for FastLanguageModel max_seq_length sizing). "
-             "TRL 1.0.0 GRPOConfig itself no longer takes this — it's only used for the model loader.",
+        "TRL 1.0.0 GRPOConfig itself no longer takes this — it's only used for the model loader.",
     )
     # vLLM server-mode acceleration
     p.add_argument(
-        "--use-vllm-server", action="store_true",
+        "--use-vllm-server",
+        action="store_true",
         help="Talk to a separately-started vLLM server (vllm_mode='server') for fast generation. "
-             "The wrapper script scripts/forecaster/train.sh starts the server before invoking this script.",
+        "The wrapper script scripts/forecaster/train.sh starts the server before invoking this script.",
     )
     p.add_argument("--vllm-server-host", default="localhost")
     p.add_argument("--vllm-server-port", type=int, default=8765)
     # Skips
-    p.add_argument("--skip-prior-sft", action="store_true", help="Reuse existing prior_sft/final_checkpoint.")
-    p.add_argument("--skip-grpo", action="store_true", help="Skip the realization GRPO phase.")
-    p.add_argument("--skip-alignment-check", action="store_true", help="Skip GRPO online reward alignment gate.")
+    p.add_argument(
+        "--skip-prior-sft",
+        action="store_true",
+        help="Reuse existing prior_sft/final_checkpoint.",
+    )
+    p.add_argument(
+        "--skip-grpo", action="store_true", help="Skip the realization GRPO phase."
+    )
+    p.add_argument(
+        "--skip-alignment-check",
+        action="store_true",
+        help="Skip GRPO online reward alignment gate.",
+    )
     return p
 
 
@@ -137,7 +186,9 @@ def _phase1_prior_sft(args: argparse.Namespace, output_dir: Path) -> str:
         "model_alias": args.model,
         "num_samples": len(sft_samples),
     }
-    (sft_dir / "train_result.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    (sft_dir / "train_result.json").write_text(
+        json.dumps(meta, indent=2), encoding="utf-8"
+    )
     return checkpoint
 
 

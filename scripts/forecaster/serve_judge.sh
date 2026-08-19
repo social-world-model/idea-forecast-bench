@@ -51,7 +51,7 @@ if curl -sf -m 2 "http://localhost:${JUDGE_PORT}/v1/models" > /dev/null 2>&1; th
   exit 0
 fi
 
-PYTHON_BIN="${PYTHON_BIN:-/data/haofeiy2/miniconda3/envs/ideabench-unsloth/bin/python}"
+PYTHON_BIN="${PYTHON_BIN:-python}"
 
 env_args=()
 if [[ -n "${JUDGE_CUDA}" ]]; then

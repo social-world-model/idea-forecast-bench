@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import json
 import os
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import requests
 
@@ -46,7 +45,9 @@ def _parse_utc(raw: str | None) -> datetime | None:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(
+            timezone.utc
+        )
     except ValueError:
         return None
 
@@ -64,16 +65,26 @@ def _paper_id_from_url(raw: str) -> str:
     return value.rstrip("/").split("/")[-1]
 
 
-def _extract_entries(feed_text: str) -> List[Dict[str, Any]]:
+def _extract_entries(feed_text: str) -> list[dict[str, Any]]:
     root = ET.fromstring(feed_text)
-    entries: List[Dict[str, Any]] = []
+    entries: list[dict[str, Any]] = []
     for node in root.findall("atom:entry", ATOM_NS):
-        source_url = _sanitize_ws(node.findtext("atom:id", default="", namespaces=ATOM_NS))
+        source_url = _sanitize_ws(
+            node.findtext("atom:id", default="", namespaces=ATOM_NS)
+        )
         paper_id = _paper_id_from_url(source_url)
-        title = _sanitize_ws(node.findtext("atom:title", default="", namespaces=ATOM_NS))
-        summary = _sanitize_ws(node.findtext("atom:summary", default="", namespaces=ATOM_NS))
-        published = _parse_utc(node.findtext("atom:published", default="", namespaces=ATOM_NS))
-        updated = _parse_utc(node.findtext("atom:updated", default="", namespaces=ATOM_NS))
+        title = _sanitize_ws(
+            node.findtext("atom:title", default="", namespaces=ATOM_NS)
+        )
+        summary = _sanitize_ws(
+            node.findtext("atom:summary", default="", namespaces=ATOM_NS)
+        )
+        published = _parse_utc(
+            node.findtext("atom:published", default="", namespaces=ATOM_NS)
+        )
+        updated = _parse_utc(
+            node.findtext("atom:updated", default="", namespaces=ATOM_NS)
+        )
         keywords = []
         for cat in node.findall("atom:category", ATOM_NS):
             term = (cat.attrib.get("term") or "").strip()
@@ -103,7 +114,7 @@ def _paper_path(base_dir: Path, paper_id: str, month: str) -> Path:
     return base_dir / month / f"{safe_id}.md"
 
 
-def _build_markdown(entry: Dict[str, Any]) -> str:
+def _build_markdown(entry: dict[str, Any]) -> str:
     summary = (entry.get("summary") or "").strip()
     if not summary:
         summary = "No abstract provided by arXiv."
@@ -114,7 +125,11 @@ def _build_markdown(entry: Dict[str, Any]) -> str:
         f"Paper ID: {entry['paper_id']}",
         f"Date: {entry['published_at'].date().isoformat()}",
     ]
-    keywords = [str(keyword).strip() for keyword in (entry.get("keywords") or []) if str(keyword).strip()]
+    keywords = [
+        str(keyword).strip()
+        for keyword in (entry.get("keywords") or [])
+        if str(keyword).strip()
+    ]
     if keywords:
         lines.append(f"Keywords: {', '.join(keywords)}")
     if entry.get("source_url"):
@@ -130,7 +145,7 @@ def _build_markdown(entry: Dict[str, Any]) -> str:
     )
 
     references = entry.get("references") or []
-    rendered_references: List[str] = []
+    rendered_references: list[str] = []
     for index, reference in enumerate(references, start=1):
         if isinstance(reference, dict):
             text = str(
@@ -164,25 +179,34 @@ def ingest_latest_arxiv_papers(
     max_results: int | None = None,
     lookback_days: int | None = None,
     now: datetime | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     utc_now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     resolved_query = query or _env_str("LIVE_IDEA_ARXIV_QUERY", DEFAULT_QUERY)
-    resolved_max_results = max_results if max_results is not None else _env_int(
-        "LIVE_IDEA_ARXIV_MAX_RESULTS", DEFAULT_MAX_RESULTS
+    resolved_max_results = (
+        max_results
+        if max_results is not None
+        else _env_int("LIVE_IDEA_ARXIV_MAX_RESULTS", DEFAULT_MAX_RESULTS)
     )
-    resolved_lookback_days = lookback_days if lookback_days is not None else _env_int(
-        "LIVE_IDEA_ARXIV_LOOKBACK_DAYS", DEFAULT_LOOKBACK_DAYS
+    resolved_lookback_days = (
+        lookback_days
+        if lookback_days is not None
+        else _env_int("LIVE_IDEA_ARXIV_LOOKBACK_DAYS", DEFAULT_LOOKBACK_DAYS)
     )
     base_dir = Path(
         data_dir
         or _env_str(
             "LIVE_IDEA_BENCH_DATA_DIR",
-            str(Path(__file__).resolve().parents[1] / "data" / "arxiv_csml" / "raw_markdown"),
+            str(
+                Path(__file__).resolve().parents[1]
+                / "data"
+                / "arxiv_csml"
+                / "raw_markdown"
+            ),
         )
     ).expanduser()
     base_dir.mkdir(parents=True, exist_ok=True)
 
-    params = {
+    params: dict[str, str | int] = {
         "search_query": resolved_query,
         "start": 0,
         "max_results": max(1, resolved_max_results),
@@ -195,7 +219,7 @@ def ingest_latest_arxiv_papers(
     entries = _extract_entries(response.text)
     cutoff = utc_now - timedelta(days=max(0, resolved_lookback_days))
 
-    ingested: List[Dict[str, Any]] = []
+    ingested: list[dict[str, Any]] = []
     skipped_existing = 0
     skipped_old = 0
 

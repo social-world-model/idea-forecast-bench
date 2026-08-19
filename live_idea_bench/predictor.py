@@ -1,18 +1,19 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import random
 import re
-from typing import Any, Iterable, List
-
-logger = logging.getLogger(__name__)
+from collections.abc import Iterable
+from typing import Any
 
 from live_idea_bench.config import load_predictor_config, load_runtime_config
 from live_idea_bench.llm import create_client, get_response_from_llm
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.similarity import _sanitize
 
+logger = logging.getLogger(__name__)
 STOPWORDS = {
     "a",
     "an",
@@ -108,12 +109,16 @@ def _base_score(pred: IdeaPrediction, signal_terms: list[str]) -> float:
     pred_tokens = set(_tokenize(_prediction_text(pred)))
     if not signal_terms:
         return 0.0
-    coverage = sum(1 for term in signal_terms if term in pred_tokens) / len(signal_terms)
+    coverage = sum(1 for term in signal_terms if term in pred_tokens) / len(
+        signal_terms
+    )
     specificity = min(len(pred_tokens) / 30.0, 1.0)
     return (0.75 * coverage) + (0.25 * specificity)
 
 
-def _dedup_predictions(candidates: list[IdeaPrediction], threshold: float = 0.8) -> list[IdeaPrediction]:
+def _dedup_predictions(
+    candidates: list[IdeaPrediction], threshold: float = 0.8
+) -> list[IdeaPrediction]:
     deduped: list[IdeaPrediction] = []
     title_keys: set[str] = set()
 
@@ -121,15 +126,22 @@ def _dedup_predictions(candidates: list[IdeaPrediction], threshold: float = 0.8)
         key = re.sub(r"\s+", " ", candidate.title.lower()).strip()
         if key in title_keys:
             continue
-        if any(_jaccard(_prediction_text(candidate), _prediction_text(kept)) >= threshold for kept in deduped):
+        if any(
+            _jaccard(_prediction_text(candidate), _prediction_text(kept)) >= threshold
+            for kept in deduped
+        ):
             continue
         title_keys.add(key)
         deduped.append(candidate)
     return deduped
 
 
-def _rank_predictions(candidates: list[IdeaPrediction], signal_terms: list[str], top_k: int) -> list[IdeaPrediction]:
-    scored = [(candidate, _base_score(candidate, signal_terms)) for candidate in candidates]
+def _rank_predictions(
+    candidates: list[IdeaPrediction], signal_terms: list[str], top_k: int
+) -> list[IdeaPrediction]:
+    scored = [
+        (candidate, _base_score(candidate, signal_terms)) for candidate in candidates
+    ]
     pool = sorted(scored, key=lambda item: (-item[1], item[0].title.lower()))
     selected: list[IdeaPrediction] = []
 
@@ -146,7 +158,10 @@ def _rank_predictions(candidates: list[IdeaPrediction], signal_terms: list[str],
         best_idx = 0
         best_mmr = float("-inf")
         for idx, (candidate, base_score) in enumerate(pool):
-            similarity = max(_jaccard(_prediction_text(candidate), _prediction_text(chosen)) for chosen in selected)
+            similarity = max(
+                _jaccard(_prediction_text(candidate), _prediction_text(chosen))
+                for chosen in selected
+            )
             novelty = 1.0 - similarity
             mmr = (0.65 * base_score) + (0.35 * novelty)
             if mmr > best_mmr:
@@ -248,13 +263,16 @@ def _parse_single_prediction_item(payload: Any) -> dict[str, Any] | None:
 
 def _infer_domain(train_papers: list[PaperRecord]) -> str:
     terms = _top_terms(
-        list(paper.summary for paper in train_papers[-20:]) + [kw for p in train_papers[-20:] for kw in p.keywords],
+        [paper.summary for paper in train_papers[-20:]]
+        + [kw for p in train_papers[-20:] for kw in p.keywords],
         limit=3,
     )
     return ", ".join(terms) if terms else "recent AI research"
 
 
-def _build_abstract_block(train_papers: list[PaperRecord], max_context_papers: int) -> str:
+def _build_abstract_block(
+    train_papers: list[PaperRecord], max_context_papers: int
+) -> str:
     blocks = []
     for idx, paper in enumerate(train_papers[-max_context_papers:], start=1):
         blocks.append(
@@ -291,7 +309,9 @@ def _llm_predictions(
         domain=_infer_domain(train_papers),
         horizon=f"the months after {cutoff_month}",
         n_ideas=top_k,
-        abstracts=_build_abstract_block(train_papers, predictor_config.max_context_papers),
+        abstracts=_build_abstract_block(
+            train_papers, predictor_config.max_context_papers
+        ),
         cutoff_month=cutoff_month,
     )
     if retry_hint:
@@ -334,16 +354,25 @@ def _llm_predictions(
                 approach=approach,
                 score=_coerce_score(item.get("score", item.get("Score", 0.5))),
                 confidence=_coerce_score(
-                    item.get("confidence", item.get("Confidence", item.get("score", item.get("Score", 0.5))))
+                    item.get(
+                        "confidence",
+                        item.get(
+                            "Confidence", item.get("score", item.get("Score", 0.5))
+                        ),
+                    )
                 ),
-                key_terms=_coerce_key_terms(item.get("key_terms") or item.get("keywords")),
+                key_terms=_coerce_key_terms(
+                    item.get("key_terms") or item.get("keywords")
+                ),
             )
         )
         if len(predictions) >= top_k:
             break
 
     if not predictions:
-        raise RuntimeError("predictor LLM output could not be parsed into structured ideas")
+        raise RuntimeError(
+            "predictor LLM output could not be parsed into structured ideas"
+        )
     return predictions
 
 
@@ -353,7 +382,10 @@ def _heuristic_predictions(
     top_k: int,
 ) -> list[IdeaPrediction]:
     texts = [paper.summary for paper in train_papers[-40:]]
-    terms = _top_terms(texts + [kw for paper in train_papers[-20:] for kw in paper.keywords], limit=max(10, top_k * 3))
+    terms = _top_terms(
+        texts + [kw for paper in train_papers[-20:] for kw in paper.keywords],
+        limit=max(10, top_k * 3),
+    )
     if len(terms) < 3:
         terms.extend(["retrieval", "alignment", "reasoning"])
 
@@ -366,7 +398,12 @@ def _heuristic_predictions(
         "Benchmark-driven {a} generalization beyond static {b}",
     ]
 
-    seed = hash((cutoff_month, tuple(terms[:10]), top_k)) & 0xFFFFFFFF
+    # `hash()` over strings is salted per process (PYTHONHASHSEED), so this
+    # "deterministic" fallback produced different ideas on every run. Use a
+    # stable digest so a given (cutoff, terms, top_k) always yields the same
+    # predictions.
+    seed_material = repr((cutoff_month, tuple(terms[:10]), top_k)).encode()
+    seed = int.from_bytes(hashlib.sha256(seed_material).digest()[:4], "big")
     rng = random.Random(seed)
     candidates: list[IdeaPrediction] = []
     for idx in range(max(top_k * 2, 8)):
@@ -394,7 +431,9 @@ def _heuristic_predictions(
 
     rng.shuffle(candidates)
     candidates = _dedup_predictions(candidates)
-    signal_terms = _top_terms(texts + [paper.title for paper in train_papers[-20:]], limit=12)
+    signal_terms = _top_terms(
+        texts + [paper.title for paper in train_papers[-20:]], limit=12
+    )
     return _rank_predictions(candidates, signal_terms, top_k)
 
 
@@ -416,7 +455,9 @@ def generate_predictions(
 
     runtime_config = load_runtime_config()
     predictor_config = load_predictor_config(predictor_config_path)
-    resolved_model = model_name or predictor_config.default_model or runtime_config.model_name
+    resolved_model = (
+        model_name or predictor_config.default_model or runtime_config.model_name
+    )
 
     MAX_RETRIES = 3
     predictions: list[IdeaPrediction] = []

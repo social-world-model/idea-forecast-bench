@@ -47,8 +47,8 @@ def _req_key(
 
 
 def batch_set_collect(
-    collector: dict,
-    cache: dict | None = None,
+    collector: dict[str, dict[str, Any]],
+    cache: dict[str, str] | None = None,
     system_prefix: str | None = None,
 ) -> None:
     """Switch current thread to collect mode.
@@ -73,7 +73,7 @@ def batch_set_collect(
     _batch_tls.system_prefix = system_prefix
 
 
-def batch_set_replay(cache: dict) -> None:
+def batch_set_replay(cache: dict[str, str]) -> None:
     """Switch current thread to replay mode (serve from cache, fall back to live)."""
     _batch_tls.mode = "replay"
     _batch_tls.cache = cache
@@ -164,6 +164,28 @@ def _is_local_model(model: str) -> bool:
     return resolve_model_reference(model) is not None
 
 
+def _stream_idle_timeout() -> Any:
+    """Per-phase HTTP timeout for the OpenAI-compatible clients.
+
+    With ``stream=True`` the OpenAI SDK does not surface an APITimeoutError on
+    a long server hang unless the underlying HTTP client has per-phase
+    timeouts, so a plain float is not enough.
+
+    The Timeout class has to come from the same HTTP library the installed
+    openai SDK uses: openai >= 3 vendors httpx2, older releases use httpx.
+    Building it from the wrong one hands the client a foreign object.
+    """
+    import importlib
+
+    for module_name in ("httpx2", "httpx"):
+        try:
+            http_lib = importlib.import_module(module_name)
+        except ImportError:
+            continue
+        return http_lib.Timeout(connect=30.0, read=120.0, write=60.0, pool=60.0)
+    raise ImportError("neither httpx2 nor httpx is installed; openai requires one")
+
+
 def create_client(model: str) -> tuple[Any, str]:
     if _is_anthropic_model(model):
         import anthropic
@@ -172,8 +194,9 @@ def create_client(model: str) -> tuple[Any, str]:
         return anthropic.Anthropic(api_key=api_key), model
 
     if _is_openai_model(model):
-        import openai
         import os as _os
+
+        import openai
 
         # When OPENAI_BASE_URL is set, route to that endpoint (used for local
         # vLLM-served LoRA-merged models in evaluation pipelines). The
@@ -187,14 +210,10 @@ def create_client(model: str) -> tuple[Any, str]:
         return openai.OpenAI(api_key=api_key, base_url=base_url), model
 
     if _is_together_model(model):
-        import httpx
         import openai
 
         api_key = _require_api_key("TOGETHER_API_KEY", model)
-        # Stream-idle hard timeout: with stream=True the OpenAI SDK never
-        # surfaces an APITimeoutError on long server hangs unless we set
-        # per-phase timeouts on the underlying httpx client.
-        timeout = httpx.Timeout(connect=30.0, read=120.0, write=60.0, pool=60.0)
+        timeout = _stream_idle_timeout()
         return (
             openai.OpenAI(
                 api_key=api_key,
@@ -206,11 +225,10 @@ def create_client(model: str) -> tuple[Any, str]:
         )
 
     if _is_deepseek_official_model(model):
-        import httpx
         import openai
 
         api_key = _require_api_key("DEEPSEEK_API_KEY", model)
-        timeout = httpx.Timeout(connect=30.0, read=120.0, write=60.0, pool=60.0)
+        timeout = _stream_idle_timeout()
         return (
             openai.OpenAI(
                 api_key=api_key,
@@ -225,8 +243,10 @@ def create_client(model: str) -> tuple[Any, str]:
         import google.generativeai as genai
 
         api_key = _require_api_key("GOOGLE_API_KEY", model)
-        genai.configure(api_key=api_key)
-        return genai.GenerativeModel(model), model
+        # google-generativeai re-exports these from its __init__ without an
+        # explicit `as` alias, so strict mode's no_implicit_reexport hides them.
+        genai.configure(api_key=api_key)  # type: ignore[attr-defined]
+        return genai.GenerativeModel(model), model  # type: ignore[attr-defined]
 
     if _is_local_model(model):
         resolved_model = resolve_model_reference(model)
@@ -239,7 +259,11 @@ def create_client(model: str) -> tuple[Any, str]:
 
 def _sanitize_text(text: str) -> str:
     """Remove null bytes and control characters that cause JSON parse errors in API requests."""
-    return "".join(ch for ch in text if ch == "\n" or ch == "\t" or (ord(ch) >= 32 and ord(ch) != 127))
+    return "".join(
+        ch
+        for ch in text
+        if ch == "\n" or ch == "\t" or (ord(ch) >= 32 and ord(ch) != 127)
+    )
 
 
 def get_response_from_llm(
@@ -263,7 +287,7 @@ def get_response_from_llm(
     _mode = getattr(_batch_tls, "mode", None)
     if _mode in ("collect", "replay"):
         _key = _req_key(model, system_message, msg, reasoning_effort, temperature)
-        _cache: dict = getattr(_batch_tls, "cache", {}) or {}
+        _cache: dict[str, str] = getattr(_batch_tls, "cache", {}) or {}
 
         # Cache hit: return stored response (works in both collect and replay modes)
         if _key in _cache:
@@ -277,7 +301,9 @@ def get_response_from_llm(
         if _mode == "collect":
             _sys_prefix = getattr(_batch_tls, "system_prefix", None)
             if _sys_prefix is None or system_message.startswith(_sys_prefix):
-                _collector: dict = getattr(_batch_tls, "collector", {})
+                _collector: dict[str, dict[str, Any]] = getattr(
+                    _batch_tls, "collector", {}
+                )
                 _collector[_key] = {
                     "model": model,
                     "system_message": system_message,
@@ -297,7 +323,8 @@ def get_response_from_llm(
         # replay mode, key not in cache → fall through to live API (safety fallback)
         logger.warning(
             "batch replay: cache miss for key=%s model=%s — falling back to live API",
-            _key[:12], model,
+            _key[:12],
+            model,
         )
     # ── End batch-mode interception ────────────────────────────────────────────
 
@@ -308,7 +335,7 @@ def get_response_from_llm(
                 "content": [{"type": "text", "text": msg}],
             }
         ]
-        request_kwargs = {
+        request_kwargs: dict[str, Any] = {
             "model": model,
             "max_tokens": MAX_NUM_TOKENS,
             "temperature": temperature,
@@ -327,8 +354,9 @@ def get_response_from_llm(
         ]
     elif _is_openai_model(model):
         import os as _os
+
         new_msg_history = msg_history + [{"role": "user", "content": msg}]
-        request_kwargs: dict[str, Any] = {
+        request_kwargs = {
             "model": model,
             "messages": [
                 {"role": "system", "content": system_message},
@@ -401,6 +429,7 @@ def get_response_from_llm(
         # <think>...</think>; strip it so downstream JSON parsing isn't fooled.
         if "<think>" in content:
             import re
+
             content = re.sub(
                 r"<think>.*?</think>", "", content, flags=re.DOTALL | re.IGNORECASE
             ).strip()
@@ -465,7 +494,7 @@ def get_response_from_llm(
 
         with torch.no_grad():
             generated = model_obj.generate(**generate_kwargs)
-        output_ids = generated[0][len(encoded["input_ids"][0]):].tolist()
+        output_ids = generated[0][len(encoded["input_ids"][0]) :].tolist()
         content = tokenizer.decode(output_ids, skip_special_tokens=True).strip()
         new_msg_history = new_msg_history + [{"role": "assistant", "content": content}]
     else:
@@ -482,6 +511,8 @@ def get_response_from_llm(
 
     logger.debug(
         "LLM | model=%s | chars=%d | preview=%s",
-        model, len(content), content[:300].replace("\n", " "),
+        model,
+        len(content),
+        content[:300].replace("\n", " "),
     )
     return content, new_msg_history

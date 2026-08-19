@@ -1,10 +1,15 @@
 """Build SFT training dataset for the innovation prior."""
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from forecaster.models import HindsightSample, innovation_to_json, memory_inventory_to_dict
+from forecaster.models import (
+    HindsightSample,
+    innovation_to_json,
+    memory_inventory_to_dict,
+)
 from forecaster.prior.memory import build_memory_store_from_hindsight_samples
 from forecaster.prior.prompting import render_prior_user_prompt
 
@@ -43,7 +48,9 @@ def build_sft_samples(
         snapshot = (memory_snapshots_by_cutoff or {}).get(sample.cutoff_month)
         if snapshot is not None:
             if not hasattr(snapshot, "exclude_source_paper_ids"):
-                raise TypeError("memory_snapshots_by_cutoff values must provide exclude_source_paper_ids().")
+                raise TypeError(
+                    "memory_snapshots_by_cutoff values must provide exclude_source_paper_ids()."
+                )
             memory = snapshot.exclude_source_paper_ids({sample.future_paper_id})
         else:
             memory = build_memory_store_from_hindsight_samples(

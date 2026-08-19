@@ -246,7 +246,7 @@ if [ -f "$TRAINED_EVAL" ]; then
   echo "Delete it to re-run: rm $TRAINED_EVAL"
 else
   echo ""; echo "===== Running evaluation ====="
-  python3 examples/live-idea-bench/run_domain_backtest.py \
+  python3 examples/benchmark/run_domain_backtest.py \
     --strategy forecaster \
     --model-name "$BASE_MODEL_ID" \
     --prior-checkpoint "$PRIOR_CKPT" \
@@ -265,7 +265,7 @@ if [ -n "${VOYAGE_API_KEY:-}" ]; then
     echo ""; echo "Voyage re-eval already exists: $VOYAGE_EVAL"
   else
     echo ""; echo "===== Voyage Re-eval (threshold=0.80) ====="
-    VOYAGE_API_KEY="$VOYAGE_API_KEY" python3 examples/live-idea-bench/reeval_voyage.py \
+    VOYAGE_API_KEY="$VOYAGE_API_KEY" python3 examples/benchmark/reeval_voyage.py \
       --input-json "$TRAINED_EVAL" \
       --papers-dir "$PAPERS" \
       --output "$VOYAGE_EVAL" \
@@ -274,7 +274,7 @@ if [ -n "${VOYAGE_API_KEY:-}" ]; then
 else
   echo ""
   echo "VOYAGE_API_KEY not set. Run Voyage re-eval manually for paper-comparable scores:"
-  echo "  VOYAGE_API_KEY=... python3 examples/live-idea-bench/reeval_voyage.py \\"
+  echo "  VOYAGE_API_KEY=... python3 examples/benchmark/reeval_voyage.py \\"
   echo "    --input-json $TRAINED_EVAL --papers-dir $PAPERS \\"
   echo "    --output $VOYAGE_EVAL --threshold 0.80"
 fi

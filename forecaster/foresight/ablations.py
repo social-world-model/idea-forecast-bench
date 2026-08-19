@@ -4,13 +4,13 @@ Each ablation flips a single switch on the foresight reward + context.
 A run is described by an `AblationConfig` row; the runner produces an
 identically-shaped row of metrics. This module owns *only* the toggles
 and the metric-record shape; the actual eval harness lives in
-scripts/phase8_ablations.py.
+examples/forecaster/phase8_ablations.py.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
-
 
 # The single switches mandated by the plan.
 REWARD_VARIANTS: tuple[str, ...] = ("foresight", "embedding_threshold", "raw_judge")
@@ -24,10 +24,10 @@ class AblationConfig:
     """One ablation cell. Set exactly one field away from the baseline."""
 
     name: str
-    reward_variant: str = "foresight"           # ours
-    decomposition_variant: str = "per_z"        # ours
-    rubric_variant: str = "static"              # ours (Phase 6 off)
-    gate_variant: str = "both"                  # ours
+    reward_variant: str = "foresight"  # ours
+    decomposition_variant: str = "per_z"  # ours
+    rubric_variant: str = "static"  # ours (Phase 6 off)
+    gate_variant: str = "both"  # ours
 
     def to_json(self) -> dict[str, Any]:
         return {

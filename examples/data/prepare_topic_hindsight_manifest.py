@@ -2,11 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT_ROOT))
 
 from forecaster.hindsight.topic_sampling import (  # noqa: E402
     DEFAULT_TOPICS_CONFIG_PATH,
@@ -63,4 +59,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

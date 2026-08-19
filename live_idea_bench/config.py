@@ -162,7 +162,7 @@ class Config:
         cls,
         config_path: str | None = None,
         prompt_dir: str | None = None,
-    ) -> "Config":
+    ) -> Config:
         runtime = load_runtime_config(config_path)
         similarity = load_similarity_config("similarity.yaml", prompt_dir=prompt_dir)
         runtime.prompt_template = PromptTemplate(
@@ -278,8 +278,15 @@ def load_runtime_config(config_path: str | None = None) -> Config:
     payload = _read_yaml(_resolve_config_path(config_path))
     embedding_payload = payload.pop("embedding", {}) or {}
     topics_payload = payload.pop("topics", None)
+    topics_file = payload.pop("topics_file", None)
     if not isinstance(embedding_payload, dict):
         raise ValueError("embedding config must be a mapping")
+    if topics_payload is None and topics_file:
+        # Single source of truth for the taxonomy. An inline `topics:` block
+        # still wins if present, so existing configs keep working.
+        topics_payload = _read_yaml(_resolve_config_path(str(topics_file))).get(
+            "topics"
+        )
     return Config(
         model_name=str(payload.get("model_name", "gpt-4o")),
         max_context_chars=int(payload.get("max_context_chars", 15000)),
@@ -307,7 +314,9 @@ def load_predictor_config(
     system_prompt = str(payload.get("system_prompt", "")).strip()
     user_template = str(payload.get("user_template", "")).strip()
     if not system_prompt or not user_template:
-        raise ValueError("predictor.yaml requires non-empty system_prompt and user_template")
+        raise ValueError(
+            "predictor.yaml requires non-empty system_prompt and user_template"
+        )
     return PredictorConfig(
         system_prompt=system_prompt,
         user_template=user_template,
@@ -363,15 +372,21 @@ def get_prompt_policy(
     *,
     prompt_dir: str | None = None,
 ) -> dict[str, Any]:
-    payload = _read_yaml(_resolve_versioned_prompt_path(prompt_id, version, prompt_dir=prompt_dir))
+    payload = _read_yaml(
+        _resolve_versioned_prompt_path(prompt_id, version, prompt_dir=prompt_dir)
+    )
     template = str(payload.get("template") or "").strip()
     if not template:
         raise ValueError("versioned prompt assets require a non-empty template field")
     return {
         "prompt_id": str(payload.get("prompt_id") or prompt_id),
         "version": str(payload.get("version") or version),
-        "model_id": str(payload.get("model_id") or payload.get("default_model") or "").strip(),
-        "temperature": float(payload.get("temperature", payload.get("default_temperature", 0.7))),
+        "model_id": str(
+            payload.get("model_id") or payload.get("default_model") or ""
+        ).strip(),
+        "temperature": float(
+            payload.get("temperature", payload.get("default_temperature", 0.7))
+        ),
         "max_tokens": int(payload.get("max_tokens", 1024)),
         "timeout_seconds": int(payload.get("timeout_seconds", 30)),
         "template": template,

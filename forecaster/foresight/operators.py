@@ -5,14 +5,14 @@ ALLOWED_INNOVATION_OPERATORS (8 verbs). For the Foresight plan we collapse
 this to a closed 4-set plus an `other` bucket so the rubric/reward gates
 can branch on a small enum.
 """
+
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import yaml
-
 
 CLOSED_OPERATORS: tuple[str, ...] = (
     "limitation_extension",
@@ -53,7 +53,9 @@ def load_operator_inventory(path: str | Path | None = None) -> OperatorInventory
     p = Path(path) if path is not None else _default_config_path()
     payload = yaml.safe_load(p.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
-        raise ValueError(f"operators.yaml must decode to a mapping, got {type(payload)}")
+        raise ValueError(
+            f"operators.yaml must decode to a mapping, got {type(payload)}"
+        )
 
     raw_ops = payload.get("operators") or []
     if not isinstance(raw_ops, list) or not raw_ops:
@@ -77,7 +79,9 @@ def load_operator_inventory(path: str | Path | None = None) -> OperatorInventory
     raw_map = payload.get("free_text_mapping") or {}
     if not isinstance(raw_map, dict):
         raise ValueError("operators.yaml: 'free_text_mapping' must be a mapping")
-    free_text_mapping = {str(k).strip().lower(): str(v).strip() for k, v in raw_map.items()}
+    free_text_mapping = {
+        str(k).strip().lower(): str(v).strip() for k, v in raw_map.items()
+    }
     unmappable = str(payload.get("unmappable_bucket", UNMAPPABLE_BUCKET)).strip()
 
     allowed_targets = closed_ids | {unmappable}

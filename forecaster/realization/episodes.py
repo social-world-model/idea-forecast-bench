@@ -4,10 +4,10 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from forecaster.realization.config import EpisodeBuildConfig
 from live_idea_bench.backtest import split_train_future_by_cutoff
 from live_idea_bench.models import PaperRecord
 from live_idea_bench.papers import add_months, month_start_date, month_to_index
-from forecaster.realization.config import EpisodeBuildConfig
 
 
 @dataclass
@@ -41,7 +41,9 @@ def _filter_by_month(
     return filtered
 
 
-def _split_labels_by_ratio(total: int, train_ratio: float, validation_ratio: float) -> list[str]:
+def _split_labels_by_ratio(
+    total: int, train_ratio: float, validation_ratio: float
+) -> list[str]:
     if total <= 0:
         return []
 
@@ -65,7 +67,11 @@ def _split_labels_by_ratio(total: int, train_ratio: float, validation_ratio: flo
         validation_count = 0
         test_count = total - train_count
 
-    labels = (["train"] * train_count) + (["validation"] * validation_count) + (["test"] * test_count)
+    labels = (
+        (["train"] * train_count)
+        + (["validation"] * validation_count)
+        + (["test"] * test_count)
+    )
     if len(labels) < total:
         labels.extend(["test"] * (total - len(labels)))
     return labels[:total]
@@ -80,9 +86,15 @@ def _split_labels_by_calendar(
     if not validation_start_month and not test_start_month:
         return None
 
-    validation_idx = month_to_index(validation_start_month) if validation_start_month else None
+    validation_idx = (
+        month_to_index(validation_start_month) if validation_start_month else None
+    )
     test_idx = month_to_index(test_start_month) if test_start_month else None
-    if validation_idx is not None and test_idx is not None and test_idx < validation_idx:
+    if (
+        validation_idx is not None
+        and test_idx is not None
+        and test_idx < validation_idx
+    ):
         raise ValueError("test_start_month must be on or after validation_start_month")
 
     labels: list[str] = []
@@ -116,7 +128,7 @@ def build_rl_episodes(
     if not scoped_papers:
         return []
 
-    month_values = sorted(set(paper.month for paper in scoped_papers), key=month_to_index)
+    month_values = sorted({paper.month for paper in scoped_papers}, key=month_to_index)
     first_month_idx = month_to_index(month_values[0])
     candidate_rows: list[dict[str, Any]] = []
     for cutoff in month_values:
@@ -133,7 +145,9 @@ def build_rl_episodes(
         if config.past_window_months is not None:
             earliest_train_month = add_months(cutoff, -(config.past_window_months - 1))
             earliest_idx = month_to_index(earliest_train_month)
-            train = [paper for paper in train if month_to_index(paper.month) >= earliest_idx]
+            train = [
+                paper for paper in train if month_to_index(paper.month) >= earliest_idx
+            ]
         if len(train) < config.min_train_papers or not future:
             continue
         candidate_rows.append(
@@ -154,13 +168,17 @@ def build_rl_episodes(
         test_start_month=config.test_start_month,
     )
     if labels is None:
-        labels = _split_labels_by_ratio(len(candidate_rows), config.train_ratio, config.validation_ratio)
+        labels = _split_labels_by_ratio(
+            len(candidate_rows), config.train_ratio, config.validation_ratio
+        )
     episodes: list[RLEpisode] = []
     for idx, row in enumerate(candidate_rows):
         split = labels[idx] if idx < len(labels) else "test"
         cache_artifact_path = ""
         if cache_root is not None:
-            cache_artifact_path = str((cache_root / split / f"{row['cutoff_month']}.json").resolve())
+            cache_artifact_path = str(
+                (cache_root / split / f"{row['cutoff_month']}.json").resolve()
+            )
         episodes.append(
             RLEpisode(
                 cutoff_month=row["cutoff_month"],

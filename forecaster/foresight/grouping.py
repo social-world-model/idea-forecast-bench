@@ -10,12 +10,14 @@ Asserts (load-bearing — raise, not warn):
   * within a group, all G rollouts share identical (cutoff_t, innovation),
   * G >= 2.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 from collections import Counter
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +27,11 @@ def _coerce_extra(extra: Any) -> dict[str, Any]:
         return extra
     if isinstance(extra, str) and extra.strip():
         try:
-            return json.loads(extra)
+            # json.loads is typed as returning Any; bind it to a typed local.
+            parsed: dict[str, Any] = json.loads(extra)
         except json.JSONDecodeError:
             return {}
+        return parsed
     return {}
 
 

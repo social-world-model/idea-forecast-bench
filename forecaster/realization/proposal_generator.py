@@ -1,4 +1,5 @@
 """Generate research proposals from innovation triples and evidence."""
+
 from __future__ import annotations
 
 import logging
@@ -7,16 +8,16 @@ from typing import Any
 
 import yaml
 
-from live_idea_bench.models import IdeaPrediction, PaperRecord
+from forecaster.config import RealizationConfig
+from forecaster.models import Innovation
 from live_idea_bench.llm import get_response_from_llm
 from live_idea_bench.model_refs import resolve_model_reference
-
-from forecaster.models import Innovation
-from forecaster.config import RealizationConfig
+from live_idea_bench.models import IdeaPrediction, PaperRecord
 
 logger = logging.getLogger(__name__)
 
 PROMPT_FILE = Path(__file__).parent.parent / "prompt" / "realization.yaml"
+
 
 def strip_think_block(text: str) -> str:
     """Strip Qwen3.5 thinking-mode reasoning from a generated completion.
@@ -142,8 +143,12 @@ def _generate_proposal_local(
     Returns:
         Generated proposal text.
     """
-    from forecaster.realization.local_generation import _load_local_model, _apply_chat_template, _require_local_generation_stack
     from forecaster.prior.sampler import _detect_base_model
+    from forecaster.realization.local_generation import (
+        _apply_chat_template,
+        _load_local_model,
+        _require_local_generation_stack,
+    )
 
     full_prompt = f"{system_prompt}\n\n{user_msg}".strip()
 
@@ -183,7 +188,7 @@ def _generate_proposal_local(
         top_k=20,
         repetition_penalty=1.5,
     )
-    output_ids = generated[0][len(encoded["input_ids"][0]):].tolist()
+    output_ids = generated[0][len(encoded["input_ids"][0]) :].tolist()
     decoded = tokenizer.decode(output_ids, skip_special_tokens=True)
     return strip_think_block(decoded).strip()
 
@@ -195,11 +200,13 @@ def _sglang_api_url() -> str | None:
     The server must be launched separately (e.g., from the eval-sglang conda env).
     """
     import os
+
     url = os.environ.get("SGLANG_URL", "").strip()
     if not url:
         return None
     try:
         import urllib.request
+
         urllib.request.urlopen(f"{url}/v1/models", timeout=2)
         return url
     except Exception:
@@ -207,7 +214,7 @@ def _sglang_api_url() -> str | None:
 
 
 def generate_proposals_batch(
-    innovations_and_evidence: list[tuple["Innovation", list[PaperRecord]]],
+    innovations_and_evidence: list[tuple[Innovation, list[PaperRecord]]],
     realization_model_path: str,
     config: RealizationConfig,
     *,
@@ -230,7 +237,13 @@ def generate_proposals_batch(
     prompt_data = _load_prompt()
     prompts: list[str] = []
     for innovation, evidence in innovations_and_evidence:
-        user_msg = _build_user_message(prompt_data, innovation, evidence, context_papers=context_papers, config=config)
+        user_msg = _build_user_message(
+            prompt_data,
+            innovation,
+            evidence,
+            context_papers=context_papers,
+            config=config,
+        )
         prompts.append(f"{prompt_data['system_prompt']}\n\n{user_msg}".strip())
 
     # --- SGLang API fast path (~10x faster than HF generate) ---
@@ -243,6 +256,7 @@ def generate_proposals_batch(
     if sglang_url:
         try:
             import openai
+
             client = openai.OpenAI(base_url=f"{sglang_url}/v1", api_key="none")
             models = client.models.list()
             model_id = models.data[0].id if models.data else "default"
@@ -269,14 +283,20 @@ def generate_proposals_batch(
             logger.warning("SGLang API failed (%s); falling back to HF generate.", exc)
 
     # --- HF generate fallback ---
-    from forecaster.realization.local_generation import _load_local_model, _apply_chat_template, _require_local_generation_stack
+    from forecaster.realization.local_generation import (
+        _apply_chat_template,
+        _load_local_model,
+        _require_local_generation_stack,
+    )
 
     resolved_base = base_model_name
     adapter_path = Path(realization_model_path) / "adapter_config.json"
     if resolved_base is None and adapter_path.exists():
         resolved_base = _detect_base_model(realization_model_path)
 
-    model, tokenizer = _load_local_model(realization_model_path, base_model_name=resolved_base)
+    model, tokenizer = _load_local_model(
+        realization_model_path, base_model_name=resolved_base
+    )
     deps = _require_local_generation_stack()
     torch = deps["torch"]
 
@@ -285,7 +305,9 @@ def generate_proposals_batch(
     tokenizer.padding_side = "left"
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
-    encoded = tokenizer(chat_prompts, return_tensors="pt", padding=True, truncation=True)
+    encoded = tokenizer(
+        chat_prompts, return_tensors="pt", padding=True, truncation=True
+    )
     encoded = {k: v.to(model.device) for k, v in encoded.items()}
 
     with torch.no_grad():
@@ -303,115 +325,9 @@ def generate_proposals_batch(
 
     results = []
     for seq in generated:
-        output_ids = seq[encoded["input_ids"].shape[1]:].tolist()
+        output_ids = seq[encoded["input_ids"].shape[1] :].tolist()
         decoded = tokenizer.decode(output_ids, skip_special_tokens=True)
         results.append(strip_think_block(decoded).strip())
-
-    tokenizer.padding_side = "right"
-    return results
-
-
-def _sglang_api_url() -> str | None:
-    """Return the SGLang server URL if available, or None.
-
-    Set SGLANG_URL=http://localhost:30000 to enable.
-    The server must be launched separately (e.g., from the eval-sglang conda env).
-    """
-    import os
-    url = os.environ.get("SGLANG_URL", "").strip()
-    if not url:
-        return None
-    try:
-        import urllib.request
-        urllib.request.urlopen(f"{url}/v1/models", timeout=2)
-        return url
-    except Exception:
-        return None
-
-
-def generate_proposals_batch(
-    innovations_and_evidence: list[tuple["Innovation", list[PaperRecord]]],
-    realization_model_path: str,
-    config: RealizationConfig,
-    *,
-    context_papers: list[PaperRecord] | None = None,
-    base_model_name: str | None = None,
-    temperature: float | None = None,
-    top_p: float | None = None,
-) -> list[str]:
-    """Batch-generate proposals for multiple innovations.
-
-    Uses SGLang offline engine when available (~10x faster than HF generate).
-    Falls back to HF model.generate() otherwise.
-    """
-    if not innovations_and_evidence:
-        return []
-
-    from forecaster.prior.sampler import _detect_base_model
-
-    # Build all prompts
-    prompt_data = _load_prompt()
-    prompts: list[str] = []
-    for innovation, evidence in innovations_and_evidence:
-        user_msg = _build_user_message(prompt_data, innovation, evidence, context_papers=context_papers, config=config)
-        prompts.append(f"{prompt_data['system_prompt']}\n\n{user_msg}".strip())
-
-    # --- SGLang API fast path (~10x faster than HF generate) ---
-    sglang_url = _sglang_api_url()
-    if sglang_url:
-        try:
-            import openai
-            client = openai.OpenAI(base_url=f"{sglang_url}/v1", api_key="none")
-            models = client.models.list()
-            model_id = models.data[0].id if models.data else "default"
-
-            results = []
-            for prompt in prompts:
-                r = client.completions.create(
-                    model=model_id, prompt=prompt,
-                    max_tokens=config.proposal_max_tokens,
-                    temperature=0.7 if temperature is None else temperature,
-                    top_p=0.9 if top_p is None else top_p,
-                )
-                results.append(r.choices[0].text.strip())
-            return results
-        except Exception as exc:
-            logger.warning("SGLang API failed (%s); falling back to HF generate.", exc)
-
-    # --- HF generate fallback ---
-    from forecaster.realization.local_generation import _load_local_model, _apply_chat_template, _require_local_generation_stack
-
-    resolved_base = base_model_name
-    adapter_path = Path(realization_model_path) / "adapter_config.json"
-    if resolved_base is None and adapter_path.exists():
-        resolved_base = _detect_base_model(realization_model_path)
-
-    model, tokenizer = _load_local_model(realization_model_path, base_model_name=resolved_base)
-    deps = _require_local_generation_stack()
-    torch = deps["torch"]
-
-    chat_prompts = [_apply_chat_template(tokenizer, p, None) for p in prompts]
-
-    tokenizer.padding_side = "left"
-    if tokenizer.pad_token_id is None:
-        tokenizer.pad_token_id = tokenizer.eos_token_id
-    encoded = tokenizer(chat_prompts, return_tensors="pt", padding=True, truncation=True)
-    encoded = {k: v.to(model.device) for k, v in encoded.items()}
-
-    with torch.no_grad():
-        generated = model.generate(
-            **encoded,
-            max_new_tokens=config.proposal_max_tokens,
-            pad_token_id=tokenizer.pad_token_id,
-            do_sample=True,
-            temperature=0.7 if temperature is None else temperature,
-            top_p=0.9 if top_p is None else top_p,
-        )
-
-    results = []
-    for seq in generated:
-        output_ids = seq[encoded["input_ids"].shape[1]:].tolist()
-        results.append(tokenizer.decode(output_ids, skip_special_tokens=True).strip())
 
     tokenizer.padding_side = "right"
     return results
@@ -461,12 +377,12 @@ def score_local_proposal(
     score_temperature: float = 1.0,
 ) -> float:
     """Score log p_psi(y | z, X) for a concrete proposal under a local policy artifact."""
+    from forecaster.prior.sampler import _detect_base_model
     from forecaster.realization.local_generation import (
         _apply_chat_template,
         _load_local_model,
         _require_local_generation_stack,
     )
-    from forecaster.prior.sampler import _detect_base_model
 
     if not proposal_text.strip():
         return float("-inf")
@@ -503,10 +419,14 @@ def score_local_proposal(
     if score_temperature > 0 and score_temperature != 1.0:
         logits = logits / score_temperature
     target_ids = encoded["input_ids"][:, 1:]
-    target_log_probs = F.log_softmax(logits, dim=-1).gather(
-        dim=-1,
-        index=target_ids.unsqueeze(-1),
-    ).squeeze(-1)
+    target_log_probs = (
+        F.log_softmax(logits, dim=-1)
+        .gather(
+            dim=-1,
+            index=target_ids.unsqueeze(-1),
+        )
+        .squeeze(-1)
+    )
     target_start = max(0, prompt_len - 1)
     conditioned = target_log_probs[:, target_start:]
     if conditioned.numel() == 0:

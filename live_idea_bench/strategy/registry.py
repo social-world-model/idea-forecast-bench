@@ -1,3 +1,5 @@
+from typing import Any
+
 from live_idea_bench.strategy.base import IdeaStrategy
 from live_idea_bench.strategy.keyword_trend import KeywordTrendStrategy
 from live_idea_bench.strategy.memory_prompting import MemoryPromptingStrategy
@@ -18,7 +20,7 @@ def create_strategy(
     similarity_config: str = "similarity.yaml",
     temperature: float | None = None,
     reasoning_effort: str | None = None,
-    **legacy_params,
+    **legacy_params: Any,
 ) -> IdeaStrategy:
     normalized = strategy_name.strip().lower()
     if normalized == KeywordTrendStrategy.name:
@@ -30,8 +32,12 @@ def create_strategy(
         resolved_model = model_name or legacy_params.get("model_id")
         return PredictorLLMStrategy(
             model_name=str(resolved_model) if resolved_model else None,
-            predictor_config=str(legacy_params.get("predictor_config", predictor_config)),
-            similarity_config=str(legacy_params.get("similarity_config", similarity_config)),
+            predictor_config=str(
+                legacy_params.get("predictor_config", predictor_config)
+            ),
+            similarity_config=str(
+                legacy_params.get("similarity_config", similarity_config)
+            ),
             temperature=temperature,
             reasoning_effort=reasoning_effort,
         )
@@ -39,9 +45,15 @@ def create_strategy(
         resolved_model = model_name or legacy_params.get("model_id")
         return PolicyRLStrategy(
             model_name=str(resolved_model) if resolved_model else None,
-            predictor_config=str(legacy_params.get("predictor_config", predictor_config)),
-            selection_config=str(legacy_params.get("selection_config", selection_config)),
-            similarity_config=str(legacy_params.get("similarity_config", similarity_config)),
+            predictor_config=str(
+                legacy_params.get("predictor_config", predictor_config)
+            ),
+            selection_config=str(
+                legacy_params.get("selection_config", selection_config)
+            ),
+            similarity_config=str(
+                legacy_params.get("similarity_config", similarity_config)
+            ),
             temperature=temperature,
             policy_manifest_path=(
                 str(legacy_params.get("policy_manifest_path"))
@@ -54,11 +66,21 @@ def create_strategy(
 
         return ForecasterStrategy(
             model_name=model_name,
-            memory_path=str(legacy_params["memory_path"]) if legacy_params.get("memory_path") else None,
-            prior_checkpoint=str(legacy_params["prior_checkpoint"]) if legacy_params.get("prior_checkpoint") else None,
-            realization_checkpoint=str(legacy_params["realization_checkpoint"]) if legacy_params.get("realization_checkpoint") else None,
-            inference_config_path=str(legacy_params.get("inference_config_path") or "inference.yaml"),
-            realization_config_path=str(legacy_params.get("realization_config_path") or "realization.yaml"),
+            memory_path=str(legacy_params["memory_path"])
+            if legacy_params.get("memory_path")
+            else None,
+            prior_checkpoint=str(legacy_params["prior_checkpoint"])
+            if legacy_params.get("prior_checkpoint")
+            else None,
+            realization_checkpoint=str(legacy_params["realization_checkpoint"])
+            if legacy_params.get("realization_checkpoint")
+            else None,
+            inference_config_path=str(
+                legacy_params.get("inference_config_path") or "inference.yaml"
+            ),
+            realization_config_path=str(
+                legacy_params.get("realization_config_path") or "realization.yaml"
+            ),
         )
     if normalized == TopicTrendStrategy.name:
         resolved_model = model_name or legacy_params.get("model_id")

@@ -20,6 +20,7 @@ Usage:
         --model qwen3.5-2b \\
         --output-dir output/forecaster_qwen3.5-2b
 """
+
 from __future__ import annotations
 
 import argparse
@@ -35,8 +36,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT_ROOT))
 
+from forecaster.realization.model_zoo import resolve_small_model  # noqa: E402
 from live_idea_bench.backtest import (  # noqa: E402
     BacktestConfig,
     backtest,
@@ -47,8 +48,6 @@ from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
 from live_idea_bench.strategy import create_strategy  # noqa: E402
 from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
 
-from forecaster.realization.model_zoo import resolve_small_model  # noqa: E402
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 log = logging.getLogger("forecaster.eval")
 
@@ -57,20 +56,25 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Run held-out eval on trained forecaster (Prior + Realization LoRAs).",
     )
-    p.add_argument("--model", default="qwen3.5-2b", help="Model preset alias (see model_zoo).")
     p.add_argument(
-        "--output-dir", required=True,
-        help="The same dir train.py wrote to. Auto-finds prior_sft/final_checkpoint and "
-             "realization_grpo/grpo/checkpoints/final_checkpoint underneath, unless overridden.",
+        "--model", default="qwen3.5-2b", help="Model preset alias (see model_zoo)."
     )
     p.add_argument(
-        "--prior-checkpoint", default=None,
+        "--output-dir",
+        required=True,
+        help="The same dir train.py wrote to. Auto-finds prior_sft/final_checkpoint and "
+        "realization_grpo/grpo/checkpoints/final_checkpoint underneath, unless overridden.",
+    )
+    p.add_argument(
+        "--prior-checkpoint",
+        default=None,
         help="Override path to prior LoRA adapter (default: <output-dir>/prior_sft/final_checkpoint).",
     )
     p.add_argument(
-        "--realization-checkpoint", default=None,
+        "--realization-checkpoint",
+        default=None,
         help="Override path to realization LoRA adapter "
-             "(default: <output-dir>/realization_grpo/grpo/checkpoints/final_checkpoint).",
+        "(default: <output-dir>/realization_grpo/grpo/checkpoints/final_checkpoint).",
     )
     p.add_argument(
         "--papers",
@@ -78,50 +82,74 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory of markdown papers (default: ../md_mineru relative to repo root).",
     )
     p.add_argument(
-        "--start-month", default="2024-10",
+        "--start-month",
+        default="2024-10",
         help="Test window start month (default: 2024-10 — clean held-out from training).",
     )
     p.add_argument(
-        "--end-month", default="2025-03",
+        "--end-month",
+        default="2025-03",
         help="Test window end month (default: 2025-03).",
     )
     p.add_argument("--top-k", type=int, default=5)
     p.add_argument("--horizon-months", type=int, default=3)
     p.add_argument("--min-train-papers", type=int, default=2)
-    p.add_argument("--workers", type=int, default=1,
-                   help="Topics processed in parallel (default 1; vLLM does its own batching).")
+    p.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Topics processed in parallel (default 1; vLLM does its own batching).",
+    )
     p.add_argument("--similarity-config", default="similarity.yaml")
     p.add_argument(
-        "--similarity-engine", default="heuristic",
+        "--similarity-engine",
+        default="heuristic",
         help="heuristic | embedding | llm — default heuristic for fast iteration.",
     )
     p.add_argument(
-        "--output", default=None,
+        "--output",
+        default=None,
         help="Output JSON path (default: <output-dir>/eval_test_<start>_<end>.json).",
     )
     p.add_argument(
-        "--max-topics", type=int, default=None,
+        "--max-topics",
+        type=int,
+        default=None,
         help="Cap number of topics processed (smoke testing).",
     )
     p.add_argument(
-        "--voyage", action="store_true",
-        help="After main eval, also run examples/live-idea-bench/reeval_voyage.py to produce "
-             "paper-comparable scores. Requires VOYAGE_API_KEY in environment.",
+        "--voyage",
+        action="store_true",
+        help="After main eval, also run examples/benchmark/reeval_voyage.py to produce "
+        "paper-comparable scores. Requires VOYAGE_API_KEY in environment.",
     )
     p.add_argument(
-        "--no-vllm-server", action="store_true",
+        "--no-vllm-server",
+        action="store_true",
         help="Force the slow HF generate path (clears SGLANG_*_URL env vars before running). "
-             "Useful for debugging the wiring without a vLLM server.",
+        "Useful for debugging the wiring without a vLLM server.",
     )
     return p
 
 
-def _resolve_checkpoints(args: argparse.Namespace, output_dir: Path) -> tuple[Path, Path]:
-    prior = Path(args.prior_checkpoint) if args.prior_checkpoint else (
-        output_dir / "prior_sft" / "final_checkpoint"
+def _resolve_checkpoints(
+    args: argparse.Namespace, output_dir: Path
+) -> tuple[Path, Path]:
+    prior = (
+        Path(args.prior_checkpoint)
+        if args.prior_checkpoint
+        else (output_dir / "prior_sft" / "final_checkpoint")
     )
-    real = Path(args.realization_checkpoint) if args.realization_checkpoint else (
-        output_dir / "realization_grpo" / "grpo" / "checkpoints" / "final_checkpoint"
+    real = (
+        Path(args.realization_checkpoint)
+        if args.realization_checkpoint
+        else (
+            output_dir
+            / "realization_grpo"
+            / "grpo"
+            / "checkpoints"
+            / "final_checkpoint"
+        )
     )
     for label, p in [("prior", prior), ("realization", real)]:
         cfg = p / "adapter_config.json"
@@ -140,11 +168,11 @@ def _materialize_similarity_config(args: argparse.Namespace) -> str:
     if not args.similarity_engine or args.similarity_engine == "":
         return args.similarity_config
     import tempfile
-    f = tempfile.NamedTemporaryFile(
+
+    with tempfile.NamedTemporaryFile(
         mode="w", suffix=".yaml", delete=False, prefix="sim_override_eval_"
-    )
-    f.write(f"engine: {args.similarity_engine}\n")
-    f.close()
+    ) as f:
+        f.write(f"engine: {args.similarity_engine}\n")
     return f.name
 
 
@@ -167,11 +195,15 @@ def _load_papers_and_topics(
 
     log.info("Loading papers from %s", papers_dir)
     papers = load_papers_from_markdown(
-        papers_dir, start_month=start_month, end_month=end_month,
+        papers_dir,
+        start_month=start_month,
+        end_month=end_month,
     )
     log.info("Loaded %d papers (%s..%s)", len(papers), start_month, end_month)
     if not papers:
-        raise SystemExit(f"ERROR: no papers found under {papers_dir} for {start_month}..{end_month}")
+        raise SystemExit(
+            f"ERROR: no papers found under {papers_dir} for {start_month}..{end_month}"
+        )
 
     topics = load_topics()
     log.info("Classifying %d papers across %d topics...", len(papers), len(topics))
@@ -192,8 +224,12 @@ def _aggregate(topic_results: dict) -> dict:
     return weighted_mean_over_topics(
         topic_results,
         (
-            "avg_hit_at_k", "avg_recall_at_k", "avg_precision_at_k", "avg_mrr",
-            "avg_novelty", "avg_diversity",
+            "avg_hit_at_k",
+            "avg_recall_at_k",
+            "avg_precision_at_k",
+            "avg_mrr",
+            "avg_novelty",
+            "avg_diversity",
         ),
     )
 
@@ -231,7 +267,9 @@ def _save_payload(
         "topic_results": topic_results,
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    output_path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
 
 def main() -> int:
@@ -254,8 +292,10 @@ def main() -> int:
     if not papers_dir.exists():
         raise SystemExit(f"ERROR: papers dir does not exist: {papers_dir}")
 
-    output_path = Path(args.output) if args.output else (
-        output_dir / f"eval_test_{args.start_month}_{args.end_month}.json"
+    output_path = (
+        Path(args.output)
+        if args.output
+        else (output_dir / f"eval_test_{args.start_month}_{args.end_month}.json")
     )
 
     log.info("=" * 60)
@@ -271,7 +311,9 @@ def main() -> int:
     log.info("  output             : %s", output_path)
     if os.environ.get("SGLANG_PRIOR_URL") or os.environ.get("SGLANG_URL"):
         log.info("  vLLM/SGLang URLs   :")
-        log.info("    SGLANG_PRIOR_URL : %s", os.environ.get("SGLANG_PRIOR_URL", "<unset>"))
+        log.info(
+            "    SGLANG_PRIOR_URL : %s", os.environ.get("SGLANG_PRIOR_URL", "<unset>")
+        )
         log.info("    SGLANG_URL       : %s", os.environ.get("SGLANG_URL", "<unset>"))
     else:
         log.info("  vLLM/SGLang URLs   : <unset> — using HF generate fallback (slow)")
@@ -279,7 +321,9 @@ def main() -> int:
 
     similarity_config_path = _materialize_similarity_config(args)
     papers, topics, grouped = _load_papers_and_topics(
-        papers_dir, args.start_month, args.end_month,
+        papers_dir,
+        args.start_month,
+        args.end_month,
     )
     if args.max_topics:
         topics = topics[: args.max_topics]
@@ -310,33 +354,56 @@ def main() -> int:
         try:
             saved = json.loads(output_path.read_text(encoding="utf-8"))
             topic_results = saved.get("topic_results", {})
-            done = sum(1 for v in topic_results.values() if v.get("backtest") is not None)
+            done = sum(
+                1 for v in topic_results.values() if v.get("backtest") is not None
+            )
             log.info("[resume] found %d completed topics in %s", done, output_path)
         except Exception as exc:
-            log.warning("[resume] could not load existing output (%s); starting fresh", exc)
+            log.warning(
+                "[resume] could not load existing output (%s); starting fresh", exc
+            )
             topic_results = {}
 
     lock = threading.Lock()
 
     def _process_topic(topic):
         with lock:
-            if topic.id in topic_results and topic_results[topic.id].get("backtest") is not None:
-                w = (topic_results[topic.id].get("backtest") or {}).get("summary", {}).get("windows", 0)
+            if (
+                topic.id in topic_results
+                and topic_results[topic.id].get("backtest") is not None
+            ):
+                w = (
+                    (topic_results[topic.id].get("backtest") or {})
+                    .get("summary", {})
+                    .get("windows", 0)
+                )
                 log.info("[%s] skipped (already done, %d windows)", topic.id, w)
                 return None
         scoped = grouped.get(topic.id, [])
         if not scoped:
             log.info("[%s] 0 papers — skipped", topic.id)
-            return topic.id, {"topic_name": topic.name, "paper_count": 0, "backtest": None}
+            return topic.id, {
+                "topic_name": topic.name,
+                "paper_count": 0,
+                "backtest": None,
+            }
         result = backtest(papers=scoped, strategy=strategy_obj, config=bt_config)
         summary = result.get("summary", {})
         log.info(
             "[%s] %d papers, %d windows — hit@k=%.4f mrr=%.4f novelty=%.4f diversity=%.4f",
-            topic.id, len(scoped), summary.get("windows", 0),
-            summary.get("avg_hit_at_k", 0), summary.get("avg_mrr", 0),
-            summary.get("avg_novelty", 0), summary.get("avg_diversity", 0),
+            topic.id,
+            len(scoped),
+            summary.get("windows", 0),
+            summary.get("avg_hit_at_k", 0),
+            summary.get("avg_mrr", 0),
+            summary.get("avg_novelty", 0),
+            summary.get("avg_diversity", 0),
         )
-        return topic.id, {"topic_name": topic.name, "paper_count": len(scoped), "backtest": result}
+        return topic.id, {
+            "topic_name": topic.name,
+            "paper_count": len(scoped),
+            "backtest": result,
+        }
 
     log.info("Running per-topic backtest (workers=%d) ...", args.workers)
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
@@ -350,20 +417,33 @@ def main() -> int:
                 topic_results[tid] = entry
                 try:
                     _save_payload(
-                        output_path, args, base_model_id, prior_ckpt, real_ckpt,
-                        topic_results, len(papers),
+                        output_path,
+                        args,
+                        base_model_id,
+                        prior_ckpt,
+                        real_ckpt,
+                        topic_results,
+                        len(papers),
                     )
                 except Exception as exc:
                     log.warning("[checkpoint] could not write payload: %s", exc)
 
     _save_payload(
-        output_path, args, base_model_id, prior_ckpt, real_ckpt,
-        topic_results, len(papers),
+        output_path,
+        args,
+        base_model_id,
+        prior_ckpt,
+        real_ckpt,
+        topic_results,
+        len(papers),
     )
     aggregate = _aggregate(topic_results)
 
     log.info("=" * 60)
-    log.info("Aggregate (%d topics):", len([t for t in topic_results.values() if t.get("backtest")]))
+    log.info(
+        "Aggregate (%d topics):",
+        len([t for t in topic_results.values() if t.get("backtest")]),
+    )
     for k, v in aggregate.items():
         log.info("  %s = %.4f", k, v)
     log.info("Saved: %s", output_path)
@@ -372,17 +452,23 @@ def main() -> int:
     # Optional Voyage re-eval
     if args.voyage:
         if not os.environ.get("VOYAGE_API_KEY"):
-            log.warning("--voyage set but VOYAGE_API_KEY not in environment; skipping re-eval.")
+            log.warning(
+                "--voyage set but VOYAGE_API_KEY not in environment; skipping re-eval."
+            )
         else:
             voyage_path = output_path.with_name(output_path.stem + "_voyage.json")
             log.info("Running Voyage re-eval -> %s", voyage_path)
             cmd = [
                 sys.executable,
                 str(PROJECT_ROOT / "examples" / "benchmark" / "reeval_voyage.py"),
-                "--input-json", str(output_path),
-                "--papers-dir", str(papers_dir),
-                "--output", str(voyage_path),
-                "--threshold", "0.80",
+                "--input-json",
+                str(output_path),
+                "--papers-dir",
+                str(papers_dir),
+                "--output",
+                str(voyage_path),
+                "--threshold",
+                "0.80",
             ]
             subprocess.run(cmd, check=True)
             log.info("Voyage re-eval complete: %s", voyage_path)

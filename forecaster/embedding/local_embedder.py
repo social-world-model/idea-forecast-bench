@@ -12,12 +12,14 @@ Caching is process-local: callers passing identical texts (same hash) skip
 re-encoding. This matters for the soft-reward path where each prediction is
 embedded once per training step and reused across candidate retrieval.
 """
+
 from __future__ import annotations
 
 import hashlib
 import os
 import threading
-from typing import Iterable
+from collections.abc import Iterable
+from typing import Any
 
 import numpy as np
 
@@ -47,7 +49,9 @@ class LocalEmbedder:
             except Exception:
                 device = "cpu"
         self.device = device
-        self._model = None
+        # `sentence_transformers` is an optional, unstubbed dependency imported
+        # lazily in `_ensure_model`, so the model handle is only ever `Any`.
+        self._model: Any = None
         self._lock = threading.Lock()
         self._cache: dict[str, list[float]] = {}
 
@@ -74,7 +78,7 @@ class LocalEmbedder:
         if missing_idx:
             self._ensure_model()
             to_encode = [text_list[i] for i in missing_idx]
-            vecs = self._model.encode(  # type: ignore[union-attr]
+            vecs = self._model.encode(
                 to_encode,
                 batch_size=self.batch_size,
                 convert_to_numpy=True,

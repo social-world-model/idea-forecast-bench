@@ -29,7 +29,8 @@ poetry install --with eval           # local-embedder for retrieve-then-judge sc
 #   The repo runs in-place from the root via `python -m live_idea_bench` — no
 #   editable install needed (the package is poetry-managed, package-mode=false).
 
-# 3. Run — one front door:
+# 3. Run — one front door (both forms work):
+live-idea-bench --help
 python -m live_idea_bench --help
 ```
 
@@ -101,7 +102,7 @@ Available baseline strategies: `predictor_llm` (raw recent-abstract prompting),
 
 ```text
 live_idea_bench/      # Core package: benchmark + evaluation protocol
-  __main__.py         #   the `python -m live_idea_bench` CLI front door
+  __main__.py         #   the `live-idea-bench` / `python -m live_idea_bench` CLI
   backtest.py         #   rolling/domain backtest runner
   similarity.py       #   retrieve-then-judge evaluation
   strategy/           #   pluggable forecasting strategies (the baselines + MDF)
@@ -112,24 +113,33 @@ forecaster/           # The MDF forecaster
   realization/        #   GRPO-trained realization policy (trl backend)
   foresight/          #   future-grounded reward, soft must_not judge, rubric, indices
   inference/          #   joint inference (Algorithm 1)
-examples/             # Entrypoint scripts (the CLI dispatches to these)
-  live-idea-bench/    #   benchmark backtests + retrieve-then-judge + validity analyses
-  forecaster/  data/  #   MDF training/inference + data prep
-scripts/              # Shell wrappers + dev/reproduction helpers
-  live-idea-bench/    #   benchmark run wrappers
+examples/             # Python entry scripts (the CLI dispatches into these)
+  benchmark/          #   backtests + retrieve-then-judge + validity analyses
+  forecaster/         #   MDF training/inference, index building, phase smoke checks
+  data/               #   corpus prep
+scripts/              # Shell wrappers for the above, plus environment setup
+  benchmark/          #   benchmark run wrappers
+  forecaster/         #   training / serving / eval wrappers
 config/               # YAML configs (config/, config/forecaster/)
-tests/                # Test suite (pytest) — green out of the box
-backend/  frontend/   # Optional web app (Flask API + React UI)
-deploy/  docs/        # Deployment manifests + ops notes
+docs/                 # Setup notes and runbooks
+backend/  frontend/   # Optional web app (Flask API + React UI), not gated by CI
 ```
+
+`examples/` holds Python and `scripts/` holds shell — see CONTRIBUTING.md.
+For how the two packages relate and why there are two environments, see
+[docs/architecture.md](docs/architecture.md).
 
 ---
 
 ## Installation detail
 
 - **Core** (`poetry install`): runs the benchmark and the LLM-API baselines, and the
-  retrieve-then-judge protocol against a hosted judge/embedding API. The full test suite
-  (`pytest`) passes on a core install.
+  retrieve-then-judge protocol against a hosted judge/embedding API. CI's smoke job
+  verifies this configuration on Python 3.10 and 3.12.
+  `poetry install` puts `live_idea_bench` and `forecaster` on the path in editable mode,
+  so `import live_idea_bench` works from any directory. Editable is required, not
+  incidental: several modules resolve `config/` and `examples/` relative to their own
+  `__file__` (see the note in `pyproject.toml`).
 - **`--with forecaster`**: the local training/inference stack for the MDF method —
   `torch, transformers, trl, peft, datasets, accelerate, sentence-transformers`. Linux + a
   recent NVIDIA GPU recommended for non-dry-run training. **Install torch from the setup
@@ -137,7 +147,7 @@ deploy/  docs/        # Deployment manifests + ops notes
   default-index torch whose CUDA build may not match your driver (it can resolve to a
   too-new wheel and leave `torch.cuda.is_available()` False). `scripts/setup_rl_env.sh`,
   `scripts/setup_rl_env_qwen3_5.sh`, and `scripts/setup_new_machine.sh` pin the correct
-  `+cuXXX` wheel via `--index-url` for your GPU. See also `NEW_MACHINE_SETUP.md`.
+  `+cuXXX` wheel via `--index-url` for your GPU. See also `docs/new-machine-setup.md`.
 - **`--with eval`**: a local sentence-transformer embedder so the retrieve-then-judge step
   works without a hosted embedding API.
 
@@ -148,12 +158,14 @@ API keys (set as needed for the providers you use): `OPENAI_API_KEY`, `ANTHROPIC
 
 ## Development & reproduction
 
-- **Tests:** `pytest` (green on a core install).
+- **Checks:** `pre-commit run --all-files` (lint) and `mypy` (types) — the two
+  gating jobs in CI, plus a smoke job. There is no automated test suite; see
+  CONTRIBUTING.md.
 - **MDF training pipeline:** `scripts/run_train_and_eval.sh` runs prior SFT → GRPO →
   eval end to end. The GRPO step defaults to the gated foresight reward used for the
   reported results, which needs a prebuilt artifact dir (`output/foresight_artifacts/{indices,rubrics}`):
   provide a paper corpus, run the hindsight pipeline to produce `data/topic_hindsight/dz.jsonl`,
-  build the indices with `build_indices.py`, then generate validated rubrics
+  build the indices with `examples/forecaster/build_indices.py`, then generate validated rubrics
   (`forecaster/foresight/README.md` has the full sequence). If those artifacts are
   missing the script stops before training with the build instructions. To run the
   whole pipeline end to end on a fresh clone without that prerequisite, use the
@@ -161,8 +173,9 @@ API keys (set as needed for the providers you use): `OPENAI_API_KEY`, `ANTHROPIC
 - **Single-metric ablation:** `scripts/forecaster/run_three_grpo.sh` drives the
   single-metric GRPO runs (soft / coverage / novelty); it uses its own reward and
   needs no foresight artifacts. Phase-by-phase smoke checks for the foresight method
-  are in `scripts/phase*_*.py` (documented in `forecaster/foresight/README.md`).
-- **Web app:** `python backend/app.py` (API) and `cd frontend && npm install && npm start` (UI).
+  are in `examples/forecaster/phase*_*.py` (documented in `forecaster/foresight/README.md`).
+- **Web app (optional):** `poetry install --with webapp && python backend/app.py` (API) and
+  `cd frontend && npm install && npm start` (UI). Not part of the CI gate; see `backend/README.md`.
 
 ## Citation
 

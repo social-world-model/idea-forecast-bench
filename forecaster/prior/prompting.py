@@ -1,11 +1,14 @@
 """Shared prompt contract for prior training, sampling, and scoring."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import yaml
 
-_PROMPT_YAML_PATH = Path(__file__).resolve().parents[2] / "forecaster" / "prompt" / "prior_sft.yaml"
+_PROMPT_YAML_PATH = (
+    Path(__file__).resolve().parents[2] / "forecaster" / "prompt" / "prior_sft.yaml"
+)
 
 
 def load_prior_prompt_config() -> dict[str, str]:
@@ -17,7 +20,9 @@ def load_prior_prompt_config() -> dict[str, str]:
     }
 
 
-def render_prior_user_prompt(memory_summary: str, *, input_template: str | None = None) -> str:
+def render_prior_user_prompt(
+    memory_summary: str, *, input_template: str | None = None
+) -> str:
     """Render the user-visible memory prompt shared by train/infer."""
     template = input_template or load_prior_prompt_config()["input_template"]
     return template.format(memory_summary=memory_summary)

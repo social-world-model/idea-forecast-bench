@@ -11,9 +11,9 @@ from live_idea_bench.daily import coerce_prediction
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.predictor import (
     _build_abstract_block,
+    _extract_json_payload,
     _heuristic_predictions,
     _infer_domain,
-    _extract_json_payload,
     _parse_prediction_items,
 )
 
@@ -34,7 +34,9 @@ def build_prediction_prompt(
         domain=_infer_domain(train_papers),
         horizon=f"the months after {cutoff_month}",
         n_ideas=n_ideas,
-        abstracts=_build_abstract_block(train_papers, predictor_config.max_context_papers),
+        abstracts=_build_abstract_block(
+            train_papers, predictor_config.max_context_papers
+        ),
         cutoff_month=cutoff_month,
     )
     if n_ideas == 1:
@@ -71,7 +73,9 @@ def _completion_to_text(raw_completion: Any) -> str:
     return str(raw_completion or "")
 
 
-def parse_completion_predictions(raw_completion: Any, *, limit: int) -> list[IdeaPrediction]:
+def parse_completion_predictions(
+    raw_completion: Any, *, limit: int
+) -> list[IdeaPrediction]:
     raw_text = _completion_to_text(raw_completion).strip()
     if not raw_text:
         return []
@@ -109,7 +113,11 @@ def parse_single_completion_prediction(raw_completion: Any) -> IdeaPrediction | 
             item = payload
         else:
             ideas = payload.get("ideas")
-            if isinstance(ideas, list) and len(ideas) == 1 and isinstance(ideas[0], dict):
+            if (
+                isinstance(ideas, list)
+                and len(ideas) == 1
+                and isinstance(ideas[0], dict)
+            ):
                 item = ideas[0]
         if item is None:
             return None
@@ -138,7 +146,9 @@ def _require_local_generation_stack() -> dict[str, Any]:
     }
 
 
-def _load_local_model(model_name_or_path: str, *, base_model_name: str | None = None) -> tuple[Any, Any]:
+def _load_local_model(
+    model_name_or_path: str, *, base_model_name: str | None = None
+) -> tuple[Any, Any]:
     cache_key = (model_name_or_path, base_model_name)
     if cache_key in _LOCAL_MODEL_CACHE:
         return _LOCAL_MODEL_CACHE[cache_key]
@@ -160,7 +170,7 @@ def _load_local_model(model_name_or_path: str, *, base_model_name: str | None = 
                 raise RuntimeError(
                     "Loading LoRA adapters for local RL inference requires peft to be installed."
                 ) from exc
-            peft_model = getattr(peft, "PeftModel")
+            peft_model = peft.PeftModel
             torch = deps["torch"]
             _dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
             model = deps["AutoModelForCausalLM"].from_pretrained(
@@ -168,7 +178,9 @@ def _load_local_model(model_name_or_path: str, *, base_model_name: str | None = 
                 torch_dtype=_dtype,
                 device_map="auto",
             )
-            model = peft_model.from_pretrained(model, model_name_or_path, torch_dtype=_dtype)
+            model = peft_model.from_pretrained(
+                model, model_name_or_path, torch_dtype=_dtype
+            )
         else:
             torch = deps["torch"]
             _dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
@@ -182,7 +194,9 @@ def _load_local_model(model_name_or_path: str, *, base_model_name: str | None = 
         return model, tokenizer
 
 
-def _apply_chat_template(tokenizer: Any, full_prompt: str, enable_thinking: bool | None) -> str:
+def _apply_chat_template(
+    tokenizer: Any, full_prompt: str, enable_thinking: bool | None
+) -> str:
     messages = [{"role": "user", "content": full_prompt}]
     if hasattr(tokenizer, "apply_chat_template"):
         kwargs: dict[str, Any] = {
@@ -222,7 +236,9 @@ def generate_local_predictions(
         top_k,
         predictor_config_path=predictor_config_path,
     )
-    model, tokenizer = _load_local_model(model_name_or_path, base_model_name=base_model_name)
+    model, tokenizer = _load_local_model(
+        model_name_or_path, base_model_name=base_model_name
+    )
     deps = _require_local_generation_stack()
     torch = deps["torch"]
 

@@ -8,14 +8,14 @@ are bumped and logged so a per-step audit can detect reward hacking
 
 Disabled by default — opt in via `rubric_refresh_every > 0` on the config.
 """
+
 from __future__ import annotations
 
-import json
 import logging
 from collections import defaultdict
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable
 
 from forecaster.foresight.judge import RubricJudge
 from forecaster.foresight.rubric import Rubric, save_rubric, stamp_metadata
@@ -67,7 +67,7 @@ def _split_by_reward(
     sorted_rs = sorted(rs, key=lambda x: x.reward)
     n = len(sorted_rs)
     neg = sorted_rs[: max(int(n * neg_quantile), min_per_class)]
-    pos = sorted_rs[-max(int(n * (1.0 - pos_quantile)), min_per_class):]
+    pos = sorted_rs[-max(int(n * (1.0 - pos_quantile)), min_per_class) :]
     return pos, neg
 
 
@@ -77,15 +77,23 @@ def _build_pairs(
 ) -> list[LabeledPair]:
     pairs: list[LabeledPair] = []
     for r in pos:
-        pairs.append(LabeledPair(
-            idea_text=r.rollout_text, candidate_text=r.candidate_text, label=1,
-            meta={"refresh_source": "policy_high_reward"},
-        ))
+        pairs.append(
+            LabeledPair(
+                idea_text=r.rollout_text,
+                candidate_text=r.candidate_text,
+                label=1,
+                meta={"refresh_source": "policy_high_reward"},
+            )
+        )
     for r in neg:
-        pairs.append(LabeledPair(
-            idea_text=r.rollout_text, candidate_text=r.candidate_text, label=0,
-            meta={"refresh_source": "policy_low_reward"},
-        ))
+        pairs.append(
+            LabeledPair(
+                idea_text=r.rollout_text,
+                candidate_text=r.candidate_text,
+                label=0,
+                meta={"refresh_source": "policy_low_reward"},
+            )
+        )
     return pairs
 
 
@@ -120,7 +128,8 @@ def refresh_one_topic(
         )
 
     cand = generate_rubric(
-        topic_id, current_rubric.cutoff_t,
+        topic_id,
+        current_rubric.cutoff_t,
         [p.rollout_text for p in pos[:3]],
         [n.rollout_text for n in neg[:3]],
     )
@@ -144,7 +153,10 @@ def refresh_one_topic(
 
     pairs = _build_pairs(pos, neg)
     report, _scored = validate_rubric(
-        bumped, pairs, judge=judge, threshold=auc_threshold,
+        bumped,
+        pairs,
+        judge=judge,
+        threshold=auc_threshold,
     )
     accepted = report.passed
     return RefreshOutcome(
@@ -155,14 +167,18 @@ def refresh_one_topic(
         auc=report.auc,
         leakage_hits=report.leakage_hits,
         accepted=accepted,
-        reason=("auc and leakage check passed" if accepted else
-                f"rejected: auc={report.auc:.3f} leakage={report.leakage_hits}"),
+        reason=(
+            "auc and leakage check passed"
+            if accepted
+            else f"rejected: auc={report.auc:.3f} leakage={report.leakage_hits}"
+        ),
     )
 
 
 @dataclass
 class RubricRefreshState:
     """Per-step bookkeeper. Held by the trainer wiring across batches."""
+
     every: int = 0
     step: int = 0
     rollout_buffer: list[RolloutSnapshot] = field(default_factory=list)
@@ -205,7 +221,8 @@ def maybe_refresh(
         if current is None:
             continue
         outcome = refresh_one_topic(
-            topic_id, rollouts,
+            topic_id,
+            rollouts,
             current_rubric=current,
             generate_rubric=generate_rubric,
             judge=judge,
@@ -216,15 +233,21 @@ def maybe_refresh(
             rubrics[topic_id] = outcome.candidate_rubric
             state.versions[topic_id] = outcome.new_version
             if state.rubrics_dir is not None:
-                save_rubric(outcome.candidate_rubric, state.rubrics_dir / f"{topic_id}.json")
+                save_rubric(
+                    outcome.candidate_rubric, state.rubrics_dir / f"{topic_id}.json"
+                )
             logger.info(
                 "rubric refresh accepted: topic=%s v%d -> v%d auc=%.3f",
-                topic_id, outcome.old_version, outcome.new_version, outcome.auc,
+                topic_id,
+                outcome.old_version,
+                outcome.new_version,
+                outcome.auc,
             )
         else:
             logger.warning(
                 "rubric refresh rejected: topic=%s %s",
-                topic_id, outcome.reason,
+                topic_id,
+                outcome.reason,
             )
     state.reset_buffer()
     return outcomes

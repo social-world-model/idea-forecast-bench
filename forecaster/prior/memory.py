@@ -2,8 +2,10 @@
 
 All mutation operations return new MemoryStore instances (immutable pattern).
 """
+
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 import os
@@ -11,19 +13,15 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from live_idea_bench.papers import date_to_ordinal, month_start_date
-
 from forecaster.models import (
     HindsightSample,
     Innovation,
     MemoryEntry,
     MemoryInventory,
-    memory_entry_to_dict,
-    memory_entry_from_dict,
-    memory_inventory_to_dict,
     memory_inventory_from_dict,
-    innovation_to_dict,
+    memory_inventory_to_dict,
 )
+from live_idea_bench.papers import date_to_ordinal, month_start_date
 
 _RECENCY_DECAY_PER_MONTH: float = 0.9
 _DEFAULT_QUERY_RECENCY_WEIGHT: float = 0.45
@@ -58,7 +56,9 @@ def hindsight_sample_available_by_cutoff(
     published_date = str(sample.future_paper_published_date or "").strip()
     if not published_date:
         return sample.future_paper_month <= cutoff_month
-    return date_to_ordinal(published_date) <= date_to_ordinal(month_start_date(cutoff_month))
+    return date_to_ordinal(published_date) <= date_to_ordinal(
+        month_start_date(cutoff_month)
+    )
 
 
 def build_memory_store_from_hindsight_samples(
@@ -136,6 +136,7 @@ class MemoryStore:
         inventory = memory_inventory_from_dict(raw)
         if cutoff_month and inventory.last_updated_month > cutoff_month:
             import logging as _logging
+
             _logging.getLogger(__name__).warning(
                 "Memory last_updated_month=%s is newer than inference cutoff_month=%s. "
                 "Ensure the memory was built only from papers up to the cutoff to avoid leakage.",
@@ -148,17 +149,17 @@ class MemoryStore:
         """Save to JSON file atomically (write to tmp, rename)."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        data = json.dumps(memory_inventory_to_dict(self._inventory), indent=2, ensure_ascii=False)
+        data = json.dumps(
+            memory_inventory_to_dict(self._inventory), indent=2, ensure_ascii=False
+        )
         fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(data)
             os.replace(tmp_path, path)
         except Exception:
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(tmp_path)
-            except OSError:
-                pass
             raise
 
     def append(
@@ -226,15 +227,28 @@ class MemoryStore:
         max_freq = max(e.frequency for e in entries) or 1
         if frequency_weight is None and utility_weight is None:
             remaining = max(0.0, 1.0 - recency_weight)
-            extra_total = _DEFAULT_QUERY_FREQUENCY_WEIGHT + _DEFAULT_QUERY_UTILITY_WEIGHT
-            frequency_weight = remaining * (_DEFAULT_QUERY_FREQUENCY_WEIGHT / extra_total)
+            extra_total = (
+                _DEFAULT_QUERY_FREQUENCY_WEIGHT + _DEFAULT_QUERY_UTILITY_WEIGHT
+            )
+            frequency_weight = remaining * (
+                _DEFAULT_QUERY_FREQUENCY_WEIGHT / extra_total
+            )
             utility_weight = remaining * (_DEFAULT_QUERY_UTILITY_WEIGHT / extra_total)
         else:
-            frequency_weight = _DEFAULT_QUERY_FREQUENCY_WEIGHT if frequency_weight is None else frequency_weight
-            utility_weight = _DEFAULT_QUERY_UTILITY_WEIGHT if utility_weight is None else utility_weight
+            frequency_weight = (
+                _DEFAULT_QUERY_FREQUENCY_WEIGHT
+                if frequency_weight is None
+                else frequency_weight
+            )
+            utility_weight = (
+                _DEFAULT_QUERY_UTILITY_WEIGHT
+                if utility_weight is None
+                else utility_weight
+            )
         total_weight = recency_weight + frequency_weight + utility_weight
         if total_weight <= 0:
             total_weight = 1.0
+
         def score(entry: MemoryEntry) -> float:
             norm_freq = entry.frequency / max_freq
             return (
@@ -242,6 +256,7 @@ class MemoryStore:
                 + (frequency_weight * _clamp01(norm_freq))
                 + (utility_weight * _normalized_utility(entry.utility_score))
             ) / total_weight
+
         ranked = sorted(entries, key=score, reverse=True)
         return ranked[:n]
 
@@ -250,7 +265,7 @@ class MemoryStore:
         new_entries: list[MemoryEntry] = []
         for entry in self._inventory.entries:
             months = max(0, _months_between(entry.timestamp_month, current_month))
-            new_score = entry.recency_score * (_RECENCY_DECAY_PER_MONTH ** months)
+            new_score = entry.recency_score * (_RECENCY_DECAY_PER_MONTH**months)
             updated = MemoryEntry(
                 innovation=entry.innovation,
                 source_paper_id=entry.source_paper_id,
@@ -280,7 +295,9 @@ class MemoryStore:
         new_entries: list[MemoryEntry] = []
         for entry in self._inventory.entries:
             if entry.source_paper_id == source_paper_id:
-                new_utility = ema_alpha * utility_delta + (1.0 - ema_alpha) * entry.utility_score
+                new_utility = (
+                    ema_alpha * utility_delta + (1.0 - ema_alpha) * entry.utility_score
+                )
                 merged_metadata = dict(entry.metadata)
                 if metadata:
                     merged_metadata.update(metadata)
@@ -310,7 +327,9 @@ class MemoryStore:
             return self
         new_inventory = MemoryInventory(
             entries=tuple(
-                entry for entry in self._inventory.entries if entry.source_paper_id not in excluded
+                entry
+                for entry in self._inventory.entries
+                if entry.source_paper_id not in excluded
             ),
             last_updated_month=self._inventory.last_updated_month,
             version=self._inventory.version,
@@ -370,8 +389,7 @@ class MemoryStore:
                 "utility": round(float(entry.utility_score), 4),
             }
             line = (
-                f"{i}. "
-                f"{json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}"
+                f"{i}. {json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}"
             )
             lines.append(line)
         return "\n".join(lines)

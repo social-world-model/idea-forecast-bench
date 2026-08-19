@@ -7,16 +7,13 @@ Usage:
         --output-dir output/prior_sft_qwen3.5-2b \
         --model qwen3.5-2b
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import logging
-import sys
 from pathlib import Path
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT_ROOT))
 
 from forecaster.config import SFTTrainConfig
 from forecaster.hindsight.dataset_builder import load_hindsight_samples_jsonl
@@ -30,8 +27,12 @@ log = logging.getLogger("prior_sft")
 def main() -> int:
     p = argparse.ArgumentParser(description="Train innovation prior via SFT.")
     p.add_argument("--hindsight", required=True, help="Path to hindsight_samples.jsonl")
-    p.add_argument("--output-dir", required=True, help="Output directory for checkpoint")
-    p.add_argument("--model", default="qwen3.5-2b", help="Model alias (default: qwen3.5-2b)")
+    p.add_argument(
+        "--output-dir", required=True, help="Output directory for checkpoint"
+    )
+    p.add_argument(
+        "--model", default="qwen3.5-2b", help="Model alias (default: qwen3.5-2b)"
+    )
     p.add_argument("--epochs", type=int, default=3)
     p.add_argument("--lr", type=float, default=2e-5)
     p.add_argument("--batch-size", type=int, default=4)
@@ -63,7 +64,11 @@ def main() -> int:
     checkpoint = train_prior(sft_samples, config, output_dir=args.output_dir)
     log.info("Checkpoint: %s", checkpoint)
 
-    meta = {"checkpoint_path": checkpoint, "model_alias": args.model, "num_samples": len(sft_samples)}
+    meta = {
+        "checkpoint_path": checkpoint,
+        "model_alias": args.model,
+        "num_samples": len(sft_samples),
+    }
     Path(f"{args.output_dir}/train_result.json").write_text(json.dumps(meta, indent=2))
     return 0
 

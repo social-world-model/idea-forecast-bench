@@ -2,11 +2,17 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Set
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 from live_idea_bench.models import IdeaPrediction, PaperRecord
-from live_idea_bench.papers import date_to_ordinal, get_paper_published_date, month_start_date, normalize_date, normalize_month
+from live_idea_bench.papers import (
+    date_to_ordinal,
+    get_paper_published_date,
+    month_start_date,
+    normalize_date,
+    normalize_month,
+)
 from live_idea_bench.similarity import evaluate_predictions
 
 
@@ -14,7 +20,7 @@ def _iso(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).isoformat()
 
 
-def coerce_prediction(raw: Dict[str, Any], rank_fallback: int) -> IdeaPrediction:
+def coerce_prediction(raw: dict[str, Any], rank_fallback: int) -> IdeaPrediction:
     rank_raw = raw.get("rank", rank_fallback)
     try:
         rank = int(rank_raw)
@@ -41,27 +47,39 @@ def coerce_prediction(raw: Dict[str, Any], rank_fallback: int) -> IdeaPrediction
         title=str(raw.get("title", "")),
         rationale=str(raw.get("rationale", "")),
         approach=str(raw.get("approach", "")),
-        score=_maybe_float(raw.get("score", raw.get("Score", raw.get("confidence", 0.0)))) or 0.0,
-        confidence=_maybe_float(raw.get("confidence", raw.get("Confidence", raw.get("score")))),
+        score=_maybe_float(
+            raw.get("score", raw.get("Score", raw.get("confidence", 0.0)))
+        )
+        or 0.0,
+        confidence=_maybe_float(
+            raw.get("confidence", raw.get("Confidence", raw.get("score")))
+        ),
         key_terms=[str(term).strip() for term in key_terms_raw if str(term).strip()],
-        metadata=(raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}),
+        # The isinstance guard already restricts this to a dict, but mypy cannot
+        # narrow across the two separate `raw.get("metadata")` calls.
+        metadata=cast(
+            "dict[str, Any]",
+            raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {},
+        ),
     )
 
 
-def compute_leaderboard_score(daily_eval: Dict[str, Any]) -> float:
+def compute_leaderboard_score(daily_eval: dict[str, Any]) -> float:
     hit = float(daily_eval.get("hit_at_k", 0.0))
     mrr = float(daily_eval.get("mrr", 0.0))
     return round((0.7 * hit) + (0.3 * mrr), 4)
 
 
-def compute_popularity_leaderboard_score(daily_eval: Dict[str, Any]) -> float:
+def compute_popularity_leaderboard_score(daily_eval: dict[str, Any]) -> float:
     """Leaderboard score weighted by paper popularity (opt-in).
 
     Falls back to regular hit_at_k/mrr when weighted metrics are not available.
     """
     w_hit_raw = daily_eval.get("weighted_hit_at_k")
     w_mrr_raw = daily_eval.get("weighted_mrr")
-    w_hit = float(w_hit_raw if w_hit_raw is not None else daily_eval.get("hit_at_k", 0.0))
+    w_hit = float(
+        w_hit_raw if w_hit_raw is not None else daily_eval.get("hit_at_k", 0.0)
+    )
     w_mrr = float(w_mrr_raw if w_mrr_raw is not None else daily_eval.get("mrr", 0.0))
     return round((0.7 * w_hit) + (0.3 * w_mrr), 4)
 
@@ -70,7 +88,7 @@ def daily_cutoff_date(now_utc: datetime) -> str:
     return now_utc.astimezone(ZoneInfo("America/New_York")).date().isoformat()
 
 
-def _resolve_generation_cutoff(generation: Dict[str, Any]) -> str | None:
+def _resolve_generation_cutoff(generation: dict[str, Any]) -> str | None:
     cutoff_date_raw = str(generation.get("cutoff_date") or "").strip()
     cutoff_month_raw = str(generation.get("cutoff_month") or "").strip()
     if cutoff_date_raw:
@@ -84,7 +102,7 @@ def _resolve_generation_cutoff(generation: Dict[str, Any]) -> str | None:
     return None
 
 
-def _topic_generations(strategy: Dict[str, Any]) -> list[Dict[str, Any]]:
+def _topic_generations(strategy: dict[str, Any]) -> list[dict[str, Any]]:
     generation = strategy.get("generation") or {}
     predictions_raw = generation.get("predictions")
     if isinstance(predictions_raw, list) and predictions_raw:
@@ -94,7 +112,7 @@ def _topic_generations(strategy: Dict[str, Any]) -> list[Dict[str, Any]]:
     if not isinstance(topic_runs, list):
         return []
 
-    generations: list[Dict[str, Any]] = []
+    generations: list[dict[str, Any]] = []
     for topic_run in topic_runs:
         if not isinstance(topic_run, dict):
             continue
@@ -111,20 +129,26 @@ def _topic_generations(strategy: Dict[str, Any]) -> list[Dict[str, Any]]:
         (_resolve_generation_cutoff(topic_generation), topic_generation)
         for topic_generation in generations
     ]
-    valid = [(cutoff, topic_generation) for cutoff, topic_generation in resolved if cutoff]
+    valid = [
+        (cutoff, topic_generation) for cutoff, topic_generation in resolved if cutoff
+    ]
     if not valid:
         return []
     latest_cutoff = max(cutoff for cutoff, _ in valid)
-    return [topic_generation for cutoff, topic_generation in valid if cutoff == latest_cutoff]
+    return [
+        topic_generation
+        for cutoff, topic_generation in valid
+        if cutoff == latest_cutoff
+    ]
 
 
 def evaluate_previous_generation(
-    strategy: Dict[str, Any],
+    strategy: dict[str, Any],
     *,
     papers: list[PaperRecord],
-    new_paper_ids: Set[str],
+    new_paper_ids: set[str],
     evaluated_at: datetime,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     generations = _topic_generations(strategy)
     if not generations:
         return None
@@ -143,10 +167,11 @@ def evaluate_previous_generation(
     future = [
         paper
         for paper in papers
-        if paper.paper_id in new_paper_ids and date_to_ordinal(get_paper_published_date(paper)) > cutoff_ord
+        if paper.paper_id in new_paper_ids
+        and date_to_ordinal(get_paper_published_date(paper)) > cutoff_ord
     ]
 
-    predictions = []
+    predictions: list[IdeaPrediction] = []
     for generation in generations:
         predictions_raw = generation.get("predictions")
         if not isinstance(predictions_raw, list):
