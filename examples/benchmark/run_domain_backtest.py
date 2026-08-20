@@ -28,10 +28,8 @@ from live_idea_bench.backtest import (  # noqa: E402
     backtest,
     weighted_mean_over_topics,
 )
-from live_idea_bench.config import load_topics  # noqa: E402
-from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
+from live_idea_bench.paper_cache import load_papers_and_topics  # noqa: E402
 from live_idea_bench.strategy import create_strategy  # noqa: E402
-from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
 
 
 def main() -> int:
@@ -143,52 +141,13 @@ def main() -> int:
             _tmp_sim_cfg.write(f"engine: {args.similarity_engine}\n")
         args.similarity_config = _tmp_sim_cfg.name
 
-    import hashlib
-    import pickle
-
     input_dir = Path(args.input_dir)
     if not input_dir.is_absolute():
         input_dir = PROJECT_ROOT / input_dir
 
-    # Cache key: input_dir + date range (topics config is stable)
-    _cache_key = hashlib.md5(
-        f"{input_dir}|{args.start_month}|{args.end_month}".encode()
-    ).hexdigest()[:12]
-    _cache_path = PROJECT_ROOT / "data" / f".papers_cache_{_cache_key}.pkl"
-
-    if _cache_path.exists():
-        print(f"Loading papers+topics from cache ({_cache_path.name}) ...")
-        with open(_cache_path, "rb") as _f:
-            _cached = pickle.load(_f)
-        papers = _cached["papers"]
-        topics = _cached["topics"]
-        grouped = _cached["grouped"]
-        print(
-            f"Loaded {len(papers)} papers ({args.start_month} to {args.end_month}) [cached]"
-        )
-    else:
-        print(f"Loading papers from {input_dir} ...")
-        papers = load_papers_from_markdown(
-            input_dir,
-            start_month=args.start_month,
-            end_month=args.end_month,
-        )
-        print(f"Loaded {len(papers)} papers ({args.start_month} to {args.end_month})")
-        if not papers:
-            print("No papers found. Exiting.")
-            return 1
-        topics = load_topics()
-        print(f"\nTopics configured: {len(topics)}")
-        print("Classifying papers by topic (this may take a minute) ...")
-        grouped = classify_papers_by_topic(papers, topics)
-        try:
-            with open(_cache_path, "wb") as _f:
-                pickle.dump(
-                    {"papers": papers, "topics": topics, "grouped": grouped}, _f
-                )
-            print(f"  [cache] saved to {_cache_path.name}")
-        except Exception as _ce:
-            print(f"  [cache] could not save: {_ce}")
+    papers, topics, grouped = load_papers_and_topics(
+        input_dir, args.start_month, args.end_month
+    )
 
     if not papers:
         print("No papers found. Exiting.")

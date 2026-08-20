@@ -39,28 +39,25 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-from live_idea_bench.backtest import (  # noqa: E402
+from live_idea_bench.backtest import (
     BacktestConfig,
     backtest,
     weighted_mean_over_topics,
 )
-from live_idea_bench.config import load_topics  # noqa: E402
-from live_idea_bench.llm import (  # noqa: E402
+from live_idea_bench.llm import (
     batch_clear,
     batch_set_collect,
     batch_set_replay,
 )
-from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
-from live_idea_bench.strategy import create_strategy  # noqa: E402
-from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
+from live_idea_bench.paper_cache import load_papers_and_topics
+from live_idea_bench.strategy import create_strategy
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 MAX_BATCH_TOKENS = 4096
 
@@ -85,42 +82,7 @@ _TWO_ROUND_STRATEGIES = {
 
 
 def _load_papers_cached(args, input_dir: Path):
-    import hashlib
-    import pickle
-
-    key = hashlib.md5(
-        f"{input_dir}|{args.start_month}|{args.end_month}".encode()
-    ).hexdigest()[:12]
-    cache_path = PROJECT_ROOT / "data" / f".papers_cache_{key}.pkl"
-
-    if cache_path.exists():
-        print(f"Loading papers+topics from cache ({cache_path.name}) ...")
-        with open(cache_path, "rb") as f:
-            c = pickle.load(f)
-        papers, topics, grouped = c["papers"], c["topics"], c["grouped"]
-        print(
-            f"Loaded {len(papers)} papers [{args.start_month}–{args.end_month}] (cached)"
-        )
-    else:
-        print(f"Loading papers from {input_dir} ...")
-        papers = load_papers_from_markdown(
-            input_dir, start_month=args.start_month, end_month=args.end_month
-        )
-        if not papers:
-            print("No papers found. Exiting.")
-            sys.exit(1)
-        print(f"Loaded {len(papers)} papers [{args.start_month}–{args.end_month}]")
-        topics = load_topics()
-        print(f"Topics: {len(topics)}. Classifying ...")
-        grouped = classify_papers_by_topic(papers, topics)
-        try:
-            with open(cache_path, "wb") as f:
-                pickle.dump({"papers": papers, "topics": topics, "grouped": grouped}, f)
-            print(f"  [cache] saved to {cache_path.name}")
-        except Exception as e:
-            print(f"  [cache] could not save: {e}")
-
-    return papers, topics, grouped
+    return load_papers_and_topics(input_dir, args.start_month, args.end_month)
 
 
 # ── Collect phase ──────────────────────────────────────────────────────────────

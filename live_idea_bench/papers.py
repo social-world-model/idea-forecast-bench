@@ -560,14 +560,23 @@ def _discover_files_for_dir(args: tuple[str, str]) -> list[Path]:
 def _cache_path_for(
     input_dir: Path, start_month: str | None, end_month: str | None
 ) -> Path:
-    """Return a deterministic pickle cache path for the given query."""
+    """Return a deterministic pickle cache path for the given query.
+
+    Deliberately NOT inside ``input_dir``. This cache is a pickle, and
+    ``input_dir`` holds a paper corpus -- something users download, copy
+    between machines and share. Writing the cache there made a read operation
+    mutate its own input, and reading it back meant unpickling whatever
+    happened to be in a corpus someone else assembled. It lives under the
+    repo's own .cache/ instead, keyed on the corpus path so different corpora
+    never collide.
+    """
     import hashlib
 
     key = f"{Path(input_dir).resolve()}|{start_month}|{end_month}"
     h = hashlib.sha256(key.encode()).hexdigest()[:16]
-    cache_dir = Path(input_dir) / ".paper_cache"
-    cache_dir.mkdir(exist_ok=True)
-    return cache_dir / f"papers_{h}.pkl"
+    cache_dir = Path(__file__).resolve().parents[1] / ".cache" / "papers"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir / f"raw_{h}.pkl"
 
 
 def load_papers_from_markdown(

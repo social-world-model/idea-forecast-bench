@@ -240,8 +240,13 @@ cleanup() {
       fi
     fi
   done
-  pkill -KILL -f "VLLM::EngineCore" 2>/dev/null || true
-  pkill -KILL -f "vllm.entrypoints.openai.api_server" 2>/dev/null || true
+  # Scoped to OUR ports. An unscoped `pkill -f "VLLM::EngineCore"` here would
+  # kill every vLLM process on the box -- including other users' runs on a
+  # shared GPU machine -- every time this script exits.
+  for port in "${VLLM_PRIOR_PORT}" "${VLLM_REAL_PORT}"; do
+    pkill -KILL -f "api_server.*--port ${port}\b" 2>/dev/null || true
+    pkill -KILL -f "VLLM::EngineCore.*${port}" 2>/dev/null || true
+  done
 }
 trap cleanup EXIT INT TERM
 

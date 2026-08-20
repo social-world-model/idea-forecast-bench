@@ -24,29 +24,25 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import logging
 import os
-import pickle
 import subprocess
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-from forecaster.realization.model_zoo import resolve_small_model  # noqa: E402
-from live_idea_bench.backtest import (  # noqa: E402
+from forecaster.realization.model_zoo import resolve_small_model
+from live_idea_bench.backtest import (
     BacktestConfig,
     backtest,
     weighted_mean_over_topics,
 )
-from live_idea_bench.config import load_topics  # noqa: E402
-from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
-from live_idea_bench.strategy import create_strategy  # noqa: E402
-from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
+from live_idea_bench.paper_cache import load_papers_and_topics
+from live_idea_bench.strategy import create_strategy
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 log = logging.getLogger("forecaster.eval")
@@ -181,42 +177,8 @@ def _load_papers_and_topics(
     start_month: str,
     end_month: str,
 ) -> tuple[list, list, dict]:
-    """Load + cache papers/topics. Mirrors examples/run_domain_backtest.py:127-159."""
-    cache_key = hashlib.md5(
-        f"{papers_dir}|{start_month}|{end_month}".encode()
-    ).hexdigest()[:12]
-    cache_path = PROJECT_ROOT / "data" / f".papers_cache_{cache_key}.pkl"
-
-    if cache_path.exists():
-        log.info("Loading papers+topics from cache (%s)", cache_path.name)
-        with open(cache_path, "rb") as f:
-            cached = pickle.load(f)
-        return cached["papers"], cached["topics"], cached["grouped"]
-
-    log.info("Loading papers from %s", papers_dir)
-    papers = load_papers_from_markdown(
-        papers_dir,
-        start_month=start_month,
-        end_month=end_month,
-    )
-    log.info("Loaded %d papers (%s..%s)", len(papers), start_month, end_month)
-    if not papers:
-        raise SystemExit(
-            f"ERROR: no papers found under {papers_dir} for {start_month}..{end_month}"
-        )
-
-    topics = load_topics()
-    log.info("Classifying %d papers across %d topics...", len(papers), len(topics))
-    grouped = classify_papers_by_topic(papers, topics)
-
-    try:
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(cache_path, "wb") as f:
-            pickle.dump({"papers": papers, "topics": topics, "grouped": grouped}, f)
-        log.info("Cached papers+topics to %s", cache_path.name)
-    except Exception as exc:
-        log.warning("Could not cache papers+topics: %s", exc)
-    return papers, topics, grouped
+    """Load + cache papers/topics; see live_idea_bench.paper_cache."""
+    return load_papers_and_topics(papers_dir, start_month, end_month, verbose=False)
 
 
 def _aggregate(topic_results: dict) -> dict:
