@@ -20,7 +20,7 @@ dependencies = [
     "backoff",
     "rich",
     "flask>=3.0.0",
-    "flask-cors>=4,<7",
+    "flask-cors>=6.0.5,<7",
     "openreview-py",
     "pandas>=2.2.0",
 ]
