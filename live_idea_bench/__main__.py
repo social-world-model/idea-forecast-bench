@@ -87,6 +87,24 @@ _COMMANDS: dict[str, tuple[str, str]] = {
     ),
 }
 
+#: Modules that live in an optional dependency group. A command that needs one
+#: is not broken -- the group just is not installed -- so say which install
+#: brings it in instead of printing an import traceback at someone following
+#: the README.
+_OPTIONAL_MODULES: dict[str, str] = {
+    "torch": "forecaster",
+    "transformers": "forecaster",
+    "trl": "forecaster",
+    "peft": "forecaster",
+    "datasets": "forecaster",
+    "accelerate": "forecaster",
+    "sentence_transformers": "forecaster",
+    "pandas": "forecaster",
+    "flask": "webapp",
+    "flask_cors": "webapp",
+}
+
+
 # `analysis` is a small family; let the user pick which one (default: leakage).
 _ANALYSIS_VARIANTS = {
     "leakage": "benchmark/analysis_leakage.py",
@@ -140,7 +158,21 @@ def main(argv: list[str] | None = None) -> int:
     # Forward remaining args to the target script's own argparse, and present a
     # sensible program name in its --help output.
     sys.argv = [f"python -m live_idea_bench {command}", *rest]
-    runpy.run_path(str(script_path), run_name="__main__")
+    try:
+        runpy.run_path(str(script_path), run_name="__main__")
+    except ModuleNotFoundError as exc:
+        # Only translate the optional-group case. Anything else is a real
+        # import error and deserves its traceback.
+        group = _OPTIONAL_MODULES.get((exc.name or "").split(".")[0])
+        if group is None:
+            raise
+        print(
+            f"`{command}` needs the optional '{group}' dependencies "
+            f"(missing: {exc.name}).\n"
+            f"Install them with:  poetry install --with {group}",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 

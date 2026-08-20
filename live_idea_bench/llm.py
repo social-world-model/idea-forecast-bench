@@ -8,11 +8,6 @@ from typing import Any
 
 from live_idea_bench.model_refs import resolve_model_reference
 
-try:  # google-generativeai is an optional provider dependency
-    from google.generativeai.types import GenerationConfig
-except ImportError:  # pragma: no cover - exercised only when the dep is absent
-    GenerationConfig = None  # type: ignore[assignment,misc]
-
 logger = logging.getLogger(__name__)
 
 # ── Batch-mode state (thread-local) ────────────────────────────────────────────
@@ -441,6 +436,12 @@ def get_response_from_llm(
             gemini_contents.append(
                 {"role": history_msg["role"], "parts": history_msg["content"]}
             )
+
+        # Imported here, not at module scope: google-generativeai is deprecated
+        # upstream and emits a FutureWarning on import, which every command in
+        # the CLI was printing whether or not it used Gemini. `genai` itself is
+        # already imported lazily in create_client for the same reason.
+        from google.generativeai.types import GenerationConfig
 
         generation_kwargs: dict[str, Any] = {
             "temperature": temperature,
