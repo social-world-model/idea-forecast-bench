@@ -42,12 +42,16 @@ jobs:
       - name: Install dependencies
         run: poetry install --with dev,webapp,eval,forecaster
       - name: pip-audit
-        # Installed with pipx, not into the audited venv: `poetry run pip
-        # install pip-audit` would add pip-audit's own dependency tree to the
-        # very environment being audited.
+        # pipx, not `poetry run pip install pip-audit`: installing the auditor
+        # into the environment under audit adds its own dependency tree to the
+        # thing being measured. --path points it at poetry's site-packages.
         run: |
           pipx install pip-audit
-          pip-audit --python "$(poetry env info --executable)" --progress-spinner off --ignore-vuln PYSEC-2026-196 --ignore-vuln PYSEC-2026-1795 --ignore-vuln PYSEC-2026-1796 --ignore-vuln PYSEC-2026-2875 --ignore-vuln PYSEC-2026-2876
+          SITE_PACKAGES="$(poetry run python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+          pip-audit --path "$SITE_PACKAGES" --progress-spinner off \
+            --ignore-vuln PYSEC-2026-196 --ignore-vuln PYSEC-2026-1795 \
+            --ignore-vuln PYSEC-2026-1796 --ignore-vuln PYSEC-2026-2875 \
+            --ignore-vuln PYSEC-2026-2876
         # The ignored IDs are all pip's own advisories. pip is the installer
         # present in every virtualenv, not a declared dependency of this
         # project, and its version is controlled by the runner image.
