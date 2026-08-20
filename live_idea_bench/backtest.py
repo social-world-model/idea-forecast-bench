@@ -122,6 +122,21 @@ def split_train_future_by_cutoff(
     horizon_months: int = 3,
     cutoff_date: str | None = None,
 ) -> tuple[list[PaperRecord], list[PaperRecord], str, str]:
+    """Split papers into (train, future) around a cutoff.
+
+    IMPORTANT -- what `horizon_months` actually means here:
+
+    A `cutoff_month` resolves to that month's FIRST day, so the cutoff month's
+    own papers fall on the future side, and the future window runs to the end
+    of `cutoff_month + horizon_months`. With cutoff_month="2024-01" and
+    horizon_months=3 the future set is Jan, Feb, Mar AND Apr -- four calendar
+    months, not three, and it includes the month named as the cutoff.
+
+    That is the definition every published number was produced under, so it is
+    deliberately left as-is. Read `horizon_months` as "months past the cutoff
+    month", not "length of the evaluation window". Pass `cutoff_date`
+    explicitly if you need an exact boundary.
+    """
     resolved_cutoff_month, resolved_cutoff_date = _resolve_cutoff(
         cutoff_month=cutoff_month,
         cutoff_date=cutoff_date,
@@ -188,7 +203,6 @@ def _summarize_windows(windows: list[BacktestWindowResult]) -> dict[str, float]:
         return {
             "windows": 0,
             "avg_hit_at_k": 0.0,
-            "avg_recall_at_k": 0.0,
             "avg_coverage_at_k": 0.0,
             "avg_precision_at_k": 0.0,
             "avg_mrr": 0.0,
@@ -196,10 +210,6 @@ def _summarize_windows(windows: list[BacktestWindowResult]) -> dict[str, float]:
             "avg_diversity": 0.0,
             "avg_lead_time": 0.0,
             "avg_duplicate_rate": 0.0,
-            "avg_weighted_hit_at_k": 0.0,
-            "avg_weighted_precision_at_k": 0.0,
-            "avg_weighted_mrr": 0.0,
-            "avg_popularity_recall_at_k": 0.0,
         }
 
     def _avg(name: str) -> float:
@@ -212,7 +222,6 @@ def _summarize_windows(windows: list[BacktestWindowResult]) -> dict[str, float]:
     return {
         "windows": len(windows),
         "avg_hit_at_k": _avg("hit_at_k"),
-        "avg_recall_at_k": _avg("recall_at_k"),
         "avg_coverage_at_k": _avg("coverage_at_k"),
         "avg_precision_at_k": _avg("precision_at_k"),
         "avg_mrr": _avg("mrr"),
@@ -220,10 +229,6 @@ def _summarize_windows(windows: list[BacktestWindowResult]) -> dict[str, float]:
         "avg_diversity": _avg("diversity"),
         "avg_lead_time": _avg("lead_time"),
         "avg_duplicate_rate": _avg("duplicate_rate"),
-        "avg_weighted_hit_at_k": _avg("weighted_hit_at_k"),
-        "avg_weighted_precision_at_k": _avg("weighted_precision_at_k"),
-        "avg_weighted_mrr": _avg("weighted_mrr"),
-        "avg_popularity_recall_at_k": _avg("popularity_recall_at_k"),
     }
 
 

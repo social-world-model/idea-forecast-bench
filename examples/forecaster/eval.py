@@ -88,7 +88,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Test window end month (default: 2025-03).",
     )
     p.add_argument("--top-k", type=int, default=5)
-    p.add_argument("--horizon-months", type=int, default=3)
+    p.add_argument(
+        "--horizon-months",
+        type=int,
+        default=3,
+        help="Months past the cutoff month. The cutoff month itself counts as "
+        "future, so N=3 spans four calendar months.",
+    )
     p.add_argument("--min-train-papers", type=int, default=2)
     p.add_argument(
         "--workers",
@@ -167,7 +173,6 @@ def _aggregate(topic_results: dict) -> dict:
         topic_results,
         (
             "avg_hit_at_k",
-            "avg_recall_at_k",
             "avg_precision_at_k",
             "avg_mrr",
             "avg_novelty",

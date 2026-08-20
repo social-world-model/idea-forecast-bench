@@ -401,7 +401,6 @@ def _save_output(
         topic_results,
         (
             "avg_hit_at_k",
-            "avg_recall_at_k",
             "avg_precision_at_k",
             "avg_mrr",
             "avg_novelty",
@@ -452,7 +451,13 @@ def main() -> int:
     parser.add_argument("--min-keyword-freq", type=int, default=1)
     parser.add_argument("--model-name", type=str)
     parser.add_argument("--top-k", type=int, default=5)
-    parser.add_argument("--horizon-months", type=int, default=3)
+    parser.add_argument(
+        "--horizon-months",
+        type=int,
+        default=3,
+        help="Months past the cutoff month. The cutoff month itself counts as "
+        "future, so N=3 spans four calendar months.",
+    )
     parser.add_argument("--min-train-papers", type=int, default=2)
     parser.add_argument("--start-month", type=str, default="2024-01")
     parser.add_argument("--end-month", type=str, default="2025-06")

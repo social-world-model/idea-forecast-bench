@@ -71,17 +71,10 @@ def compute_leaderboard_score(daily_eval: dict[str, Any]) -> float:
 
 
 def compute_popularity_leaderboard_score(daily_eval: dict[str, Any]) -> float:
-    """Leaderboard score weighted by paper popularity (opt-in).
-
-    Falls back to regular hit_at_k/mrr when weighted metrics are not available.
-    """
-    w_hit_raw = daily_eval.get("weighted_hit_at_k")
-    w_mrr_raw = daily_eval.get("weighted_mrr")
-    w_hit = float(
-        w_hit_raw if w_hit_raw is not None else daily_eval.get("hit_at_k", 0.0)
-    )
-    w_mrr = float(w_mrr_raw if w_mrr_raw is not None else daily_eval.get("mrr", 0.0))
-    return round((0.7 * w_hit) + (0.3 * w_mrr), 4)
+    """Leaderboard score: 0.7 * hit@k + 0.3 * MRR."""
+    hit = float(daily_eval.get("hit_at_k", 0.0))
+    mrr = float(daily_eval.get("mrr", 0.0))
+    return round((0.7 * hit) + (0.3 * mrr), 4)
 
 
 def daily_cutoff_date(now_utc: datetime) -> str:

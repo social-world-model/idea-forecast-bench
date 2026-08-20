@@ -339,12 +339,6 @@ def score_prediction_list(
     coverage_at_k = (
         (len(matched_paper_ids) / len(future_papers)) if future_papers else 0.0
     )
-    # recall_at_k: true recall — matched / min(k, |future_papers|). Denominator is
-    # the max number of distinct future papers the top-k predictions could match.
-    recall_denominator = min(k, len(future_papers))
-    recall_at_k = (
-        (len(matched_paper_ids) / recall_denominator) if recall_denominator > 0 else 0.0
-    )
     precision_at_k = (
         (len(matched_paper_ids) / max(1, min(k, len(top_preds)))) if top_preds else 0.0
     )
@@ -361,40 +355,9 @@ def score_prediction_list(
     duplicate_rate = (duplicate_blocked / len(top_preds)) if top_preds else 0.0
 
     # Popularity-weighted metrics — only non-zero when popularity_weights are provided
-    weighted_hit = 0.0
-    weighted_precision = 0.0
-    weighted_mrr_val = 0.0
-    popularity_recall = 0.0
-    if popularity_weights:
-        matched_popularities = [
-            popularity_weights.get(pid, 0.0) for pid in matched_paper_ids
-        ]
-        if matched_popularities:
-            weighted_hit = max(matched_popularities)
-            weighted_precision = sum(matched_popularities) / max(
-                1, min(k, len(top_preds))
-            )
-            # weighted MRR: 1/rank of first matched * that match's popularity
-            first_match = next(
-                (m for m in matches if m.is_match),
-                None,
-            )
-            if first_match is not None:
-                weighted_mrr_val = (
-                    1.0 / first_match.prediction_rank
-                ) * first_match.matched_paper_popularity
-        total_pop_mass = sum(
-            popularity_weights.get(p.paper_id, 0.0) for p in future_papers
-        )
-        matched_pop_mass = sum(matched_popularities)
-        popularity_recall = (
-            matched_pop_mass / total_pop_mass if total_pop_mass > 0 else 0.0
-        )
-
     return ScoredPredictionList(
         evaluation=EvaluationResult(
             hit_at_k=round(hit_at_k, 4),
-            recall_at_k=round(recall_at_k, 4),
             coverage_at_k=round(coverage_at_k, 4),
             precision_at_k=round(precision_at_k, 4),
             mrr=round(mrr, 4),
@@ -404,10 +367,6 @@ def score_prediction_list(
             matched_paper_ids=matched_paper_ids,
             lead_time=round(lead_time, 4),
             duplicate_rate=round(duplicate_rate, 4),
-            weighted_hit_at_k=round(weighted_hit, 4),
-            weighted_precision_at_k=round(weighted_precision, 4),
-            weighted_mrr=round(weighted_mrr_val, 4),
-            popularity_recall_at_k=round(popularity_recall, 4),
         ),
         matches=matches,
         unmatched_future_paper_ids=[

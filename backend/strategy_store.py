@@ -301,7 +301,6 @@ def _aggregate_topic_backtest_summary(
     return {
         "windows": total_windows,
         "avg_hit_at_k": _weighted_avg("avg_hit_at_k"),
-        "avg_recall_at_k": _weighted_avg("avg_recall_at_k"),
         "avg_precision_at_k": _weighted_avg("avg_precision_at_k"),
         "avg_mrr": _weighted_avg("avg_mrr"),
         "avg_novelty": _weighted_avg("avg_novelty"),

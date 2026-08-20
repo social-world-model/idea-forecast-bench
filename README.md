@@ -51,7 +51,7 @@ live-idea-bench baselines    # score the baselines, print a comparison table
 `baselines` echoes the settings every strategy shared, then one row each:
 
 ```text
-strategy                windows        hit_at_k     recall_at_k             mrr
+strategy                windows        hit_at_k   precision_at_k             mrr
 -------------------------------------------------------------------------------
 topic_trend                 ...             ...             ...             ...
 summary_prompting           ...             ...             ...             ...
