@@ -121,7 +121,14 @@ def _embedding_similarity(
             "Embedding engine requires VOYAGE_API_KEY (Voyage-only, no fallback). "
             "Set it, or switch the engine in similarity.yaml."
         )
-    base_url = runtime_config.embedding.embedding_base_url or VOYAGE_BASE_URL
+    # VOYAGE_BASE_URL mirrors OPENAI_BASE_URL on the generation side: it lets a
+    # local OpenAI-compatible endpoint be used without editing a tracked config
+    # file. Env wins over config so a checkout stays clean.
+    base_url = (
+        os.environ.get("VOYAGE_BASE_URL")
+        or runtime_config.embedding.embedding_base_url
+        or VOYAGE_BASE_URL
+    )
     model = runtime_config.embedding.api_model
     client = openai.OpenAI(api_key=api_key, base_url=base_url)
     clean_idea = _sanitize(idea)

@@ -13,6 +13,11 @@ The key here includes a fingerprint of the resolved topic definitions, so any
 taxonomy edit misses the cache. Topics are loaded first because that is a
 cheap YAML parse; the expensive steps are reading the corpus and classifying
 it.
+
+It also includes a fingerprint of the corpus. `fetch` is incremental, so the
+documented workflow -- fetch, run, fetch more, run again -- kept every input to
+the old key identical while the corpus underneath had grown, and the second run
+silently reported the first run's numbers.
 """
 
 from __future__ import annotations
@@ -25,7 +30,7 @@ from typing import Any
 
 from live_idea_bench.config import TopicDefinition, load_topics
 from live_idea_bench.models import PaperRecord
-from live_idea_bench.papers import load_papers_from_markdown
+from live_idea_bench.papers import corpus_fingerprint, load_papers_from_markdown
 from live_idea_bench.topics import classify_papers_by_topic
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -53,9 +58,15 @@ def topics_fingerprint(topics: list[TopicDefinition]) -> str:
 
 
 def cache_key(
-    input_dir: Path | str, start_month: str, end_month: str, topics_fp: str
+    input_dir: Path | str,
+    start_month: str,
+    end_month: str,
+    topics_fp: str,
+    corpus_fp: str,
 ) -> str:
-    raw = f"{Path(input_dir).resolve()}|{start_month}|{end_month}|{topics_fp}"
+    raw = (
+        f"{Path(input_dir).resolve()}|{start_month}|{end_month}|{topics_fp}|{corpus_fp}"
+    )
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
@@ -74,7 +85,13 @@ def load_papers_and_topics(
     indistinguishable from a model that predicted badly.
     """
     topics = load_topics()
-    key = cache_key(input_dir, start_month, end_month, topics_fingerprint(topics))
+    key = cache_key(
+        input_dir,
+        start_month,
+        end_month,
+        topics_fingerprint(topics),
+        corpus_fingerprint(input_dir),
+    )
     resolved_cache_dir = cache_dir or DEFAULT_CACHE_DIR
     cache_path = resolved_cache_dir / f"papers_{key}.pkl"
 

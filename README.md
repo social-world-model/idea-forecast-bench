@@ -39,14 +39,20 @@ poetry install
 
 ## Quick start
 
-Matching is embedding-based, so set a Voyage key first:
+Every baseline writes its predictions with an LLM, and matching is
+embedding-based, so two keys are needed:
 
 ```bash
-export VOYAGE_API_KEY=...
+export VOYAGE_API_KEY=...     # matching (embedding-only)
+export OPENAI_API_KEY=...     # generation; ANTHROPIC_/GOOGLE_/TOGETHER_/DEEPSEEK_ also work
 
 live-idea-bench fetch        # pull an arXiv corpus into data/csml/raw_markdown
-live-idea-bench baselines    # score the baselines, print a comparison table
+live-idea-bench baselines    # score every baseline, print a comparison table
 ```
+
+`baselines` checks both before it starts, so a missing key costs a second
+rather than five failed runs. To point generation at a local
+OpenAI-compatible server instead of a provider, set `OPENAI_BASE_URL`.
 
 `baselines` echoes the settings every strategy shared, then one row each:
 
@@ -77,21 +83,35 @@ live-idea-bench benchmark --strategy summary_prompting     # a single strategy
 
 | Strategy | Key? | Idea |
 |---|---|---|
-| `topic_trend` | no | extrapolate rising keywords |
-| `topic_trend` | no LLM | extrapolates the 52-topic taxonomy |
+| `topic_trend` | yes | extrapolates the 52-topic taxonomy, then writes ideas per trending cluster |
 | `predictor_llm` | yes | prompt an LLM with recent abstracts |
 | `summary_prompting` | yes | prompt over summarised recent work |
 | `retrieval_prompting` | yes | retrieval-augmented prompting |
 | `memory_prompting` | yes | prompting with a running memory |
 | `forecaster` | yes + checkpoints | the MDF method |
 
-`baselines` runs `topic_trend` by default — it needs no *LLM* provider, though
-scoring still needs `VOYAGE_API_KEY`. Add the LLM baselines with a provider key:
+`baselines` runs all five. There is no LLM-free baseline: `topic_trend` picks
+its clusters arithmetically but still asks a model to write the predictions.
+Use `--only` for a subset:
 
 ```bash
-export OPENAI_API_KEY=sk-...
-live-idea-bench baselines --include-llm
+live-idea-bench baselines --only topic_trend,summary_prompting
 ```
+
+### Checking the pipeline without provider keys
+
+Both sides accept an OpenAI-compatible endpoint, so the whole path -- corpus →
+windows → generation → embedding match → metrics -- can be exercised against a
+local server (vLLM, SGLang, or any stub) with no provider account:
+
+```bash
+export OPENAI_BASE_URL=http://127.0.0.1:8000/v1  OPENAI_API_KEY=EMPTY
+export VOYAGE_BASE_URL=http://127.0.0.1:8000/v1  VOYAGE_API_KEY=EMPTY
+live-idea-bench baselines --only topic_trend
+```
+
+This verifies wiring, not quality: `hit@k` against a stub is meaningless, and
+only `windows` reaching a non-zero value tells you the run was real.
 
 **Matching is embedding-only.** There is no `--similarity-engine`: scores from
 different matchers are not comparable, and making the matcher selectable meant

@@ -4,15 +4,17 @@ Reproducing the baseline table used to mean invoking `benchmark` once per
 strategy, by hand, and remembering to keep every window/scoring flag identical
 between runs -- if one run drifted, the numbers were no longer comparable.
 
-    live-idea-bench baselines --input-dir data/csml/raw_markdown
-
 Every strategy sees exactly the same windows and the same matcher; the shared
 settings are printed once so a run is self-documenting.
 
+Every baseline needs two things: an LLM provider (all five generate their
+predictions with one) and VOYAGE_API_KEY (matching is embedding-only). Both are
+checked before any run starts, so a missing key fails in one second rather than
+five subprocesses later.
+
 Usage:
-    live-idea-bench baselines                          # keyless: heuristic matcher
-    live-idea-bench baselines --only topic_trend,topic_trend
-    live-idea-bench baselines --similarity-engine embedding   # needs VOYAGE_API_KEY
+    live-idea-bench baselines
+    live-idea-bench baselines --only topic_trend,summary_prompting
 """
 
 from __future__ import annotations
@@ -24,17 +26,27 @@ import subprocess
 import sys
 from pathlib import Path
 
-#: Baselines that need no LLM provider. Scoring still needs VOYAGE_API_KEY:
-#: matching is embedding-only.
-NO_LLM_BASELINES = ("topic_trend",)
-#: Baselines that call an LLM, and therefore need a provider key.
-LLM_BASELINES = (
+#: Every baseline generates its predictions with an LLM -- topic_trend included:
+#: it clusters the taxonomy itself, then asks a model to write the predictions
+#: for each trending cluster. There is no LLM-free baseline.
+ALL_BASELINES = (
+    "topic_trend",
     "predictor_llm",
     "summary_prompting",
     "retrieval_prompting",
     "memory_prompting",
 )
-ALL_BASELINES = NO_LLM_BASELINES + LLM_BASELINES
+
+#: Any one of these satisfies the LLM requirement. OPENAI_BASE_URL is included
+#: so a local OpenAI-compatible endpoint (vLLM, SGLang, a stub) counts.
+LLM_ENV_VARS = (
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "GOOGLE_API_KEY",
+    "TOGETHER_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "OPENAI_BASE_URL",
+)
 
 METRICS = (
     "avg_hit_at_k",
@@ -56,14 +68,7 @@ def parse_args() -> argparse.Namespace:
         "--only",
         type=str,
         default=None,
-        help="Comma-separated subset, e.g. 'topic_trend,summary_prompting'. "
-        f"No-LLM: {','.join(NO_LLM_BASELINES)}. LLM: {','.join(LLM_BASELINES)}.",
-    )
-    parser.add_argument(
-        "--include-llm",
-        action="store_true",
-        help="Also run the LLM baselines (needs an LLM provider key on top of "
-        "VOYAGE_API_KEY).",
+        help="Comma-separated subset of: " + ",".join(ALL_BASELINES),
     )
     parser.add_argument("--start-month", type=str, default="2024-01")
     parser.add_argument("--end-month", type=str, default="2025-06")
@@ -91,7 +96,7 @@ def _selected(args: argparse.Namespace) -> list[str]:
                 f"Choose from: {', '.join(ALL_BASELINES)}"
             )
         return names
-    return list(ALL_BASELINES if args.include_llm else NO_LLM_BASELINES)
+    return list(ALL_BASELINES)
 
 
 def _run_one(strategy: str, args: argparse.Namespace, out_path: Path) -> bool:
@@ -114,7 +119,6 @@ def _run_one(strategy: str, args: argparse.Namespace, out_path: Path) -> bool:
         str(args.top_k),
         "--min-train-papers",
         str(args.min_train_papers),
-        "--similarity-engine",
         "--workers",
         str(args.workers),
         "--output",
@@ -145,17 +149,23 @@ def main() -> int:
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    needs_key = [b for b in baselines if b in LLM_BASELINES]
-    if needs_key and not any(
-        os.environ.get(v)
-        for v in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY")
-    ):
-        print(
-            f"WARNING: {', '.join(needs_key)} call an LLM, but no provider key is "
-            "set (OPENAI_API_KEY / ANTHROPIC_API_KEY / GOOGLE_API_KEY).\n"
-            "         Those rows will come back unscored. Continuing in case a "
-            "local endpoint is configured.\n"
+    missing = []
+    if not any(os.environ.get(v) for v in LLM_ENV_VARS):
+        missing.append(
+            "  an LLM provider: set one of "
+            + " / ".join(LLM_ENV_VARS[:-1])
+            + ",\n    or OPENAI_BASE_URL for a local OpenAI-compatible endpoint"
         )
+    if not os.environ.get("VOYAGE_API_KEY"):
+        missing.append("  VOYAGE_API_KEY: matching is embedding-only")
+    if missing:
+        # Fail here rather than launching runs that cannot produce a number.
+        # Every baseline needs both, so one missing key means an empty table.
+        print(
+            "Cannot run: every baseline needs both of these.\n" + "\n".join(missing),
+            file=sys.stderr,
+        )
+        return 2
 
     print("Shared settings (identical for every baseline, so the rows compare):")
     print(f"  corpus            {args.input_dir}")
@@ -168,9 +178,14 @@ def main() -> int:
     results: dict[str, dict[str, float] | None] = {}
     for strategy in baselines:
         out_path = out_dir / f"{strategy}.json"
-        results[strategy] = (
-            _read_metrics(out_path) if _run_one(strategy, args, out_path) else None
-        )
+        # Remove first: otherwise a crashed run silently reports the numbers a
+        # previous run left in the same file.
+        out_path.unlink(missing_ok=True)
+        _run_one(strategy, args, out_path)
+        # Read regardless of exit code. `benchmark` exits 1 when it scores zero
+        # windows, which is "ran but the corpus was too thin" -- a different
+        # problem from a traceback, and the JSON is written either way.
+        results[strategy] = _read_metrics(out_path)
 
     print(f"\n{'=' * 78}\nBaseline comparison\n{'=' * 78}")
     cols = [m.replace("avg_", "") for m in METRICS]
@@ -193,18 +208,25 @@ def main() -> int:
         print(f"{strategy:<22}{windows:>9}{row}")
     print(f"\nPer-run JSON in {out_dir}/")
 
-    unscored = [
-        s for s, m in results.items() if m is None or int(m.get("windows", 0)) == 0
-    ]
-    if unscored:
+    # Keep these apart: a run that errored and a run that scored nothing have
+    # different causes, and collapsing them sent people to widen the corpus when
+    # the real problem was an exception.
+    errored = [s for s, m in results.items() if m is None]
+    empty = [s for s, m in results.items() if m is not None and not int(m["windows"])]
+    if errored:
         print(
-            f"\n{len(unscored)} baseline(s) produced no scored windows: "
-            f"{', '.join(unscored)}\n"
-            "Either the corpus is too thin (widen `fetch --lookback-days`, or "
-            "lower --min-train-papers) or a required API key is missing."
+            f"\n{len(errored)} baseline(s) exited non-zero: {', '.join(errored)}\n"
+            "The traceback is in this run's output above -- read that first; the "
+            "corpus settings are not the cause."
         )
-        return 1
-    return 0
+    if empty:
+        print(
+            f"\n{len(empty)} baseline(s) ran but scored no windows: "
+            f"{', '.join(empty)}\n"
+            "The corpus is too thin for these settings: widen "
+            "`fetch --lookback-days`, or lower --min-train-papers."
+        )
+    return 1 if (errored or empty) else 0
 
 
 if __name__ == "__main__":
