@@ -22,7 +22,6 @@ Optional groups:
 | Group | Adds | When |
 |---|---|---|
 | `--with forecaster` | torch, transformers, trl, peft, datasets, accelerate | training/running MDF locally |
-| `--with eval` | sentence-transformers | local embedder for retrieve-then-judge |
 | `--with webapp` | flask, flask-cors | running `backend/app.py` |
 
 Install CUDA-correct torch from `scripts/setup_rl_env*.sh`, not from

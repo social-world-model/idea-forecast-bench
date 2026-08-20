@@ -41,7 +41,7 @@ jobs:
       # largest dependency surface in the project; auditing everything except
       # them, while the comment claimed otherwise, was the worst of both.
       - name: Install dependencies
-        run: poetry install --with dev,webapp,eval,forecaster
+        run: poetry install --with dev,webapp,forecaster
       - name: pip-audit
         # pipx, not `poetry run pip install pip-audit`: installing the auditor
         # into the environment under audit adds its own dependency tree to the

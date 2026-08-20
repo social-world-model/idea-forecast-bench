@@ -30,7 +30,6 @@ poetry install
 |---|---|---|
 | — | `poetry install` | run the benchmark and the baselines |
 | forecaster | `poetry install --with forecaster` | train or run MDF locally (torch, trl, peft) |
-| eval | `poetry install --with eval` | local embedder instead of a hosted one |
 | webapp | `poetry install --with webapp` | the optional Flask API under `backend/` |
 
 > Install CUDA-matched torch from `scripts/setup_rl_env*.sh`, not from
@@ -81,18 +80,22 @@ live-idea-bench benchmark --strategy summary_prompting     # a single strategy
 
 ## Baselines
 
-| Strategy | Key? | Idea |
-|---|---|---|
-| `topic_trend` | yes | extrapolates the 52-topic taxonomy, then writes ideas per trending cluster |
-| `predictor_llm` | yes | prompt an LLM with recent abstracts |
-| `summary_prompting` | yes | prompt over summarised recent work |
-| `retrieval_prompting` | yes | retrieval-augmented prompting |
-| `memory_prompting` | yes | prompting with a running memory |
-| `forecaster` | yes + checkpoints | the MDF method |
+`baselines` runs all five under identical windows and an identical matcher, so
+the rows are comparable:
 
-`baselines` runs all five. There is no LLM-free baseline: `topic_trend` picks
-its clusters arithmetically but still asks a model to write the predictions.
-Use `--only` for a subset:
+| Strategy | Idea |
+|---|---|
+| `topic_trend` | rank the 52-topic taxonomy by trend, write ideas for the top clusters |
+| `predictor_llm` | prompt an LLM with recent abstracts |
+| `summary_prompting` | prompt over summarised recent work |
+| `retrieval_prompting` | retrieval-augmented prompting |
+| `memory_prompting` | prompting with a running memory |
+
+All five need both keys. There is no LLM-free baseline: `topic_trend` picks its
+clusters arithmetically but still asks a model to write the predictions.
+
+MDF is not in this table because it needs trained checkpoints; run it with
+`live-idea-bench benchmark --strategy forecaster`. Use `--only` for a subset:
 
 ```bash
 live-idea-bench baselines --only topic_trend,summary_prompting
@@ -113,10 +116,9 @@ live-idea-bench baselines --only topic_trend
 This verifies wiring, not quality: `hit@k` against a stub is meaningless, and
 only `windows` reaching a non-zero value tells you the run was real.
 
-**Matching is embedding-only.** There is no `--similarity-engine`: scores from
-different matchers are not comparable, and making the matcher selectable meant
-a typo could silently produce numbers that looked fine but could not be
-compared to anything.
+**Matching is embedding-only** — there is no `--similarity-engine`. Scores from
+different matchers are not comparable, so the choice was removed rather than
+left as a flag a typo could change.
 
 ## Training MDF
 

@@ -1048,7 +1048,11 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    embed_client = openai.OpenAI(api_key=voyage_key, base_url=VOYAGE_BASE_URL)
+    # Same override as the benchmark matcher (live_idea_bench/similarity.py):
+    # without it, VOYAGE_BASE_URL would silently apply to `baselines` but not to
+    # `judge-eval`, and the two would embed against different endpoints.
+    embed_base_url = os.environ.get("VOYAGE_BASE_URL") or VOYAGE_BASE_URL
+    embed_client = openai.OpenAI(api_key=voyage_key, base_url=embed_base_url)
 
     # Judge client: prefer env-var endpoint so we can target a local
     # vLLM OpenAI-compatible server when OPENAI_API_KEY is absent.

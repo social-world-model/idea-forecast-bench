@@ -73,8 +73,14 @@ packages = [
 # the heavy ML stack only when you train or run the MDF forecaster locally.
 #
 #   poetry install --with forecaster   # train/run the MDF forecaster
-#   poetry install --with eval         # local-embedder retrieve-then-judge
 #   poetry install --with webapp       # the optional Flask API under backend/
+#
+# There is no "eval" group. It used to exist to install a local
+# sentence-transformer as an embedding fallback for retrieve-then-judge, but
+# that fallback was removed on purpose -- mixing embedding models makes scores
+# incomparable, so both the matcher and the judge are Voyage-only and fail loud
+# without a key. sentence-transformers is still installed by the forecaster
+# group, which is where its real consumers (the retrieval indices) live.
 
 # MDF forecaster: SFT the prior + GRPO-train the realization policy locally.
 [tool.poetry.group.forecaster]
@@ -100,14 +106,6 @@ accelerate = ">=0.27"
 sentence-transformers = ">=2.7"
 # Lazily imported by forecaster/realization/verl/dataset.py only.
 pandas = ">=2.2.0"
-
-# Evaluation extra: local sentence-transformer embedder fallback for the
-# retrieve-then-judge protocol when no hosted embedding API is configured.
-[tool.poetry.group.eval]
-optional = true
-
-[tool.poetry.group.eval.dependencies]
-sentence-transformers = ">=2.7"
 
 # Optional web app: the Flask API under backend/ (see backend/README.md).
 # Not needed to run the benchmark or the forecaster.
