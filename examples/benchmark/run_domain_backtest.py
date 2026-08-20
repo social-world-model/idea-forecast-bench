@@ -109,8 +109,10 @@ def main() -> int:
     parser.add_argument(
         "--output",
         type=str,
-        default="/tmp/domain_backtest.json",
-        help="Output JSON path.",
+        default=None,
+        help="Output JSON path. Defaults to output/backtest/<strategy>.json -- "
+        "per strategy, because a shared default plus resume silently merged "
+        "runs of different strategies into one artifact.",
     )
     parser.add_argument(
         "--workers",
@@ -162,20 +164,59 @@ def main() -> int:
     )
 
     # ── Resume support: load existing partial results ────────────────
-    output_path = Path(args.output)
+    output_path = Path(
+        args.output or PROJECT_ROOT / "output" / "backtest" / f"{args.strategy}.json"
+    )
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    run_fingerprint = {
+        "strategy": args.strategy,
+        "top_k": args.top_k,
+        "horizon_months": args.horizon_months,
+        "min_train_papers": args.min_train_papers,
+        "start_month": args.start_month,
+        "end_month": args.end_month,
+    }
     topic_results: dict = {}
     _saved_payload: dict = {}
     if output_path.exists():
         try:
             _saved_payload = json.loads(output_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as _e:
+            print(f"  [resume] could not read existing output ({_e}), starting fresh")
+            _saved_payload = {}
+        if _saved_payload:
+            prior = {
+                "strategy": _saved_payload.get("strategy"),
+                **{
+                    k: (_saved_payload.get("config") or {}).get(k)
+                    for k in (
+                        "top_k",
+                        "horizon_months",
+                        "min_train_papers",
+                        "start_month",
+                        "end_month",
+                    )
+                },
+            }
+            if prior != run_fingerprint:
+                # Resuming across configurations merges incompatible windows and
+                # then stamps the artifact with the CURRENT header, so the file
+                # claims a provenance its contents do not have.
+                differing = [
+                    k for k in run_fingerprint if prior.get(k) != run_fingerprint[k]
+                ]
+                raise SystemExit(
+                    f"{output_path} was produced by a different configuration "
+                    f"(differs on: {', '.join(differing)}).\n"
+                    "Refusing to resume: merging them would report one set of "
+                    "numbers under another set's settings.\n"
+                    "Pass a different --output, or delete that file to start fresh."
+                )
             topic_results = _saved_payload.get("topic_results", {})
             _resumed = sum(
                 1 for v in topic_results.values() if v.get("backtest") is not None
             )
             print(f"  [resume] found {_resumed} completed topics in {output_path}")
-        except Exception as _e:
-            print(f"  [resume] could not load existing output ({_e}), starting fresh")
             topic_results = {}
 
     print(f"\nRunning per-topic backtest (horizon={args.horizon_months}m) ...\n")
@@ -305,6 +346,7 @@ def main() -> int:
             "backtest": result,
         }
 
+    failed_topics: list[str] = []
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = {pool.submit(_process_topic, t): t for t in topics}
         for fut in as_completed(futures):
@@ -321,6 +363,7 @@ def main() -> int:
                 import traceback
 
                 traceback.print_exc()
+                failed_topics.append(topic.id)
                 continue
             if res is None:
                 continue
@@ -359,6 +402,26 @@ def main() -> int:
 
     _save_checkpoint()
     print(f"\nSaved to {output_path}")
+
+    # A run that scored nothing must not look like a run that scored zero.
+    # Without this an all-topics-failed run exits 0 and leaves behind a
+    # well-formed artifact full of 0.0000 -- indistinguishable from a model
+    # that simply predicted badly.
+    if total_windows == 0:
+        print(
+            f"\nNO WINDOWS SCORED. {len(failed_topics)} topic(s) errored"
+            + (f": {', '.join(failed_topics[:5])}" if failed_topics else "")
+            + ".\nThe metrics above are not results -- nothing was evaluated. "
+            "Check the corpus covers the window, and that required API keys are set.",
+            flush=True,
+        )
+        return 1
+    if failed_topics:
+        print(
+            f"\nWARNING: {len(failed_topics)} of {len(topics)} topics errored and "
+            f"are absent from the aggregate: {', '.join(failed_topics[:10])}",
+            flush=True,
+        )
 
     return 0
 

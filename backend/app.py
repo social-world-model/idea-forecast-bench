@@ -9,6 +9,7 @@ from typing import Any
 
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 
 from backend.strategy_store import (
     bootstrap_backtest_if_missing,
@@ -158,6 +159,30 @@ def handle_api_error(error: APIError) -> tuple[Response, int]:
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     return jsonify(payload), error.status_code
+
+
+@app.errorhandler(HTTPException)
+def handle_http_exception(error: HTTPException) -> tuple[Response, int]:
+    """Keep routing errors as routing errors.
+
+    Flask dispatches HTTPException (404, 405, 400, ...) to the most specific
+    handler. Without this one they fell through to the Exception handler below
+    and every mistyped URL was reported as a 500 "internal_error" -- to clients
+    and, more expensively, in the logs.
+    """
+    return (
+        jsonify(
+            {
+                "error": {
+                    "code": (error.name or "http_error").lower().replace(" ", "_"),
+                    "message": error.description or error.name,
+                    "details": None,
+                },
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        ),
+        error.code or 500,
+    )
 
 
 @app.errorhandler(Exception)
