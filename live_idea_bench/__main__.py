@@ -10,6 +10,8 @@ individual scripts keeps working.
 Commands
 --------
 Benchmark:
+    fetch            Download an arXiv corpus the benchmark can read.
+    baselines        Run every baseline on one corpus, print a comparison table.
     benchmark        Run a domain-separated backtest of a forecasting strategy.
     judge-eval       Score saved predictions with the retrieve-then-judge LLM judge.
 
@@ -42,6 +44,14 @@ _EXAMPLES = _REPO_ROOT / "examples"
 # __main__ with sys.argv rewritten, so its existing argparse handles the flags.
 _COMMANDS: dict[str, tuple[str, str]] = {
     # benchmark (examples/benchmark/)
+    "fetch": (
+        "benchmark/fetch_papers.py",
+        "Download an arXiv corpus the benchmark can read.",
+    ),
+    "baselines": (
+        "benchmark/run_all_baselines.py",
+        "Run every baseline on one corpus and print a comparison table.",
+    ),
     "benchmark": (
         "benchmark/run_domain_backtest.py",
         "Run a domain-separated backtest.",

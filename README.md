@@ -16,87 +16,120 @@ cutoff and forecast the research ideas the community pursues next. It ships two 
 
 ## Quick start
 
+Three commands, no API key, nothing to download by hand:
+
 ```bash
-# 1. Clone
-git clone https://github.com/ulab-uiuc/live-idea-bench.git
-cd live-idea-bench
+git clone https://github.com/ulab-uiuc/live-idea-bench.git && cd live-idea-bench
+poetry install
 
-# 2. Install (core = everything the benchmark needs)
-poetry install                       # deps for the benchmark + test suite
-#   ...add extras only when you train/run the forecaster locally:
-poetry install --with forecaster     # MDF forecaster training stack (torch/transformers/trl/peft/...)
-poetry install --with eval           # local-embedder for retrieve-then-judge scoring
-#   The repo runs in-place from the root via `python -m live_idea_bench` — no
-#   editable install needed (the package is poetry-managed, package-mode=false).
-
-# 3. Run — one front door (both forms work):
-live-idea-bench --help
-python -m live_idea_bench --help
+live-idea-bench fetch                  # pull an arXiv corpus into data/csml/raw_markdown
+live-idea-bench baselines              # run every keyless baseline, print a comparison table
 ```
 
-The CLI is the single entrypoint. Every command forwards its flags to the underlying
-script, so `python -m live_idea_bench <cmd> --help` shows that command's options.
+It echoes the settings every strategy shared (so the rows are comparable), then
+one row per baseline:
+
+```text
+Shared settings (identical for every baseline, so the rows compare):
+  corpus            data/csml/raw_markdown
+  window            2024-01 .. 2025-06
+  horizon_months    3
+  top_k             5
+  similarity_engine heuristic
+
+strategy                windows        hit_at_k     recall_at_k             mrr
+-------------------------------------------------------------------------------
+keyword_trend               ...             ...             ...             ...
+topic_trend                 ...             ...             ...             ...
+```
+
+Absolute values depend entirely on the corpus you fetched, so none are quoted
+here — `fetch` pulls whatever arXiv returns today, which is not the frozen
+corpus behind the paper's numbers.
+
+`windows` is how many scored backtest windows the corpus supported, and it is
+the first thing to read. A strategy that produced none is reported as
+
+```text
+predictor_llm                 0   NOT SCORED -- no windows produced
+```
+
+rather than a row of zeros, and the command exits non-zero — "could not be
+scored" must never be mistakable for "scored 0.0". Usual causes are a corpus
+too thin for the window (widen `fetch --lookback-days`, or lower
+`--min-train-papers`) or a missing API key, which the command also warns about
+before it starts. A small keyless smoke corpus of ~800 papers gives
+`keyword_trend` a few dozen windows but typically leaves `topic_trend`
+unscored, because the 52-topic taxonomy needs denser per-topic coverage.
+
+**Every flag has a default.** The commands above are complete as written; reach
+for flags only to change something:
+
+```bash
+live-idea-bench fetch --query "cat:cs.CL" --max-results 5000
+live-idea-bench baselines --start-month 2024-06 --end-month 2025-06 --top-k 10
+live-idea-bench benchmark --strategy summary_prompting      # one strategy, not all
+```
+
+### Baselines
+
+| Strategy | Needs a key? | What it does |
+|---|---|---|
+| `keyword_trend` | no | extrapolates rising keywords |
+| `topic_trend` | no | same, over the 52-topic taxonomy |
+| `predictor_llm` | yes | prompts an LLM with recent abstracts |
+| `summary_prompting` | yes | prompts over summarised recent work |
+| `retrieval_prompting` | yes | retrieval-augmented prompting |
+| `memory_prompting` | yes | prompting with a running memory |
+| `forecaster` | yes + checkpoints | the MDF method |
+
+`baselines` runs the keyless two by default. Add the LLM ones once a provider
+key is set:
+
+```bash
+export OPENAI_API_KEY=sk-...
+live-idea-bench baselines --include-llm
+live-idea-bench baselines --only summary_prompting,retrieval_prompting
+```
+
+### Scoring engines
+
+How a prediction is matched to a future paper. `heuristic` is the default
+because it needs no credentials; the reported results use `embedding`.
+
+| `--similarity-engine` | Needs | Notes |
+|---|---|---|
+| `heuristic` | nothing | lexical matcher; use for smoke runs |
+| `embedding` | `VOYAGE_API_KEY` | Voyage-only by design, no silent fallback |
+| `llm` | a judge key | pair with `--eval-model`, e.g. `--eval-model gpt-5.4` |
+
+Scores from different engines are not comparable — pick one per experiment.
+
+### All commands
+
+`live-idea-bench <cmd> --help` shows any command's own flags.
 
 | Area | Command | What it does |
 |------|---------|--------------|
-| **Benchmark** | `python -m live_idea_bench benchmark`   | Run a domain-separated backtest of a forecasting strategy |
-|               | `python -m live_idea_bench judge-eval`  | Score saved predictions with the retrieve-then-judge LLM judge |
-| **MDF forecaster** | `python -m live_idea_bench hindsight`   | Extract latent-innovation training labels from future papers |
-|                    | `python -m live_idea_bench train-prior` | SFT the memory-conditioned innovation prior |
-|                    | `python -m live_idea_bench train`       | GRPO-train the realization policy |
-|                    | `python -m live_idea_bench infer`       | Joint inference: sample from the prior → realize → select |
-|                    | `python -m live_idea_bench eval`        | Evaluate a trained forecaster on a held-out window |
-| **Single-metric ablation** | `python -m live_idea_bench ablate` | Single-metric GRPO (soft / coverage / novelty) |
-| **Analysis** | `python -m live_idea_bench analysis`    | Evaluation-validity analyses (citation / coauthor / leakage) |
+| **Benchmark** | `fetch` | Download an arXiv corpus the benchmark can read |
+| | `baselines` | Run every baseline on one corpus, print a comparison table |
+| | `benchmark` | Backtest a single forecasting strategy |
+| | `judge-eval` | Score saved predictions with the retrieve-then-judge LLM judge |
+| **MDF forecaster** | `hindsight` | Extract latent-innovation training labels from future papers |
+| | `train-prior` | SFT the memory-conditioned innovation prior |
+| | `train` | GRPO-train the realization policy |
+| | `infer` | Joint inference: prior → realize → select |
+| | `eval` | Evaluate a trained forecaster on a held-out window |
+| **Ablation** | `ablate` | Single-metric GRPO (soft / coverage / novelty) |
+| **Analysis** | `analysis` | Evaluation-validity analyses (citation / coauthor / leakage) |
 
-### Minimal example — run the benchmark
-
-The benchmark runs over the arXiv CS.ML corpus. Place the paper markdown under
-`data/csml/raw_markdown/` in the layout `load_papers_from_markdown` expects
-(`<paper_id>/auto/<paper_id>.md`), then point `--input-dir` at it:
+Optional installs, only when you need them:
 
 ```bash
-python -m live_idea_bench benchmark \
-  --input-dir data/csml/raw_markdown \
-  --strategy summary_prompting \
-  --start-month 2024-10 --end-month 2025-03 \
-  --output /tmp/backtest.json
+poetry install --with forecaster   # MDF training stack (torch/transformers/trl/peft/...)
+poetry install --with eval         # local embedder for retrieve-then-judge
+poetry install --with webapp       # the Flask API under backend/
 ```
-
-The **default matcher is the Voyage embedding engine** (`engine: embedding` in
-`live_idea_bench/prompt/similarity.yaml`), which requires `VOYAGE_API_KEY` — by
-design there is no local/lexical fallback, so a misconfigured embedding endpoint
-fails loud rather than silently degrading and corrupting score comparability. For
-a quick, key-free smoke run, switch to the lexical matcher with
-`--similarity-engine heuristic`:
-
-```bash
-python -m live_idea_bench benchmark \
-  --input-dir data/csml/raw_markdown \
-  --strategy summary_prompting \
-  --similarity-engine heuristic \
-  --start-month 2024-10 --end-month 2025-03 \
-  --output /tmp/backtest.json
-```
-
-To score matches with an LLM judge instead, add `--similarity-engine llm` and
-name the judge with `--eval-model` (the `--eval-model` value is ignored unless
-the engine is `llm`):
-
-```bash
-python -m live_idea_bench benchmark \
-  --input-dir data/csml/raw_markdown \
-  --strategy summary_prompting \
-  --similarity-engine llm --eval-model gpt-5.4 \
-  --start-month 2024-10 --end-month 2025-03 \
-  --output /tmp/backtest.json
-```
-
-Available baseline strategies: `predictor_llm` (raw recent-abstract prompting),
-`summary_prompting`, `retrieval_prompting`, `memory_prompting`, and `keyword_trend` /
-`topic_trend`. The MDF forecaster is the `forecaster` strategy.
-
----
 
 ## Repository layout
 
