@@ -14,7 +14,6 @@ from live_idea_bench.config import (
     load_runtime_config,
     load_similarity_config,
 )
-from live_idea_bench.llm import create_client, get_response_from_llm
 from live_idea_bench.models import (
     EvaluationResult,
     IdeaPrediction,
@@ -81,56 +80,13 @@ def _keyword_overlap(a: str, b: str) -> float:
     return len(sa & sb) / min(len(sa), len(sb))
 
 
-def _hybrid_similarity(a: str, b: str) -> float:
+def lexical_similarity(a: str, b: str) -> float:
+    """Token-overlap similarity. NOT a scoring engine -- benchmark matching is
+    embedding-only. Exposed publicly because forecaster's inference scorer
+    needs a cheap text-similarity primitive."""
     jac = _token_jaccard(a, b)
     seq = SequenceMatcher(None, a.lower(), b.lower()).ratio()
     return (0.65 * jac) + (0.35 * seq)
-
-
-def _llm_similarity(
-    idea: str,
-    context: str,
-    similarity_config: SimilarityConfig,
-    runtime_config: Config,
-    *,
-    model_name: str | None = None,
-    reasoning_effort: str | None = None,
-) -> MatchResult:
-    resolved_model = model_name or runtime_config.model_name
-    client, resolved_model = create_client(resolved_model)
-    max_chars = runtime_config.embedding.max_context_chars
-    clean_idea = _sanitize(idea)
-    clean_context = _sanitize(context[:max_chars])
-    raw, _ = get_response_from_llm(
-        msg=similarity_config.user_prompt_template.format(
-            idea=clean_idea, context=clean_context
-        ),
-        client=client,
-        model=resolved_model,
-        system_message=similarity_config.system_prompt,
-        temperature=runtime_config.temperature,
-        reasoning_effort=reasoning_effort,
-    )
-
-    reasoning = raw.strip()
-    # Fail loud on a parse miss: silently scoring 0.0 marks a genuinely
-    # high-similarity pair as a non-match and corrupts the benchmark
-    # metrics. No-fallback policy — surface the malformed judge output.
-    score_match = re.search(
-        r"(?im)\**\s*score\s*\**\s*:?\s*\**\s*(0?\.\d+|[01](?:\.\d+)?)", raw
-    )
-    if not score_match:
-        raise ValueError(
-            f"LLM judge ({resolved_model}) returned no parseable 'Score:' line; "
-            f"refusing to silently score 0.0 (would mark a real match as a miss). "
-            f"Raw response: {reasoning[:500]!r}"
-        )
-    score = float(score_match.group(1))
-    return MatchResult(
-        score=max(0.0, min(1.0, score)),
-        reasoning=reasoning,
-        engine_name=f"llm:{resolved_model}",
-    )
 
 
 def _sanitize(text: str) -> str:
@@ -207,31 +163,9 @@ def compute_similarity(
     model_name: str | None = None,
     reasoning_effort: str | None = None,
 ) -> MatchResult:
-    resolved_similarity = similarity_config or load_similarity_config()
+    del similarity_config, model_name, reasoning_effort  # single-engine now
     resolved_runtime = runtime_config or load_runtime_config()
-
-    engine = resolved_similarity.engine.lower().strip()
-    if engine == "llm":
-        return _llm_similarity(
-            idea,
-            context,
-            resolved_similarity,
-            resolved_runtime,
-            model_name=model_name,
-            reasoning_effort=reasoning_effort,
-        )
-    if engine == "embedding":
-        return _embedding_similarity(idea, context, resolved_runtime)
-
-    semantic = _hybrid_similarity(idea, context)
-    keyword = _keyword_overlap(idea, context)
-    return MatchResult(
-        score=max(semantic, keyword),
-        reasoning=f"hybrid semantic={semantic:.3f}, keyword={keyword:.3f}",
-        engine_name="hybrid",
-        semantic=semantic,
-        keyword=keyword,
-    )
+    return _embedding_similarity(idea, context, resolved_runtime)
 
 
 def is_match(
@@ -240,28 +174,8 @@ def is_match(
     context: str,
     similarity_config: SimilarityConfig,
 ) -> bool:
-    engine = similarity_config.engine.lower().strip()
-    if engine == "llm":
-        return result.score >= similarity_config.llm_match_threshold
-    if engine == "embedding":
-        return result.score >= similarity_config.embedding_threshold
-    # hybrid (default) — reuse the components computed in compute_similarity so
-    # the match decision and the sort score (max(semantic, keyword)) are derived
-    # from the exact same numbers; no recompute, no greedy-selection drift.
-    semantic = (
-        result.semantic
-        if result.semantic is not None
-        else _hybrid_similarity(idea, context)
-    )
-    keyword = (
-        result.keyword
-        if result.keyword is not None
-        else _keyword_overlap(idea, context)
-    )
-    return (
-        semantic >= similarity_config.semantic_threshold
-        or keyword >= similarity_config.keyword_threshold
-    )
+    del idea, context  # embedding scores are self-contained
+    return result.score >= similarity_config.embedding_threshold
 
 
 def _prefilter_future_papers(
@@ -277,7 +191,7 @@ def _prefilter_future_papers(
     ranked = sorted(
         pool,
         key=lambda paper: max(
-            _hybrid_similarity(prediction_text, paper_text(paper)),
+            lexical_similarity(prediction_text, paper_text(paper)),
             _keyword_overlap(prediction_text, paper_text(paper)),
         ),
         reverse=True,
@@ -512,7 +426,7 @@ def lexical_novelty_at_k(
     """Novelty@k as 1 - max lexical similarity to the train pool, averaged over the top-k.
 
     INTENTIONALLY ENGINE-INDEPENDENT: this metric always uses the lexical
-    ``_hybrid_similarity`` (token Jaccard + SequenceMatcher) and does NOT honor
+    ``lexical_similarity`` (token Jaccard + SequenceMatcher) and does NOT honor
     ``similarity_config.engine``. Match selection may use Voyage embedding or the
     LLM judge, but novelty stays lexical because routing it through the
     configured engine would cost O(k * |train|) embedding/LLM calls per window
@@ -526,7 +440,7 @@ def lexical_novelty_at_k(
     scores: list[float] = []
     for pred in predictions[:k]:
         pred_text = idea_text(pred)
-        max_ref_sim = max(_hybrid_similarity(pred_text, ref) for ref in reference_pool)
+        max_ref_sim = max(lexical_similarity(pred_text, ref) for ref in reference_pool)
         scores.append(1.0 - max_ref_sim)
     return sum(scores) / len(scores)
 
@@ -535,7 +449,7 @@ def lexical_diversity_at_k(predictions: list[IdeaPrediction], k: int) -> float:
     """Diversity@k as mean pairwise (1 - lexical similarity) over the top-k predictions.
 
     INTENTIONALLY ENGINE-INDEPENDENT (see ``lexical_novelty_at_k``): always uses
-    the lexical ``_hybrid_similarity`` and ignores ``similarity_config.engine``.
+    the lexical ``lexical_similarity`` and ignores ``similarity_config.engine``.
     Routing the O(k^2) pairwise comparisons through Voyage/LLM would make every
     window pay for a diagnostic metric, so this stays lexical and key-free.
     """
@@ -547,7 +461,7 @@ def lexical_diversity_at_k(predictions: list[IdeaPrediction], k: int) -> float:
         for j in range(i + 1, len(top_preds)):
             distances.append(
                 1.0
-                - _hybrid_similarity(idea_text(top_preds[i]), idea_text(top_preds[j]))
+                - lexical_similarity(idea_text(top_preds[i]), idea_text(top_preds[j]))
             )
     return sum(distances) / len(distances)
 

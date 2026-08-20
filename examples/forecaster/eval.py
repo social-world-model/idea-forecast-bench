@@ -39,7 +39,6 @@ from live_idea_bench.backtest import (
     backtest,
     weighted_mean_over_topics,
 )
-from live_idea_bench.config import write_similarity_engine_override
 from live_idea_bench.paper_cache import load_papers_and_topics
 from live_idea_bench.strategy import create_strategy
 
@@ -99,11 +98,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--similarity-config", default="similarity.yaml")
     p.add_argument(
-        "--similarity-engine",
-        default="heuristic",
-        help="heuristic | embedding | llm — default heuristic for fast iteration.",
-    )
-    p.add_argument(
         "--output",
         default=None,
         help="Output JSON path (default: <output-dir>/eval_test_<start>_<end>.json).",
@@ -158,13 +152,6 @@ def _resolve_checkpoints(
     return prior.resolve(), real.resolve()
 
 
-def _materialize_similarity_config(args: argparse.Namespace) -> str:
-    """If --similarity-engine is set, return a config path with only that changed."""
-    if not args.similarity_engine:
-        return str(args.similarity_config)
-    return write_similarity_engine_override(args.similarity_engine)
-
-
 def _load_papers_and_topics(
     papers_dir: Path,
     start_month: str,
@@ -208,7 +195,6 @@ def _save_payload(
         "model_name": base_model_id,
         "prior_checkpoint": str(prior_ckpt),
         "realization_checkpoint": str(real_ckpt),
-        "similarity_engine": args.similarity_engine,
         "config": {
             "top_k": args.top_k,
             "horizon_months": args.horizon_months,
@@ -261,7 +247,6 @@ def main() -> int:
     log.info("  papers             : %s", papers_dir)
     log.info("  test window        : %s ~ %s", args.start_month, args.end_month)
     log.info("  top-k / horizon    : %d / %d months", args.top_k, args.horizon_months)
-    log.info("  similarity engine  : %s", args.similarity_engine)
     log.info("  workers            : %d", args.workers)
     log.info("  output             : %s", output_path)
     if os.environ.get("SGLANG_PRIOR_URL") or os.environ.get("SGLANG_URL"):
@@ -273,8 +258,6 @@ def main() -> int:
     else:
         log.info("  vLLM/SGLang URLs   : <unset> — using HF generate fallback (slow)")
     log.info("=" * 60)
-
-    similarity_config_path = _materialize_similarity_config(args)
     papers, topics, grouped = _load_papers_and_topics(
         papers_dir,
         args.start_month,
@@ -290,7 +273,7 @@ def main() -> int:
     strategy_obj = create_strategy(
         strategy_name="forecaster",
         model_name=base_model_id,
-        similarity_config=similarity_config_path,
+        similarity_config=args.similarity_config,
         prior_checkpoint=str(prior_ckpt),
         realization_checkpoint=str(real_ckpt),
     )
@@ -300,7 +283,7 @@ def main() -> int:
         min_train_papers=args.min_train_papers,
         start_month=args.start_month,
         end_month=args.end_month,
-        similarity_config=similarity_config_path,
+        similarity_config=args.similarity_config,
     )
 
     # ─── Resume support ───────────────────────────────────────────

@@ -8,7 +8,7 @@ Usage::
 
     python examples/run_domain_backtest.py \
         --input-dir data/csml/raw_markdown \
-        --strategy keyword_trend \
+        --strategy topic_trend \
         --start-month 2024-01 --end-month 2025-06 \
         --output /tmp/domain_backtest.json
 """
@@ -26,7 +26,6 @@ from live_idea_bench.backtest import (
     backtest,
     weighted_mean_over_topics,
 )
-from live_idea_bench.config import write_similarity_engine_override
 from live_idea_bench.paper_cache import load_papers_and_topics
 from live_idea_bench.strategy import create_strategy
 
@@ -43,7 +42,7 @@ def main() -> int:
         default="data/csml/raw_markdown",
         help="Directory with markdown papers.",
     )
-    parser.add_argument("--strategy", type=str, default="keyword_trend")
+    parser.add_argument("--strategy", type=str, default="topic_trend")
     parser.add_argument("--recent-months", type=int, default=3)
     parser.add_argument("--min-keyword-freq", type=int, default=1)
     parser.add_argument(
@@ -87,18 +86,10 @@ def main() -> int:
     )
     parser.add_argument("--similarity-config", type=str, default="similarity.yaml")
     parser.add_argument(
-        "--similarity-engine",
-        type=str,
-        default=None,
-        help="Override the similarity engine at runtime (e.g. heuristic, embedding, llm). "
-        "Useful when you want to skip API calls and re-evaluate later with reeval_voyage.py.",
-    )
-    parser.add_argument(
         "--eval-model",
         type=str,
         default=None,
-        help="Model to use for LLM-based similarity evaluation (e.g. gpt-5.4). "
-        "Only relevant when --similarity-engine llm is used.",
+        help="Model to use for LLM-based similarity evaluation (e.g. gpt-5.4). ",
     )
     parser.add_argument(
         "--reasoning-effort",
@@ -132,12 +123,6 @@ def main() -> int:
 
     # Apply runtime engine override: write a minimal temp YAML so the caller
     # never needs to touch similarity.yaml just to change the engine.
-    _tmp_sim_cfg = None
-    if args.similarity_engine:
-        args.similarity_config = write_similarity_engine_override(
-            args.similarity_engine
-        )
-        _tmp_sim_cfg = args.similarity_config
 
     input_dir = Path(args.input_dir)
     if not input_dir.is_absolute():
@@ -230,7 +215,6 @@ def main() -> int:
             "model_name": resolved,
             "eval_model": args.eval_model,
             "reasoning_effort": args.reasoning_effort,
-            "similarity_engine": args.similarity_engine,
             "config": {
                 "top_k": args.top_k,
                 "horizon_months": args.horizon_months,
@@ -375,11 +359,6 @@ def main() -> int:
 
     _save_checkpoint()
     print(f"\nSaved to {output_path}")
-
-    if _tmp_sim_cfg:
-        import os
-
-        os.unlink(_tmp_sim_cfg)
 
     return 0
 

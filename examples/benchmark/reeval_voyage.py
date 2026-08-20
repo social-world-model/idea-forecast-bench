@@ -3,9 +3,9 @@
 
 Usage:
     python examples/reeval_voyage.py \
-        --input-json logs/baselines/keyword_trend_raw.json \
+        --input-json logs/baselines/topic_trend_raw.json \
         --papers-dir data/csml/raw_markdown \
-        --output logs/baselines/keyword_trend_voyage.json
+        --output logs/baselines/topic_trend_voyage.json
 
 Loads predictions from a previous run_domain_backtest.py output, batch-embeds
 all relevant papers and predictions with voyage-3-large (one API call per 128

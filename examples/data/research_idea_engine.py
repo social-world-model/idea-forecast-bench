@@ -34,8 +34,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--strategy",
         type=str,
-        default="keyword_trend",
-        help="Strategy name (keyword_trend, predictor_llm, or policy_rl).",
+        default="topic_trend",
+        help="Strategy name (topic_trend, predictor_llm, or policy_rl).",
     )
     parser.add_argument(
         "--recent-months", type=int, default=3, help="Recent window used by strategy."

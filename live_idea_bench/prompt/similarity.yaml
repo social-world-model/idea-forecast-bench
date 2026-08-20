@@ -1,10 +1,7 @@
-# Default engine: Voyage embedding (requires VOYAGE_API_KEY; no fallback).
-# Switch to heuristic for a key-free lexical run, or llm for the LLM judge.
-engine: embedding
+# Matching is embedding-only (Voyage). There is no engine choice: scores from
+# different matchers are not comparable, and making it selectable invited runs
+# whose numbers could not be compared to each other.
 embedding_threshold: 0.4
-semantic_threshold: 0.5
-keyword_threshold: 0.3
-llm_match_threshold: 0.7
 system_prompt: |
   You are a precise similarity evaluator. You output structured scores and reasoning.
 user_prompt_template: |

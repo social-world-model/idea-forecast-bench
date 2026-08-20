@@ -35,15 +35,17 @@ poetry install
 
 > Install CUDA-matched torch from `scripts/setup_rl_env*.sh`, not from
 > `poetry install --with forecaster` — the default index can resolve a wheel that leaves
-> `torch.cuda.is_available()` False. See [docs/new-machine-setup.md](docs/new-machine-setup.md).
+> `torch.cuda.is_available()` False.
 
 ## Quick start
 
-No API key, nothing to download by hand:
+Matching is embedding-based, so set a Voyage key first:
 
 ```bash
+export VOYAGE_API_KEY=...
+
 live-idea-bench fetch        # pull an arXiv corpus into data/csml/raw_markdown
-live-idea-bench baselines    # score every keyless baseline, print a comparison table
+live-idea-bench baselines    # score the baselines, print a comparison table
 ```
 
 `baselines` echoes the settings every strategy shared, then one row each:
@@ -51,8 +53,8 @@ live-idea-bench baselines    # score every keyless baseline, print a comparison 
 ```text
 strategy                windows        hit_at_k     recall_at_k             mrr
 -------------------------------------------------------------------------------
-keyword_trend               ...             ...             ...             ...
 topic_trend                 ...             ...             ...             ...
+summary_prompting           ...             ...             ...             ...
 ```
 
 Read `windows` first. A strategy that produced none is reported as
@@ -75,20 +77,26 @@ live-idea-bench benchmark --strategy summary_prompting     # a single strategy
 
 | Strategy | Key? | Idea |
 |---|---|---|
-| `keyword_trend` | no | extrapolate rising keywords |
-| `topic_trend` | no | same, over the 52-topic taxonomy |
+| `topic_trend` | no | extrapolate rising keywords |
+| `topic_trend` | no LLM | extrapolates the 52-topic taxonomy |
 | `predictor_llm` | yes | prompt an LLM with recent abstracts |
 | `summary_prompting` | yes | prompt over summarised recent work |
 | `retrieval_prompting` | yes | retrieval-augmented prompting |
 | `memory_prompting` | yes | prompting with a running memory |
 | `forecaster` | yes + checkpoints | the MDF method |
 
-`baselines` runs the keyless two by default. Add the rest once a provider key is set:
+`baselines` runs `topic_trend` by default — it needs no *LLM* provider, though
+scoring still needs `VOYAGE_API_KEY`. Add the LLM baselines with a provider key:
 
 ```bash
 export OPENAI_API_KEY=sk-...
 live-idea-bench baselines --include-llm
 ```
+
+**Matching is embedding-only.** There is no `--similarity-engine`: scores from
+different matchers are not comparable, and making the matcher selectable meant
+a typo could silently produce numbers that looked fine but could not be
+compared to anything.
 
 ## Training MDF
 
@@ -103,20 +111,6 @@ live-idea-bench infer         # prior → realize → select
 gated foresight reward and needs prebuilt artifacts — see
 [forecaster/foresight/README.md](forecaster/foresight/README.md) for that sequence, or use
 `REWARD_MODE=legacy` to run the whole pipeline without them.
-
-<details>
-<summary><b>Scoring engines</b> — how a prediction is matched to a future paper</summary>
-
-| `--similarity-engine` | Needs | Notes |
-|---|---|---|
-| `heuristic` | nothing | lexical matcher; the default, for smoke runs |
-| `embedding` | `VOYAGE_API_KEY` | Voyage-only by design, no silent fallback |
-| `llm` | a judge key | pair with `--eval-model`, e.g. `--eval-model gpt-5.4` |
-
-Scores from different engines are not comparable — pick one per experiment. The reported
-results use `embedding`.
-
-</details>
 
 <details>
 <summary><b>All commands</b></summary>
@@ -138,15 +132,6 @@ results use `embedding`.
 | `analysis` | Evaluation-validity analyses (citation / coauthor / leakage) |
 
 </details>
-
-## Documentation
-
-| | |
-|---|---|
-| [docs/architecture.md](docs/architecture.md) | how the packages fit together, and the two environments |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | setup, what CI checks, commit conventions |
-| [forecaster/foresight/README.md](forecaster/foresight/README.md) | the foresight reward: indices, rubrics, smoke checks |
-| [docs/](docs/) | runbooks and the optional web app's API |
 
 ## Citation
 

@@ -19,7 +19,7 @@
 #  Force HF generate (skip SGLang):
 #    USE_SGLANG=0 MODEL=qwen3.5-0.8b bash scripts/run_eval_trained.sh
 #
-#  Settings match other baselines (memory_prompting, keyword_trend, etc.)
+#  Settings match other baselines (memory_prompting, topic_trend, etc.)
 #  for fair comparison via run_domain_backtest.py.
 # ==========================================================================
 set -euo pipefail

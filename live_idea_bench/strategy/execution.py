@@ -38,7 +38,7 @@ def _legacy_to_current_params(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_strategy(strategy_record: dict[str, Any]) -> IdeaStrategy:
-    strategy_name = str(strategy_record.get("strategy_name") or "keyword_trend")
+    strategy_name = str(strategy_record.get("strategy_name") or "topic_trend")
     params = _legacy_to_current_params(strategy_record.get("params") or {})
     if strategy_name == "prompt_llm":
         strategy_name = "predictor_llm"

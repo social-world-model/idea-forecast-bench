@@ -57,8 +57,6 @@ you want to bring parts of it back.
 
 ## Layout
 
-Full picture in [docs/architecture.md](docs/architecture.md).
-
 | Directory | Contains |
 |---|---|
 | `live_idea_bench/` | the benchmark package + evaluation protocol |

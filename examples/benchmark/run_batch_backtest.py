@@ -29,7 +29,6 @@ Usage
       --model-name gpt-5.4 --reasoning-effort medium \\
       --start-month 2023-01 --end-month 2025-06 \\
       --horizon-months 3 --top-k 5 --min-train-papers 5 \\
-      --similarity-engine hybrid \\
       --output logs/baselines/predictor_llm_raw.json \\
       --batch-dir logs/batch/predictor_llm
 """
@@ -49,7 +48,6 @@ from live_idea_bench.backtest import (
     backtest,
     weighted_mean_over_topics,
 )
-from live_idea_bench.config import write_similarity_engine_override
 from live_idea_bench.llm import (
     batch_clear,
     batch_set_collect,
@@ -417,7 +415,6 @@ def _save_output(
         "model_name": resolved,
         "eval_model": args.eval_model,
         "reasoning_effort": args.reasoning_effort,
-        "similarity_engine": args.similarity_engine,
         "config": {
             "top_k": args.top_k,
             "horizon_months": args.horizon_months,
@@ -460,7 +457,6 @@ def main() -> int:
     parser.add_argument("--start-month", type=str, default="2024-01")
     parser.add_argument("--end-month", type=str, default="2025-06")
     parser.add_argument("--similarity-config", type=str, default="similarity.yaml")
-    parser.add_argument("--similarity-engine", type=str, default=None)
     parser.add_argument("--eval-model", type=str, default=None)
     parser.add_argument("--reasoning-effort", type=str, default=None)
     parser.add_argument("--candidate-limit", type=int, default=None)
@@ -490,10 +486,6 @@ def main() -> int:
 
     # ── similarity engine override ────────────────────────────────────────────
     _tmp_sim_cfg = None
-    if args.similarity_engine:
-        args.similarity_config = write_similarity_engine_override(
-            args.similarity_engine
-        )
 
     # ── setup paths ───────────────────────────────────────────────────────────
     timestamp = time.strftime("%Y%m%d_%H%M%S")

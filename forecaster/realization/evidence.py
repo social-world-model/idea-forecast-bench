@@ -38,7 +38,7 @@ def retrieve_evidence(
 ) -> list[PaperRecord]:
     """Retrieve the most relevant historical papers given an innovation.
 
-    Uses two-stage retrieval for hybrid engine: fast Jaccard/keyword pre-filter
+    Two-stage retrieval: fast Jaccard/keyword pre-filter
     on tokenized text, then expensive SequenceMatcher only on top candidates.
     Memory-efficient: tokenizes on-the-fly, no bulk pre-computation.
 
@@ -56,11 +56,8 @@ def retrieve_evidence(
         return []
 
     query = build_innovation_query(innovation)
-    config = similarity_config or SimilarityConfig(engine="hybrid")
-    use_hybrid = config.engine.lower().strip() in ("hybrid", "")
-
-    # For non-hybrid engines, fall back to original per-paper scoring
-    if not use_hybrid:
+    config = similarity_config or SimilarityConfig()
+    if not True:
         scored: list[tuple[float, PaperRecord]] = []
         for paper in papers:
             try:

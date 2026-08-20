@@ -11,7 +11,7 @@ settings are printed once so a run is self-documenting.
 
 Usage:
     live-idea-bench baselines                          # keyless: heuristic matcher
-    live-idea-bench baselines --only keyword_trend,topic_trend
+    live-idea-bench baselines --only topic_trend,topic_trend
     live-idea-bench baselines --similarity-engine embedding   # needs VOYAGE_API_KEY
 """
 
@@ -24,9 +24,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-#: Baselines that need no model API key -- the default set, so a fresh clone
-#: can produce a table offline.
-OFFLINE_BASELINES = ("keyword_trend", "topic_trend")
+#: Baselines that need no LLM provider. Scoring still needs VOYAGE_API_KEY:
+#: matching is embedding-only.
+NO_LLM_BASELINES = ("topic_trend",)
 #: Baselines that call an LLM, and therefore need a provider key.
 LLM_BASELINES = (
     "predictor_llm",
@@ -34,7 +34,7 @@ LLM_BASELINES = (
     "retrieval_prompting",
     "memory_prompting",
 )
-ALL_BASELINES = OFFLINE_BASELINES + LLM_BASELINES
+ALL_BASELINES = NO_LLM_BASELINES + LLM_BASELINES
 
 METRICS = (
     "avg_hit_at_k",
@@ -57,26 +57,20 @@ def parse_args() -> argparse.Namespace:
         "--only",
         type=str,
         default=None,
-        help="Comma-separated subset, e.g. 'keyword_trend,summary_prompting'. "
-        f"Offline: {','.join(OFFLINE_BASELINES)}. LLM: {','.join(LLM_BASELINES)}.",
+        help="Comma-separated subset, e.g. 'topic_trend,summary_prompting'. "
+        f"No-LLM: {','.join(NO_LLM_BASELINES)}. LLM: {','.join(LLM_BASELINES)}.",
     )
     parser.add_argument(
         "--include-llm",
         action="store_true",
-        help="Also run the LLM baselines (needs a provider API key). Off by "
-        "default so the command works with no credentials.",
+        help="Also run the LLM baselines (needs an LLM provider key on top of "
+        "VOYAGE_API_KEY).",
     )
     parser.add_argument("--start-month", type=str, default="2024-01")
     parser.add_argument("--end-month", type=str, default="2025-06")
     parser.add_argument("--horizon-months", type=int, default=3)
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--min-train-papers", type=int, default=5)
-    parser.add_argument(
-        "--similarity-engine",
-        type=str,
-        default="heuristic",
-        help="heuristic (no key) | embedding (VOYAGE_API_KEY) | llm (judge key).",
-    )
     parser.add_argument("--model-name", type=str, default=None)
     parser.add_argument("--workers", type=int, default=1)
     return parser.parse_args()
@@ -92,7 +86,7 @@ def _selected(args: argparse.Namespace) -> list[str]:
                 f"Choose from: {', '.join(ALL_BASELINES)}"
             )
         return names
-    return list(ALL_BASELINES if args.include_llm else OFFLINE_BASELINES)
+    return list(ALL_BASELINES if args.include_llm else NO_LLM_BASELINES)
 
 
 def _run_one(strategy: str, args: argparse.Namespace, out_path: Path) -> bool:
@@ -116,7 +110,6 @@ def _run_one(strategy: str, args: argparse.Namespace, out_path: Path) -> bool:
         "--min-train-papers",
         str(args.min_train_papers),
         "--similarity-engine",
-        args.similarity_engine,
         "--workers",
         str(args.workers),
         "--output",
@@ -165,7 +158,6 @@ def main() -> int:
     print(f"  horizon_months    {args.horizon_months}")
     print(f"  top_k             {args.top_k}")
     print(f"  min_train_papers  {args.min_train_papers}")
-    print(f"  similarity_engine {args.similarity_engine}")
     print(f"  baselines         {', '.join(baselines)}")
 
     results: dict[str, dict[str, float] | None] = {}

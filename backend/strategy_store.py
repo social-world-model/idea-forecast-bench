@@ -2,7 +2,7 @@
 Strategy store: CRUD for Strategy objects, backed by per-file JSON in backend/strategies/.
 
 A Strategy bundles:
-  - strategy_name : which IdeaStrategy implementation ("keyword_trend", …)
+  - strategy_name : which IdeaStrategy implementation ("topic_trend", …)
   - params        : strategy hyper-params (recent_months, min_keyword_freq)
   - config        : BacktestConfig fields + data_dir
 """
@@ -79,7 +79,7 @@ def _normalize_params(
     raw_params = params if isinstance(params, dict) else {}
     normalized_params = dict(raw_params)
 
-    if strategy_name == "keyword_trend":
+    if strategy_name == "topic_trend":
         if strict_keyword_coercion:
             normalized_params["recent_months"] = int(raw_params.get("recent_months", 3))
             normalized_params["min_keyword_freq"] = int(
@@ -346,7 +346,7 @@ def _seed_topic_runs(
 
 
 def _normalize_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
-    strategy_name = str(strategy.get("strategy_name") or "keyword_trend")
+    strategy_name = str(strategy.get("strategy_name") or "topic_trend")
     if strategy_name == "prompt_llm":
         strategy_name = "predictor_llm"
     normalized = dict(strategy)
@@ -425,7 +425,7 @@ def get_strategy(strategy_id: str) -> dict[str, Any] | None:
 
 def create_strategy(data: dict[str, Any]) -> dict[str, Any]:
     strategy_id = uuid.uuid4().hex[:8]
-    strategy_name = str(data.get("strategy_name", "keyword_trend"))
+    strategy_name = str(data.get("strategy_name", "topic_trend"))
     if strategy_name == "prompt_llm":
         strategy_name = "predictor_llm"
     config = data.get("config") or {}
@@ -726,7 +726,7 @@ def seed_demo_strategies() -> None:
     demos = [
         {
             "name": "Keyword Trend · 2024-H1 → 2024-H2",
-            "strategy_name": "keyword_trend",
+            "strategy_name": "topic_trend",
             "params": {"recent_months": 3, "min_keyword_freq": 1},
             "config": {
                 "top_k": 5,
@@ -738,7 +738,7 @@ def seed_demo_strategies() -> None:
         },
         {
             "name": "Keyword Trend · 2024 Full Year",
-            "strategy_name": "keyword_trend",
+            "strategy_name": "topic_trend",
             "params": {"recent_months": 6, "min_keyword_freq": 1},
             "config": {
                 "top_k": 8,
@@ -750,7 +750,7 @@ def seed_demo_strategies() -> None:
         },
         {
             "name": "Keyword Trend · 2025 Preview",
-            "strategy_name": "keyword_trend",
+            "strategy_name": "topic_trend",
             "params": {"recent_months": 2, "min_keyword_freq": 1},
             "config": {
                 "top_k": 5,

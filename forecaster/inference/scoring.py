@@ -40,11 +40,9 @@ def _semantic_similarity(text_a: str, text_b: str) -> float:
     Uses the same hybrid engine as evidence retrieval (difflib + keyword overlap),
     avoiding any heavy ML dependency. Returns a value in [0, 1].
     """
-    from live_idea_bench.similarity import _hybrid_similarity, _keyword_overlap
+    from live_idea_bench.similarity import lexical_similarity
 
-    semantic = _hybrid_similarity(text_a, text_b)
-    keyword = _keyword_overlap(text_a, text_b)
-    return max(semantic, keyword)
+    return float(lexical_similarity(text_a, text_b))
 
 
 def _clamp01(value: float) -> float:

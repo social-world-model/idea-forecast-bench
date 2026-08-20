@@ -74,7 +74,7 @@ curl -X POST http://localhost:5000/api/strategies \
   -H "Content-Type: application/json" \
   -H "X-Live-Idea-Admin-Token: $LIVE_IDEA_ADMIN_TOKEN" \
   -d '{
-    "strategy_name": "keyword_trend",
+    "strategy_name": "topic_trend",
     "config": {"top_k": 5, "horizon_months": 3, "end_month": "2024-09"}
   }'
 ```

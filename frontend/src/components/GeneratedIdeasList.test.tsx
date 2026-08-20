@@ -5,7 +5,7 @@ function makeStrategy(): Strategy {
   return {
     id: 'strategy-1',
     name: 'Topic Strategy',
-    strategy_name: 'keyword_trend',
+    strategy_name: 'topic_trend',
     params: {},
     config: {
       top_k: 5,

@@ -65,7 +65,6 @@ from live_idea_bench.predictor import extract_abstract, generate_predictions
 from live_idea_bench.similarity import evaluate_predictions, score_prediction_list
 from live_idea_bench.strategy import (
     IdeaStrategy,
-    KeywordTrendStrategy,
     PolicyRLStrategy,
     PredictorLLMStrategy,
     create_strategy,
@@ -90,7 +89,6 @@ __all__ = [
     "EvaluationResult",
     "IdeaPrediction",
     "IdeaStrategy",
-    "KeywordTrendStrategy",
     "MatchResult",
     "PaperRecord",
     "PolicyRLStrategy",

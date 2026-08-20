@@ -112,7 +112,7 @@ export interface DailyEvaluation {
 export interface Strategy {
   id: string;
   name: string;
-  strategy_name: string;      // "keyword_trend"
+  strategy_name: string;      // "topic_trend"
   params: StrategyParams;
   config: StrategyConfig;
   created_at: string;
