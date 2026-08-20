@@ -352,6 +352,37 @@ def load_similarity_config(
     )
 
 
+def write_similarity_engine_override(
+    engine: str,
+    *,
+    base: str = "similarity.yaml",
+    prompt_dir: str | None = None,
+) -> str:
+    """Write a temp similarity config that changes ONLY the engine.
+
+    The entry scripts used to implement ``--similarity-engine`` by writing a
+    temp YAML containing just ``engine: <name>``. Because
+    :func:`load_similarity_config` reads a file and defaults every absent key,
+    that discarded the rest of similarity.yaml -- including the judge prompts.
+    ``--similarity-engine llm`` therefore called the judge with an empty
+    system prompt and an empty user template (83 and 832 characters of prompt,
+    silently replaced by ""), and any threshold tuned in similarity.yaml
+    reverted to the hardcoded default.
+
+    This copies the base config and overrides one key, so the other settings
+    survive.
+    """
+    import tempfile
+
+    payload = _read_yaml(_resolve_prompt_path(base, prompt_dir=prompt_dir))
+    payload["engine"] = engine
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, prefix="sim_override_"
+    ) as handle:
+        yaml.safe_dump(payload, handle, allow_unicode=True, sort_keys=False)
+        return handle.name
+
+
 def _resolve_versioned_prompt_path(
     prompt_id: str,
     version: str,

@@ -22,6 +22,10 @@ dependencies = [
     #            forecaster/embedding/local_embedder.py
     "tqdm>=4.66",
     "numpy>=1.24",
+    # KMeans backs the cluster_coverage metric in the judge-eval command. It
+    # used to arrive only transitively via sentence-transformers in the
+    # optional groups, so a core install silently computed a different metric.
+    "scikit-learn>=1.3",
 ]
 
 [project.scripts]

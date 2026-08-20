@@ -490,16 +490,16 @@ def _cluster_coverage(
         return 0.0
     k = min(k, n)
 
-    try:
-        import numpy as np
-        from sklearn.cluster import KMeans
+    # No silent fallback. The old one put every paper in its own cluster, which
+    # turns cluster_coverage from "fraction of topical clusters hit" into
+    # "fraction of papers matched" -- a different quantity reported under the
+    # same name, differing between machines depending on whether scikit-learn
+    # happened to be installed.
+    import numpy as np
+    from sklearn.cluster import KMeans
 
-        X = np.array(future_vecs)
-        labels = KMeans(n_clusters=k, n_init=5, random_state=0).fit_predict(X)
-    except Exception:
-        # Fallback: assign each paper to its own cluster if sklearn unavailable
-        labels = list(range(n))
-        k = n
+    X = np.array(future_vecs)
+    labels = KMeans(n_clusters=k, n_init=5, random_state=0).fit_predict(X)
 
     matched_clusters = {
         labels[i] for i, pid in enumerate(future_ids) if pid in matched_ids

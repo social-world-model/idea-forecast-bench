@@ -89,7 +89,7 @@ poetry install                       # benchmark + evaluation protocol
 poetry install --with forecaster     # + the training stack
 poetry install --with eval           # + local sentence-transformer embedder
 poetry install --with webapp         # + Flask, for backend/
-poetry install --with dev,test       # + tooling
+poetry install --with dev       # + tooling
 ```
 
 `pyproject.toml` and `poetry.lock` are the single source of truth for

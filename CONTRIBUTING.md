@@ -5,7 +5,7 @@
 ```bash
 git clone https://github.com/ulab-uiuc/live-idea-bench.git
 cd live-idea-bench
-poetry install --with dev,test          # core + tooling
+poetry install --with dev          # core + tooling
 pre-commit install                      # lint on commit
 pre-commit install --hook-type commit-msg
 git config blame.ignoreRevsFile .git-blame-ignore-revs

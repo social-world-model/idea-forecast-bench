@@ -117,7 +117,15 @@ jobs:
     needs: [lint, typecheck, smoke]
     runs-on: ubuntu-latest
     steps:
-      - name: Fail if any job failed
-        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
-        run: exit 1
+      # Requires success explicitly. Checking only for 'failure'/'cancelled'
+      # let a *skipped* job through, which is the state a job lands in when
+      # something upstream of it goes wrong.
+      - name: Require every job to have succeeded
+        if: >-
+          needs.lint.result != 'success' ||
+          needs.typecheck.result != 'success' ||
+          needs.smoke.result != 'success'
+        run: |
+          echo "lint=${{ needs.lint.result }} typecheck=${{ needs.typecheck.result }} smoke=${{ needs.smoke.result }}"
+          exit 1
       - run: echo "all checks passed"

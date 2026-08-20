@@ -39,6 +39,7 @@ from live_idea_bench.backtest import (
     backtest,
     weighted_mean_over_topics,
 )
+from live_idea_bench.config import write_similarity_engine_override
 from live_idea_bench.paper_cache import load_papers_and_topics
 from live_idea_bench.strategy import create_strategy
 
@@ -158,18 +159,10 @@ def _resolve_checkpoints(
 
 
 def _materialize_similarity_config(args: argparse.Namespace) -> str:
-    """If --similarity-engine is set, write a tiny override YAML and return its path.
-    Mirrors examples/run_domain_backtest.py:107-117.
-    """
-    if not args.similarity_engine or args.similarity_engine == "":
-        return args.similarity_config
-    import tempfile
-
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, prefix="sim_override_eval_"
-    ) as f:
-        f.write(f"engine: {args.similarity_engine}\n")
-    return f.name
+    """If --similarity-engine is set, return a config path with only that changed."""
+    if not args.similarity_engine:
+        return str(args.similarity_config)
+    return write_similarity_engine_override(args.similarity_engine)
 
 
 def _load_papers_and_topics(

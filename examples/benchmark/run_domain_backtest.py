@@ -21,15 +21,16 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-from live_idea_bench.backtest import (  # noqa: E402
+from live_idea_bench.backtest import (
     BacktestConfig,
     backtest,
     weighted_mean_over_topics,
 )
-from live_idea_bench.paper_cache import load_papers_and_topics  # noqa: E402
-from live_idea_bench.strategy import create_strategy  # noqa: E402
+from live_idea_bench.config import write_similarity_engine_override
+from live_idea_bench.paper_cache import load_papers_and_topics
+from live_idea_bench.strategy import create_strategy
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def main() -> int:
@@ -133,13 +134,10 @@ def main() -> int:
     # never needs to touch similarity.yaml just to change the engine.
     _tmp_sim_cfg = None
     if args.similarity_engine:
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".yaml", delete=False, prefix="sim_override_"
-        ) as _tmp_sim_cfg:
-            _tmp_sim_cfg.write(f"engine: {args.similarity_engine}\n")
-        args.similarity_config = _tmp_sim_cfg.name
+        args.similarity_config = write_similarity_engine_override(
+            args.similarity_engine
+        )
+        _tmp_sim_cfg = args.similarity_config
 
     input_dir = Path(args.input_dir)
     if not input_dir.is_absolute():
@@ -381,7 +379,7 @@ def main() -> int:
     if _tmp_sim_cfg:
         import os
 
-        os.unlink(_tmp_sim_cfg.name)
+        os.unlink(_tmp_sim_cfg)
 
     return 0
 

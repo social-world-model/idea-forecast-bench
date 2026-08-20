@@ -49,6 +49,7 @@ from live_idea_bench.backtest import (
     backtest,
     weighted_mean_over_topics,
 )
+from live_idea_bench.config import write_similarity_engine_override
 from live_idea_bench.llm import (
     batch_clear,
     batch_set_collect,
@@ -490,13 +491,9 @@ def main() -> int:
     # ── similarity engine override ────────────────────────────────────────────
     _tmp_sim_cfg = None
     if args.similarity_engine:
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".yaml", delete=False, prefix="sim_override_"
-        ) as _tmp_sim_cfg:
-            _tmp_sim_cfg.write(f"engine: {args.similarity_engine}\n")
-        args.similarity_config = _tmp_sim_cfg.name
+        args.similarity_config = write_similarity_engine_override(
+            args.similarity_engine
+        )
 
     # ── setup paths ───────────────────────────────────────────────────────────
     timestamp = time.strftime("%Y%m%d_%H%M%S")

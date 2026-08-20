@@ -13,6 +13,7 @@ A faiss/hnsw backend can be swapped in later behind the `search()` API.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from collections.abc import Sequence
@@ -80,8 +81,16 @@ class HashingEmbedder:
         out = np.zeros((len(texts), self.dim), dtype=np.float32)
         for i, text in enumerate(texts):
             for token in (text or "").lower().split():
-                # cheap stable hash → index
-                h = hash((token, self.seed)) & 0xFFFFFFFF
+                # blake2b, not builtin hash(): str hashing is salted per
+                # process (PYTHONHASHSEED), so the previous "stable hash"
+                # produced different embeddings on every run -- and these
+                # embeddings key the foresight indices that drive the reward.
+                h = int.from_bytes(
+                    hashlib.blake2b(
+                        f"{token}|{self.seed}".encode(), digest_size=4
+                    ).digest(),
+                    "big",
+                )
                 out[i, h % self.dim] += 1.0
         norms = np.linalg.norm(out, axis=1, keepdims=True)
         norms = np.where(norms == 0.0, 1.0, norms)
