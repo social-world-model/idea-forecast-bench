@@ -28,6 +28,7 @@ jobs:
   python-deps:
     name: python dependency audit
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Install poetry
@@ -59,6 +60,7 @@ jobs:
   npm-deps:
     name: frontend dependency audit
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: frontend

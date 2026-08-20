@@ -29,7 +29,8 @@ GPU="${3:?need gpu}"
 PORT="${4:?need port}"
 
 PYTHON_BIN="${PYTHON_BIN:-python}"
-export PATH="$(dirname "${PYTHON_BIN}"):${PATH}"
+PYTHON_BIN_DIR="$(dirname "${PYTHON_BIN}")"
+export PATH="${PYTHON_BIN_DIR}:${PATH}"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3.5-9B}"
 PAPERS="${PAPERS:-data/csml/raw_markdown}"
 # Load papers from 2024-06 so the first test cutoff has prior-month reading
@@ -63,7 +64,10 @@ echo "============================================================"
 
 SRV_PID=""
 cleanup() {
-  [[ -n "${SRV_PID}" ]] && { pkill -TERM -P "${SRV_PID}" 2>/dev/null || true; kill -TERM "${SRV_PID}" 2>/dev/null || true; }
+  if [[ -n "${SRV_PID}" ]]; then
+    pkill -TERM -P "${SRV_PID}" 2>/dev/null || true
+    kill -TERM "${SRV_PID}" 2>/dev/null || true
+  fi
   sleep 2
   pkill -KILL -f "api_server .*--port ${PORT}\b" 2>/dev/null || true
   # sweep our EngineCore left on this GPU
@@ -71,7 +75,9 @@ cleanup() {
   if [[ -n "$uuid" ]]; then
     local envroot; envroot="$(dirname "$(dirname "${PYTHON_BIN}")")"
     for pid in $(nvidia-smi --query-compute-apps=pid,gpu_uuid --format=csv,noheader | awk -F', ' -v u="$uuid" '$2==u{print $1}'); do
-      readlink -f "/proc/$pid/exe" 2>/dev/null | grep -q "$envroot" && kill -KILL "$pid" 2>/dev/null || true
+      if readlink -f "/proc/$pid/exe" 2>/dev/null | grep -q "$envroot"; then
+        kill -KILL "$pid" 2>/dev/null || true
+      fi
     done
   fi
 }

@@ -17,7 +17,8 @@ cd "$(dirname "$0")/../.."
 
 GPU="${1:?usage: run_eval_3modes.sh <gpu>}"
 PYTHON_BIN="${PYTHON_BIN:-$(command -v python)}"
-export PATH="$(dirname "${PYTHON_BIN}"):${PATH}"
+PYTHON_BIN_DIR="$(dirname "${PYTHON_BIN}")"
+export PATH="${PYTHON_BIN_DIR}:${PATH}"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3.5-9B}"
 GEN_PORT="${GEN_PORT:-8800}"
 JUDGE_PORT="${JUDGE_PORT:-8767}"
@@ -25,7 +26,11 @@ TS="$(date +%Y%m%d_%H%M%S)"
 mkdir -p logs outputs
 MODES=(soft coverage novelty)
 
-adapter_for() { ls -dt outputs/grpo_"$1"_*/realization_grpo/grpo/checkpoints/final_checkpoint 2>/dev/null | head -1; }
+adapter_for() {
+  find outputs -maxdepth 5 -type d \
+    -path "outputs/grpo_$1_*/realization_grpo/grpo/checkpoints/final_checkpoint" \
+    -exec stat -f "%m %N" {} + 2>/dev/null | sort -rn | head -1 | cut -d" " -f2-
+}
 
 echo "=== Phase 1: predictor generation (one adapter at a time) ==="
 for mode in "${MODES[@]}"; do

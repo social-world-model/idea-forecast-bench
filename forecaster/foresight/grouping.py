@@ -138,7 +138,7 @@ def _token_set(text: str) -> set[str]:
     return {w for w in (text or "").lower().split() if len(w) > 3}
 
 
-def _jaccard(a: set[str], b: set[str]) -> float:
+def jaccard(a: set[str], b: set[str]) -> float:
     if not a and not b:
         return 0.0
     inter = len(a & b)
@@ -169,7 +169,7 @@ def compute_dedup_penalties(
             for j in range(len(chunk)):
                 if i == j:
                     continue
-                if _jaccard(token_sets[i], token_sets[j]) >= threshold:
+                if jaccard(token_sets[i], token_sets[j]) >= threshold:
                     dupes += 1
             out[g_start + i] = penalty * dupes
     return out

@@ -457,9 +457,9 @@ def get_response_from_llm(
         new_msg_history = new_msg_history + [{"role": "assistant", "content": content}]
     elif _is_local_model(model):
         from forecaster.realization.local_generation import (
-            _apply_chat_template,
-            _load_local_model,
-            _require_local_generation_stack,
+            apply_chat_template,
+            load_local_model,
+            require_local_generation_stack,
         )
 
         resolved_model = resolve_model_reference(model)
@@ -467,12 +467,12 @@ def get_response_from_llm(
             raise _unsupported_model_error(model)
 
         new_msg_history = msg_history + [{"role": "user", "content": msg}]
-        model_obj, tokenizer = _load_local_model(resolved_model)
-        deps = _require_local_generation_stack()
+        model_obj, tokenizer = load_local_model(resolved_model)
+        deps = require_local_generation_stack()
         torch = deps["torch"]
 
         full_prompt = f"{system_message}\n\n{msg}".strip()
-        chat_prompt = _apply_chat_template(tokenizer, full_prompt, None)
+        chat_prompt = apply_chat_template(tokenizer, full_prompt, None)
         encoded = tokenizer([chat_prompt], return_tensors="pt")
         encoded = {name: value.to(model_obj.device) for name, value in encoded.items()}
 

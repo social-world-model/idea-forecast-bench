@@ -72,9 +72,9 @@ SGLANG_OK=0
 cleanup_sglang() {
   if [ "$SGLANG_OK" -eq 1 ]; then
     echo "Stopping SGLang servers..."
-    kill $(cat /tmp/sglang_prior_${MODEL}.pid 2>/dev/null) 2>/dev/null || true
-    kill $(cat /tmp/sglang_real_${MODEL}.pid 2>/dev/null) 2>/dev/null || true
-    rm -f /tmp/sglang_prior_${MODEL}.pid /tmp/sglang_real_${MODEL}.pid
+    kill "$(cat /tmp/sglang_prior_"${MODEL}".pid 2>/dev/null)" 2>/dev/null || true
+    kill "$(cat /tmp/sglang_real_"${MODEL}".pid 2>/dev/null)" 2>/dev/null || true
+    rm -f /tmp/sglang_prior_"${MODEL}".pid /tmp/sglang_real_"${MODEL}".pid
   fi
 }
 trap cleanup_sglang EXIT
@@ -185,8 +185,8 @@ print(':'.join(dirs))
     --mem-fraction-static "${SGLANG_MEM}" \
     --port "${PRIOR_PORT}" \
     --max-total-tokens 4096 \
-    > /tmp/sglang_prior_${MODEL}.log 2>&1 &
-  echo $! > /tmp/sglang_prior_${MODEL}.pid
+    > /tmp/sglang_prior_"${MODEL}".log 2>&1 &
+  echo $! > /tmp/sglang_prior_"${MODEL}".pid
 
   python3 -m sglang.launch_server \
     --model-path "${VLM_REAL}" \
@@ -194,8 +194,8 @@ print(':'.join(dirs))
     --mem-fraction-static "${SGLANG_MEM}" \
     --port "${REAL_PORT}" \
     --max-total-tokens 4096 \
-    > /tmp/sglang_real_${MODEL}.log 2>&1 &
-  echo $! > /tmp/sglang_real_${MODEL}.pid
+    > /tmp/sglang_real_"${MODEL}".log 2>&1 &
+  echo $! > /tmp/sglang_real_"${MODEL}".pid
 
   # Wait for both servers to come up
   echo "Waiting for servers..."
@@ -209,12 +209,12 @@ print(':'.join(dirs))
       break
     fi
     # Check if either process died
-    if ! kill -0 $(cat /tmp/sglang_prior_${MODEL}.pid 2>/dev/null) 2>/dev/null; then
+    if ! kill -0 "$(cat /tmp/sglang_prior_"${MODEL}".pid 2>/dev/null)" 2>/dev/null; then
       echo "Prior server died. Falling back to HF generate."
       echo "Log: /tmp/sglang_prior_${MODEL}.log"
       break
     fi
-    if ! kill -0 $(cat /tmp/sglang_real_${MODEL}.pid 2>/dev/null) 2>/dev/null; then
+    if ! kill -0 "$(cat /tmp/sglang_real_"${MODEL}".pid 2>/dev/null)" 2>/dev/null; then
       echo "Realization server died. Falling back to HF generate."
       echo "Log: /tmp/sglang_real_${MODEL}.log"
       break
@@ -228,8 +228,8 @@ print(':'.join(dirs))
     echo "SGLang serving active: prior=:${PRIOR_PORT} realization=:${REAL_PORT}"
   else
     echo "SGLang setup failed. Using HF generate (slower)."
-    kill $(cat /tmp/sglang_prior_${MODEL}.pid 2>/dev/null) 2>/dev/null || true
-    kill $(cat /tmp/sglang_real_${MODEL}.pid 2>/dev/null) 2>/dev/null || true
+    kill "$(cat /tmp/sglang_prior_"${MODEL}".pid 2>/dev/null)" 2>/dev/null || true
+    kill "$(cat /tmp/sglang_real_"${MODEL}".pid 2>/dev/null)" 2>/dev/null || true
   fi
 else
   if [ "$USE_SGLANG" = "1" ]; then
