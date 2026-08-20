@@ -44,14 +44,26 @@ embedding-based, so two keys are needed:
 ```bash
 export VOYAGE_API_KEY=...     # matching (embedding-only)
 export OPENAI_API_KEY=...     # generation; ANTHROPIC_/GOOGLE_/TOGETHER_/DEEPSEEK_ also work
-
-live-idea-bench fetch        # pull an arXiv corpus into data/csml/raw_markdown
-live-idea-bench baselines    # score every baseline, print a comparison table
 ```
 
 `baselines` checks both before it starts, so a missing key costs a second
 rather than five failed runs. To point generation at a local
 OpenAI-compatible server instead of a provider, set `OPENAI_BASE_URL`.
+
+Then get a corpus. Either use the frozen one the paper was run against
+([md_files.zip, ~5 GB](https://drive.google.com/file/d/1182o0Teo3G128c3mxeimDQNBZNY-iWCe/view?usp=sharing)),
+pointing `--input-dir` at wherever you unpacked it:
+
+```bash
+live-idea-bench baselines --input-dir /path/to/unpacked/corpus
+```
+
+or pull a fresh one from arXiv, which needs no account:
+
+```bash
+live-idea-bench fetch        # into data/csml/raw_markdown
+live-idea-bench baselines    # score every baseline, print a comparison table
+```
 
 `baselines` echoes the settings every strategy shared, then one row each:
 
@@ -64,11 +76,13 @@ summary_prompting           ...             ...             ...             ...
 
 Read `windows` first. A strategy that produced none is reported as
 `NOT SCORED -- no windows produced` and the command exits non-zero, so "could not run"
-is never mistaken for "scored 0.0". Fix it by widening `fetch --lookback-days` or
-lowering `--min-train-papers`.
+is never mistaken for "scored 0.0". If that happens, the corpus does not cover the
+window densely enough: widen it with `--start-month` / `--end-month`, lower
+`--min-train-papers`, or fetch more (`fetch --lookback-days`, `--max-results`).
 
-No numbers are quoted here: `fetch` pulls whatever arXiv serves today, which is not the
-frozen corpus behind the paper.
+No numbers are quoted here, because they depend on the corpus. `fetch` pulls whatever
+arXiv serves on the day you run it, so it is useful for checking that the pipeline works
+but will not reproduce the paper; the frozen corpus above will.
 
 **Every flag has a default** — the commands above are complete as written.
 
