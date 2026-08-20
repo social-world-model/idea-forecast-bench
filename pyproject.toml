@@ -114,7 +114,7 @@ types-requests = "^2.31"
 # the pre-commit hooks, so a drift here means "green locally, red in CI".
 ruff = "^0.15.0"
 mypy = "^1.18.0"
-commitizen = "^3.14.1"
+commitizen = "^4.17.0"
 matplotlib = ">=3.10.8"
 
 [build-system]
