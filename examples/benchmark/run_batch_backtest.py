@@ -29,7 +29,6 @@ Usage
       --model-name gpt-5.4 --reasoning-effort medium \\
       --start-month 2023-01 --end-month 2025-06 \\
       --horizon-months 3 --top-k 5 --min-train-papers 5 \\
-      --similarity-engine hybrid \\
       --output logs/baselines/predictor_llm_raw.json \\
       --batch-dir logs/batch/predictor_llm
 """
@@ -39,28 +38,25 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-from live_idea_bench.backtest import (  # noqa: E402
+from live_idea_bench.backtest import (
     BacktestConfig,
     backtest,
     weighted_mean_over_topics,
 )
-from live_idea_bench.config import load_topics  # noqa: E402
-from live_idea_bench.llm import (  # noqa: E402
+from live_idea_bench.llm import (
     batch_clear,
     batch_set_collect,
     batch_set_replay,
 )
-from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
-from live_idea_bench.strategy import create_strategy  # noqa: E402
-from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
+from live_idea_bench.paper_cache import load_papers_and_topics
+from live_idea_bench.strategy import create_strategy
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 MAX_BATCH_TOKENS = 4096
 
@@ -85,42 +81,7 @@ _TWO_ROUND_STRATEGIES = {
 
 
 def _load_papers_cached(args, input_dir: Path):
-    import hashlib
-    import pickle
-
-    key = hashlib.md5(
-        f"{input_dir}|{args.start_month}|{args.end_month}".encode()
-    ).hexdigest()[:12]
-    cache_path = PROJECT_ROOT / "data" / f".papers_cache_{key}.pkl"
-
-    if cache_path.exists():
-        print(f"Loading papers+topics from cache ({cache_path.name}) ...")
-        with open(cache_path, "rb") as f:
-            c = pickle.load(f)
-        papers, topics, grouped = c["papers"], c["topics"], c["grouped"]
-        print(
-            f"Loaded {len(papers)} papers [{args.start_month}–{args.end_month}] (cached)"
-        )
-    else:
-        print(f"Loading papers from {input_dir} ...")
-        papers = load_papers_from_markdown(
-            input_dir, start_month=args.start_month, end_month=args.end_month
-        )
-        if not papers:
-            print("No papers found. Exiting.")
-            sys.exit(1)
-        print(f"Loaded {len(papers)} papers [{args.start_month}–{args.end_month}]")
-        topics = load_topics()
-        print(f"Topics: {len(topics)}. Classifying ...")
-        grouped = classify_papers_by_topic(papers, topics)
-        try:
-            with open(cache_path, "wb") as f:
-                pickle.dump({"papers": papers, "topics": topics, "grouped": grouped}, f)
-            print(f"  [cache] saved to {cache_path.name}")
-        except Exception as e:
-            print(f"  [cache] could not save: {e}")
-
-    return papers, topics, grouped
+    return load_papers_and_topics(input_dir, args.start_month, args.end_month)
 
 
 # ── Collect phase ──────────────────────────────────────────────────────────────
@@ -440,7 +401,6 @@ def _save_output(
         topic_results,
         (
             "avg_hit_at_k",
-            "avg_recall_at_k",
             "avg_precision_at_k",
             "avg_mrr",
             "avg_novelty",
@@ -454,7 +414,6 @@ def _save_output(
         "model_name": resolved,
         "eval_model": args.eval_model,
         "reasoning_effort": args.reasoning_effort,
-        "similarity_engine": args.similarity_engine,
         "config": {
             "top_k": args.top_k,
             "horizon_months": args.horizon_months,
@@ -492,12 +451,17 @@ def main() -> int:
     parser.add_argument("--min-keyword-freq", type=int, default=1)
     parser.add_argument("--model-name", type=str)
     parser.add_argument("--top-k", type=int, default=5)
-    parser.add_argument("--horizon-months", type=int, default=3)
+    parser.add_argument(
+        "--horizon-months",
+        type=int,
+        default=3,
+        help="Months past the cutoff month. The cutoff month itself counts as "
+        "future, so N=3 spans four calendar months.",
+    )
     parser.add_argument("--min-train-papers", type=int, default=2)
     parser.add_argument("--start-month", type=str, default="2024-01")
     parser.add_argument("--end-month", type=str, default="2025-06")
     parser.add_argument("--similarity-config", type=str, default="similarity.yaml")
-    parser.add_argument("--similarity-engine", type=str, default=None)
     parser.add_argument("--eval-model", type=str, default=None)
     parser.add_argument("--reasoning-effort", type=str, default=None)
     parser.add_argument("--candidate-limit", type=int, default=None)
@@ -527,14 +491,6 @@ def main() -> int:
 
     # ── similarity engine override ────────────────────────────────────────────
     _tmp_sim_cfg = None
-    if args.similarity_engine:
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".yaml", delete=False, prefix="sim_override_"
-        ) as _tmp_sim_cfg:
-            _tmp_sim_cfg.write(f"engine: {args.similarity_engine}\n")
-        args.similarity_config = _tmp_sim_cfg.name
 
     # ── setup paths ───────────────────────────────────────────────────────────
     timestamp = time.strftime("%Y%m%d_%H%M%S")

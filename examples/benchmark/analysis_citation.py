@@ -23,11 +23,10 @@ from __future__ import annotations
 import argparse
 import json
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
-S2_BASE = "https://api.semanticscholar.org/graph/v1/paper"
+from live_idea_bench.semantic_scholar import fetch_paper
+
 DEFAULT_DELAY = 1.1  # seconds between requests when no API key
 
 
@@ -56,23 +55,6 @@ def _require_llmjudge_schema(data: dict, source: str) -> None:
                 "Re-run llm_judge_eval.py to populate per-window train ids."
             )
         return
-
-
-def _s2_fetch(arxiv_id: str, fields: str, api_key: str | None) -> dict | None:
-    url = f"{S2_BASE}/arXiv:{arxiv_id}?fields={fields}"
-    req = urllib.request.Request(url)
-    if api_key:
-        req.add_header("x-api-key", api_key)
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return None
-        raise
-    except Exception as e:  # noqa: BLE001 — network best-effort, surfaced below
-        print(f"  [s2 error] {arxiv_id}: {e}")
-        return None
 
 
 def _extract_arxiv_id(ext_ids: dict | None) -> str | None:
@@ -115,7 +97,7 @@ def _analyze(data: dict, api_key: str | None, delay: float) -> dict:
     checked: dict[tuple[str, frozenset], bool] = {}
 
     def _cites_train(arxiv_id: str, train_ids: set[str]) -> bool:
-        result = _s2_fetch(arxiv_id, "references.externalIds", api_key)
+        result = fetch_paper(arxiv_id, "references.externalIds", api_key)
         if not result:
             return False
         for ref in result.get("references", []):

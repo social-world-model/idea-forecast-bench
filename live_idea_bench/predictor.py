@@ -82,7 +82,7 @@ def _tokenize(text: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", text.lower())
 
 
-def _top_terms(texts: Iterable[str], limit: int = 20) -> list[str]:
+def top_terms(texts: Iterable[str], limit: int = 20) -> list[str]:
     counts: dict[str, int] = {}
     for text in texts:
         for tok in _tokenize(text):
@@ -93,7 +93,7 @@ def _top_terms(texts: Iterable[str], limit: int = 20) -> list[str]:
     return [term for term, _ in ordered[:limit]]
 
 
-def _jaccard(a: str, b: str) -> float:
+def jaccard(a: str, b: str) -> float:
     sa = set(_tokenize(a))
     sb = set(_tokenize(b))
     if not sa or not sb:
@@ -101,12 +101,12 @@ def _jaccard(a: str, b: str) -> float:
     return len(sa & sb) / len(sa | sb)
 
 
-def _prediction_text(pred: IdeaPrediction) -> str:
+def prediction_text(pred: IdeaPrediction) -> str:
     return f"{pred.title} {pred.rationale} {pred.approach}".strip()
 
 
-def _base_score(pred: IdeaPrediction, signal_terms: list[str]) -> float:
-    pred_tokens = set(_tokenize(_prediction_text(pred)))
+def base_score(pred: IdeaPrediction, signal_terms: list[str]) -> float:
+    pred_tokens = set(_tokenize(prediction_text(pred)))
     if not signal_terms:
         return 0.0
     coverage = sum(1 for term in signal_terms if term in pred_tokens) / len(
@@ -116,7 +116,7 @@ def _base_score(pred: IdeaPrediction, signal_terms: list[str]) -> float:
     return (0.75 * coverage) + (0.25 * specificity)
 
 
-def _dedup_predictions(
+def dedup_predictions(
     candidates: list[IdeaPrediction], threshold: float = 0.8
 ) -> list[IdeaPrediction]:
     deduped: list[IdeaPrediction] = []
@@ -127,7 +127,7 @@ def _dedup_predictions(
         if key in title_keys:
             continue
         if any(
-            _jaccard(_prediction_text(candidate), _prediction_text(kept)) >= threshold
+            jaccard(prediction_text(candidate), prediction_text(kept)) >= threshold
             for kept in deduped
         ):
             continue
@@ -140,7 +140,7 @@ def _rank_predictions(
     candidates: list[IdeaPrediction], signal_terms: list[str], top_k: int
 ) -> list[IdeaPrediction]:
     scored = [
-        (candidate, _base_score(candidate, signal_terms)) for candidate in candidates
+        (candidate, base_score(candidate, signal_terms)) for candidate in candidates
     ]
     pool = sorted(scored, key=lambda item: (-item[1], item[0].title.lower()))
     selected: list[IdeaPrediction] = []
@@ -159,7 +159,7 @@ def _rank_predictions(
         best_mmr = float("-inf")
         for idx, (candidate, base_score) in enumerate(pool):
             similarity = max(
-                _jaccard(_prediction_text(candidate), _prediction_text(chosen))
+                jaccard(prediction_text(candidate), prediction_text(chosen))
                 for chosen in selected
             )
             novelty = 1.0 - similarity
@@ -178,7 +178,7 @@ def _rank_predictions(
     return selected
 
 
-def _extract_json_payload(raw_text: str) -> Any:
+def extract_json_payload(raw_text: str) -> Any:
     text = raw_text.strip()
     if not text:
         return None
@@ -238,7 +238,7 @@ def _coerce_key_terms(raw: Any) -> list[str]:
     return deduped
 
 
-def _parse_prediction_items(payload: Any) -> list[dict[str, Any]]:
+def parse_prediction_items(payload: Any) -> list[dict[str, Any]]:
     if isinstance(payload, list):
         return [item for item in payload if isinstance(item, dict)]
     if isinstance(payload, dict):
@@ -261,8 +261,8 @@ def _parse_single_prediction_item(payload: Any) -> dict[str, Any] | None:
     return None
 
 
-def _infer_domain(train_papers: list[PaperRecord]) -> str:
-    terms = _top_terms(
+def infer_domain(train_papers: list[PaperRecord]) -> str:
+    terms = top_terms(
         [paper.summary for paper in train_papers[-20:]]
         + [kw for p in train_papers[-20:] for kw in p.keywords],
         limit=3,
@@ -270,7 +270,7 @@ def _infer_domain(train_papers: list[PaperRecord]) -> str:
     return ", ".join(terms) if terms else "recent AI research"
 
 
-def _build_abstract_block(
+def build_abstract_block(
     train_papers: list[PaperRecord], max_context_papers: int
 ) -> str:
     blocks = []
@@ -306,10 +306,10 @@ def _llm_predictions(
     )
 
     message = predictor_config.user_template.format(
-        domain=_infer_domain(train_papers),
+        domain=infer_domain(train_papers),
         horizon=f"the months after {cutoff_month}",
         n_ideas=top_k,
-        abstracts=_build_abstract_block(
+        abstracts=build_abstract_block(
             train_papers, predictor_config.max_context_papers
         ),
         cutoff_month=cutoff_month,
@@ -332,12 +332,12 @@ def _llm_predictions(
         seed=seed,
         reasoning_effort=reasoning_effort,
     )
-    payload = _extract_json_payload(raw_text)
+    payload = extract_json_payload(raw_text)
     if top_k == 1:
         single_item = _parse_single_prediction_item(payload)
         items = [single_item] if single_item is not None else []
     else:
-        items = _parse_prediction_items(payload)
+        items = parse_prediction_items(payload)
 
     predictions: list[IdeaPrediction] = []
     for item in items:
@@ -376,13 +376,13 @@ def _llm_predictions(
     return predictions
 
 
-def _heuristic_predictions(
+def heuristic_predictions(
     train_papers: list[PaperRecord],
     cutoff_month: str,
     top_k: int,
 ) -> list[IdeaPrediction]:
     texts = [paper.summary for paper in train_papers[-40:]]
-    terms = _top_terms(
+    terms = top_terms(
         texts + [kw for paper in train_papers[-20:] for kw in paper.keywords],
         limit=max(10, top_k * 3),
     )
@@ -430,8 +430,8 @@ def _heuristic_predictions(
         )
 
     rng.shuffle(candidates)
-    candidates = _dedup_predictions(candidates)
-    signal_terms = _top_terms(
+    candidates = dedup_predictions(candidates)
+    signal_terms = top_terms(
         texts + [paper.title for paper in train_papers[-20:]], limit=12
     )
     return _rank_predictions(candidates, signal_terms, top_k)
@@ -508,7 +508,7 @@ def generate_predictions(
                 f"(model={resolved_model}) → heuristic fallback. Last error: {last_exc}",
                 flush=True,
             )
-            predictions = _heuristic_predictions(
+            predictions = heuristic_predictions(
                 train_papers=train_papers,
                 cutoff_month=cutoff_month,
                 top_k=top_k,

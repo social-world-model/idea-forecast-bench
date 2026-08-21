@@ -5,7 +5,7 @@
 ```bash
 git clone https://github.com/ulab-uiuc/live-idea-bench.git
 cd live-idea-bench
-poetry install --with dev,test          # core + tooling
+poetry install --with dev          # core + tooling
 pre-commit install                      # lint on commit
 pre-commit install --hook-type commit-msg
 git config blame.ignoreRevsFile .git-blame-ignore-revs
@@ -22,7 +22,6 @@ Optional groups:
 | Group | Adds | When |
 |---|---|---|
 | `--with forecaster` | torch, transformers, trl, peft, datasets, accelerate | training/running MDF locally |
-| `--with eval` | sentence-transformers | local embedder for retrieve-then-judge |
 | `--with webapp` | flask, flask-cors | running `backend/app.py` |
 
 Install CUDA-correct torch from `scripts/setup_rl_env*.sh`, not from
@@ -56,8 +55,6 @@ manual review, and `git log` before commit 79b434b has the deleted suite if
 you want to bring parts of it back.
 
 ## Layout
-
-Full picture in [docs/architecture.md](docs/architecture.md).
 
 | Directory | Contains |
 |---|---|

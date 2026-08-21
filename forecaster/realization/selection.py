@@ -7,11 +7,11 @@ import re
 from forecaster.realization.config import SelectionConfig
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.predictor import (
-    _base_score,
-    _dedup_predictions,
-    _jaccard,
-    _prediction_text,
-    _top_terms,
+    base_score,
+    dedup_predictions,
+    jaccard,
+    prediction_text,
+    top_terms,
 )
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ def _title_key(prediction: IdeaPrediction) -> str:
 
 def _signal_terms(train_papers: list[PaperRecord]) -> list[str]:
     recent = train_papers[-20:]
-    return _top_terms(
+    return top_terms(
         [paper.summary for paper in recent]
         + [keyword for paper in recent for keyword in paper.keywords],
         limit=20,
@@ -55,7 +55,7 @@ def select_top_k_predictions(
         title_frequency[key] = title_frequency.get(key, 0) + 1
 
     unique_candidate_titles = len(title_frequency)
-    deduped = _dedup_predictions(
+    deduped = dedup_predictions(
         candidates, threshold=selection_config.dedup_similarity_threshold
     )
     dedup_retention_ratio = round(len(deduped) / max(1, len(candidates)), 4)
@@ -76,7 +76,7 @@ def select_top_k_predictions(
         if confidence is None:
             confidence = candidate.score
         confidence = max(0.0, min(1.0, float(confidence or 0.0)))
-        heuristic = _base_score(candidate, signal_terms)
+        heuristic = base_score(candidate, signal_terms)
         relevance = (
             (selection_config.relevance_frequency_weight * frequency)
             + (selection_config.relevance_confidence_weight * confidence)
@@ -115,7 +115,7 @@ def select_top_k_predictions(
         best_score = float("-inf")
         for idx, (candidate, relevance) in enumerate(scored_pool):
             similarity = max(
-                _jaccard(_prediction_text(candidate), _prediction_text(chosen))
+                jaccard(prediction_text(candidate), prediction_text(chosen))
                 for chosen in selected
             )
             novelty_to_selected = 1.0 - similarity

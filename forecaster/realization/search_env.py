@@ -73,7 +73,7 @@ def search_corpus(
     normalized_query = str(query).strip()
     if not normalized_query or not papers:
         return ()
-    config = similarity_config or SimilarityConfig(engine="hybrid")
+    config = similarity_config or SimilarityConfig()
     scored: list[tuple[float, str, str, PaperRecord]] = []
     for paper in papers:
         try:

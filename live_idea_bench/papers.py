@@ -557,17 +557,53 @@ def _discover_files_for_dir(args: tuple[str, str]) -> list[Path]:
     return [p for p in child.rglob("*.md") if p.name.lower() != "readme.md"]
 
 
+def corpus_fingerprint(input_dir: Path | str) -> str:
+    """Stable hash of the corpus files: relative path and size, sorted.
+
+    Deliberately not a content hash -- reading every paper is the step the
+    caches keyed on this exist to avoid. Deliberately not mtime either:
+    `fetch` rewrites files it already has, and mtime would invalidate on runs
+    where nothing changed. Path+size catches papers added, removed, or
+    refetched at a different length, which is every way this corpus changes.
+    """
+    import hashlib
+    import json as _json
+
+    root = Path(input_dir)
+    if not root.is_dir():
+        return "absent"
+    entries = sorted(
+        (str(p.relative_to(root)), p.stat().st_size) for p in root.rglob("*.md")
+    )
+    return hashlib.sha256(_json.dumps(entries).encode()).hexdigest()[:16]
+
+
 def _cache_path_for(
     input_dir: Path, start_month: str | None, end_month: str | None
 ) -> Path:
-    """Return a deterministic pickle cache path for the given query."""
+    """Return a deterministic pickle cache path for the given query.
+
+    Deliberately NOT inside ``input_dir``. This cache is a pickle, and
+    ``input_dir`` holds a paper corpus -- something users download, copy
+    between machines and share. Writing the cache there made a read operation
+    mutate its own input, and reading it back meant unpickling whatever
+    happened to be in a corpus someone else assembled. It lives under the
+    repo's own .cache/ instead, keyed on the corpus path so different corpora
+    never collide.
+    """
     import hashlib
 
-    key = f"{Path(input_dir).resolve()}|{start_month}|{end_month}"
+    # The corpus fingerprint is part of the key: `fetch` is incremental, so
+    # without it "fetch more papers, run again" reused the smaller corpus and
+    # silently reported the previous run's numbers.
+    key = (
+        f"{Path(input_dir).resolve()}|{start_month}|{end_month}"
+        f"|{corpus_fingerprint(input_dir)}"
+    )
     h = hashlib.sha256(key.encode()).hexdigest()[:16]
-    cache_dir = Path(input_dir) / ".paper_cache"
-    cache_dir.mkdir(exist_ok=True)
-    return cache_dir / f"papers_{h}.pkl"
+    cache_dir = Path(__file__).resolve().parents[1] / ".cache" / "papers"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir / f"raw_{h}.pkl"
 
 
 def load_papers_from_markdown(

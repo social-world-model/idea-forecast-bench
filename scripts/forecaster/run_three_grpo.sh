@@ -151,7 +151,9 @@ run_mode() {
   if ! curl -sf -m 2 "http://localhost:${ROLLOUT_PORT}/health/" > /dev/null 2>&1; then
     echo "ERROR: rollout vLLM did not come up. Tail of log:" >&2
     tail -30 "${rollout_log}" >&2 || true
-    [[ -n "${hc_pid}" ]] && kill "${hc_pid}" 2>/dev/null || true
+    if [[ -n "${hc_pid}" ]]; then
+      kill "${hc_pid}" 2>/dev/null || true
+    fi
     exit 1
   fi
 

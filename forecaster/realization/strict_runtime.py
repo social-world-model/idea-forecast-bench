@@ -22,9 +22,9 @@ from forecaster.models import (
     strict_search_contract,
 )
 from forecaster.realization.local_generation import (
-    _apply_chat_template,
-    _load_local_model,
-    _require_local_generation_stack,
+    apply_chat_template,
+    load_local_model,
+    require_local_generation_stack,
 )
 from forecaster.realization.search_env import (
     apply_search_action,
@@ -128,7 +128,7 @@ def build_strict_interactive_messages(
     return system_prompt, user_prompt
 
 
-def _extract_json_payload(text: str) -> object | None:
+def extract_json_payload(text: str) -> object | None:
     raw = str(text or "").strip()
     if not raw:
         return None
@@ -147,7 +147,7 @@ def _extract_json_payload(text: str) -> object | None:
 
 def parse_search_actions_completion(text: str) -> list[SearchAction] | None:
     """Parse a legacy completion payload into a list of search actions."""
-    payload = _extract_json_payload(text)
+    payload = extract_json_payload(text)
     rows: object
     rows = payload.get("actions", []) if isinstance(payload, dict) else payload
     if not isinstance(rows, list):
@@ -162,7 +162,7 @@ def parse_search_actions_completion(text: str) -> list[SearchAction] | None:
 
 def parse_single_search_action_completion(text: str) -> SearchAction | None:
     """Parse a strict single-action completion payload."""
-    payload = _extract_json_payload(text)
+    payload = extract_json_payload(text)
     if not isinstance(payload, dict):
         return None
     if "actions" in payload or "steps" in payload or "strict_rollout" in payload:
@@ -174,7 +174,7 @@ def parse_single_search_action_completion(text: str) -> SearchAction | None:
 
 
 def _strict_completion_invalid_reason(text: str) -> str:
-    payload = _extract_json_payload(text)
+    payload = extract_json_payload(text)
     if isinstance(payload, list):
         return "full_action_list_invalid_in_strict_mode"
     if isinstance(payload, dict) and "actions" in payload:
@@ -200,7 +200,7 @@ def serialize_strict_rollout_completion(trajectory: RealizationTrajectory) -> st
 
 def parse_strict_rollout_completion(text: str) -> RealizationTrajectory | None:
     """Parse a serialized strict rollout artifact."""
-    payload = _extract_json_payload(text)
+    payload = extract_json_payload(text)
     if not isinstance(payload, dict):
         return None
     trajectory_payload = payload.get("strict_rollout", payload)
@@ -281,17 +281,17 @@ def _generate_local_completion(
     if resolved_base_model_name is None and adapter_config_path.exists():
         resolved_base_model_name = _detect_base_model(model_name_or_path)
 
-    model, tokenizer = _load_local_model(
+    model, tokenizer = load_local_model(
         model_name_or_path, base_model_name=resolved_base_model_name
     )
-    deps = _require_local_generation_stack()
+    deps = require_local_generation_stack()
     torch = deps["torch"]
 
     if seed is not None:
         torch.manual_seed(seed)
 
     full_prompt = f"{system_prompt}\n\n{user_prompt}".strip()
-    chat_prompt = _apply_chat_template(tokenizer, full_prompt, None)
+    chat_prompt = apply_chat_template(tokenizer, full_prompt, None)
     encoded = tokenizer([chat_prompt], return_tensors="pt")
     encoded = {name: value.to(model.device) for name, value in encoded.items()}
     generation_kwargs: dict[str, Any] = {
@@ -387,11 +387,11 @@ def _score_conditioned_completion_with_model(
     score_normalization: str,
     score_temperature: float,
 ) -> float:
-    deps = _require_local_generation_stack()
+    deps = require_local_generation_stack()
     torch = deps["torch"]
     import torch.nn.functional as F
 
-    prompt_text = _apply_chat_template(
+    prompt_text = apply_chat_template(
         tokenizer, f"{system_prompt}\n\n{user_prompt}".strip(), None
     )
     prompt_encoded = tokenizer([prompt_text], return_tensors="pt")
@@ -487,7 +487,7 @@ def score_strict_realization_trajectory(
     if resolved_base_model_name is None:
         resolved_base_model_name = _detect_base_model(model_name_or_path)
 
-    model, tokenizer = _load_local_model(
+    model, tokenizer = load_local_model(
         model_name_or_path,
         base_model_name=resolved_base_model_name,
     )

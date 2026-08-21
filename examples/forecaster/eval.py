@@ -24,29 +24,25 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import logging
 import os
-import pickle
 import subprocess
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-from forecaster.realization.model_zoo import resolve_small_model  # noqa: E402
-from live_idea_bench.backtest import (  # noqa: E402
+from forecaster.realization.model_zoo import resolve_small_model
+from live_idea_bench.backtest import (
     BacktestConfig,
     backtest,
     weighted_mean_over_topics,
 )
-from live_idea_bench.config import load_topics  # noqa: E402
-from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
-from live_idea_bench.strategy import create_strategy  # noqa: E402
-from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
+from live_idea_bench.paper_cache import load_papers_and_topics
+from live_idea_bench.strategy import create_strategy
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 log = logging.getLogger("forecaster.eval")
@@ -92,7 +88,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Test window end month (default: 2025-03).",
     )
     p.add_argument("--top-k", type=int, default=5)
-    p.add_argument("--horizon-months", type=int, default=3)
+    p.add_argument(
+        "--horizon-months",
+        type=int,
+        default=3,
+        help="Months past the cutoff month. The cutoff month itself counts as "
+        "future, so N=3 spans four calendar months.",
+    )
     p.add_argument("--min-train-papers", type=int, default=2)
     p.add_argument(
         "--workers",
@@ -101,11 +103,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Topics processed in parallel (default 1; vLLM does its own batching).",
     )
     p.add_argument("--similarity-config", default="similarity.yaml")
-    p.add_argument(
-        "--similarity-engine",
-        default="heuristic",
-        help="heuristic | embedding | llm — default heuristic for fast iteration.",
-    )
     p.add_argument(
         "--output",
         default=None,
@@ -161,62 +158,13 @@ def _resolve_checkpoints(
     return prior.resolve(), real.resolve()
 
 
-def _materialize_similarity_config(args: argparse.Namespace) -> str:
-    """If --similarity-engine is set, write a tiny override YAML and return its path.
-    Mirrors examples/run_domain_backtest.py:107-117.
-    """
-    if not args.similarity_engine or args.similarity_engine == "":
-        return args.similarity_config
-    import tempfile
-
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, prefix="sim_override_eval_"
-    ) as f:
-        f.write(f"engine: {args.similarity_engine}\n")
-    return f.name
-
-
 def _load_papers_and_topics(
     papers_dir: Path,
     start_month: str,
     end_month: str,
 ) -> tuple[list, list, dict]:
-    """Load + cache papers/topics. Mirrors examples/run_domain_backtest.py:127-159."""
-    cache_key = hashlib.md5(
-        f"{papers_dir}|{start_month}|{end_month}".encode()
-    ).hexdigest()[:12]
-    cache_path = PROJECT_ROOT / "data" / f".papers_cache_{cache_key}.pkl"
-
-    if cache_path.exists():
-        log.info("Loading papers+topics from cache (%s)", cache_path.name)
-        with open(cache_path, "rb") as f:
-            cached = pickle.load(f)
-        return cached["papers"], cached["topics"], cached["grouped"]
-
-    log.info("Loading papers from %s", papers_dir)
-    papers = load_papers_from_markdown(
-        papers_dir,
-        start_month=start_month,
-        end_month=end_month,
-    )
-    log.info("Loaded %d papers (%s..%s)", len(papers), start_month, end_month)
-    if not papers:
-        raise SystemExit(
-            f"ERROR: no papers found under {papers_dir} for {start_month}..{end_month}"
-        )
-
-    topics = load_topics()
-    log.info("Classifying %d papers across %d topics...", len(papers), len(topics))
-    grouped = classify_papers_by_topic(papers, topics)
-
-    try:
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(cache_path, "wb") as f:
-            pickle.dump({"papers": papers, "topics": topics, "grouped": grouped}, f)
-        log.info("Cached papers+topics to %s", cache_path.name)
-    except Exception as exc:
-        log.warning("Could not cache papers+topics: %s", exc)
-    return papers, topics, grouped
+    """Load + cache papers/topics; see live_idea_bench.paper_cache."""
+    return load_papers_and_topics(papers_dir, start_month, end_month, verbose=False)
 
 
 def _aggregate(topic_results: dict) -> dict:
@@ -225,7 +173,6 @@ def _aggregate(topic_results: dict) -> dict:
         topic_results,
         (
             "avg_hit_at_k",
-            "avg_recall_at_k",
             "avg_precision_at_k",
             "avg_mrr",
             "avg_novelty",
@@ -253,7 +200,6 @@ def _save_payload(
         "model_name": base_model_id,
         "prior_checkpoint": str(prior_ckpt),
         "realization_checkpoint": str(real_ckpt),
-        "similarity_engine": args.similarity_engine,
         "config": {
             "top_k": args.top_k,
             "horizon_months": args.horizon_months,
@@ -306,7 +252,6 @@ def main() -> int:
     log.info("  papers             : %s", papers_dir)
     log.info("  test window        : %s ~ %s", args.start_month, args.end_month)
     log.info("  top-k / horizon    : %d / %d months", args.top_k, args.horizon_months)
-    log.info("  similarity engine  : %s", args.similarity_engine)
     log.info("  workers            : %d", args.workers)
     log.info("  output             : %s", output_path)
     if os.environ.get("SGLANG_PRIOR_URL") or os.environ.get("SGLANG_URL"):
@@ -318,8 +263,6 @@ def main() -> int:
     else:
         log.info("  vLLM/SGLang URLs   : <unset> — using HF generate fallback (slow)")
     log.info("=" * 60)
-
-    similarity_config_path = _materialize_similarity_config(args)
     papers, topics, grouped = _load_papers_and_topics(
         papers_dir,
         args.start_month,
@@ -335,7 +278,7 @@ def main() -> int:
     strategy_obj = create_strategy(
         strategy_name="forecaster",
         model_name=base_model_id,
-        similarity_config=similarity_config_path,
+        similarity_config=args.similarity_config,
         prior_checkpoint=str(prior_ckpt),
         realization_checkpoint=str(real_ckpt),
     )
@@ -345,7 +288,7 @@ def main() -> int:
         min_train_papers=args.min_train_papers,
         start_month=args.start_month,
         end_month=args.end_month,
-        similarity_config=similarity_config_path,
+        similarity_config=args.similarity_config,
     )
 
     # ─── Resume support ───────────────────────────────────────────

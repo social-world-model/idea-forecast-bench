@@ -55,7 +55,13 @@ def main() -> int:
     p.add_argument("--num-candidates", type=int, default=16)
     p.add_argument("--top-k", type=int, default=5)
     p.add_argument("--temperature", type=float, default=0.8)
-    p.add_argument("--horizon-months", type=int, default=3)
+    p.add_argument(
+        "--horizon-months",
+        type=int,
+        default=3,
+        help="Months past the cutoff month. The cutoff month itself counts as "
+        "future, so N=3 spans four calendar months.",
+    )
     p.add_argument("--start-month", default="2023-01")
     p.add_argument("--end-month", default="2025-06")
     args = p.parse_args()

@@ -1,7 +1,6 @@
 from typing import Any
 
 from live_idea_bench.strategy.base import IdeaStrategy
-from live_idea_bench.strategy.keyword_trend import KeywordTrendStrategy
 from live_idea_bench.strategy.memory_prompting import MemoryPromptingStrategy
 from live_idea_bench.strategy.policy_rl import PolicyRLStrategy
 from live_idea_bench.strategy.predictor_llm import PredictorLLMStrategy
@@ -23,11 +22,6 @@ def create_strategy(
     **legacy_params: Any,
 ) -> IdeaStrategy:
     normalized = strategy_name.strip().lower()
-    if normalized == KeywordTrendStrategy.name:
-        return KeywordTrendStrategy(
-            recent_months=recent_months,
-            min_keyword_freq=min_keyword_freq,
-        )
     if normalized in {PredictorLLMStrategy.name, "prompt_llm"}:
         resolved_model = model_name or legacy_params.get("model_id")
         return PredictorLLMStrategy(

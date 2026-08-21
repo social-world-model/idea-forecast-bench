@@ -8,7 +8,7 @@ Usage::
 
     python examples/run_domain_backtest.py \
         --input-dir data/csml/raw_markdown \
-        --strategy keyword_trend \
+        --strategy topic_trend \
         --start-month 2024-01 --end-month 2025-06 \
         --output /tmp/domain_backtest.json
 """
@@ -21,17 +21,15 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-from live_idea_bench.backtest import (  # noqa: E402
+from live_idea_bench.backtest import (
     BacktestConfig,
     backtest,
     weighted_mean_over_topics,
 )
-from live_idea_bench.config import load_topics  # noqa: E402
-from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
-from live_idea_bench.strategy import create_strategy  # noqa: E402
-from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
+from live_idea_bench.paper_cache import load_papers_and_topics
+from live_idea_bench.strategy import create_strategy
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def main() -> int:
@@ -44,7 +42,7 @@ def main() -> int:
         default="data/csml/raw_markdown",
         help="Directory with markdown papers.",
     )
-    parser.add_argument("--strategy", type=str, default="keyword_trend")
+    parser.add_argument("--strategy", type=str, default="topic_trend")
     parser.add_argument("--recent-months", type=int, default=3)
     parser.add_argument("--min-keyword-freq", type=int, default=1)
     parser.add_argument(
@@ -75,7 +73,13 @@ def main() -> int:
         help="Path to policy manifest JSON (policy_rl strategy).",
     )
     parser.add_argument("--top-k", type=int, default=5)
-    parser.add_argument("--horizon-months", type=int, default=3)
+    parser.add_argument(
+        "--horizon-months",
+        type=int,
+        default=3,
+        help="Months past the cutoff month. The cutoff month itself counts as "
+        "future, so N=3 spans four calendar months.",
+    )
     parser.add_argument("--min-train-papers", type=int, default=2)
     parser.add_argument("--start-month", type=str, default="2024-01")
     parser.add_argument("--end-month", type=str, default="2025-06")
@@ -88,18 +92,10 @@ def main() -> int:
     )
     parser.add_argument("--similarity-config", type=str, default="similarity.yaml")
     parser.add_argument(
-        "--similarity-engine",
-        type=str,
-        default=None,
-        help="Override the similarity engine at runtime (e.g. heuristic, embedding, llm). "
-        "Useful when you want to skip API calls and re-evaluate later with reeval_voyage.py.",
-    )
-    parser.add_argument(
         "--eval-model",
         type=str,
         default=None,
-        help="Model to use for LLM-based similarity evaluation (e.g. gpt-5.4). "
-        "Only relevant when --similarity-engine llm is used.",
+        help="Model to use for LLM-based similarity evaluation (e.g. gpt-5.4). ",
     )
     parser.add_argument(
         "--reasoning-effort",
@@ -119,8 +115,10 @@ def main() -> int:
     parser.add_argument(
         "--output",
         type=str,
-        default="/tmp/domain_backtest.json",
-        help="Output JSON path.",
+        default=None,
+        help="Output JSON path. Defaults to output/backtest/<strategy>.json -- "
+        "per strategy, because a shared default plus resume silently merged "
+        "runs of different strategies into one artifact.",
     )
     parser.add_argument(
         "--workers",
@@ -133,62 +131,14 @@ def main() -> int:
 
     # Apply runtime engine override: write a minimal temp YAML so the caller
     # never needs to touch similarity.yaml just to change the engine.
-    _tmp_sim_cfg = None
-    if args.similarity_engine:
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".yaml", delete=False, prefix="sim_override_"
-        ) as _tmp_sim_cfg:
-            _tmp_sim_cfg.write(f"engine: {args.similarity_engine}\n")
-        args.similarity_config = _tmp_sim_cfg.name
-
-    import hashlib
-    import pickle
 
     input_dir = Path(args.input_dir)
     if not input_dir.is_absolute():
         input_dir = PROJECT_ROOT / input_dir
 
-    # Cache key: input_dir + date range (topics config is stable)
-    _cache_key = hashlib.md5(
-        f"{input_dir}|{args.start_month}|{args.end_month}".encode()
-    ).hexdigest()[:12]
-    _cache_path = PROJECT_ROOT / "data" / f".papers_cache_{_cache_key}.pkl"
-
-    if _cache_path.exists():
-        print(f"Loading papers+topics from cache ({_cache_path.name}) ...")
-        with open(_cache_path, "rb") as _f:
-            _cached = pickle.load(_f)
-        papers = _cached["papers"]
-        topics = _cached["topics"]
-        grouped = _cached["grouped"]
-        print(
-            f"Loaded {len(papers)} papers ({args.start_month} to {args.end_month}) [cached]"
-        )
-    else:
-        print(f"Loading papers from {input_dir} ...")
-        papers = load_papers_from_markdown(
-            input_dir,
-            start_month=args.start_month,
-            end_month=args.end_month,
-        )
-        print(f"Loaded {len(papers)} papers ({args.start_month} to {args.end_month})")
-        if not papers:
-            print("No papers found. Exiting.")
-            return 1
-        topics = load_topics()
-        print(f"\nTopics configured: {len(topics)}")
-        print("Classifying papers by topic (this may take a minute) ...")
-        grouped = classify_papers_by_topic(papers, topics)
-        try:
-            with open(_cache_path, "wb") as _f:
-                pickle.dump(
-                    {"papers": papers, "topics": topics, "grouped": grouped}, _f
-                )
-            print(f"  [cache] saved to {_cache_path.name}")
-        except Exception as _ce:
-            print(f"  [cache] could not save: {_ce}")
+    papers, topics, grouped = load_papers_and_topics(
+        input_dir, args.start_month, args.end_month
+    )
 
     if not papers:
         print("No papers found. Exiting.")
@@ -220,20 +170,59 @@ def main() -> int:
     )
 
     # ── Resume support: load existing partial results ────────────────
-    output_path = Path(args.output)
+    output_path = Path(
+        args.output or PROJECT_ROOT / "output" / "backtest" / f"{args.strategy}.json"
+    )
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    run_fingerprint = {
+        "strategy": args.strategy,
+        "top_k": args.top_k,
+        "horizon_months": args.horizon_months,
+        "min_train_papers": args.min_train_papers,
+        "start_month": args.start_month,
+        "end_month": args.end_month,
+    }
     topic_results: dict = {}
     _saved_payload: dict = {}
     if output_path.exists():
         try:
             _saved_payload = json.loads(output_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as _e:
+            print(f"  [resume] could not read existing output ({_e}), starting fresh")
+            _saved_payload = {}
+        if _saved_payload:
+            prior = {
+                "strategy": _saved_payload.get("strategy"),
+                **{
+                    k: (_saved_payload.get("config") or {}).get(k)
+                    for k in (
+                        "top_k",
+                        "horizon_months",
+                        "min_train_papers",
+                        "start_month",
+                        "end_month",
+                    )
+                },
+            }
+            if prior != run_fingerprint:
+                # Resuming across configurations merges incompatible windows and
+                # then stamps the artifact with the CURRENT header, so the file
+                # claims a provenance its contents do not have.
+                differing = [
+                    k for k in run_fingerprint if prior.get(k) != run_fingerprint[k]
+                ]
+                raise SystemExit(
+                    f"{output_path} was produced by a different configuration "
+                    f"(differs on: {', '.join(differing)}).\n"
+                    "Refusing to resume: merging them would report one set of "
+                    "numbers under another set's settings.\n"
+                    "Pass a different --output, or delete that file to start fresh."
+                )
             topic_results = _saved_payload.get("topic_results", {})
             _resumed = sum(
                 1 for v in topic_results.values() if v.get("backtest") is not None
             )
             print(f"  [resume] found {_resumed} completed topics in {output_path}")
-        except Exception as _e:
-            print(f"  [resume] could not load existing output ({_e}), starting fresh")
             topic_results = {}
 
     print(f"\nRunning per-topic backtest (horizon={args.horizon_months}m) ...\n")
@@ -260,7 +249,6 @@ def main() -> int:
             topic_results,
             (
                 "avg_hit_at_k",
-                "avg_recall_at_k",
                 "avg_precision_at_k",
                 "avg_mrr",
                 "avg_novelty",
@@ -273,7 +261,6 @@ def main() -> int:
             "model_name": resolved,
             "eval_model": args.eval_model,
             "reasoning_effort": args.reasoning_effort,
-            "similarity_engine": args.similarity_engine,
             "config": {
                 "top_k": args.top_k,
                 "horizon_months": args.horizon_months,
@@ -364,6 +351,7 @@ def main() -> int:
             "backtest": result,
         }
 
+    failed_topics: list[str] = []
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = {pool.submit(_process_topic, t): t for t in topics}
         for fut in as_completed(futures):
@@ -380,6 +368,7 @@ def main() -> int:
                 import traceback
 
                 traceback.print_exc()
+                failed_topics.append(topic.id)
                 continue
             if res is None:
                 continue
@@ -403,7 +392,6 @@ def main() -> int:
         topic_results,
         (
             "avg_hit_at_k",
-            "avg_recall_at_k",
             "avg_precision_at_k",
             "avg_mrr",
             "avg_novelty",
@@ -419,10 +407,25 @@ def main() -> int:
     _save_checkpoint()
     print(f"\nSaved to {output_path}")
 
-    if _tmp_sim_cfg:
-        import os
-
-        os.unlink(_tmp_sim_cfg.name)
+    # A run that scored nothing must not look like a run that scored zero.
+    # Without this an all-topics-failed run exits 0 and leaves behind a
+    # well-formed artifact full of 0.0000 -- indistinguishable from a model
+    # that simply predicted badly.
+    if total_windows == 0:
+        print(
+            f"\nNO WINDOWS SCORED. {len(failed_topics)} topic(s) errored"
+            + (f": {', '.join(failed_topics[:5])}" if failed_topics else "")
+            + ".\nThe metrics above are not results -- nothing was evaluated. "
+            "Check the corpus covers the window, and that required API keys are set.",
+            flush=True,
+        )
+        return 1
+    if failed_topics:
+        print(
+            f"\nWARNING: {len(failed_topics)} of {len(topics)} topics errored and "
+            f"are absent from the aggregate: {', '.join(failed_topics[:10])}",
+            flush=True,
+        )
 
     return 0
 

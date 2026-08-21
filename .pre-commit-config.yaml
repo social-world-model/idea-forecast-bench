@@ -38,6 +38,22 @@ repos:
         additional_dependencies: [tomli]
         args: [--toml, pyproject.toml]
 
+  # 2,800 lines of bash had no linter while Python got ruff + mypy --strict.
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        # SC2317 fires on every cleanup() invoked only through `trap`, which is
+        # the pattern all the vLLM wrappers use -- 23 false positives.
+        args: [--exclude=SC2317]
+
+  # detect-private-key only catches PEM blocks. This repo is built around eight
+  # third-party API keys, none of which look like a private key.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v3.29.1
     hooks:

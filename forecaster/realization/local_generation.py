@@ -10,11 +10,11 @@ from live_idea_bench.config import load_predictor_config
 from live_idea_bench.daily import coerce_prediction
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.predictor import (
-    _build_abstract_block,
-    _extract_json_payload,
-    _heuristic_predictions,
-    _infer_domain,
-    _parse_prediction_items,
+    build_abstract_block,
+    extract_json_payload,
+    heuristic_predictions,
+    infer_domain,
+    parse_prediction_items,
 )
 
 _LOCAL_MODEL_CACHE: dict[tuple[str, str | None], tuple[Any, Any]] = {}
@@ -31,10 +31,10 @@ def build_prediction_prompt(
 ) -> str:
     predictor_config = load_predictor_config(predictor_config_path)
     user_prompt = predictor_config.user_template.format(
-        domain=_infer_domain(train_papers),
+        domain=infer_domain(train_papers),
         horizon=f"the months after {cutoff_month}",
         n_ideas=n_ideas,
-        abstracts=_build_abstract_block(
+        abstracts=build_abstract_block(
             train_papers, predictor_config.max_context_papers
         ),
         cutoff_month=cutoff_month,
@@ -81,8 +81,8 @@ def parse_completion_predictions(
         return []
 
     try:
-        payload = _extract_json_payload(raw_text)
-        items = _parse_prediction_items(payload)
+        payload = extract_json_payload(raw_text)
+        items = parse_prediction_items(payload)
     except Exception as exc:
         logger.warning("Failed to parse completion predictions: %s", exc)
         return []
@@ -105,7 +105,7 @@ def parse_single_completion_prediction(raw_completion: Any) -> IdeaPrediction | 
     if not raw_text:
         return None
     try:
-        payload = _extract_json_payload(raw_text)
+        payload = extract_json_payload(raw_text)
         if not isinstance(payload, dict):
             return None
         item: dict[str, Any] | None = None
@@ -130,7 +130,7 @@ def parse_single_completion_prediction(raw_completion: Any) -> IdeaPrediction | 
     return dataclasses.replace(prediction, rank=1)
 
 
-def _require_local_generation_stack() -> dict[str, Any]:
+def require_local_generation_stack() -> dict[str, Any]:
     try:
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -146,7 +146,7 @@ def _require_local_generation_stack() -> dict[str, Any]:
     }
 
 
-def _load_local_model(
+def load_local_model(
     model_name_or_path: str, *, base_model_name: str | None = None
 ) -> tuple[Any, Any]:
     cache_key = (model_name_or_path, base_model_name)
@@ -157,7 +157,7 @@ def _load_local_model(
         if cache_key in _LOCAL_MODEL_CACHE:
             return _LOCAL_MODEL_CACHE[cache_key]
 
-        deps = _require_local_generation_stack()
+        deps = require_local_generation_stack()
         tokenizer_source = base_model_name or model_name_or_path
         tokenizer = deps["AutoTokenizer"].from_pretrained(tokenizer_source)
         if tokenizer.pad_token is None:
@@ -194,7 +194,7 @@ def _load_local_model(
         return model, tokenizer
 
 
-def _apply_chat_template(
+def apply_chat_template(
     tokenizer: Any, full_prompt: str, enable_thinking: bool | None
 ) -> str:
     messages = [{"role": "user", "content": full_prompt}]
@@ -236,16 +236,16 @@ def generate_local_predictions(
         top_k,
         predictor_config_path=predictor_config_path,
     )
-    model, tokenizer = _load_local_model(
+    model, tokenizer = load_local_model(
         model_name_or_path, base_model_name=base_model_name
     )
-    deps = _require_local_generation_stack()
+    deps = require_local_generation_stack()
     torch = deps["torch"]
 
     if seed is not None:
         torch.manual_seed(seed)
 
-    chat_prompt = _apply_chat_template(tokenizer, prompt, enable_thinking)
+    chat_prompt = apply_chat_template(tokenizer, prompt, enable_thinking)
     encoded = tokenizer([chat_prompt], return_tensors="pt")
     encoded = {name: value.to(model.device) for name, value in encoded.items()}
 
@@ -275,7 +275,7 @@ def generate_local_predictions(
     if not predictions:
         if not fallback_to_heuristic:
             return []
-        predictions = _heuristic_predictions(train_papers, cutoff_month, top_k)
+        predictions = heuristic_predictions(train_papers, cutoff_month, top_k)
 
     result: list[IdeaPrediction] = []
     for idx, prediction in enumerate(predictions[:top_k], start=1):

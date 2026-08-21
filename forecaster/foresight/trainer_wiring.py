@@ -173,6 +173,12 @@ def build_foresight_context(
 # ---------------------------------------------------------------- TRL reward_fn factory
 
 
+#: A handful of transient judge failures is normal; a systematic one is not.
+#: Past this many, training stops rather than optimising against zeros.
+_MAX_REWARD_FAILURES = 50
+_reward_failures = {"n": 0}
+
+
 def make_reward_fn(
     config: Any,
     *,
@@ -265,7 +271,19 @@ def make_reward_fn(
                         )
                     )
                 except Exception as exc:
+                    # 0.0 is a legitimate reward ("bad completion"), so an
+                    # infrastructure failure here is indistinguishable from a
+                    # genuine low score and the policy trains on the noise.
+                    # Tolerate transients, but refuse to keep going once the
+                    # failures stop looking transient.
                     logger.warning("foresight reward failed: %s", exc, exc_info=True)
+                    _reward_failures["n"] += 1
+                    if _reward_failures["n"] > _MAX_REWARD_FAILURES:
+                        raise RuntimeError(
+                            f"foresight reward failed {_reward_failures['n']} times; "
+                            "refusing to continue training on substituted zeros. "
+                            "Check the judge endpoint and the foresight artifacts."
+                        ) from exc
                     out.append(0.0)
 
             if dedup_penalty > 0.0 and num_generations >= 2:

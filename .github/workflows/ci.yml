@@ -24,6 +24,7 @@ jobs:
   lint:
     name: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,7 +32,9 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install pre-commit
-        run: pip install pre-commit
+        # Pinned to poetry.lock's version: an unpinned install here is exactly
+        # the local-vs-CI drift this single-source-of-truth setup exists to stop.
+        run: pip install pre-commit==3.8.0
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
@@ -45,6 +48,7 @@ jobs:
   typecheck:
     name: typecheck
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       # poetry must exist before setup-python, or `cache: poetry` has nothing
@@ -65,6 +69,7 @@ jobs:
   smoke:
     name: smoke (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -116,8 +121,17 @@ jobs:
     if: always()
     needs: [lint, typecheck, smoke]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Fail if any job failed
-        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
-        run: exit 1
+      # Requires success explicitly. Checking only for 'failure'/'cancelled'
+      # let a *skipped* job through, which is the state a job lands in when
+      # something upstream of it goes wrong.
+      - name: Require every job to have succeeded
+        if: >-
+          needs.lint.result != 'success' ||
+          needs.typecheck.result != 'success' ||
+          needs.smoke.result != 'success'
+        run: |
+          echo "lint=${{ needs.lint.result }} typecheck=${{ needs.typecheck.result }} smoke=${{ needs.smoke.result }}"
+          exit 1
       - run: echo "all checks passed"

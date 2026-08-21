@@ -220,9 +220,11 @@ cleanup() {
       kill -KILL "${VLLM_PID}" 2>/dev/null || true
     fi
   fi
-  pkill -KILL -f "VLLM::EngineCore" 2>/dev/null || true
-  pkill -KILL -f "trl vllm-serve" 2>/dev/null || true
-  pkill -KILL -f "trl.scripts.vllm_serve" 2>/dev/null || true
+  # Scoped to OUR port -- see the note in eval_vllm.sh. Unscoped name sweeps
+  # here would take down co-tenants' vLLM servers on a shared GPU box.
+  pkill -KILL -f "trl.scripts.vllm_serve.*--port ${VLLM_PORT}\b" 2>/dev/null || true
+  pkill -KILL -f "trl vllm-serve.*--port ${VLLM_PORT}\b" 2>/dev/null || true
+  pkill -KILL -f "VLLM::EngineCore.*${VLLM_PORT}" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 

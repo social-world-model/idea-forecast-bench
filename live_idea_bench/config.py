@@ -133,11 +133,7 @@ class PredictorConfig:
 
 @dataclass
 class SimilarityConfig:
-    engine: str = "hybrid"
-    semantic_threshold: float = 0.5
-    keyword_threshold: float = 0.3
     embedding_threshold: float = 0.4
-    llm_match_threshold: float = 0.7
     system_prompt: str = ""
     user_prompt_template: str = ""
 
@@ -342,11 +338,7 @@ def load_similarity_config(
 ) -> SimilarityConfig:
     payload = _read_yaml(_resolve_prompt_path(name_or_path, prompt_dir=prompt_dir))
     return SimilarityConfig(
-        engine=str(payload.get("engine", "hybrid")).strip() or "hybrid",
-        semantic_threshold=float(payload.get("semantic_threshold", 0.5)),
-        keyword_threshold=float(payload.get("keyword_threshold", 0.3)),
         embedding_threshold=float(payload.get("embedding_threshold", 0.4)),
-        llm_match_threshold=float(payload.get("llm_match_threshold", 0.7)),
         system_prompt=str(payload.get("system_prompt", "")).strip(),
         user_prompt_template=str(payload.get("user_prompt_template", "")).strip(),
     )

@@ -145,9 +145,9 @@ def _generate_proposal_local(
     """
     from forecaster.prior.sampler import _detect_base_model
     from forecaster.realization.local_generation import (
-        _apply_chat_template,
-        _load_local_model,
-        _require_local_generation_stack,
+        apply_chat_template,
+        load_local_model,
+        require_local_generation_stack,
     )
 
     full_prompt = f"{system_prompt}\n\n{user_msg}".strip()
@@ -158,11 +158,11 @@ def _generate_proposal_local(
     if resolved_base_model_name is None and adapter_config_path.exists():
         resolved_base_model_name = _detect_base_model(realization_model_path)
 
-    model, tokenizer = _load_local_model(
+    model, tokenizer = load_local_model(
         realization_model_path,
         base_model_name=resolved_base_model_name,
     )
-    deps = _require_local_generation_stack()
+    deps = require_local_generation_stack()
     torch = deps["torch"]
 
     if seed is not None:
@@ -170,7 +170,7 @@ def _generate_proposal_local(
 
     # Match training: thinking=True so the chat template prefills <think>\n
     # and the GRPO-trained policy sees the same prompt distribution it learned.
-    chat_prompt = _apply_chat_template(tokenizer, full_prompt, True)
+    chat_prompt = apply_chat_template(tokenizer, full_prompt, True)
     encoded = tokenizer([chat_prompt], return_tensors="pt")
     encoded = {name: value.to(model.device) for name, value in encoded.items()}
 
@@ -284,9 +284,9 @@ def generate_proposals_batch(
 
     # --- HF generate fallback ---
     from forecaster.realization.local_generation import (
-        _apply_chat_template,
-        _load_local_model,
-        _require_local_generation_stack,
+        apply_chat_template,
+        load_local_model,
+        require_local_generation_stack,
     )
 
     resolved_base = base_model_name
@@ -294,13 +294,13 @@ def generate_proposals_batch(
     if resolved_base is None and adapter_path.exists():
         resolved_base = _detect_base_model(realization_model_path)
 
-    model, tokenizer = _load_local_model(
+    model, tokenizer = load_local_model(
         realization_model_path, base_model_name=resolved_base
     )
-    deps = _require_local_generation_stack()
+    deps = require_local_generation_stack()
     torch = deps["torch"]
 
-    chat_prompts = [_apply_chat_template(tokenizer, p, True) for p in prompts]
+    chat_prompts = [apply_chat_template(tokenizer, p, True) for p in prompts]
 
     tokenizer.padding_side = "left"
     if tokenizer.pad_token_id is None:
@@ -379,9 +379,9 @@ def score_local_proposal(
     """Score log p_psi(y | z, X) for a concrete proposal under a local policy artifact."""
     from forecaster.prior.sampler import _detect_base_model
     from forecaster.realization.local_generation import (
-        _apply_chat_template,
-        _load_local_model,
-        _require_local_generation_stack,
+        apply_chat_template,
+        load_local_model,
+        require_local_generation_stack,
     )
 
     if not proposal_text.strip():
@@ -398,15 +398,15 @@ def score_local_proposal(
     if resolved_base_model_name is None:
         resolved_base_model_name = _detect_base_model(model_name_or_path)
 
-    deps = _require_local_generation_stack()
+    deps = require_local_generation_stack()
     torch = deps["torch"]
     import torch.nn.functional as F
 
-    model, tokenizer = _load_local_model(
+    model, tokenizer = load_local_model(
         model_name_or_path,
         base_model_name=resolved_base_model_name,
     )
-    prompt_text = _apply_chat_template(tokenizer, full_prompt, None)
+    prompt_text = apply_chat_template(tokenizer, full_prompt, None)
     prompt_encoded = tokenizer([prompt_text], return_tensors="pt")
     prompt_len = prompt_encoded["input_ids"].shape[1]
     encoded = tokenizer([f"{prompt_text}{proposal_text}"], return_tensors="pt")

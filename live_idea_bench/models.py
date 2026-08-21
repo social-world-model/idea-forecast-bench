@@ -34,7 +34,6 @@ class IdeaPrediction:
 @dataclass
 class EvaluationResult:
     hit_at_k: float
-    recall_at_k: float
     precision_at_k: float
     mrr: float
     novelty: float
@@ -43,16 +42,10 @@ class EvaluationResult:
     matched_paper_ids: list[str]
     # coverage_at_k = matched / len(future_papers): fraction of ALL future papers
     # hit by the top-k predictions. Upper-bounded by min(k, |future|)/|future|, so
-    # it is NOT a true recall when |future| > k (it cannot reach 1.0). Kept for
-    # backward comparability with earlier runs that stored this under recall_at_k.
+    # it cannot reach 1.0 when |future| > k -- read it as coverage, not recall.
     coverage_at_k: float = 0.0
     lead_time: float = 0.0
     duplicate_rate: float = 0.0
-    # Popularity-weighted metrics (opt-in; 0.0 when no popularity_weights provided)
-    weighted_hit_at_k: float = 0.0
-    weighted_precision_at_k: float = 0.0
-    weighted_mrr: float = 0.0
-    popularity_recall_at_k: float = 0.0
 
 
 @dataclass

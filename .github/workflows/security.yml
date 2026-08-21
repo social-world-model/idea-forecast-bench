@@ -28,6 +28,7 @@ jobs:
   python-deps:
     name: python dependency audit
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Install poetry
@@ -36,14 +37,22 @@ jobs:
         with:
           python-version: "3.12"
           cache: poetry
-      # Audits what is actually locked, including the optional groups, rather
-      # than only the core set.
+      # Every group, forecaster included. torch/transformers/trl are the
+      # largest dependency surface in the project; auditing everything except
+      # them, while the comment claimed otherwise, was the worst of both.
       - name: Install dependencies
-        run: poetry install --with dev,webapp,eval
+        run: poetry install --with dev,webapp,forecaster
       - name: pip-audit
+        # pipx, not `poetry run pip install pip-audit`: installing the auditor
+        # into the environment under audit adds its own dependency tree to the
+        # thing being measured. --path points it at poetry's site-packages.
         run: |
-          poetry run pip install -q pip-audit
-          poetry run pip-audit --progress-spinner off --ignore-vuln PYSEC-2026-196 --ignore-vuln PYSEC-2026-1795 --ignore-vuln PYSEC-2026-1796 --ignore-vuln PYSEC-2026-2875 --ignore-vuln PYSEC-2026-2876
+          pipx install pip-audit
+          SITE_PACKAGES="$(poetry run python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+          pip-audit --path "$SITE_PACKAGES" --progress-spinner off \
+            --ignore-vuln PYSEC-2026-196 --ignore-vuln PYSEC-2026-1795 \
+            --ignore-vuln PYSEC-2026-1796 --ignore-vuln PYSEC-2026-2875 \
+            --ignore-vuln PYSEC-2026-2876
         # The ignored IDs are all pip's own advisories. pip is the installer
         # present in every virtualenv, not a declared dependency of this
         # project, and its version is controlled by the runner image.
@@ -51,6 +60,7 @@ jobs:
   npm-deps:
     name: frontend dependency audit
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: frontend

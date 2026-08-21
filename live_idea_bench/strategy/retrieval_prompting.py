@@ -27,9 +27,9 @@ from live_idea_bench.llm import create_client, get_response_from_llm
 from live_idea_bench.models import IdeaPrediction, PaperRecord
 from live_idea_bench.papers import add_months, month_to_index
 from live_idea_bench.similarity import (
-    _hybrid_similarity,
     _keyword_overlap,
     _sanitize,
+    lexical_similarity,
     paper_text,
 )
 from live_idea_bench.strategy.base import IdeaStrategy
@@ -82,7 +82,7 @@ def _retrieve(
     scored: list[tuple[float, PaperRecord]] = []
     for paper in train_papers:
         ctx = paper_text(paper)
-        semantic = _hybrid_similarity(query, ctx)
+        semantic = lexical_similarity(query, ctx)
         keyword = _keyword_overlap(query, ctx)
         scored.append((max(semantic, keyword), paper))
     scored.sort(key=lambda item: -item[0])

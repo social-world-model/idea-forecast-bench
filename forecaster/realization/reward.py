@@ -152,7 +152,6 @@ def benchmark_score(evaluation: EvaluationResult) -> float:
 def _empty_evaluation() -> EvaluationResult:
     return EvaluationResult(
         hit_at_k=0.0,
-        recall_at_k=0.0,
         precision_at_k=0.0,
         mrr=0.0,
         novelty=0.0,
