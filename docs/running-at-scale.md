@@ -133,6 +133,44 @@ session leader still exists" does not by itself mean the job is exposed; what
 matters is whether the chain reaches an active tool-call shell or terminates at
 init.
 
+### An absent field reads as a clean result
+
+`fallback_events` is the only thing separating a real MDF row from a fully
+degraded one, so it was checked before trusting the row — at the window level,
+where windows carry `cutoff_month`, `evaluation`, `matches`, `predictions`,
+`train_papers` and no `fallback_events` at all. `dict.get` returned nothing,
+which was read as "no fallbacks recorded".
+
+It is written per prediction, in `metadata` (`forecaster.py:371`). Checking the
+wrong level does not error; it silently confirms whatever you hoped.
+
+```python
+# Wrong: windows have no such key, so this is always empty.
+w.get("fallback_events", [])
+
+# Right, and it fails loudly if the field ever moves:
+evs = [e for w in windows for p in w["predictions"]
+       for e in p["metadata"]["fallback_events"]]
+```
+
+Two kinds are recorded and only one invalidates a row:
+
+| event | meaning |
+|---|---|
+| `phase="prior"`, `heuristic_innovations` | the trained prior was not used — the row is a heuristic baseline |
+| `phase="runtime_boundary"`, `demo_wrapper` | `strict_eval` lacked an artifact and dropped to the flexible runtime |
+
+Corroborate rather than relying on the absence of a warning. A real
+`metadata.prior_score` (a conditional logprob) and an operator prefix on
+`approach` — `"adapt: ..."`, `"compose: ..."` — both come from prior sampling;
+`_build_heuristic_innovations` produces neither.
+
+Note that `prior.yaml` points `memory_path` at `data/memory_inventory.json`,
+which is not in the repository. Every run therefore takes the `demo_wrapper`
+path, including the ones that produced the published checkpoints. Manufacturing
+that snapshot would make a new run diverge from the published setup rather than
+match it — the right move is to record the condition, not to fix it.
+
 ## Concurrency: hosted APIs and self-hosted endpoints tune in opposite directions
 
 The parameters have the same names and the correct values differ by more than an
@@ -275,4 +313,23 @@ changes.
 - Shard union checked against the full topic list before launch, by set
   comparison rather than by counting lines.
 - `fallback_events` read from the artifact — not the absence of warnings in a
-  log — before believing an MDF row.
+  log — before believing an MDF row, and read from `predictions[].metadata`
+  rather than from the window, where the key does not exist.
+
+## A note on the shape of these failures
+
+Almost every entry above is the same mistake in a different costume: something
+was inferred rather than read, and the inference happened to agree with what was
+expected.
+
+A window count summed across topics agreed that the run was finished. A missing
+`fallback_events` key agreed that nothing had degraded. An endpoint at 100% GPU
+agreed that concurrency was well tuned. A stale log agreed that a fix had not
+worked. `except Exception: pass` around a state read agreed that progress had
+stalled. In every case the signal was indirect, the reading was wrong, and
+nothing raised.
+
+The habit that catches these is cheap: after changing something, look at a
+direct observable that must move — `num_requests_running` after adding an
+endpoint, a `skipping` line after a resume, a `prior_score` after fixing a
+checkpoint path. Not "it should be working now."
