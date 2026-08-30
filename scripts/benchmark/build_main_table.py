@@ -43,6 +43,7 @@ def strategy_of(fp, d):
     return '?'
 
 rows = collections.defaultdict(lambda: {'w':0,'hit2':0,'hit3':0,'np':0,'fb_prior':0,'short':0})
+coverage = collections.defaultdict(set)
 for backbone, pat in SRC:
     for fp in sorted(glob.glob(pat)):
         try: d = json.load(open(fp))
@@ -54,6 +55,7 @@ for backbone, pat in SRC:
             if not bt: continue
             for w in bt.get('windows', []):
                 rows[key]['w'] += 1
+                coverage[key].add((tid, w.get('cutoff_month')))
                 pp = w.get('per_prediction', []) or []
                 # S>=2 原口径：judge 自己的 is_match
                 if any(p.get('is_match') for p in pp): rows[key]['hit2'] += 1
@@ -77,4 +79,17 @@ for backbone, _ in SRC:
         print(f'{backbone:<17}{strat:<21}{v["w"]:>5}{v["hit2"]/v["w"]:>12.4f}{v["hit3"]/v["w"]:>12.4f}'
               f'{v["short"]:>6}{v["fb_prior"]:>10}')
 tot = sum(v['w'] for v in rows.values())
-print(f'\n合计 {len(rows)} 行 / {tot} 窗' + ('  ✅ 16 行齐' if len(rows) == 16 else f'  ⚠️ 期望 16 行'))
+# Coverage assertions. Both are needed and neither implies the other: counting
+# unique topics alone passes a row whose topic ran only three of its twelve
+# cutoffs, and counting unique (topic, cutoff) pairs alone is filled in by
+# duplicates -- two shard sets built from different partitions once summed to
+# exactly 624 windows while covering 40 of 52 topics, with file count, window
+# total, error count and per-shard topic counts all looking right.
+EXPECTED_TOPICS, EXPECTED_WINDOWS = 52, 624
+for (backbone, strat), cov in sorted(coverage.items()):
+    ts = {t for t, _ in cov}
+    if len(ts) != EXPECTED_TOPICS or len(cov) != EXPECTED_WINDOWS:
+        print(f'  !! {backbone}/{strat}: {len(ts)}/{EXPECTED_TOPICS} topics, '
+              f'{len(cov)}/{EXPECTED_WINDOWS} windows -- incomplete, do not report')
+
+print(f'\n合计 {len(rows)} 行 / {tot} 窗'  + ('  ✅ 16 行齐' if len(rows) == 16 else f'  ⚠️ 期望 16 行'))
