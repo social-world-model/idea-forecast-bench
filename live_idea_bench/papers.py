@@ -565,9 +565,27 @@ def corpus_fingerprint(input_dir: Path | str) -> str:
     `fetch` rewrites files it already has, and mtime would invalidate on runs
     where nothing changed. Path+size catches papers added, removed, or
     refetched at a different length, which is every way this corpus changes.
+
+    Set ``LIVE_IDEA_CORPUS_FINGERPRINT`` to skip the walk. It is one rglob plus
+    a stat per paper -- cheap on a local disk, but on a 108k-paper corpus over
+    NFS it took over 110s here, and every process pays it independently: a
+    20-process sharded sweep spent its first quarter-hour computing the same
+    hash twenty times, contending on the same server.
+
+    The override is deliberately explicit rather than a cache keyed on
+    something cheap. Any such key (directory mtime, a stamp file) can miss a
+    change deeper in the tree and would silently serve results computed against
+    a corpus that no longer exists -- the exact failure this fingerprint was
+    introduced to prevent. Setting the variable is the caller asserting the
+    corpus is frozen for the run, which is checkable in the launch script.
     """
     import hashlib
     import json as _json
+    import os
+
+    override = os.environ.get("LIVE_IDEA_CORPUS_FINGERPRINT", "").strip()
+    if override:
+        return override
 
     root = Path(input_dir)
     if not root.is_dir():
