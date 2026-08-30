@@ -28,6 +28,31 @@ _SMALL_MODEL_SPECS = (
         min_transformers_version="4.37.0",
         notes="Legacy Qwen2.5 baseline; prefer Qwen3.5 models for new work.",
     ),
+    # Qwen2.5 7B / 14B are the clean-cutoff backbones for the leakage-free
+    # evaluation: their pretraining stops around mid-2023, so every benchmark
+    # cutoff from 2023-07 onward is uncontaminated for them. Qwen3/Qwen3.5
+    # cannot serve that role (Qwen3.5 reports ~2026 knowledge, which covers the
+    # entire evaluation range this corpus can produce).
+    SmallModelSpec(
+        alias="qwen2.5-7b-instruct",
+        model_id="Qwen/Qwen2.5-7B-Instruct",
+        family="qwen2.5",
+        params_billions=7.62,
+        variant="instruct",
+        license_name="apache-2.0",
+        min_transformers_version="4.37.0",
+        notes="Clean-cutoff backbone (~mid-2023). vLLM-compatible.",
+    ),
+    SmallModelSpec(
+        alias="qwen2.5-14b-instruct",
+        model_id="Qwen/Qwen2.5-14B-Instruct",
+        family="qwen2.5",
+        params_billions=14.77,
+        variant="instruct",
+        license_name="apache-2.0",
+        min_transformers_version="4.37.0",
+        notes="Clean-cutoff backbone (~mid-2023). vLLM-compatible.",
+    ),
     # ----- Qwen 3 (text-only, compatible with vLLM) -----
     SmallModelSpec(
         alias="qwen3-0.6b",
@@ -151,10 +176,13 @@ _MODEL_ALIAS_REDIRECTS = {
     "qwen3-4b-instruct-2507": "qwen3-4b",
     "qwen3-8b-base": "qwen3.5-9b-base",
     "qwen3-8b-instruct": "qwen3.5-9b",
-    # Old Qwen2.5 aliases
+    # Old Qwen2.5 aliases. `qwen2.5-7b-instruct` used to redirect here to
+    # `qwen2.5-3b-instruct`, which silently trained/served a 3B model whenever a
+    # 7B was requested -- a wrong-model run that raised nothing. Now that a real
+    # 7B spec exists the redirect is gone; `-base` still falls back because no
+    # base-weights spec is registered.
     "qwen2.5-3b-base": "qwen2.5-3b-instruct",
-    "qwen2.5-7b-base": "qwen2.5-3b-instruct",
-    "qwen2.5-7b-instruct": "qwen2.5-3b-instruct",
+    "qwen2.5-7b-base": "qwen2.5-7b-instruct",
 }
 
 

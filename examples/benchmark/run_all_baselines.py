@@ -73,6 +73,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start-month", type=str, default="2024-01")
     parser.add_argument("--end-month", type=str, default="2025-06")
     parser.add_argument(
+        "--min-cutoff-month",
+        type=str,
+        default=None,
+        help="Earliest cutoff to EVALUATE (>= this). Lets --start-month load "
+        "earlier papers as reading context while only scoring the test-period "
+        "cutoffs, which is the only way to fix the window count independently "
+        "of how much lead-in context the first cutoff gets.",
+    )
+    parser.add_argument(
         "--horizon-months",
         type=int,
         default=3,
@@ -82,6 +91,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--min-train-papers", type=int, default=5)
     parser.add_argument("--model-name", type=str, default=None)
+    parser.add_argument(
+        "--candidate-limit",
+        type=int,
+        default=None,
+        help="Max future papers each prediction is matched against. The matcher "
+        "issues one embedding call per (prediction, candidate) pair, so leaving "
+        "this unset is O(top_k * |future|) calls per window -- ~1.5M calls for a "
+        "208-window five-baseline sweep. Must be identical across baselines for "
+        "the rows to stay comparable.",
+    )
     parser.add_argument("--workers", type=int, default=1)
     return parser.parse_args()
 
@@ -124,6 +143,10 @@ def _run_one(strategy: str, args: argparse.Namespace, out_path: Path) -> bool:
         "--output",
         str(out_path),
     ]
+    if args.min_cutoff_month:
+        cmd += ["--min-cutoff-month", args.min_cutoff_month]
+    if args.candidate_limit:
+        cmd += ["--candidate-limit", str(args.candidate_limit)]
     if args.model_name:
         cmd += ["--model-name", args.model_name]
     print(f"\n─── {strategy} " + "─" * (52 - len(strategy)))
@@ -170,7 +193,11 @@ def main() -> int:
     print("Shared settings (identical for every baseline, so the rows compare):")
     print(f"  corpus            {args.input_dir}")
     print(f"  window            {args.start_month} .. {args.end_month}")
+    min_cutoff = args.min_cutoff_month or "(none -- every eligible month scored)"
+    cand_limit = args.candidate_limit or "(none -- exhaustive matching)"
+    print(f"  min_cutoff_month  {min_cutoff}")
     print(f"  horizon_months    {args.horizon_months}")
+    print(f"  candidate_limit   {cand_limit}")
     print(f"  top_k             {args.top_k}")
     print(f"  min_train_papers  {args.min_train_papers}")
     print(f"  baselines         {', '.join(baselines)}")

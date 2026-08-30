@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -125,7 +126,20 @@ def main() -> int:
         type=int,
         default=1,
         help="Number of topics to process in parallel (default 1). "
-        "Higher values increase throughput at the cost of more concurrent API calls.",
+        "Threads, so this only speeds up the API-bound part -- the lexical "
+        "prefilter in similarity.py is pure Python and GIL-bound. Shard with "
+        "--topics across processes to parallelise that.",
+    )
+    parser.add_argument(
+        "--topics",
+        type=str,
+        default=None,
+        help="Comma-separated topic ids to score (default: all). Exists to shard "
+        "one strategy across processes: ~95%% of a window's non-API time is "
+        "difflib.SequenceMatcher inside the prefilter, which is pure Python and "
+        "therefore GIL-bound, so --workers cannot parallelise it. Topics are "
+        "independent, so N processes over disjoint --topics sets scale linearly. "
+        "Each shard needs its own --output; merge the topic_results afterwards.",
     )
     args = parser.parse_args()
 
@@ -143,6 +157,25 @@ def main() -> int:
     if not papers:
         print("No papers found. Exiting.")
         return 1
+
+    if args.topics:
+        wanted = [t.strip() for t in args.topics.split(",") if t.strip()]
+        known = {t.id for t in topics}
+        # Reject unknown ids rather than silently scoring fewer topics: a typo in
+        # one shard of a sharded run would otherwise drop those topics from the
+        # merged result, and the aggregate would look complete.
+        unknown = [t for t in wanted if t not in known]
+        if unknown:
+            print(
+                f"Unknown topic id(s): {', '.join(unknown)}.\n"
+                f"Known ids: {', '.join(sorted(known))}",
+                file=sys.stderr,
+            )
+            return 2
+        selected = set(wanted)
+        topics = [t for t in topics if t.id in selected]
+        print(f"Sharded to {len(topics)} topic(s): {', '.join(t.id for t in topics)}")
+
     for topic_id, topic_papers in grouped.items():
         print(f"  {topic_id}: {len(topic_papers)} papers")
 

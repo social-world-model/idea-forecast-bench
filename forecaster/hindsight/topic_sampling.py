@@ -93,12 +93,23 @@ FIXED_TOPIC_HINDSIGHT_EPISODES: tuple[TopicHindsightEpisode, ...] = (
         future_start_date="2024-04-01",
         future_end_date="2024-06-30",
     ),
-    TopicHindsightEpisode(
-        episode_id="E6",
-        cutoff_date="2024-06-30",
-        future_start_date="2024-07-01",
-        future_end_date="2024-09-30",
-    ),
+    # E6 (cutoff 2024-06-30, future 2024-07..09) is deliberately absent. The
+    # LAST episode's future window sets the earliest cutoff MDF can be evaluated
+    # on without training-set contamination: with E6 present the labels cite
+    # papers through 2024-09, so evaluation could only start at 2024-10. Ending
+    # at E5 stops the labels at 2024-06, which lines the boundary up exactly
+    # with gpt-4.1's 2024-06 pretraining cutoff -- the evaluation range is then
+    # pinned by an external fact about the baseline model rather than by our own
+    # method's training data, and it gains three cutoff months (12 instead of 9).
+    #
+    # Two properties depend on the quarterly spacing, so do not switch to a
+    # monthly grid without handling both: (1) output/foresight_artifacts/indices
+    # only holds indices at these quarter boundaries -- a monthly grid needs 8
+    # more, built with examples/forecaster/build_indices.py; (2) quarterly future
+    # windows do not overlap, whereas monthly ones overlap by 2/3 and
+    # sample_future_papers_deterministically has no cross-episode dedup (its
+    # seen_paper_ids is function-local), so the same paper would be selected as
+    # the target for adjacent episodes.
 )
 
 

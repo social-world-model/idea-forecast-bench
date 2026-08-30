@@ -90,7 +90,8 @@ MAX_NUM_TOKENS = 4096
 def _unsupported_model_error(model: str) -> ValueError:
     return ValueError(
         "Unsupported model "
-        f"'{model}'. Supported model families: claude-*, gpt-4o*, gpt-5*, *gemini*, "
+        f"'{model}'. Supported model families: claude-*, gpt-4o*, gpt-4.1*, gpt-5*, "
+        "*gemini*, "
         "Together AI hosted (deepseek-ai/*, Qwen/*), "
         "or a local/Hugging Face model reference such as Qwen/Qwen3.5-2B."
     )
@@ -107,7 +108,11 @@ def _require_api_key(env_var: str, model: str) -> str:
 
 
 def _is_openai_model(model: str) -> bool:
-    return model.startswith("gpt-4o") or model.startswith("gpt-5")
+    # gpt-4.1 is listed explicitly: without it `gpt-4.1` fell through to
+    # _is_local_model, resolved to nothing, and raised "Unsupported model" --
+    # so the model could not be used as a generation backbone at all, even
+    # though gpt-4.1-mini was already the default judge.
+    return model.startswith(("gpt-4o", "gpt-4.1", "gpt-5"))
 
 
 def _is_anthropic_model(model: str) -> bool:
