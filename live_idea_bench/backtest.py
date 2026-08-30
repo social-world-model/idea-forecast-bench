@@ -59,6 +59,15 @@ class BacktestConfig:
     similarity_config: str = "similarity.yaml"
     popularity_cache_path: str | None = None  # Path to popularity cache JSON
     candidate_limit: int | None = None  # max future papers per prediction for LLM eval
+    # Generate predictions but do not score them here. The retrieve-then-judge
+    # pass (`judge-eval`) reads only cutoff_month/cutoff_date/predictions from
+    # this artifact -- it re-embeds the papers and retrieves candidates itself --
+    # so when the judge supplies the reported numbers, the embedding match run
+    # here is duplicated work: O(top_k * candidate_limit) Voyage calls plus a
+    # SequenceMatcher prefilter over every future paper, per window. Skipping it
+    # leaves every metric NaN (never 0.0, which reads as "scored zero") and
+    # stamps matching_skipped on the window and the summary.
+    skip_matching: bool = False
 
 
 def _filter_by_month(
@@ -198,6 +207,28 @@ def evaluate_at_cutoff(
     )
 
 
+def _unscored_evaluation() -> EvaluationResult:
+    """Metrics for a window whose matching was skipped.
+
+    Every value is NaN rather than 0.0 on purpose: a row of zeros is
+    indistinguishable from a model that predicted badly, and this artifact is
+    read downstream by `judge-eval`, which supplies the real numbers.
+    """
+    nan = float("nan")
+    return EvaluationResult(
+        hit_at_k=nan,
+        precision_at_k=nan,
+        mrr=nan,
+        novelty=nan,
+        diversity=nan,
+        matched_prediction_ranks=[],
+        matched_paper_ids=[],
+        coverage_at_k=nan,
+        lead_time=nan,
+        duplicate_rate=nan,
+    )
+
+
 def _summarize_windows(windows: list[BacktestWindowResult]) -> dict[str, float]:
     if not windows:
         return {
@@ -309,6 +340,23 @@ def run_backtest(
                 file=sys.stderr,
                 flush=True,
             )
+        if config.skip_matching:
+            window_results.append(
+                BacktestWindowResult(
+                    cutoff_month=cutoff,
+                    cutoff_date=cutoff_date,
+                    future_end_month=future_end,
+                    future_end_date=future_end_date,
+                    train_papers=len(train),
+                    future_papers=len(future),
+                    train_paper_ids=[paper.paper_id for paper in train],
+                    predictions=predictions,
+                    evaluation=_unscored_evaluation(),
+                    matches=[],
+                )
+            )
+            continue
+
         popularity_weights = None
         if config.popularity_cache_path:
             popularity_weights = enrich_papers_with_popularity(

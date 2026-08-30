@@ -131,6 +131,17 @@ def main() -> int:
         "--topics across processes to parallelise that.",
     )
     parser.add_argument(
+        "--skip-matching",
+        action="store_true",
+        help="Generate predictions but do not score them here. `judge-eval` reads "
+        "only cutoff_month/cutoff_date/predictions from this artifact and "
+        "re-embeds everything itself, so when the judge supplies the reported "
+        "numbers this run's embedding match is duplicated work -- it costs "
+        "O(top_k * candidate_limit) Voyage calls plus a SequenceMatcher "
+        "prefilter over every future paper, per window. Metrics come out NaN "
+        "(never 0.0) and the artifact is stamped matching_skipped.",
+    )
+    parser.add_argument(
         "--topics",
         type=str,
         default=None,
@@ -200,7 +211,17 @@ def main() -> int:
         min_cutoff_month=args.min_cutoff_month,
         similarity_config=args.similarity_config,
         candidate_limit=args.candidate_limit,
+        skip_matching=args.skip_matching,
     )
+    if args.skip_matching:
+        print(
+            "\n"
+            + "=" * 72
+            + "\n  --skip-matching: predictions only, NOT scored here.\n"
+            "  Every metric in this artifact is NaN. Score it with `judge-eval`.\n"
+            + "=" * 72,
+            flush=True,
+        )
 
     # ── Resume support: load existing partial results ────────────────
     output_path = Path(
@@ -300,7 +321,13 @@ def main() -> int:
                 "min_train_papers": args.min_train_papers,
                 "start_month": args.start_month,
                 "end_month": args.end_month,
+                "min_cutoff_month": args.min_cutoff_month,
+                "candidate_limit": args.candidate_limit,
             },
+            # Stamped on the artifact so a consumer cannot read NaN metrics as
+            # a failed run: they were never computed here by design.
+            "matching_skipped": bool(args.skip_matching),
+            "topics_shard": args.topics,
             "total_papers": len(papers),
             "total_windows": total_windows,
             "aggregate_summary": weighted,
