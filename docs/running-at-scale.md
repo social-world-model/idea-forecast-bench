@@ -103,6 +103,36 @@ topics went unrun; the merged table would have aggregated 46 topics and looked
 entirely normal. `wc -l` disagreeing with the real line count is the tell. Use
 `done < <(cat file; echo)`.
 
+### `nohup` does not survive a process-group kill
+
+A probe launched as `nohup bash job.sh &` from a tool call that also waited for
+its output vanished three minutes in: no traceback, no `Killed`, no OOM line, the
+log ending mid-progress-bar and the GPU back to 0 MiB. Nothing distinguished it
+from a run that finished without writing its output, which sends you looking at
+the write path instead of the process.
+
+The wait loop was what got reaped, and the reap terminates the whole process
+group. `nohup` only ignores SIGHUP; it does not stop a SIGTERM addressed to the
+group, so the job died with the loop that was watching it. Use `setsid` and do
+not wait for a long job in the call that launches it:
+
+```bash
+setsid nohup bash job.sh > log 2>&1 < /dev/null &
+```
+
+Confirm the detachment rather than assuming it -- the job's `sid` must differ
+from the launching shell's `pgid`:
+
+```bash
+ps -eo pid,pgid,sid,cmd | grep job.sh
+```
+
+To check an already-running job, walk its parents up to `ppid=1`. A wrapper
+script sitting in `wait` stays alive for as long as its children do, so "the
+session leader still exists" does not by itself mean the job is exposed; what
+matters is whether the chain reaches an active tool-call shell or terminates at
+init.
+
 ## Concurrency: hosted APIs and self-hosted endpoints tune in opposite directions
 
 The parameters have the same names and the correct values differ by more than an
@@ -155,6 +185,18 @@ state out of logs.
 | Counting unique `(topic, window)` pairs | 2% | 20% |
 | Reading a log written before the fix | "fix ineffective" | fix worked |
 | Rate from `PREV=0` on the first tick | 390/min | 36/min |
+| Max of every `n/12` a log printed | 8 topics at 6-7/12 | 4 topics, counted twice |
+| `${g%.*}` on a vLLM counter | 7 windows | 7,307,144 tokens |
+
+The last two are worth separating from the others. `tqdm` reprints a bar in
+place, so a log holds many lines per bar and none of them says which topic it
+belongs to: taking the last match undercounts, taking the top-N maxima counts one
+bar several times, and either way the bar advances when a window *starts*, not
+when it finishes. And vLLM's `/metrics` reports counters in scientific notation
+(`vllm:generation_tokens_total{...} 7.307144e+06`), which shell arithmetic and
+`${var%.*}` both silently mangle -- parse it with
+`python3 -c "print(int(float(...)))"`. That one was caught only because 7 was
+absurd; a truncation landing on a plausible number would not have been.
 
 Read what the code commits, not what it prints. For `judge-eval` that is
 `completed_windows` in the state file:
