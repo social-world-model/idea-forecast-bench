@@ -289,8 +289,13 @@ def main() -> int:
 
     # Helper: write current state to disk after every topic (must hold _lock)
     def _save_checkpoint() -> None:
-        resolved: str | None = None
-        if args.strategy == "predictor_llm":
+        # Which model produced these predictions. This used to resolve only for
+        # predictor_llm and be written as null for the other four strategies, so
+        # an artifact could not say which backbone generated it -- only its file
+        # path could, and that is lost the moment results are merged. Every
+        # strategy takes --model-name, so record it for every strategy.
+        resolved: str | None = args.model_name
+        if args.strategy == "predictor_llm" and not resolved:
             from live_idea_bench.config import (
                 load_predictor_config,
                 load_runtime_config,
@@ -298,7 +303,7 @@ def main() -> int:
 
             _pc = load_predictor_config()
             _rc = load_runtime_config()
-            resolved = args.model_name or _pc.default_model or _rc.model_name
+            resolved = _pc.default_model or _rc.model_name
         weighted = weighted_mean_over_topics(
             topic_results,
             (
