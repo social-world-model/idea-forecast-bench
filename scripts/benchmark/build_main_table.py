@@ -36,10 +36,16 @@ SRC = {
 ORDER = ['topic_trend','predictor_llm','summary_prompting','retrieval_prompting','memory_prompting','forecaster']
 
 def strategy_of(fp, d):
+    # Judged artifacts do not carry `strategy` at top level (the judge writes its
+    # own schema), so fall back to the filename. MDF's files are named mdf.shard*,
+    # which contains none of the strategy ids -- name it explicitly rather than
+    # letting it fall through to '?' and drop out of the printed table while
+    # still being counted in the row total.
     s = d.get('strategy')
     if s: return s
     for k in ORDER:
         if k in fp: return k
+    if '/mdf_judged' in fp or '/mdf.' in fp: return 'forecaster'
     return '?'
 
 rows = collections.defaultdict(lambda: {'w':0,'hit2':0,'hit3':0,'np':0,'fb_prior':0,'short':0})
@@ -73,7 +79,9 @@ print(f'===== 主表（judge = {TAG}）=====')
 h = f'{"backbone":<17}{"strategy":<21}{"窗":>5}{"hit@k S>=2":>12}{"hit@k S>=3":>12}{"短窗":>6}{"prior降级":>10}'
 print(h); print('-'*len(h))
 for backbone, _ in SRC:
-    for strat in ORDER:
+    strats = [x for x in ORDER if rows.get((backbone, x))] + \
+             [x for (b, x) in rows if b == backbone and x not in ORDER]
+    for strat in strats:
         v = rows.get((backbone, strat))
         if not v or v['w'] == 0: continue
         print(f'{backbone:<17}{strat:<21}{v["w"]:>5}{v["hit2"]/v["w"]:>12.4f}{v["hit3"]/v["w"]:>12.4f}'
