@@ -219,7 +219,8 @@ def main() -> int:
             + "=" * 72
             + "\n  --skip-matching: predictions only, NOT scored here.\n"
             "  Every metric in this artifact is NaN. Score it with `judge-eval`.\n"
-            + "=" * 72,
+            + "="
+            * 72,
             flush=True,
         )
 

@@ -22,6 +22,7 @@ silently reported the first run's numbers.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -125,19 +126,19 @@ def load_papers_and_topics(
         print("Classifying papers by topic (this may take a minute) ...")
     grouped = classify_papers_by_topic(papers, topics)
 
+    # Write to a pid-suffixed temp file and rename into place. cache_key()
+    # is deliberately independent of --topics, so every process in a
+    # sharded run computes the same path and, on a cold cache, they all
+    # reach this write at once. Interleaved pickle.dump() calls leave a
+    # torn file that the next run's exists() check accepts: at best it
+    # raises on load, at worst it unpickles a truncated corpus and the run
+    # reports numbers off fewer papers without erroring. os.replace is
+    # atomic within a filesystem, so a reader sees either the old file or a
+    # complete new one, and concurrent writers merely overwrite each other
+    # with identical content.
+    tmp_path = cache_path.with_name(f"{cache_path.name}.{os.getpid()}.tmp")
     try:
         resolved_cache_dir.mkdir(parents=True, exist_ok=True)
-        # Write to a pid-suffixed temp file and rename into place. cache_key()
-        # is deliberately independent of --topics, so every process in a
-        # sharded run computes the same path and, on a cold cache, they all
-        # reach this write at once. Interleaved pickle.dump() calls leave a
-        # torn file that the next run's exists() check accepts: at best it
-        # raises on load, at worst it unpickles a truncated corpus and the run
-        # reports numbers off fewer papers without erroring. os.replace is
-        # atomic within a filesystem, so a reader sees either the old file or a
-        # complete new one, and concurrent writers merely overwrite each other
-        # with identical content.
-        tmp_path = cache_path.with_name(f"{cache_path.name}.{os.getpid()}.tmp")
         with open(tmp_path, "wb") as handle:
             pickle.dump(
                 {"papers": papers, "topics": topics, "grouped": grouped}, handle
@@ -146,10 +147,8 @@ def load_papers_and_topics(
         if verbose:
             print(f"  [cache] saved to {cache_path.name}")
     except OSError as exc:
-        try:
+        with contextlib.suppress(OSError):
             tmp_path.unlink()
-        except (OSError, NameError, UnboundLocalError):
-            pass
         if verbose:
             print(f"  [cache] could not save: {exc}")
 
