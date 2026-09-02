@@ -19,7 +19,7 @@ dependencies = [
     # Config
     "pyyaml>=6.0",
     # LLM API clients
-    "anthropic>=0.40",
+    "anthropic>=1.3.0",
     "openai>=1.0.0",
     "google-generativeai",
     # HTTP
