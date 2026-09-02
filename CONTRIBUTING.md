@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-git clone https://github.com/ulab-uiuc/live-idea-bench.git
+git clone https://github.com/social-world-model/live-idea-bench.git
 cd live-idea-bench
 poetry install --with dev          # core + tooling
 pre-commit install                      # lint on commit

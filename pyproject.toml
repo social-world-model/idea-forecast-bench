@@ -40,9 +40,9 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/ulab-uiuc/live-idea-bench"
+Repository = "https://github.com/social-world-model/live-idea-bench"
 Paper = "https://arxiv.org/abs/2609.00747"
-Issues = "https://github.com/ulab-uiuc/live-idea-bench/issues"
+Issues = "https://github.com/social-world-model/live-idea-bench/issues"
 
 [project.scripts]
 idea-forecast-bench = "idea_forecast_bench.__main__:main"

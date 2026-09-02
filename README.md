@@ -7,10 +7,10 @@
 <div align="center">
 
 [![arXiv](https://img.shields.io/badge/arXiv-2609.00747-b31b1b.svg)](https://arxiv.org/abs/2609.00747)
-[![CI](https://github.com/ulab-uiuc/live-idea-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/ulab-uiuc/live-idea-bench/actions/workflows/ci.yml)
+[![CI](https://github.com/social-world-model/live-idea-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/social-world-model/live-idea-bench/actions/workflows/ci.yml)
 [![Python 3.10](https://img.shields.io/badge/python-%E2%89%A53.10-blue)](https://www.python.org/downloads/release/python-3109/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![GitHub pull request](https://img.shields.io/badge/PRs-welcome-red)](https://github.com/ulab-uiuc/live-idea-bench/pulls)
+[![GitHub pull request](https://img.shields.io/badge/PRs-welcome-red)](https://github.com/social-world-model/live-idea-bench/pulls)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 
 </div>
@@ -50,7 +50,7 @@ curl -sSL https://install.python-poetry.org | python3 -
 export PATH="$HOME/.local/bin:$PATH"
 
 # install from source
-git clone https://github.com/ulab-uiuc/live-idea-bench.git
+git clone https://github.com/social-world-model/live-idea-bench.git
 cd live-idea-bench
 poetry install
 ```
