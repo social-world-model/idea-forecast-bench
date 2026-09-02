@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
 DZ="${DZ:-data/topic_hindsight/dz.jsonl}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-output/foresight_artifacts}"
@@ -12,7 +12,7 @@ extra=()
 [[ -n "$JUDGE_MODEL_FLAG" ]] && extra+=(--model "$JUDGE_MODEL_FLAG")
 [[ -n "$JUDGE_BASE_URL_FLAG" ]] && extra+=(--judge-base-url "$JUDGE_BASE_URL_FLAG")
 
-python examples/build_rubrics.py \
+python examples/forecaster/build_rubrics.py \
   --dz "$DZ" \
   --rubrics-dir "$ARTIFACT_DIR/rubrics" \
   --report "$ARTIFACT_DIR/rubric_validation.md" \

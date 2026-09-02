@@ -41,7 +41,7 @@ examples/
 1. Build per-cutoff indices and rubrics:
 
 ```bash
-PYTHONPATH=. python examples/build_rubrics.py --mode live
+PYTHONPATH=. python examples/forecaster/build_rubrics.py --mode live
 PYTHONPATH=. python - <<'PY'
 from pathlib import Path
 from forecaster.foresight.indices import SentenceTransformerEmbedder, build_cutoff_indices

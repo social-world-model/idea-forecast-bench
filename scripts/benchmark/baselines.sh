@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
 INPUT_DIR="${INPUT_DIR:-data/csml/raw_markdown}"
 OUTPUT_DIR="${OUTPUT_DIR:-output/baselines}"
@@ -14,7 +14,7 @@ ONLY="${ONLY:-}"
 extra=()
 [[ -n "$ONLY" ]] && extra+=(--only "$ONLY")
 
-python examples/baselines.py \
+python examples/benchmark/baselines.py \
   --input-dir "$INPUT_DIR" \
   --output-dir "$OUTPUT_DIR" \
   --model-name "$MODEL" \

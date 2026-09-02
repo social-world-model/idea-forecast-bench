@@ -15,7 +15,7 @@ dry_run: false
 # a rubric-conditioned Qwen judge with the soft must-not penalty). This is the
 # reward used for the reported results. It needs a prebuilt artifact dir
 # (per-cutoff future/history indices + validated rubrics) — build it first with
-# examples/build_indices.py and the rubric generator (see forecaster/foresight/README.md).
+# examples/forecaster/build_indices.py and the rubric generator (see forecaster/foresight/README.md).
 reward_mode: foresight
 foresight_artifact_dir: output/foresight_artifacts
 foresight_embedder: sentence-transformer:sentence-transformers/allenai-specter

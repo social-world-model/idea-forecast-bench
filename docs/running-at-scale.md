@@ -308,7 +308,7 @@ one token over. Failures are per-window, so the run finishes normally with
 `total_windows=0`. Two machines burned twenty minutes each on this because the
 outward signs -- live processes, advancing tqdm, growing log files, a clean exit
 -- are identical to a healthy run. Give the endpoint headroom above
-`MAX_NUM_TOKENS` (`scripts/serve_vllm.sh` refuses anything under
+`MAX_NUM_TOKENS` (`scripts/benchmark/serve_vllm.sh` refuses anything under
 16384), and check client logs for `maximum context length` rather than
 checking that processes are alive.
 
@@ -354,7 +354,7 @@ The coordination lesson is narrower and worth stating on its own: **never pass a
 group name across a machine boundary.** "Take S0+S1" was received by a peer that
 had built its own S0 and S1. Pass the explicit member list, or partition by
 artifact filename, which cannot be reinterpreted.
-`examples/split_topics.py` is deterministic for a fixed corpus, so two
+`examples/benchmark/split_topics.py` is deterministic for a fixed corpus, so two
 machines running it on the same corpus get the same split; still pass the list.
 
 ## Four more that reported success, from the re-judging round

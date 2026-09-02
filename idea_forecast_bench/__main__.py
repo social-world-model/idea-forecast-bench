@@ -36,42 +36,42 @@ _EXAMPLES = _REPO_ROOT / "examples"
 _COMMANDS: dict[str, tuple[str, str]] = {
     # benchmark (examples/)
     "fetch": (
-        "fetch.py",
+        "benchmark/fetch.py",
         "Download an arXiv corpus the benchmark can read.",
     ),
     "baselines": (
-        "baselines.py",
+        "benchmark/baselines.py",
         "Run every baseline on one corpus and print a comparison table.",
     ),
     "benchmark": (
-        "benchmark.py",
+        "benchmark/benchmark.py",
         "Run a domain-separated backtest.",
     ),
     "judge-eval": (
-        "judge_eval.py",
+        "benchmark/judge_eval.py",
         "Retrieve-then-judge LLM evaluation of predictions.",
     ),
     # MDF forecaster
     "hindsight": (
-        "hindsight.py",
+        "forecaster/hindsight.py",
         "Extract latent-innovation training labels.",
     ),
-    "train-prior": ("train_prior.py", "SFT the innovation prior."),
+    "train-prior": ("forecaster/train_prior.py", "SFT the innovation prior."),
     "train": (
-        "train.py",
+        "forecaster/train.py",
         "GRPO-train the realization policy.",
     ),
     "infer": (
-        "infer.py",
+        "forecaster/infer.py",
         "Joint inference: prior -> realize -> select.",
     ),
     # analysis (examples/)
     "analysis": (
-        "analysis_leakage.py",
+        "benchmark/analysis_leakage.py",
         "Evaluation-validity analyses (citation/coauthor/leakage).",
     ),
     "main-table": (
-        "main_table.py",
+        "benchmark/main_table.py",
         "Assemble the main results table from judge-eval outputs.",
     ),
 }
@@ -96,9 +96,9 @@ _OPTIONAL_MODULES: dict[str, str] = {
 
 # `analysis` is a small family; let the user pick which one (default: leakage).
 _ANALYSIS_VARIANTS = {
-    "leakage": "analysis_leakage.py",
-    "citation": "analysis_citation.py",
-    "coauthor": "analysis_coauthor.py",
+    "leakage": "benchmark/analysis_leakage.py",
+    "citation": "benchmark/analysis_citation.py",
+    "coauthor": "benchmark/analysis_coauthor.py",
 }
 
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
 MODEL="${MODEL:-qwen2.5-7b-instruct}"
 INPUT_DIR="${INPUT_DIR:-data/csml/raw_markdown}"
@@ -10,7 +10,7 @@ TRAINER_CONFIG="${TRAINER_CONFIG:-grpo_train.yaml}"
 OUTPUT_DIR="${OUTPUT_DIR:-output/mdf/realization_grpo}"
 export USE_VLLM="${USE_VLLM:-1}"
 
-python examples/train.py \
+python examples/forecaster/train.py \
   --model-preset "$MODEL" \
   --input-dir "$INPUT_DIR" \
   --hindsight "$HINDSIGHT" \

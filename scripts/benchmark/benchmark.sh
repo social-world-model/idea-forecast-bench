@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
 INPUT_DIR="${INPUT_DIR:-data/csml/raw_markdown}"
 STRATEGY="${STRATEGY:-summary_prompting}"
@@ -24,7 +24,7 @@ extra=()
 [[ -n "$PRIOR_CHECKPOINT" ]] && extra+=(--prior-checkpoint "$PRIOR_CHECKPOINT")
 [[ -n "$REALIZATION_CHECKPOINT" ]] && extra+=(--realization-checkpoint "$REALIZATION_CHECKPOINT")
 
-python examples/benchmark.py \
+python examples/benchmark/benchmark.py \
   --input-dir "$INPUT_DIR" \
   --strategy "$STRATEGY" \
   --model-name "$MODEL" \

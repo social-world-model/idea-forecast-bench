@@ -42,14 +42,14 @@ wait_all() {
 }
 
 # 1. generate ---------------------------------------------------------------
-mapfile -t SHARD_TOPICS < <(SHARDS="$SHARDS" bash scripts/split_topics.sh | grep -v '^$')
+mapfile -t SHARD_TOPICS < <(SHARDS="$SHARDS" bash scripts/benchmark/split_topics.sh | grep -v '^$')
 echo "generating: ${#SHARD_TOPICS[@]} shards x strategies: $STRATEGIES"
 pids=()
 for strategy in $STRATEGIES; do
   for i in "${!SHARD_TOPICS[@]}"; do
     label="${strategy}.s${i}"
     STRATEGY="$strategy" TOPICS="${SHARD_TOPICS[$i]}" OUTPUT="$GEN_DIR/$label.json" \
-      bash scripts/benchmark.sh > "$LOG_DIR/$label.log" 2>&1 &
+      bash scripts/benchmark/benchmark.sh > "$LOG_DIR/$label.log" 2>&1 &
     pids+=("$!")
   done
 done
@@ -65,7 +65,7 @@ for artifact in "${artifacts[@]}"; do
   label="$(basename "$artifact" .json)"
   topics="$(python -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("topics_shard") or ",".join(d.get("topic_results",{})))' "$artifact")"
   INPUT_JSON="$artifact" TOPICS="$topics" OUTPUT="$JUDGED_DIR/$label.judged.json" \
-    bash scripts/judge_eval.sh > "$LOG_DIR/$label.judge.log" 2>&1 &
+    bash scripts/benchmark/judge_eval.sh > "$LOG_DIR/$label.judge.log" 2>&1 &
   pids+=("$!")
 done
 wait_all "${pids[@]}"
@@ -78,4 +78,4 @@ for judged in "$JUDGED_DIR"/*.judged.json; do
 done
 
 # 3. table ------------------------------------------------------------------
-SOURCES="$LABEL=$JUDGED_DIR/*.judged.json" bash scripts/main_table.sh
+SOURCES="$LABEL=$JUDGED_DIR/*.judged.json" bash scripts/benchmark/main_table.sh

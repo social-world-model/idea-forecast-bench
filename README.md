@@ -178,9 +178,8 @@ matchers are not comparable, so there is no flag to change the matcher.
 MDF is trained in two stages, a supervised prior and a GRPO-trained realization
 policy, then evaluated through the same `benchmark` and `judge-eval` path as every
 baseline. The commands below are the full pipeline. Every step also has a shell twin
-in `scripts/` (`hindsight.sh`, `build_indices.sh`, `build_rubrics.sh`,
-`train_prior.sh`, `train.sh`, `benchmark.sh`, `judge_eval.sh`) whose variables are
-the paper's settings, and `scripts/run_train.sh` chains all of them, skipping any
+under `scripts/forecaster/` (and `scripts/benchmark/` for the last one) whose
+variables are the paper's settings, and `scripts/run_train.sh` chains all of them, skipping any
 stage whose output already exists:
 
 ```bash
@@ -219,10 +218,10 @@ per-topic rubric. Build both (one GPU for the embedder; the rubric step calls a
 judge, either the OpenAI default or a local endpoint via `--judge-base-url`):
 
 ```bash
-python examples/build_indices.py --papers-dir /path/to/corpus \
+python examples/forecaster/build_indices.py --papers-dir /path/to/corpus \
   --hindsight data/topic_hindsight/hindsight_samples.jsonl \
   --art output/foresight_artifacts
-python examples/build_rubrics.py --mode live \
+python examples/forecaster/build_rubrics.py --mode live \
   --rubrics-dir output/foresight_artifacts/rubrics
 ```
 
@@ -241,7 +240,7 @@ idea-forecast-bench train-prior --model qwen2.5-7b-instruct \
 ### Step 4 — Realization GRPO
 
 Warm-starts from the prior adapter. The foresight judge is `gpt-4o` unless
-`JUDGE_BASE_URL` points at a local endpoint (`scripts/serve_vllm.sh`);
+`JUDGE_BASE_URL` points at a local endpoint (`scripts/benchmark/serve_vllm.sh`);
 `FORESIGHT_JUDGE_WORKERS` bounds its concurrency.
 
 ```bash
@@ -278,8 +277,8 @@ idea-forecast-bench judge-eval --input-json output/backtest/forecaster.json \
 A full sweep is 624 windows per (strategy, backbone), which is too slow for one
 process: the work between API calls is GIL-bound, so the run is sharded by topic
 across processes. One script does the whole thing with the paper's settings as
-defaults, calling `scripts/split_topics.sh`, `benchmark.sh`, `judge_eval.sh` and
-`main_table.sh` in turn:
+defaults, calling `split_topics.sh`, `benchmark.sh`, `judge_eval.sh` and
+`main_table.sh` under `scripts/benchmark/` in turn:
 
 ```bash
 OPENAI_API_KEY=... VOYAGE_API_KEY=... bash scripts/run_benchmark.sh
@@ -287,7 +286,7 @@ OPENAI_API_KEY=... VOYAGE_API_KEY=... bash scripts/run_benchmark.sh
 ```
 
 To run a local backbone or the Qwen3.5-9B judge, serve it with
-`scripts/serve_vllm.sh` and point `OPENAI_BASE_URL` at it. Two settings
+`scripts/benchmark/serve_vllm.sh` and point `OPENAI_BASE_URL` at it. Two settings
 fail silently when wrong. The served model name decides routing: generation only
 goes to `OPENAI_BASE_URL` for names starting with `gpt-4o`, `gpt-4.1` or `gpt-5`, so
 serve a local backbone under an alias such as `gpt-4o-qwen7b` and pass the judge's
@@ -295,7 +294,7 @@ own name with `JUDGE_MODEL`. The context length must be at least 16384, because
 the client requests 4096 output tokens and the longest prompts are about 4100.
 
 ```bash
-SERVED_NAMES="gpt-4o-qwen7b" bash scripts/serve_vllm.sh /models/Qwen2.5-7B-Instruct 31000
+SERVED_NAMES="gpt-4o-qwen7b" bash scripts/benchmark/serve_vllm.sh /models/Qwen2.5-7B-Instruct 31000
 MODEL=gpt-4o-qwen7b LABEL=Qwen2.5-7B OPENAI_BASE_URL=http://127.0.0.1:31000/v1 OPENAI_API_KEY=EMPTY \
   VOYAGE_API_KEY=... bash scripts/run_benchmark.sh
 ```
@@ -326,7 +325,11 @@ forecaster/                 # MDF: Mode-Decomposition Forecaster
 └── foresight/              # future-grounded reward, indices, rubrics
 
 examples/                   # one Python entry script per CLI command
-scripts/                    # one shell twin per example, plus run_benchmark.sh and run_train.sh
+├── benchmark/              # fetch, baselines, benchmark, judge_eval, main_table, analysis_*
+└── forecaster/             # hindsight, build_indices, build_rubrics, train_prior, train, infer
+scripts/                    # one shell twin per example (same layout), plus:
+├── run_benchmark.sh        # split -> sharded generate -> judge -> table
+└── run_train.sh            # labels -> reward artifacts -> prior SFT -> GRPO -> generate -> judge
 config/                     # YAML config, including the 52-topic taxonomy
 docs/                       # running-at-scale notes
 ```

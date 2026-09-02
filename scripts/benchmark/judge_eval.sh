@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
 INPUT_JSON="${INPUT_JSON:-output/backtest/summary_prompting.json}"
 INPUT_DIR="${INPUT_DIR:-data/csml/raw_markdown}"
@@ -21,7 +21,7 @@ extra=()
 [[ -n "$JUDGE_MODEL_FLAG" ]] && extra+=(--judge-model "$JUDGE_MODEL_FLAG")
 [[ -n "$JUDGE_BASE_URL_FLAG" ]] && extra+=(--judge-base-url "$JUDGE_BASE_URL_FLAG")
 
-python examples/judge_eval.py \
+python examples/benchmark/judge_eval.py \
   --input-json "$INPUT_JSON" \
   --papers-dir "$INPUT_DIR" \
   --output "$OUTPUT" \
