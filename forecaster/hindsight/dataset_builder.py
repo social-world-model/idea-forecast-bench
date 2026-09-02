@@ -108,13 +108,23 @@ def load_hindsight_samples_jsonl(path: str | Path) -> list[HindsightSample]:
     Returns:
         List of HindsightSample objects sorted by (cutoff_month, published_date).
     """
+    from forecaster.foresight.cutoffs import TRAIN_CUTOFF_MAX
+
     path = Path(path)
     samples: list[HindsightSample] = []
+    dropped = 0
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line:
             continue
         row = json.loads(line)
+        # A hindsight file built before the training window was tightened can
+        # carry episodes whose future window overlaps evaluation. Training on
+        # them leaks the test period, so they are dropped here rather than
+        # trusted because the file exists.
+        if str(row["cutoff_date"])[:10] > TRAIN_CUTOFF_MAX:
+            dropped += 1
+            continue
         innovation = Innovation(
             base_direction=str(row["innovation"]["base_direction"]),
             operator=str(row["innovation"]["operator"]),
@@ -137,4 +147,11 @@ def load_hindsight_samples_jsonl(path: str | Path) -> list[HindsightSample]:
             s.future_paper_id,
         ),
     )
+    if dropped:
+        logger.warning(
+            "dropped %d hindsight rows with cutoff_date > %s (training must not "
+            "see the evaluation window)",
+            dropped,
+            TRAIN_CUTOFF_MAX,
+        )
     return samples

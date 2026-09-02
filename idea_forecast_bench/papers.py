@@ -8,6 +8,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import IO, Any
 
+from idea_forecast_bench.atomic import atomic_write_bytes
 from idea_forecast_bench.models import PaperRecord
 
 PathLike = str | Path
@@ -649,8 +650,8 @@ def load_papers_from_markdown(
                     f"[papers] Loaded {len(cached)} papers from cache ({cache_file.name})"
                 )
                 return cached
-        except Exception:
-            pass  # stale/corrupt cache — rebuild
+        except Exception as exc:
+            print(f"[papers] cache {cache_file.name} unreadable ({exc}); rebuilding")
 
     if workers is None:
         workers = _default_workers()
@@ -723,11 +724,12 @@ def load_papers_from_markdown(
     # --- Save to cache ---
     if use_cache and results:
         try:
-            with open(cache_file, "wb") as f:
-                pickle.dump(results, f, protocol=pickle.HIGHEST_PROTOCOL)
+            atomic_write_bytes(
+                cache_file, pickle.dumps(results, protocol=pickle.HIGHEST_PROTOCOL)
+            )
             print(f"[papers] Cached {len(results)} papers to {cache_file.name}")
-        except Exception:
-            pass  # non-fatal
+        except OSError as exc:
+            print(f"[papers] could not write cache {cache_file.name}: {exc}")
 
     return results
 

@@ -6,6 +6,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from idea_forecast_bench.atomic import atomic_write_text
+
 
 class RunState:
     """Persists embeddings and judge decisions across runs."""
@@ -160,10 +162,7 @@ class RunState:
             "completed_windows": self._data["completed_windows"],
             "window_outputs": self._data["window_outputs"],
         }
-        tmp = self.path.with_suffix(".tmp")
-        tmp.parent.mkdir(parents=True, exist_ok=True)
-        tmp.write_text(json.dumps(main, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(self.path)
+        atomic_write_text(self.path, json.dumps(main, ensure_ascii=False))
         self._last_flush_time = now
 
     def _flush_embeddings(self, *, force: bool = False) -> None:
@@ -178,10 +177,7 @@ class RunState:
             "paper_embeddings": self._data["paper_embeddings"],
             "pred_embeddings": self._data["pred_embeddings"],
         }
-        tmp = self.embeddings_path.with_suffix(".tmp")
-        tmp.parent.mkdir(parents=True, exist_ok=True)
-        tmp.write_text(json.dumps(emb, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(self.embeddings_path)
+        atomic_write_text(self.embeddings_path, json.dumps(emb, ensure_ascii=False))
         self._last_emb_flush_time = now
 
     def force_flush(self) -> None:

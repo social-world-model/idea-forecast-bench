@@ -278,7 +278,13 @@ def main() -> int:
     ap.add_argument(
         "--topics", default="", help="comma-separated topic_ids; empty = top-N by count"
     )
-    ap.add_argument("--n-topics", type=int, default=5)
+    ap.add_argument(
+        "--n-topics",
+        type=int,
+        default=0,
+        help="Build rubrics for only the N largest topics; 0 (default) = every topic. "
+        "The reward returns 0.0 for any topic without a rubric.",
+    )
     ap.add_argument("--n-per-class", type=int, default=20)
     ap.add_argument("--threshold", type=float, default=0.70)
     ap.add_argument("--mode", choices=["smoke", "live"], default="smoke")
@@ -310,7 +316,7 @@ def main() -> int:
         topics = [
             t
             for t, _ in sorted(by_topic.items(), key=lambda kv: -len(kv[1]))[
-                : args.n_topics
+                : args.n_topics or None
             ]
         ]
 

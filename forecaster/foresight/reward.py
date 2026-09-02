@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 #: Concurrent judge calls per rollout. Bounded by judge_top_r (10 by default),
 #: so this is an upper bound rather than a target. Override with
 #: FORESIGHT_JUDGE_WORKERS=1 to restore the serial behaviour.
-_JUDGE_WORKERS = max(1, int(os.environ.get("FORESIGHT_JUDGE_WORKERS", "10")))
+_JUDGE_WORKERS = max(1, int(os.environ.get("FORESIGHT_JUDGE_WORKERS") or "10"))
 
 _DBG_N = 0  # TEMP: throttle counter for gate diagnostics
 

@@ -1,87 +1,12 @@
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
-import threading
 from typing import Any
 
 from idea_forecast_bench.model_refs import resolve_model_reference
 
 logger = logging.getLogger(__name__)
-
-# ── Batch-mode state (thread-local) ────────────────────────────────────────────
-# Modes:
-#   None      — live mode (default); every call goes to the real API
-#   "collect" — intercept calls: record into collector, return "" placeholder
-#   "replay"  — intercept calls: return from cache, fall back to live if missing
-#
-# In collect mode, the optional `system_prefix` filter lets you collect only
-# calls whose system_message starts with that prefix (e.g. only "compress"
-# calls in memory_prompting).  All other calls still return "" without hitting
-# the live API.  The optional `cache` dict pre-seeds results so that already-
-# known responses (e.g. compress results in round-2 of memory_prompting) are
-# served from cache rather than collected again.
-
-_batch_tls = threading.local()
-
-
-def _req_key(
-    model: str,
-    system_message: str,
-    msg: str,
-    reasoning_effort: str | None,
-    temperature: float,
-) -> str:
-    """Stable SHA-256 key for a specific LLM request."""
-    content = (
-        f"{model}\x00{reasoning_effort or ''}\x00{temperature}\x00"
-        f"{system_message}\x00{msg}"
-    )
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()
-
-
-def batch_set_collect(
-    collector: dict[str, dict[str, Any]],
-    cache: dict[str, str] | None = None,
-    system_prefix: str | None = None,
-) -> None:
-    """Switch current thread to collect mode.
-
-    Parameters
-    ----------
-    collector:
-        Dict to write collected requests into.  Key = request hash,
-        value = request parameter dict.  Shared across threads; Python's
-        GIL makes dict item assignment atomic so no extra lock is needed.
-    cache:
-        Optional pre-seeded responses (key → response text).  Cache hits
-        are returned directly without collecting or calling the live API.
-        Use this in round-2 of memory_prompting to serve compress results.
-    system_prefix:
-        If set, only collect calls whose system_message starts with this
-        string.  Non-matching calls still return "" (no live API call).
-    """
-    _batch_tls.mode = "collect"
-    _batch_tls.collector = collector
-    _batch_tls.cache = cache if cache is not None else {}
-    _batch_tls.system_prefix = system_prefix
-
-
-def batch_set_replay(cache: dict[str, str]) -> None:
-    """Switch current thread to replay mode (serve from cache, fall back to live)."""
-    _batch_tls.mode = "replay"
-    _batch_tls.cache = cache
-    _batch_tls.collector = None
-    _batch_tls.system_prefix = None
-
-
-def batch_clear() -> None:
-    """Reset current thread to live mode."""
-    _batch_tls.mode = None
-    _batch_tls.collector = None
-    _batch_tls.cache = {}
-    _batch_tls.system_prefix = None
 
 
 MAX_NUM_TOKENS = 4096
@@ -282,51 +207,6 @@ def get_response_from_llm(
     system_message = _sanitize_text(system_message)
     if msg_history is None:
         msg_history = []
-
-    # ── Batch-mode interception ────────────────────────────────────────────────
-    _mode = getattr(_batch_tls, "mode", None)
-    if _mode in ("collect", "replay"):
-        _key = _req_key(model, system_message, msg, reasoning_effort, temperature)
-        _cache: dict[str, str] = getattr(_batch_tls, "cache", {}) or {}
-
-        # Cache hit: return stored response (works in both collect and replay modes)
-        if _key in _cache:
-            _content = _cache[_key]
-            _hist = (msg_history or []) + [
-                {"role": "user", "content": msg},
-                {"role": "assistant", "content": _content},
-            ]
-            return _content, _hist
-
-        if _mode == "collect":
-            _sys_prefix = getattr(_batch_tls, "system_prefix", None)
-            if _sys_prefix is None or system_message.startswith(_sys_prefix):
-                _collector: dict[str, dict[str, Any]] = getattr(
-                    _batch_tls, "collector", {}
-                )
-                _collector[_key] = {
-                    "model": model,
-                    "system_message": system_message,
-                    "msg": msg,
-                    "reasoning_effort": reasoning_effort,
-                    "temperature": temperature,
-                    "top_p": top_p,
-                    "seed": seed,
-                }
-            # Return placeholder — do NOT call live API in collect mode
-            _hist = (msg_history or []) + [
-                {"role": "user", "content": msg},
-                {"role": "assistant", "content": ""},
-            ]
-            return "", _hist
-
-        # replay mode, key not in cache → fall through to live API (safety fallback)
-        logger.warning(
-            "batch replay: cache miss for key=%s model=%s — falling back to live API",
-            _key[:12],
-            model,
-        )
-    # ── End batch-mode interception ────────────────────────────────────────────
 
     if _is_anthropic_model(model):
         new_msg_history = msg_history + [

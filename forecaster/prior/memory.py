@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import contextlib
 import json
 import math
-import os
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +13,7 @@ from forecaster.models import (
     memory_inventory_from_dict,
     memory_inventory_to_dict,
 )
+from idea_forecast_bench.atomic import atomic_write_text
 from idea_forecast_bench.papers import date_to_ordinal, month_start_date
 
 _RECENCY_DECAY_PER_MONTH: float = 0.9
@@ -147,15 +145,7 @@ class MemoryStore:
         data = json.dumps(
             memory_inventory_to_dict(self._inventory), indent=2, ensure_ascii=False
         )
-        fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                f.write(data)
-            os.replace(tmp_path, path)
-        except Exception:
-            with contextlib.suppress(OSError):
-                os.unlink(tmp_path)
-            raise
+        atomic_write_text(path, data)
 
     def append(
         self,

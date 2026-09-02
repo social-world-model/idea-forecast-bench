@@ -154,8 +154,12 @@ def main() -> int:
         print("No papers found. Exiting.")
         return 1
 
-    if args.topics:
+    if args.topics is not None:
         wanted = [t.strip() for t in args.topics.split(",") if t.strip()]
+        if not wanted:
+            # An empty shard must fail, not silently widen to every topic.
+            print("--topics was given but is empty.", file=sys.stderr)
+            return 2
         known = {t.id for t in topics}
         # Reject unknown ids rather than silently scoring fewer topics: a typo in
         # one shard of a sharded run would otherwise drop those topics from the
@@ -263,7 +267,6 @@ def main() -> int:
                 1 for v in topic_results.values() if v.get("backtest") is not None
             )
             print(f"  [resume] found {_resumed} completed topics in {output_path}")
-            topic_results = {}
 
     print(f"\nRunning per-topic backtest (horizon={args.horizon_months}m) ...\n")
     total_windows = sum(
@@ -281,7 +284,7 @@ def main() -> int:
         # path could, and that is lost the moment results are merged. Every
         # strategy takes --model-name, so record it for every strategy.
         resolved: str | None = args.model_name
-        if args.strategy == "predictor_llm" and not resolved:
+        if not resolved:
             from idea_forecast_bench.config import (
                 load_predictor_config,
                 load_runtime_config,

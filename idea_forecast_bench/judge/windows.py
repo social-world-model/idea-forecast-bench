@@ -151,6 +151,7 @@ def process_window(
                 "method_score": rep_decision["method_score"],
                 "specificity_score": rep_decision["specificity_score"],
                 "novelty": novelty,
+                "metadata": dict(pred.metadata),
                 "top_candidates": [
                     {
                         "paper_id": pid,

@@ -13,6 +13,7 @@ from typing import Any
 
 import openai
 
+from idea_forecast_bench.atomic import atomic_write_text
 from idea_forecast_bench.backtest import weighted_mean_over_topics
 from idea_forecast_bench.config import load_topics
 from idea_forecast_bench.judge.config import (
@@ -135,6 +136,12 @@ def main() -> int:
 
     saved = json.loads(Path(args.input_json).read_text(encoding="utf-8"))
     cfg = saved.get("config", {})
+    # Generator provenance travels with the judged artifact, so main-table can
+    # read the strategy and backbone instead of guessing from file names.
+    args.source_provenance = {
+        key: saved.get(key)
+        for key in ("strategy", "model_name", "matching_skipped", "topics_shard")
+    }
     start_month = cfg.get("start_month", "2023-01")
     end_month = cfg.get("end_month", "2025-06")
     horizon_months = cfg.get("horizon_months", 3)
@@ -147,14 +154,13 @@ def main() -> int:
     print(f"Loaded {len(papers)} papers", flush=True)
 
     topics = load_topics(args.topics_config)
-    grouped = classify_papers_by_topic(papers, topics)
-
     if args.topics:
         topic_filter = {t.strip() for t in args.topics.split(",")}
         topics = [t for t in topics if t.id in topic_filter]
         print(
             f"Running on {len(topics)} topic(s): {[t.id for t in topics]}", flush=True
         )
+    grouped = classify_papers_by_topic(papers, topics)
 
     topic_results: dict[str, Any] = {}
     total_windows = 0
@@ -241,14 +247,13 @@ def _write_output(
         "cluster_k": args.cluster_k,
         "match_pm_threshold": MATCH_PM_THRESHOLD,
         "match_s_threshold": MATCH_S_THRESHOLD,
+        **getattr(args, "source_provenance", {}),
         "config": cfg,
         "total_windows": total_windows,
         "aggregate_summary": aggregate or _compute_aggregate(topic_results),
         "topic_results": topic_results,
     }
-    tmp = out_path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-    tmp.replace(out_path)
+    atomic_write_text(out_path, json.dumps(payload, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

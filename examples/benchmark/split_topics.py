@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import sys
 
@@ -10,9 +10,11 @@ from idea_forecast_bench.paper_cache import load_papers_and_topics
 
 def balanced_split(counts: dict[str, int], shards: int) -> list[list[str]]:
     """Greedy longest-processing-time assignment: heaviest topic first, each
-    to the currently lightest shard. Deterministic for a fixed corpus."""
+    to the currently lightest shard. Never returns an empty shard: the shard
+    count is capped at the number of topics."""
     if shards < 1:
         raise ValueError("shards must be >= 1")
+    shards = min(shards, len(counts))
     ordered = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
     buckets: list[list[str]] = [[] for _ in range(shards)]
     loads = [0] * shards
@@ -29,8 +31,6 @@ def main() -> int:
     )
     parser.add_argument("--input-dir", default="data/csml/raw_markdown")
     parser.add_argument("--shards", type=int, default=4)
-    # Same defaults as run_domain_backtest.py: the split must see the same
-    # papers the backtest will, or the balance is off.
     parser.add_argument("--start-month", default="2024-01")
     parser.add_argument("--end-month", default="2025-06")
     parser.add_argument(
@@ -38,15 +38,24 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    _papers, _topics, grouped = load_papers_and_topics(
-        args.input_dir, args.start_month, args.end_month, verbose=False
-    )
-    counts = {topic_id: len(papers) for topic_id, papers in grouped.items()}
+    # Only the shard lines may reach stdout: the launcher captures it. Corpus
+    # loading prints progress, so route that to stderr.
+    with contextlib.redirect_stdout(sys.stderr):
+        _papers, _topics, grouped = load_papers_and_topics(
+            args.input_dir, args.start_month, args.end_month, verbose=False
+        )
+    counts = {topic_id: len(papers) for topic_id, papers in grouped.items() if papers}
     if not counts:
         print("No topics with papers in that window.", file=sys.stderr)
         return 1
 
     buckets = balanced_split(counts, args.shards)
+    if len(buckets) < args.shards:
+        print(
+            f"only {len(counts)} topics have papers; emitting {len(buckets)} shards "
+            f"instead of {args.shards}",
+            file=sys.stderr,
+        )
     if args.json:
         print(json.dumps(buckets))
     else:

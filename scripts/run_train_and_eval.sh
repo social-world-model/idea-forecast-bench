@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 MODEL="${MODEL:-qwen2.5-7b-instruct}"
-HINDSIGHT="${HINDSIGHT:-output/hindsight_samples.jsonl}"
+HINDSIGHT="${HINDSIGHT:-data/topic_hindsight/hindsight_samples.jsonl}"
 PAPERS="${PAPERS:-data/csml/raw_markdown}"
 OUT="output/forecaster_${MODEL}"
 THRESHOLD="${THRESHOLD:-0.80}"
