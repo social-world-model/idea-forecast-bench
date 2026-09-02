@@ -101,7 +101,7 @@ transformers = ">=4.40"
 # max_prompt_length, GRPOConfig.vllm_group_port). The old ">=0.9" floor
 # resolved to trl 0.11.4, which has no GRPOTrainer at all -- so the documented
 # `python -m idea_forecast_bench train` could not run against the locked version.
-trl = ">=1.4"
+trl = ">=1.12.0"
 peft = ">=0.10"
 datasets = ">=2.18"
 accelerate = ">=0.27"
