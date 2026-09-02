@@ -1,18 +1,3 @@
-"""Local sentence embedder used as a drop-in replacement for Voyage in
-the eval pipeline and as the embedding backend for cluster-coverage and
-novelty rewards during GRPO training.
-
-Selection rationale:
-  * `BAAI/bge-large-en-v1.5` (1024-dim) is the strongest open en-text retriever
-    in the 0.3-1.5B size range, fits on a single A6000 alongside training
-    workloads, and produces vectors whose cosine geometry matches what the
-    KMeans / novelty code in `examples/llm_judge_eval.py` already expects.
-
-Caching is process-local: callers passing identical texts (same hash) skip
-re-encoding. This matters for the soft-reward path where each prediction is
-embedded once per training step and reused across candidate retrieval.
-"""
-
 from __future__ import annotations
 
 import hashlib

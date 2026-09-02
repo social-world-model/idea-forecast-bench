@@ -1,5 +1,3 @@
-"""ForecasterPipeline: orchestrates all 4 phases of the forecasting method."""
-
 from __future__ import annotations
 
 import json
@@ -45,8 +43,8 @@ from forecaster.prior.memory import (
 from forecaster.prior.sampler import sample_innovations
 from forecaster.prior.sft_dataset import build_sft_samples, save_sft_dataset
 from forecaster.prior.trainer import train_prior
-from live_idea_bench.llm import create_client
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.llm import create_client
+from idea_forecast_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +90,7 @@ class ForecasterPipeline:
         cutoff_months: list[str],
         horizon_months: int = 3,
     ) -> list[HindsightSample]:
-        """Phase 1: extract hindsight innovations from historical papers."""
+        """Hindsight: extract innovations from historical papers."""
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         llm_client, model = create_client(self.llm_model)
@@ -142,7 +140,7 @@ class ForecasterPipeline:
         memory_snapshots_by_cutoff: dict[str, MemoryStore] | None = None,
         config_override: SFTTrainConfig | None = None,
     ) -> str:
-        """Phase 2: train the innovation prior via SFT.
+        """Prior SFT: train the innovation prior.
 
         Returns path to checkpoint.
         """
@@ -303,7 +301,7 @@ class ForecasterPipeline:
         dry_run: bool = False,
         strict_mode: bool | None = None,
     ) -> str | None:
-        """Phase 3: train the realization module via GRPO.
+        """Realization GRPO: train the realization module.
 
         Delegates to the existing RL pipeline. Returns manifest path or None.
         """
@@ -372,7 +370,7 @@ class ForecasterPipeline:
         prior_model_path: str | None = None,
         realization_model_path: str | None = None,
     ) -> list[ScoredProposal]:
-        """Phase 4: run Algorithm 1 for joint inference.
+        """Joint inference: run Algorithm 1.
 
         Args:
             cutoff_month: The forecasting cutoff month.
@@ -381,7 +379,7 @@ class ForecasterPipeline:
                 provided, inference scores candidates with conditional log-probability
                 under p_theta(z | M_t); otherwise it falls back to memory heuristics.
             realization_model_path: Optional path to the GRPO-trained realization
-                checkpoint (from Phase 3). When provided, proposal generation uses
+                checkpoint (from realization GRPO). When provided, proposal generation uses
                 p_ψ(y|z,X) trained model instead of the generic LLM client.
 
         Returns:
@@ -455,7 +453,7 @@ class ForecasterPipeline:
         )
         fallback_events: list[dict[str, Any]] = []
 
-        logger.info("Phase 1: Hindsight extraction.")
+        logger.info("Hindsight extraction.")
         hindsight_samples = self.run_hindsight_extraction(
             cutoff_months=sorted_cutoffs,
             horizon_months=horizon_months,
@@ -477,19 +475,17 @@ class ForecasterPipeline:
         refresh_prior_checkpoint: str = ""
         refresh_memory_snapshots: dict[str, MemoryStore] = {}
         if not skip_training and training_hindsight_samples:
-            logger.info("Phase 2: Prior SFT training.")
+            logger.info("Prior SFT training.")
             prior_checkpoint = self.run_prior_training(training_hindsight_samples)
             bootstrap_prior_checkpoint = prior_checkpoint
         elif not skip_training:
-            logger.info(
-                "Phase 2: No legal training hindsight samples; skipping prior SFT."
-            )
+            logger.info("No legal training hindsight samples; skipping prior SFT.")
         else:
-            logger.info("Phase 2: Skipping prior SFT training (skip_training=True).")
+            logger.info("Skipping prior SFT training (skip_training=True).")
 
         realization_model_path: str | None = None
         if not skip_training and train_cutoffs:
-            logger.info("Phase 3: Realization GRPO training.")
+            logger.info("Realization GRPO training.")
             manifest_path = self.run_realization_training(
                 cutoff_months=train_cutoffs,
                 horizon_months=horizon_months,
@@ -498,16 +494,14 @@ class ForecasterPipeline:
             )
             realization_model_path = _extract_realization_model_path(manifest_path)
             if realization_model_path:
-                logger.info(
-                    "Phase 3 artifact: realization model at %s", realization_model_path
-                )
+                logger.info("Realization model at %s", realization_model_path)
             else:
                 if use_strict_eval:
                     raise RuntimeError(
                         "Strict mode requires a realization artifact for joint inference."
                     )
                 logger.info(
-                    "Phase 3: No realization model checkpoint found; Phase 4 will use demo LLM fallback."
+                    "No realization model checkpoint found; inference will use the demo LLM fallback."
                 )
                 fallback_events.append(
                     {
@@ -517,11 +511,9 @@ class ForecasterPipeline:
                     }
                 )
         elif not skip_training:
-            logger.info(
-                "Phase 3: No train cutoffs available; skipping realization training."
-            )
+            logger.info("No train cutoffs available; skipping realization training.")
         else:
-            logger.info("Phase 3: Skipping realization training (skip_training=True).")
+            logger.info("Skipping realization training (skip_training=True).")
             if not realization_model_path and not use_strict_eval:
                 fallback_events.append(
                     {
@@ -539,7 +531,7 @@ class ForecasterPipeline:
             and prior_checkpoint
             and realization_model_path
         ):
-            logger.info("Phase 3.5: Prior refresh via offline replay.")
+            logger.info("Prior refresh via offline replay.")
             refresh_prior_checkpoint, refresh_memory_snapshots = self.run_prior_refresh(
                 train_cutoffs=train_cutoffs,
                 horizon_months=horizon_months,
@@ -579,7 +571,7 @@ class ForecasterPipeline:
             self._memory_store.persist(pre_inference_memory_path)
             self._memory_store.persist(self.output_dir / "memory_inventory.json")
 
-            logger.info("Phase 4: Joint inference at cutoff %s.", last_cutoff)
+            logger.info("Joint inference at cutoff %s.", last_cutoff)
             training_papers = [p for p in self.papers if p.month <= last_cutoff]
 
             if use_strict_eval and (

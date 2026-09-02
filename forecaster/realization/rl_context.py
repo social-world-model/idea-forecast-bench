@@ -1,8 +1,3 @@
-"""Assemble and cache the context shared by every RL trainer backend.
-
-Split out of pipeline.py, which had grown to 1,573 lines.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -36,7 +31,7 @@ from forecaster.realization.trainers import (
     PreparedRLContext,
     build_config_fingerprint,
 )
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 

@@ -1,8 +1,3 @@
-"""Generate realization candidates for an episode (API / local HF / heuristic).
-
-Split out of pipeline.py, which had grown to 1,573 lines.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -44,8 +39,8 @@ from forecaster.realization.strict_runtime import (
     run_strict_realization_rollout,
     serialize_strict_rollout_completion,
 )
-from live_idea_bench.llm import create_client
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.llm import create_client
+from idea_forecast_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 

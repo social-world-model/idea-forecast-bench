@@ -19,7 +19,7 @@ class VerlDatasetArtifacts:
 
 
 def build_verl_dataset_rows(
-    prompt_rows: list[dict[str, Any]], *, data_source: str = "live_idea_bench"
+    prompt_rows: list[dict[str, Any]], *, data_source: str = "idea_forecast_bench"
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for index, row in enumerate(prompt_rows):

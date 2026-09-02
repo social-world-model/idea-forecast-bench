@@ -1,16 +1,3 @@
-"""Phase-5 GRPO grouping invariant + optional in-group dedup penalty.
-
-Decision 3 (locked): TRL groups `num_generations` completions per prompt;
-the plan requires one dataset row ↔ one (cutoff_t, z) so groups naturally
-compare realizations of the *same* mode. We verify this at runtime —
-silent grouping drift here would invalidate the group-relative advantage.
-
-Asserts (load-bearing — raise, not warn):
-  * every prompt encodes exactly one (t, z)  (extra_info has the keys),
-  * within a group, all G rollouts share identical (cutoff_t, innovation),
-  * G >= 2.
-"""
-
 from __future__ import annotations
 
 import json

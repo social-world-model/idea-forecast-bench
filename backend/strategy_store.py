@@ -1,12 +1,3 @@
-"""
-Strategy store: CRUD for Strategy objects, backed by per-file JSON in backend/strategies/.
-
-A Strategy bundles:
-  - strategy_name : which IdeaStrategy implementation ("topic_trend", …)
-  - params        : strategy hyper-params (recent_months, min_keyword_freq)
-  - config        : BacktestConfig fields + data_dir
-"""
-
 import json
 import os
 import uuid
@@ -24,13 +15,13 @@ from backend.strategy_records import (
     _normalize_strategy,
     _normalize_topic_runs,
 )
-from live_idea_bench.config import TopicDefinition, load_topics
-from live_idea_bench.models import PaperRecord
-from live_idea_bench.papers import load_papers_from_markdown
-from live_idea_bench.topics import classify_papers_by_topic
+from idea_forecast_bench.config import TopicDefinition, load_topics
+from idea_forecast_bench.models import PaperRecord
+from idea_forecast_bench.papers import load_papers_from_markdown
+from idea_forecast_bench.topics import classify_papers_by_topic
 
 if TYPE_CHECKING:
-    from live_idea_bench.strategy.base import IdeaStrategy
+    from idea_forecast_bench.strategy.base import IdeaStrategy
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DATA_DIR = PROJECT_ROOT / "data" / "arxiv_csml" / "raw_markdown"
@@ -48,7 +39,7 @@ def _path(strategy_id: str) -> Path:
 
 
 def _runtime_default_data_dir() -> Path:
-    override = os.environ.get("LIVE_IDEA_BENCH_DATA_DIR", "").strip()
+    override = os.environ.get("IDEA_FORECAST_BENCH_DATA_DIR", "").strip()
     if not override:
         return DEFAULT_DATA_DIR
     return Path(override).expanduser()
@@ -285,8 +276,8 @@ def load_papers_for_strategy(strategy: dict[str, Any]) -> list[PaperRecord]:
 
 
 def _make_strategy_obj(s: dict[str, Any]) -> "IdeaStrategy":
-    """Instantiate the IdeaStrategy from the live_idea_bench registry."""
-    from live_idea_bench.strategy.execution import build_strategy
+    """Instantiate the IdeaStrategy from the idea_forecast_bench registry."""
+    from idea_forecast_bench.strategy.execution import build_strategy
 
     return build_strategy(s)
 
@@ -328,7 +319,7 @@ def _collect_mode_errors(topic_runs: list[dict[str, Any]], mode: str) -> str | N
 
 def run_backtest_sync(strategy_id: str) -> None:
     """Run backtest synchronously and persist the result."""
-    from live_idea_bench.strategy.execution import run_strategy_backtest
+    from idea_forecast_bench.strategy.execution import run_strategy_backtest
 
     s = _read(strategy_id)
     if s is None:
@@ -416,7 +407,7 @@ def run_generation_sync(strategy_id: str, cutoff_date: str | None = None) -> Non
         if not cutoff_date:
             raise ValueError("cutoff_date is required for generation")
 
-        from live_idea_bench.strategy.execution import run_strategy_generation
+        from idea_forecast_bench.strategy.execution import run_strategy_generation
 
         papers = _load_papers(s)
         topic_papers = _classify_strategy_papers(papers, topics)

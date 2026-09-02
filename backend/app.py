@@ -47,7 +47,7 @@ def _env_int(name: str, default: int) -> int:
 
 
 def _cors_origins() -> list[str]:
-    raw = os.environ.get("LIVE_IDEA_CORS_ORIGINS", "").strip()
+    raw = os.environ.get("IDEA_FORECAST_CORS_ORIGINS", "").strip()
     if raw:
         return [origin.strip() for origin in raw.split(",") if origin.strip()]
     return [
@@ -59,14 +59,14 @@ def _cors_origins() -> list[str]:
 
 
 def _admin_token() -> str:
-    return os.environ.get("LIVE_IDEA_ADMIN_TOKEN", "").strip()
+    return os.environ.get("IDEA_FORECAST_ADMIN_TOKEN", "").strip()
 
 
 def _request_admin_token() -> str:
     bearer = request.headers.get("Authorization", "").strip()
     if bearer.lower().startswith("bearer "):
         return bearer[7:].strip()
-    return request.headers.get("X-Live-Idea-Admin-Token", "").strip()
+    return request.headers.get("X-Idea-Forecast-Admin-Token", "").strip()
 
 
 def _auth_bypass_enabled() -> bool:
@@ -98,7 +98,7 @@ CORS(
 
 
 def _bootstrap_leaderboard_async() -> None:
-    if not _env_flag("LIVE_IDEA_BOOTSTRAP_BACKTEST", True):
+    if not _env_flag("IDEA_FORECAST_BOOTSTRAP_BACKTEST", True):
         return
 
     def _worker() -> None:
@@ -137,7 +137,7 @@ def guard_protected_write_endpoints() -> None:
     expected = _admin_token()
     if not expected:
         raise APIError(
-            "Protected write endpoints are disabled until LIVE_IDEA_ADMIN_TOKEN is configured",
+            "Protected write endpoints are disabled until IDEA_FORECAST_ADMIN_TOKEN is configured",
             status_code=503,
             code="admin_token_not_configured",
         )
@@ -225,7 +225,7 @@ def healthz() -> Response | tuple[Response, int]:
         {
             "status": "ok",
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "service": "live-idea-bench-backend",
+            "service": "idea-forecast-bench-backend",
         }
     )
 
@@ -332,7 +332,7 @@ def api_strategy_generate(strategy_id: str) -> tuple[Response, int]:
     cutoff_date_raw = payload.get("cutoff_date")
     if not isinstance(cutoff_date_raw, str) or not cutoff_date_raw.strip():
         raise APIError("cutoff_date is required (YYYY-MM-DD)", status_code=400)
-    from live_idea_bench.papers import normalize_date
+    from idea_forecast_bench.papers import normalize_date
 
     try:
         cutoff_date = normalize_date(cutoff_date_raw.strip())

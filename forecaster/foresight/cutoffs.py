@@ -1,12 +1,3 @@
-"""Temporal window constants and leakage assertions for the Foresight plan.
-
-Locked design decision (see memory: foresight-rl-plan-decisions):
-- train cutoffs:        t <= 2024-06
-- train future window:  ends at  <= 2024-09 (3-month horizon from the latest train cutoff)
-- rubric held-out:      cutoff <= 2024-06, positives drawn from 2024-07..2024-09
-- test cutoffs:         t >= 2024-10
-"""
-
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -14,11 +5,11 @@ from datetime import date
 
 # These are the load-bearing dates. Changing them invalidates the
 # train/test disjointness invariant.
-TRAIN_CUTOFF_MAX: str = "2024-06-30"
-TEST_CUTOFF_MIN: str = "2024-10-01"
+TRAIN_CUTOFF_MAX: str = "2024-03-31"
+TEST_CUTOFF_MIN: str = "2024-07-01"
 # No paper published on or after this date may appear in any *training*
 # future index — it would leak the test window into training.
-FUTURE_WINDOW_HARD_LIMIT: str = "2024-10-01"
+FUTURE_WINDOW_HARD_LIMIT: str = "2024-07-01"
 
 
 def _to_date(s: str) -> date:
@@ -33,7 +24,7 @@ def assert_train_test_disjoint(
     train_cutoffs: Iterable[str],
     test_cutoffs: Iterable[str],
 ) -> None:
-    """Hard invariant: max(train_cutoffs) < min(test_cutoffs), both < 2024-10-01.
+    """Hard invariant: max(train_cutoffs) < FUTURE_WINDOW_HARD_LIMIT <= min(test_cutoffs).
 
     Raises:
         AssertionError: if either window is empty, the windows overlap, or

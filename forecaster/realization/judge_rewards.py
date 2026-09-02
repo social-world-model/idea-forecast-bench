@@ -1,33 +1,3 @@
-"""Per-rollout reward functions for the three GRPO experiments.
-
-Each function returns a single float in [0, 1] for a single
-``IdeaPrediction``. The GRPO trainer's ``reward_fn`` iterates these
-across the rollout group; the trainer itself handles the
-group-relative advantage normalization, so we only need each per-rollout
-signal to be informative and bounded.
-
-  * ``compute_novelty_reward`` — semantic novelty against the train corpus
-    via local-embedding cosine. Replaces the token-Jaccard variant in
-    ``forecaster.realization.reward._novelty_score``.
-
-  * ``compute_coverage_reward`` — for a single prediction, mean over the
-    k future-paper clusters of the prediction's max cosine to that
-    cluster, only counting clusters above a similarity gate. The
-    original ``_cluster_coverage`` in ``examples/llm_judge_eval.py`` is
-    aggregate; this is a per-rollout proxy that preserves the "did this
-    prediction reach the cluster?" semantic and yields enough intra-group
-    variance for GRPO to optimize.
-
-  * ``compute_soft_reward`` — retrieve top-R future-paper candidates by
-    embedding cosine, call a local LLM judge on each, return
-    (P + M + S) / 9 if the best candidate passes the match thresholds
-    (P + M >= 5 AND S >= 2), else 0. Drop-in replacement for the
-    LLM-judge metric in ``llm_judge_eval.py`` lines 645-655.
-
-All three functions accept dependency-injected clients/embedders so
-they can be tested without a vLLM server up.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -38,8 +8,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
-from live_idea_bench.models import IdeaPrediction, PaperRecord
-from live_idea_bench.similarity import idea_text, paper_text
+from idea_forecast_bench.models import IdeaPrediction, PaperRecord
+from idea_forecast_bench.similarity import idea_text, paper_text
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only import, kept off the hot path
     import openai
@@ -55,7 +25,7 @@ class SupportsEmbedding(Protocol):
 
 logger = logging.getLogger(__name__)
 
-# Reuse the exact constants from examples/llm_judge_eval.py so the GRPO
+# Reuse the exact constants from examples/benchmark/judge_eval.py so the GRPO
 # training reward and the offline eval stay numerically aligned.
 DEFAULT_TOP_R = 10
 DEFAULT_CLUSTER_K = 5
@@ -274,7 +244,7 @@ def compute_soft_reward(
 
     Returns the soft score of the highest-scoring matched candidate, or 0.0
     if no candidate passes the match thresholds. This is the per-prediction
-    analogue of ``examples/llm_judge_eval.py``'s aggregate ``soft_score``.
+    analogue of ``examples/benchmark/judge_eval.py``'s aggregate ``soft_score``.
     """
     if not future_papers:
         return 0.0

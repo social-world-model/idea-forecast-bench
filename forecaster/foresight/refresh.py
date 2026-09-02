@@ -1,14 +1,3 @@
-"""Phase-6 rubric refresh (co-evolution).
-
-Every K updates, snapshot the policy's recent rollouts, label them by
-reward (high → fresh positives, low → fresh negatives) within each topic,
-regenerate the rubric, re-validate AUC, and hot-swap. Rubric versions
-are bumped and logged so a per-step audit can detect reward hacking
-(inflated training reward + flat held-out metrics).
-
-Disabled by default — opt in via `rubric_refresh_every > 0` on the config.
-"""
-
 from __future__ import annotations
 
 import logging

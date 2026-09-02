@@ -5,8 +5,8 @@ import logging
 import re
 
 from forecaster.realization.config import SelectionConfig
-from live_idea_bench.models import IdeaPrediction, PaperRecord
-from live_idea_bench.predictor import (
+from idea_forecast_bench.models import IdeaPrediction, PaperRecord
+from idea_forecast_bench.predictor import (
     base_score,
     dedup_predictions,
     jaccard,

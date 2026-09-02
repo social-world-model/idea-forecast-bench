@@ -1,16 +1,3 @@
-"""Per-cutoff vector indices for the Foresight reward + grounding gate.
-
-Two index types per training cutoff t:
-  * FutureIndex  — over Y_{t+1} (papers published in (t, t+horizon])
-                   used by the new reward to retrieve true-future candidates.
-  * HistoryIndex — over X_{<=t} (papers available at the cutoff)
-                   used by the grounding gate (does the rollout's cited
-                   evidence retrieve close enough to anything that *did* exist?).
-
-Index storage is intentionally minimal (numpy arrays + JSON metadata).
-A faiss/hnsw backend can be swapped in later behind the `search()` API.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -28,7 +15,7 @@ from forecaster.foresight.cutoffs import (
     FUTURE_WINDOW_HARD_LIMIT,
     assert_no_test_window_leakage,
 )
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 
@@ -309,11 +296,11 @@ def build_cutoff_indices(
 ) -> dict[str, CutoffIndexBundle]:
     """Build future + history indices for every cutoff.
 
-    Uses live_idea_bench.backtest.split_train_future_by_cutoff to slice
+    Uses idea_forecast_bench.backtest.split_train_future_by_cutoff to slice
     the corpus, so the temporal semantics exactly match what the
     existing trainer dataset assumes.
     """
-    from live_idea_bench.backtest import split_train_future_by_cutoff
+    from idea_forecast_bench.backtest import split_train_future_by_cutoff
 
     bundles: dict[str, CutoffIndexBundle] = {}
     save_path: Path | None = Path(save_dir) if save_dir else None

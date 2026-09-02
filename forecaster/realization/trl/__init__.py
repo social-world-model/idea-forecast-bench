@@ -1,7 +1,3 @@
-# Shim for broken vllm_ascend plugin probe.
-# vLLM probes for this Huawei Ascend NPU plugin at import time; if a stale
-# stub is found the import crashes. We register a proper fake module so the
-# probe succeeds harmlessly. This must run before any TRL or vLLM import.
 import importlib.machinery
 import importlib.util
 import sys

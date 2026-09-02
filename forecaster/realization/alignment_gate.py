@@ -1,8 +1,3 @@
-"""Pre-training gate: does the policy beat the prompt-only baseline?
-
-Split out of pipeline.py, which had grown to 1,573 lines.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -40,7 +35,7 @@ from forecaster.realization.reward import (
 from forecaster.realization.trainers import (
     PreparedRLContext,
 )
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 

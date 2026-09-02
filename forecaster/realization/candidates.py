@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 from forecaster.realization.episodes import RLEpisode
 from forecaster.realization.reward import RLRewardEvaluation
-from live_idea_bench.models import IdeaPrediction
+from idea_forecast_bench.models import IdeaPrediction
 
 
 @dataclass

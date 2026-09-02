@@ -1,10 +1,3 @@
-"""Stage helpers for ForecasterPipeline.
-
-Split out of orchestrator.py, which had grown past the repo's 800-line cap.
-These are pure module-level helpers; the pipeline class itself stays in
-orchestrator.py.
-"""
-
 from __future__ import annotations
 
 import json
@@ -24,10 +17,10 @@ from forecaster.prior.memory import (
     hindsight_sample_available_by_cutoff,
 )
 from forecaster.realization.proposal_generator import proposal_to_idea_prediction
-from live_idea_bench.backtest import split_train_future_by_cutoff
-from live_idea_bench.models import PaperRecord
-from live_idea_bench.papers import month_start_date
-from live_idea_bench.similarity import score_prediction_list
+from idea_forecast_bench.backtest import split_train_future_by_cutoff
+from idea_forecast_bench.models import PaperRecord
+from idea_forecast_bench.papers import month_start_date
+from idea_forecast_bench.similarity import score_prediction_list
 
 logger = logging.getLogger(__name__)
 

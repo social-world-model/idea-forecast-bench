@@ -1,13 +1,3 @@
-"""Hard gates for the Phase-4 reward.
-
-Each gate is a small, side-effect-free predicate that the new
-`compute_reward` consults before doing the expensive judge call.
-
-  * format_ok(rollout_text, prompt_mode, innovation) -> bool
-  * grounded(rollout_text, history_index, embedder, threshold) -> bool
-  * operator_consistent(rollout_text, z_operator, threshold) -> bool
-"""
-
 from __future__ import annotations
 
 import logging

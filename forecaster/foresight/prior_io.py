@@ -1,12 +1,3 @@
-"""D_z ↔ prior SFT bridge.
-
-The existing prior trainer (forecaster/prior/trainer.py) takes
-`{"input": <rendered memory prompt>, "target": <innovation JSON>}` rows.
-This module converts the Phase-1 D_z (forecaster.foresight.dz) into those
-rows and exposes a thin `RawMemoryStore` so the existing sampler can be
-fed a precomputed `memory_text` string.
-"""
-
 from __future__ import annotations
 
 import json

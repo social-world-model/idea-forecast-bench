@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 from forecaster.models import strict_runtime_manifest_contract
 from forecaster.realization.io import _write_json
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.models import PaperRecord
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only helper alias
     from _typeshed import DataclassInstance

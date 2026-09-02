@@ -1,5 +1,3 @@
-"""Prompt construction for hindsight innovation extraction."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,7 +5,7 @@ from typing import Any
 
 import yaml
 
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.models import PaperRecord
 
 PROMPT_FILE = Path(__file__).parent.parent / "prompt" / "hindsight.yaml"
 

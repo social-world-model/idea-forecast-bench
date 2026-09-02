@@ -1,8 +1,3 @@
-"""Turn RL episodes into the prompt rows the trainer consumes.
-
-Split out of pipeline.py, which had grown to 1,573 lines.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -30,7 +25,7 @@ from forecaster.realization.proposal_generator import (
 from forecaster.realization.strict_runtime import (
     build_strict_interactive_messages,
 )
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 

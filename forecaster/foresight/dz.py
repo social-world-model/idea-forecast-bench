@@ -1,20 +1,3 @@
-"""D_z augmentation: turn the raw hindsight JSONL into the Phase-1 D_z.
-
-Input rows (existing `data/topic_hindsight/hindsight_samples.jsonl`):
-  {topic_id, episode_id, cutoff_date, future_paper_id, future_paper_title,
-   future_paper_published_date, innovation:{base_direction, operator, gap},
-   context_paper_count}
-
-Output rows (D_z, written by `augment_hindsight_rows`):
-  {cutoff_t, topic_id, episode_id,
-   target_z: {base_direction, operator, gap},
-   operator_closed,                    # one of CLOSED_OPERATORS ∪ {"other"}
-   source_future_id,                   # = future_paper_id
-   future_paper_published_date,        # for downstream window asserts
-   context_paper_ids: [...] | null,    # populated only if a corpus is supplied
-   memory_text: str | null}            # populated only if a corpus is supplied
-"""
-
 from __future__ import annotations
 
 import json
@@ -25,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from forecaster.foresight.cutoffs import (
-    FUTURE_WINDOW_HARD_LIMIT,
+    TRAIN_CUTOFF_MAX,
     _to_date,
 )
 from forecaster.foresight.memory import build_memory
@@ -34,8 +17,8 @@ from forecaster.foresight.operators import (
     load_operator_inventory,
     map_free_text_operator,
 )
-from live_idea_bench.backtest import split_train_future_by_cutoff
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.backtest import split_train_future_by_cutoff
+from idea_forecast_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +113,7 @@ def augment_hindsight_rows(
         horizon_months: passed through to split_train_future_by_cutoff
             when papers_by_id is provided.
         enforce_train_window: when True (the default) drop rows whose
-            cutoff_t lands on/after FUTURE_WINDOW_HARD_LIMIT. Surfaced in
+            cutoff_t lands after TRAIN_CUTOFF_MAX. Surfaced in
             `dropped_test_window`.
         summary_path: if provided, write the AugmentationSummary as JSON.
     """
@@ -138,7 +121,7 @@ def augment_hindsight_rows(
     in_path = Path(input_jsonl)
     out_path = Path(output_jsonl)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    hard_limit = _to_date(FUTURE_WINDOW_HARD_LIMIT)
+    train_max = _to_date(TRAIN_CUTOFF_MAX)
 
     summary = AugmentationSummary()
     counts: dict[str, int] = dict.fromkeys(inventory.closed_ids, 0)
@@ -160,7 +143,7 @@ def augment_hindsight_rows(
             except ValueError:
                 summary.dropped_missing_cutoff += 1
                 continue
-            if enforce_train_window and cutoff_d >= hard_limit:
+            if enforce_train_window and cutoff_d > train_max:
                 summary.dropped_test_window += 1
                 continue
 

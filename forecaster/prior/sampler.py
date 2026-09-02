@@ -1,9 +1,8 @@
-"""Sample innovation candidates from the trained prior model."""
-
 from __future__ import annotations
 
 import json
 import logging
+import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -77,6 +76,13 @@ def _detect_base_model(model_path_str: str) -> str | None:
 
 
 _PRIOR_MODEL_CACHE: dict[str, tuple[Any, Any]] = {}
+# The benchmark runs windows on a ThreadPoolExecutor (--workers), so this
+# cache is read and written concurrently. Without the lock every worker
+# misses the empty cache on the first window and loads its own full copy
+# of the model with device_map="auto" -- 8 workers OOMed a 95GB card,
+# and the caller swallows that into a silent heuristic fallback. Mirrors
+# the double-checked locking in forecaster/realization/local_generation.py.
+_PRIOR_MODEL_CACHE_LOCK = threading.Lock()
 
 
 def _load_prior_model_and_tokenizer(model_path_str: str) -> tuple[Any, Any]:
@@ -86,6 +92,17 @@ def _load_prior_model_and_tokenizer(model_path_str: str) -> tuple[Any, Any]:
     """
     if model_path_str in _PRIOR_MODEL_CACHE:
         return _PRIOR_MODEL_CACHE[model_path_str]
+
+    with _PRIOR_MODEL_CACHE_LOCK:
+        if model_path_str in _PRIOR_MODEL_CACHE:
+            return _PRIOR_MODEL_CACHE[model_path_str]
+        return _load_prior_model_and_tokenizer_locked(model_path_str)
+
+
+def _load_prior_model_and_tokenizer_locked(
+    model_path_str: str,
+) -> tuple[Any, Any]:
+    """Load under _PRIOR_MODEL_CACHE_LOCK. Callers must hold it."""
 
     try:
         import peft

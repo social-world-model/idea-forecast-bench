@@ -1,25 +1,3 @@
-"""Wire the Phase-4 reward into the TRL runner without disturbing legacy.
-
-The TRL runner already wraps a `compute_score(...)` call in a TRL-style
-`reward_fn(completions, **kwargs)`. This module exposes a single factory:
-
-    make_reward_fn(config) -> Callable
-
-When `config.reward_mode == "legacy"`, the returned callable is identical
-to the existing wrapper. When `config.reward_mode == "foresight"`, we
-load a ForesightContext from disk (indices + rubrics + embedder + judge)
-and dispatch to compute_score_v2.
-
-Artifact directory layout expected when reward_mode == "foresight":
-
-    <foresight_artifact_dir>/
-        indices/
-            future_<cutoff>.npz, future_<cutoff>.meta.json
-            history_<cutoff>.npz, history_<cutoff>.meta.json
-        rubrics/
-            <topic>.json
-"""
-
 from __future__ import annotations
 
 import json
@@ -263,7 +241,7 @@ def make_reward_fn(
                 try:
                     out.append(
                         compute_score_v2(
-                            data_source=f"live_idea_bench::{trainer_name}",
+                            data_source=f"idea_forecast_bench::{trainer_name}",
                             solution_str=sol,
                             ground_truth="",
                             extra_info=extra,
@@ -311,7 +289,7 @@ def make_reward_fn(
             try:
                 out.append(
                     compute_score(
-                        data_source=f"live_idea_bench::{trainer_name}",
+                        data_source=f"idea_forecast_bench::{trainer_name}",
                         solution_str=completion,
                         ground_truth="",
                         extra_info=extra,

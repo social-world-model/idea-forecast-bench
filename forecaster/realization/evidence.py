@@ -1,5 +1,3 @@
-"""Embedding-based evidence retrieval for the realization module."""
-
 from __future__ import annotations
 
 import logging
@@ -7,9 +5,9 @@ import re
 from difflib import SequenceMatcher
 
 from forecaster.models import Innovation
-from live_idea_bench.config import SimilarityConfig
-from live_idea_bench.models import PaperRecord
-from live_idea_bench.similarity import compute_similarity, paper_text
+from idea_forecast_bench.config import SimilarityConfig
+from idea_forecast_bench.models import PaperRecord
+from idea_forecast_bench.similarity import compute_similarity, paper_text
 
 logger = logging.getLogger(__name__)
 

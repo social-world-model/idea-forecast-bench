@@ -1,4 +1,3 @@
-# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -160,8 +159,8 @@ cython_debug/
 .idea/
 
 # Datasets and run artifacts. Anchored at the repo root on purpose: a bare
-# `**/data/*` also swallows source directories named `data` (e.g. the tracked
-# scripts under examples/data/), so new files there would be silently ignored.
+# `**/data/*` would also swallow any source directory named `data`, so new
+# files there would be silently ignored.
 /data/*
 !/data/.gitkeep
 **/keywords_results.json

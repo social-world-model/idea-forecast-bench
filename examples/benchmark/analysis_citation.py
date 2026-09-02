@@ -1,23 +1,4 @@
 #!/usr/bin/env python3
-"""Citation analysis: do hit papers cite papers from their training window?
-
-For each matched (hit) prediction, fetch the hit paper's references from the
-Semantic Scholar API and check whether any reference is a paper in the SAME
-window's training set (papers published <= cutoff for that topic). A higher
-citation rate for hit papers than for a non-hit control set suggests predictions
-capture genuine community continuity rather than arbitrary topical overlap.
-
-This targets the per-window ``train_paper_ids`` (topic-scoped, date<=cutoff) that
-llm_judge_eval.py now serializes — NOT a global union of future candidates,
-which any real arXiv paper would almost certainly cite (no discriminative power).
-
-Usage:
-    python examples/benchmark/analysis_citation.py \\
-        --input memory_prompting_llmjudge.json \\
-        --output citation_report.json \\
-        [--s2-key YOUR_SEMANTIC_SCHOLAR_API_KEY]
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -25,7 +6,7 @@ import json
 import time
 from pathlib import Path
 
-from live_idea_bench.semantic_scholar import fetch_paper
+from idea_forecast_bench.semantic_scholar import fetch_paper
 
 DEFAULT_DELAY = 1.1  # seconds between requests when no API key
 
@@ -52,7 +33,7 @@ def _require_llmjudge_schema(data: dict, source: str) -> None:
         if "train_paper_ids" not in w:
             raise SystemExit(
                 f"{source}: llm_judge_eval output predates train_paper_ids. "
-                "Re-run llm_judge_eval.py to populate per-window train ids."
+                "Re-run judge_eval.py to populate per-window train ids."
             )
         return
 

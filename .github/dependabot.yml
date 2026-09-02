@@ -1,6 +1,3 @@
-# Previously this covered pip at "/" only, on a daily cadence with no PR cap.
-# npm (frontend) and the GitHub Actions themselves -- where 14 uses of
-# deprecated @v2 actions had accumulated -- were not covered at all.
 version: 2
 updates:
   - package-ecosystem: "pip"

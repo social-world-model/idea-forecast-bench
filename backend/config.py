@@ -1,6 +1,3 @@
-# Configuration for Idea Generation
-
-# Keywords to search for in OpenReview
 KEYWORDS = [
     "Diffusion Language Model",
     "Multimodal Visual Reasoning",

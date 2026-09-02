@@ -1,24 +1,8 @@
-"""Phase-4 reward: retrieve-then-judge against the per-cutoff future index.
-
-Drop-in replacement for the old composite paper-faithful reward. Exposed
-two ways:
-
-  1. `compute_foresight_reward(rollout_text, payload, ctx) -> float`
-     — pure function for unit tests + ablation runners.
-  2. Routed inside the live TRL reward callback via `ForesightContext`
-     installation (forecaster/foresight/trainer_wiring.py, added next).
-
-Gates (any failure ⇒ 0.0):
-  * format_ok
-  * grounded (history index over X_<=t)
-  * operator_consistent (rollout-vs-z.operator)
-Retrieve from future_index[cutoff_t] (top-R) → rubric-conditioned judge
-(`forecaster.foresight.judge`). Return max of the judge scores.
-"""
-
 from __future__ import annotations
 
 import logging
+import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -40,6 +24,11 @@ from forecaster.foresight.rubric import Rubric, load_rubrics_dir
 from forecaster.models import Innovation
 
 logger = logging.getLogger(__name__)
+
+#: Concurrent judge calls per rollout. Bounded by judge_top_r (10 by default),
+#: so this is an upper bound rather than a target. Override with
+#: FORESIGHT_JUDGE_WORKERS=1 to restore the serial behaviour.
+_JUDGE_WORKERS = max(1, int(os.environ.get("FORESIGHT_JUDGE_WORKERS") or "10"))
 
 _DBG_N = 0  # TEMP: throttle counter for gate diagnostics
 
@@ -77,7 +66,7 @@ class ForesightContext:
     # Per-cutoff indices keyed by `cutoff_date` (YYYY-MM-DD).
     future_indices: dict[str, FutureIndex]
     history_indices: dict[str, HistoryIndex]
-    # Topic-keyed rubric library (Phase 2 outputs).
+    # Topic-keyed rubric library (build_rubrics.py outputs).
     rubrics: dict[str, Rubric]
     # future_paper_id -> topic_id, used to recover topic_id when the dataset's
     # extra_info doesn't carry it (HindsightSample drops topic_id upstream).
@@ -280,11 +269,22 @@ def compute_foresight_reward(
         diag["reason"] = f"no rubric for topic={payload.topic_id!r}"
         return 0.0, diag
 
-    judge_scores: list[float] = []
-    for paper_id, _retrieval_score in hits:
+    # One blocking HTTP call per retrieved candidate, and the trainer calls this
+    # once per rollout, so a GRPO step issues num_generations * judge_top_r of
+    # them -- 80 with the defaults here. Serially at ~0.83s each that is ~66s of
+    # a 185s step spent waiting on a judge server that batches requests happily.
+    # The scores are combined with max(), so order does not matter and running
+    # them concurrently changes nothing numerically.
+    def _score_one(paper_id: str) -> float:
         cand_text = _candidate_text_from_index(future, paper_id)
-        res = ctx.judge.score(payload.rollout_text, cand_text, rubric)
-        judge_scores.append(res.score)
+        return ctx.judge.score(payload.rollout_text, cand_text, rubric).score
+
+    workers = max(1, min(len(hits), _JUDGE_WORKERS))
+    if workers > 1:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            judge_scores = list(pool.map(_score_one, [pid for pid, _ in hits]))
+    else:
+        judge_scores = [_score_one(pid) for pid, _ in hits]
     best_judge = float(max(judge_scores))
     # Dense shaping (env REWARD_SIM_SHAPING; default 0.0 = original judge-only).
     # The retrieval cosine-sim to the nearest future paper is a continuous signal

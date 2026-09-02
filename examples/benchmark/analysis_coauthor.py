@@ -1,23 +1,4 @@
 #!/usr/bin/env python3
-"""Co-author analysis: do hit papers share authors with the training community?
-
-The research "community" is defined by the authors of the TRAINING-window papers
-(published <= cutoff). For each hit paper and a non-hit control paper we measure
-author overlap with that community, EXCLUDING the paper's own authors so a paper
-cannot trivially overlap with itself. Higher hit-paper overlap than control
-suggests predictions track established research groups rather than arbitrary work.
-
-The previous version built the community from the hit papers' own candidate pool
-(circular: a hit paper's authors are in the pool by construction) and did not
-exclude self-authors — both forced a non-trivial overlap regardless of leakage.
-
-Usage:
-    python examples/benchmark/analysis_coauthor.py \\
-        --input memory_prompting_llmjudge.json \\
-        --output coauthor_report.json \\
-        [--s2-key YOUR_SEMANTIC_SCHOLAR_API_KEY]
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -25,7 +6,7 @@ import json
 import time
 from pathlib import Path
 
-from live_idea_bench.semantic_scholar import fetch_paper
+from idea_forecast_bench.semantic_scholar import fetch_paper
 
 DEFAULT_DELAY = 1.1
 
@@ -46,7 +27,7 @@ def _require_llmjudge_schema(data: dict, source: str) -> None:
         if "train_paper_ids" not in w:
             raise SystemExit(
                 f"{source}: llm_judge_eval output predates train_paper_ids. "
-                "Re-run llm_judge_eval.py to populate per-window train ids."
+                "Re-run judge_eval.py to populate per-window train ids."
             )
         return
 

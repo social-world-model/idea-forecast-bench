@@ -1,10 +1,3 @@
-"""Realization RL pipeline: orchestration.
-
-The episode/prompt, candidate-generation, context-caching and alignment-gate
-stages moved to sibling modules; their public names are re-exported here so
-existing `from forecaster.realization.pipeline import ...` keeps working.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -41,7 +34,7 @@ from forecaster.realization.rl_context import (  # noqa: F401  re-export
 from forecaster.realization.trainers import (
     create_trainer_runner,
 )
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 

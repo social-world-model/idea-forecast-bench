@@ -429,7 +429,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     <div className="dashboard-container">
       <div className="dashboard-header">
         <div className="title-container">
-          <h1 className="dashboard-title">Live Idea Bench</h1>
+          <h1 className="dashboard-title">IdeaForecastBench</h1>
         </div>
         <p className="dashboard-subtitle">
           Benchmark for research idea prediction strategies - backtest on historical

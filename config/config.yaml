@@ -1,7 +1,7 @@
 model_name: "gpt-4o"
 max_context_chars: 15000
 temperature: 0.0
-# Prompt text lives under live_idea_bench/prompt/*.yaml. This file only stores runtime defaults.
+# Prompt text lives under idea_forecast_bench/prompt/*.yaml. This file only stores runtime defaults.
 # Credentials are read from the environment (OPENAI_API_KEY, ANTHROPIC_API_KEY,
 # GOOGLE_API_KEY, VOYAGE_API_KEY) -- never put a key in this file.
 
@@ -21,6 +21,6 @@ embedding:
 
 # The 52-topic taxonomy lives in exactly one place. It used to be duplicated
 # here verbatim (~800 identical lines), so editing one copy silently diverged
-# from the other: live_idea_bench/config.py read this file while
+# from the other: idea_forecast_bench/config.py read this file while
 # forecaster/hindsight/topic_sampling.py read topics_v2.yaml.
 topics_file: config/topics_v2.yaml

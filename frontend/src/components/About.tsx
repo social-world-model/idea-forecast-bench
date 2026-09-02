@@ -90,7 +90,7 @@ const About: React.FC = () => {
           <div className="project-features">
             <h3><span className="highlight-text">Our Mission</span></h3>
             <p className="warning-paragraph">
-              Live Idea Bench evaluates research-idea generation strategies on a shared paper stream so researchers can compare prompts, models, and heuristics under identical data windows and evaluation rules.
+              IdeaForecastBench evaluates research-idea generation strategies on a shared paper stream so researchers can compare prompts, models, and heuristics under identical data windows and evaluation rules.
             </p>
 
             <h3><span className="highlight-text">Why historical backtesting?</span></h3>

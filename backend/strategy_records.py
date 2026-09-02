@@ -1,11 +1,3 @@
-"""Normalisation of stored strategy records.
-
-Every field that reaches these functions came out of a JSON file on disk, so
-they coerce defensively rather than trusting the shape. Split out of
-strategy_store.py, which had grown past the repo's 800-line cap; the store
-itself is now about persistence and running jobs.
-"""
-
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:

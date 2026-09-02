@@ -1,41 +1,11 @@
-"""Single forecaster training entry point (prior SFT + realization GRPO, Unsloth + TRL).
-
-Phase 1 — Prior SFT: trains ``p_θ(z | M_t)`` via SFT on the hindsight dataset,
-using the memory module ``M_t`` from ``forecaster.prior.memory``.
-
-Phase 2 — Dataset prep: builds the realization GRPO prompt rows and writes
-``trainer_dataset.jsonl``.
-
-Phase 3 — Realization GRPO: trains ``p_ψ(y | z, X_{≤t})`` via GRPO with the
-verifiable rewards (evidence accuracy, operator adherence, scientific
-coherence). Warm-starts from the Phase 1 adapter so the two phases compose into
-the factorized model.
-
-Usage:
-    python examples/forecaster/train.py \\
-        --model qwen3.5-2b \\
-        --hindsight output/hindsight_samples.jsonl \\
-        --papers data/csml/raw_markdown \\
-        --output-dir output/forecaster_qwen3.5-2b
-"""
-
-from __future__ import annotations
-
 import argparse
 import json
-import logging
+import sys
 from dataclasses import replace
 from pathlib import Path
 
-from forecaster.config import SFTTrainConfig  # noqa: E402
-from forecaster.hindsight.dataset_builder import (
-    load_hindsight_samples_jsonl,  # noqa: E402
-)
-from forecaster.prior.sft_dataset import (  # noqa: E402
-    build_sft_samples,
-    save_sft_dataset,
-)
-from forecaster.prior.trainer import train_prior  # noqa: E402
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 from forecaster.realization import (  # noqa: E402
     load_candidate_generation_config,
     load_episode_build_config,
@@ -43,245 +13,248 @@ from forecaster.realization import (  # noqa: E402
     load_reward_config,
     load_selection_config,
 )
-from forecaster.realization.model_zoo import resolve_small_model  # noqa: E402
+from forecaster.realization.io import _write_json  # noqa: E402
+from forecaster.realization.model_zoo import (  # noqa: E402
+    list_small_model_payloads,
+    resolve_small_model,
+)
 from forecaster.realization.pipeline import run_policy_rl_pipeline  # noqa: E402
-from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
-log = logging.getLogger("forecaster.train")
+from idea_forecast_bench.papers import load_papers_from_markdown  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
-        description="Train the forecaster (Prior SFT + Realization GRPO) with Unsloth."
+    parser = argparse.ArgumentParser(
+        description="Prepare and train RL policy checkpoints for IdeaForecastBench."
     )
-    p.add_argument(
-        "--model", default="qwen3.5-2b", help="Model preset alias (see model_zoo)."
+    parser.add_argument(
+        "--input-dir",
+        type=str,
+        default="data/csml/raw_markdown",
+        help="Directory with markdown papers.",
     )
-    p.add_argument(
-        "--hindsight", required=True, help="Path to hindsight_samples.jsonl."
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="data/rl_runs/policy_rl",
+        help="Directory for RL artifacts.",
     )
-    p.add_argument(
-        "--papers",
-        default=str(PROJECT_ROOT.parent / "md_mineru"),
-        help="Directory of markdown papers (default: ../md_mineru relative to repo root).",
+    parser.add_argument(
+        "--model-name", type=str, help="Hugging Face model id or local checkpoint path."
     )
-    p.add_argument("--output-dir", required=True, help="Top-level output directory.")
-    p.add_argument(
-        "--start-month", default=None, help="Lower bound month for loading papers."
+    parser.add_argument(
+        "--model-preset",
+        type=str,
+        help="Shortcut alias from the built-in 3B/4B model registry.",
     )
-    p.add_argument(
-        "--end-month", default=None, help="Upper bound month for loading papers."
+    parser.add_argument(
+        "--trainer",
+        type=str,
+        choices=["grpo"],
+        default="grpo",
+        help="Trainer algorithm to run (GRPO).",
     )
-    p.add_argument(
-        "--max-episodes",
-        type=int,
-        default=None,
-        help="Cap GRPO episodes for quick runs.",
+    parser.add_argument(
+        "--trainer-config",
+        type=str,
+        help="Optional trainer config file under config/rl.",
     )
-    p.add_argument(
-        "--max-grpo-rows",
-        type=int,
-        default=None,
-        help="Hard cap on the number of GRPO training rows (one row per hindsight sample). "
-        "Use this for smoke tests — --max-episodes only caps episode count, not rows.",
+    parser.add_argument(
+        "--init-policy-path",
+        type=str,
+        help="Optional checkpoint path used to warm-start GRPO.",
     )
-    # Prior SFT overrides
-    p.add_argument("--prior-epochs", type=int, default=3)
-    p.add_argument("--prior-lr", type=float, default=2e-5)
-    p.add_argument("--prior-batch-size", type=int, default=4)
-    p.add_argument("--prior-max-seq-length", type=int, default=4096)
-    p.add_argument("--prior-lora-r", type=int, default=16)
-    p.add_argument("--max-memory-entries", type=int, default=10)
-    # GRPO overrides
-    p.add_argument(
-        "--grpo-epochs",
-        type=int,
-        default=None,
-        help="Override num_train_epochs for GRPO.",
-    )
-    p.add_argument(
-        "--grpo-lr", type=float, default=None, help="Override learning_rate for GRPO."
-    )
-    p.add_argument(
-        "--num-generations",
-        type=int,
-        default=None,
-        help="GRPO group size G (must fit in VRAM).",
-    )
-    p.add_argument(
-        "--max-completion-length",
-        type=int,
-        default=None,
-        help="Override GRPO max_completion_length.",
-    )
-    p.add_argument(
-        "--max-prompt-length",
-        type=int,
-        default=None,
-        help="Override prompt length budget (used for FastLanguageModel max_seq_length sizing). "
-        "TRL 1.0.0 GRPOConfig itself no longer takes this — it's only used for the model loader.",
-    )
-    # vLLM server-mode acceleration
-    p.add_argument(
-        "--use-vllm-server",
+    parser.add_argument(
+        "--prepare-only",
         action="store_true",
-        help="Talk to a separately-started vLLM server (vllm_mode='server') for fast generation. "
-        "The wrapper script scripts/forecaster/train.sh starts the server before invoking this script.",
+        help="Prepare common artifacts and trainer datasets without training.",
     )
-    p.add_argument("--vllm-server-host", default="localhost")
-    p.add_argument("--vllm-server-port", type=int, default=8765)
-    # Skips
-    p.add_argument(
-        "--skip-prior-sft",
-        action="store_true",
-        help="Reuse existing prior_sft/final_checkpoint.",
+    parser.add_argument(
+        "--prepare-split",
+        type=str,
+        choices=["train", "validation", "test", "all"],
+        help="Episode split to materialize when used with --prepare-only.",
     )
-    p.add_argument(
-        "--skip-grpo", action="store_true", help="Skip the realization GRPO phase."
-    )
-    p.add_argument(
+    parser.add_argument(
         "--skip-alignment-check",
         action="store_true",
-        help="Skip GRPO online reward alignment gate.",
+        help="Skip the online reward alignment check for GRPO.",
     )
-    return p
-
-
-def _phase1_prior_sft(args: argparse.Namespace, output_dir: Path) -> str:
-    sft_dir = output_dir / "prior_sft"
-    final_ckpt = sft_dir / "final_checkpoint"
-    if args.skip_prior_sft and final_ckpt.exists():
-        log.info("Phase 1 skipped (reusing %s).", final_ckpt)
-        return str(final_ckpt)
-
-    log.info("Phase 1: loading hindsight samples from %s", args.hindsight)
-    samples = load_hindsight_samples_jsonl(args.hindsight)
-    log.info("Loaded %d hindsight samples.", len(samples))
-
-    sft_samples = build_sft_samples(samples, max_memory_entries=args.max_memory_entries)
-    log.info("Built %d SFT samples (memory-augmented).", len(sft_samples))
-
-    sft_dir.mkdir(parents=True, exist_ok=True)
-    save_sft_dataset(sft_samples, str(sft_dir / "dataset.jsonl"))
-
-    sft_config = SFTTrainConfig(
-        model_alias=args.model,
-        num_epochs=args.prior_epochs,
-        learning_rate=args.prior_lr,
-        per_device_batch_size=args.prior_batch_size,
-        max_seq_length=args.prior_max_seq_length,
-        max_memory_entries=args.max_memory_entries,
-        lora_r=args.prior_lora_r,
-        output_dir=str(sft_dir),
+    parser.add_argument(
+        "--max-episodes", type=int, help="Optional cap for quick experiments."
     )
-
-    checkpoint = train_prior(sft_samples, sft_config, output_dir=str(sft_dir))
-    log.info("Phase 1 done. Prior checkpoint: %s", checkpoint)
-
-    meta = {
-        "checkpoint_path": checkpoint,
-        "model_alias": args.model,
-        "num_samples": len(sft_samples),
-    }
-    (sft_dir / "train_result.json").write_text(
-        json.dumps(meta, indent=2), encoding="utf-8"
+    parser.add_argument(
+        "--start-month", type=str, help="Optional lower bound month for loading papers."
     )
-    return checkpoint
+    parser.add_argument(
+        "--end-month", type=str, help="Optional upper bound month for loading papers."
+    )
+    parser.add_argument(
+        "--episode-config",
+        type=str,
+        default="episode_build.yaml",
+        help="RL episode config file under config/rl.",
+    )
+    parser.add_argument(
+        "--candidate-config",
+        type=str,
+        default="candidate_generation.yaml",
+        help="Candidate generation config file under config/rl.",
+    )
+    parser.add_argument(
+        "--reward-config",
+        type=str,
+        default="reward.yaml",
+        help="Reward config file under config/rl.",
+    )
+    parser.add_argument(
+        "--selection-config",
+        type=str,
+        default="selection.yaml",
+        help="Selector config file under config/rl.",
+    )
+    parser.add_argument(
+        "--similarity-config",
+        type=str,
+        default="similarity.yaml",
+        help="Similarity config used for reward evaluation.",
+    )
+    parser.add_argument(
+        "--hindsight",
+        type=str,
+        default=None,
+        help="Path to hindsight_samples.jsonl for GRPO training data.",
+    )
+    parser.add_argument(
+        "--list-model-presets",
+        action="store_true",
+        help="Print the built-in small-model candidates and exit.",
+    )
+    return parser
 
 
-def _phase2_3_grpo(
-    args: argparse.Namespace,
-    output_dir: Path,
-    prior_ckpt: str | None,
-) -> dict | None:
-    if args.skip_grpo:
-        log.info("Phase 2/3 skipped (--skip-grpo).")
+_HF_MODEL_ID_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_./"
+)
+
+
+def _validate_init_policy_path(path: str | None) -> str | None:
+    if path is None:
         return None
+    p = Path(path)
+    if p.is_absolute() or "/" in path or "\\" in path:
+        resolved = p.resolve()
+        if not resolved.exists():
+            raise ValueError(f"--init-policy-path does not exist: {resolved}")
+        return str(resolved)
+    if not all(c in _HF_MODEL_ID_CHARS for c in path):
+        raise ValueError(
+            f"--init-policy-path {path!r} is not a valid local path or Hugging Face model ID."
+        )
+    return path
 
-    log.info("Phase 2: loading papers from %s", args.papers)
+
+def _resolve_model_name(args: argparse.Namespace) -> str:
+    if args.model_name:
+        return str(args.model_name)
+    if args.model_preset:
+        return resolve_small_model(str(args.model_preset)).model_id
+    raise ValueError(
+        "Either --model-name or --model-preset is required unless --list-model-presets is used."
+    )
+
+
+def _resolve_trainer_config(args: argparse.Namespace) -> tuple[str, object]:
+    if not args.trainer:
+        raise ValueError("--trainer is required unless --list-model-presets is used.")
+    explicit = str(args.trainer_config).strip() if args.trainer_config else ""
+    if args.trainer == "grpo":
+        path = explicit or "grpo_train.yaml"
+        return path, load_grpo_train_config(path)
+    raise ValueError(f"Unsupported trainer: {args.trainer}")
+
+
+def main() -> int:
+    parser = build_parser()
+    raw_args = sys.argv[1:]
+    if any(arg == "--split" or arg.startswith("--split=") for arg in raw_args):
+        parser.error(
+            "--split was removed from the training CLI. Training always uses the train split; "
+            "use --prepare-only with --prepare-split if you need validation/test/all artifacts."
+        )
+    args = parser.parse_args(raw_args)
+
+    if args.list_model_presets:
+        print(json.dumps(list_small_model_payloads(), indent=2, ensure_ascii=False))
+        return 0
+    if args.prepare_split and not args.prepare_only:
+        parser.error("--prepare-split requires --prepare-only.")
+    selected_split = args.prepare_split or "train"
+
+    input_dir = Path(args.input_dir)
     papers = load_papers_from_markdown(
-        input_dir=Path(args.papers),
+        input_dir=input_dir,
         start_month=args.start_month,
         end_month=args.end_month,
     )
     if not papers:
-        log.error("No papers loaded from %s", args.papers)
-        return None
+        print(f"No papers loaded from {input_dir}")
+        return 1
 
-    episode_config = load_episode_build_config()
+    episode_config = load_episode_build_config(args.episode_config)
+    candidate_config = load_candidate_generation_config(args.candidate_config)
+    reward_config = load_reward_config(args.reward_config)
+    selection_config = load_selection_config(args.selection_config)
+    trainer_config_path, trainer_config = _resolve_trainer_config(args)
+
+    overrides: dict[str, str] = {}
     if args.start_month:
-        episode_config = replace(episode_config, start_month=args.start_month)
+        overrides["start_month"] = args.start_month
     if args.end_month:
-        episode_config = replace(episode_config, end_month=args.end_month)
-    candidate_config = load_candidate_generation_config()
-    reward_config = load_reward_config()
-    selection_config = load_selection_config()
-    grpo_config = load_grpo_train_config()
-    grpo_overrides: dict = {}
-    if args.grpo_epochs is not None:
-        grpo_overrides["num_train_epochs"] = args.grpo_epochs
-    if args.grpo_lr is not None:
-        grpo_overrides["learning_rate"] = args.grpo_lr
-    if args.num_generations is not None:
-        grpo_overrides["num_generations"] = args.num_generations
-    if args.max_completion_length is not None:
-        grpo_overrides["max_completion_length"] = args.max_completion_length
-    if args.max_prompt_length is not None:
-        grpo_overrides["max_prompt_length"] = args.max_prompt_length
-    if grpo_overrides:
-        grpo_config = replace(grpo_config, **grpo_overrides)
+        overrides["end_month"] = args.end_month
+    if overrides:
+        episode_config = replace(episode_config, **overrides)
 
-    samples = load_hindsight_samples_jsonl(args.hindsight)
+    # Load hindsight samples for GRPO (provides innovation z per future paper)
+    hindsight_samples = None
+    if args.hindsight:
+        from forecaster.hindsight.dataset_builder import load_hindsight_samples_jsonl
 
-    grpo_dir = output_dir / "realization_grpo"
-    log.info("Phase 3: running GRPO with Unsloth (output=%s)", grpo_dir)
+        hindsight_samples = load_hindsight_samples_jsonl(args.hindsight)
+        print(
+            f"Loaded {len(hindsight_samples)} hindsight samples from {args.hindsight}"
+        )
+
     manifest = run_policy_rl_pipeline(
         papers,
-        model_name=resolve_small_model(args.model).model_id,
-        output_dir=str(grpo_dir),
+        trainer=args.trainer,
+        model_name=_resolve_model_name(args),
+        output_dir=args.output_dir,
         episode_config=episode_config,
         candidate_config=candidate_config,
         reward_config=reward_config,
+        reward_config_path=args.reward_config,
         selection_config=selection_config,
-        trainer_config=grpo_config,
-        trainer_config_path="grpo_train.yaml",
-        selection_config_path="selection.yaml",
+        trainer_config=trainer_config,
+        trainer_config_path=trainer_config_path,
+        selection_config_path=args.selection_config,
+        split=selected_split,
         max_episodes=args.max_episodes,
-        init_policy_path=prior_ckpt,
+        similarity_config_path=args.similarity_config,
+        prepare_only=args.prepare_only,
+        init_policy_path=_validate_init_policy_path(args.init_policy_path),
         skip_alignment_check=args.skip_alignment_check,
-        hindsight_samples=samples,
-        max_grpo_rows=args.max_grpo_rows,
-        use_vllm_server=args.use_vllm_server,
-        vllm_server_host=args.vllm_server_host,
-        vllm_server_port=args.vllm_server_port,
+        hindsight_samples=hindsight_samples,
     )
-    log.info("Phase 3 done. Pipeline manifest: %s", grpo_dir / "pipeline_manifest.json")
-    return manifest
+    manifest_path = Path(args.output_dir)
+    if not manifest_path.is_absolute():
+        manifest_path = PROJECT_ROOT / manifest_path
+    _write_json(manifest_path / "run_summary.json", manifest)
 
-
-def main() -> int:
-    args = build_parser().parse_args()
-    output_dir = Path(args.output_dir).resolve()
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    log.info("=" * 60)
-    log.info("Forecaster training (Unsloth + TRL)")
-    log.info("  model:      %s", args.model)
-    log.info("  hindsight:  %s", args.hindsight)
-    log.info("  papers:     %s", args.papers)
-    log.info("  output:     %s", output_dir)
-    log.info("=" * 60)
-
-    prior_ckpt = _phase1_prior_sft(args, output_dir)
-    manifest = _phase2_3_grpo(args, output_dir, prior_ckpt)
-
-    log.info("Done.")
-    if manifest:
-        ckpt = manifest.get("trainer_policy_manifest_path", "")
-        log.info("  GRPO policy manifest: %s", ckpt)
+    action = "prepared" if args.prepare_only else "finished"
+    print(
+        f"RL trainer '{args.trainer}' {action} for {manifest['selected_episode_count']} episodes."
+    )
+    print(f"Artifacts saved to {manifest_path.resolve()}")
     return 0
 
 

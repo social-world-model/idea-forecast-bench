@@ -1,8 +1,3 @@
-# Review routing. Uses individual accounts rather than a team handle so the
-# file is valid without org-level team membership; swap in a team
-# (e.g. @ulab-uiuc/<team>) once one exists.
-
-# Default owners for everything in the repo.
 *                         @lwaekfjlk @4R5T
 
 # Anything that decides whether a change can land.
@@ -12,6 +7,6 @@
 /.pre-commit-config.yaml  @lwaekfjlk @4R5T
 
 # The evaluation protocol: changes here move published numbers.
-/live_idea_bench/similarity.py  @lwaekfjlk @4R5T
-/live_idea_bench/backtest.py    @lwaekfjlk @4R5T
+/idea_forecast_bench/similarity.py  @lwaekfjlk @4R5T
+/idea_forecast_bench/backtest.py    @lwaekfjlk @4R5T
 /config/                        @lwaekfjlk @4R5T

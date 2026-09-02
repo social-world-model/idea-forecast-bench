@@ -1,5 +1,3 @@
-"""Generate research proposals from innovation triples and evidence."""
-
 from __future__ import annotations
 
 import logging
@@ -10,9 +8,9 @@ import yaml
 
 from forecaster.config import RealizationConfig
 from forecaster.models import Innovation
-from live_idea_bench.llm import get_response_from_llm
-from live_idea_bench.model_refs import resolve_model_reference
-from live_idea_bench.models import IdeaPrediction, PaperRecord
+from idea_forecast_bench.llm import get_response_from_llm
+from idea_forecast_bench.model_refs import resolve_model_reference
+from idea_forecast_bench.models import IdeaPrediction, PaperRecord
 
 logger = logging.getLogger(__name__)
 

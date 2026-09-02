@@ -1,5 +1,3 @@
-"""Strict realization runtime built on the interactive search environment."""
-
 from __future__ import annotations
 
 import json
@@ -31,8 +29,8 @@ from forecaster.realization.search_env import (
     initialize_search_state,
     strict_result_from_state,
 )
-from live_idea_bench.llm import get_response_from_llm
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.llm import get_response_from_llm
+from idea_forecast_bench.models import PaperRecord
 
 
 def build_default_search_queries(

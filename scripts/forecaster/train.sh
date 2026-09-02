@@ -1,43 +1,22 @@
 #!/usr/bin/env bash
-# ============================================================================
-#  Single-GPU training (no vLLM).
-#
-#  Runs Phase 1 (Prior SFT) → Phase 2 (dataset prep) →
-#  Phase 3 (Realization GRPO) using Unsloth + the latest TRL,
-#  with `fast_inference=False` (Unsloth's documented Qwen3.5 GRPO path).
-#
-#  Generation runs through HF generate (~50-100 tok/s on 2B) — slow but
-#  rock-solid on a single GPU. Per-step warm time on A100 80GB at G=4 with
-#  max_completion_length=2048: ~120-160s.
-#
-#  For multi-GPU vLLM-accelerated training (3-5x faster), see
-#  scripts/forecaster/train_vllm.sh.
-#
-#  Activate the env first:
-#      conda activate live-idea-bench-unsloth
-#
-#  Example:
-#      bash scripts/forecaster/train.sh \
-#          --model qwen3.5-2b \
-#          --hindsight output/hindsight_samples.jsonl \
-#          --output-dir output/forecaster_qwen3.5-2b
-# ============================================================================
 set -euo pipefail
-cd "$(dirname "$0")/../.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
-# Reject --use-vllm-server here — that path requires multi-GPU and a
-# separately-launched vLLM server. The user should use train_vllm.sh instead.
-for arg in "$@"; do
-  if [[ "$arg" == "--use-vllm-server" ]]; then
-    echo "ERROR: --use-vllm-server is not supported in train.sh." >&2
-    echo "       It requires 2+ GPUs and a separately-launched vLLM server." >&2
-    echo "       Use scripts/forecaster/train_vllm.sh instead." >&2
-    exit 1
-  fi
-done
+MODEL="${MODEL:-qwen2.5-7b-instruct}"
+INPUT_DIR="${INPUT_DIR:-data/csml/raw_markdown}"
+HINDSIGHT="${HINDSIGHT:-data/topic_hindsight/hindsight_samples.jsonl}"
+INIT_POLICY="${INIT_POLICY:-output/mdf/prior_sft/final_checkpoint}"
+TRAINER_CONFIG="${TRAINER_CONFIG:-grpo_train.yaml}"
+OUTPUT_DIR="${OUTPUT_DIR:-output/mdf/realization_grpo}"
+export USE_VLLM="${USE_VLLM:-1}"
 
-# Honor PYTHON_BIN if the user set it explicitly (e.g. when there are
-# multiple anaconda installs and `which python` is unreliable). Defaults to
-# `python` from PATH (assumes `conda activate <env>` was run first).
-PYTHON_BIN="${PYTHON_BIN:-python}"
-exec "${PYTHON_BIN}" examples/forecaster/train.py "$@"
+python examples/forecaster/train.py \
+  --model-preset "$MODEL" \
+  --input-dir "$INPUT_DIR" \
+  --hindsight "$HINDSIGHT" \
+  --init-policy-path "$INIT_POLICY" \
+  --trainer grpo \
+  --trainer-config "$TRAINER_CONFIG" \
+  --skip-alignment-check \
+  --output-dir "$OUTPUT_DIR" \
+  "$@"

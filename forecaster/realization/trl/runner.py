@@ -1,10 +1,3 @@
-"""TRL-based GRPO training runner.
-
-Single-process alternative to the veRL backend. Loads model directly to GPU
-via device_map, avoiding the multi-GB CPU overhead of Ray. Produces the same
-training results — both implement standard GRPO (Eq. 2 in the paper).
-"""
-
 from __future__ import annotations
 
 import logging
@@ -110,7 +103,7 @@ def prepare_trl_artifacts(
     """Prepare dataset for TRL training (JSONL format, no Parquet needed)."""
     output_dir = common_context.shared_dir.parent / trainer_name
     dataset_rows = build_verl_dataset_rows(
-        common_context.prompt_rows, data_source=f"live_idea_bench::{trainer_name}"
+        common_context.prompt_rows, data_source=f"idea_forecast_bench::{trainer_name}"
     )
     dataset_path = output_dir / "trainer_dataset.jsonl"
     dataset_path.parent.mkdir(parents=True, exist_ok=True)
@@ -173,7 +166,7 @@ def train_with_trl(
 
     # --- Build reward function closure ---
     # Routed through forecaster.foresight.trainer_wiring; switches between
-    # the legacy composite reward and the Phase-4 foresight reward via
+    # the legacy composite reward and the foresight reward via
     # config.reward_mode ("legacy" | "foresight"). Keeping the call in
     # one place lets ablation runs flip a single field.
     from forecaster.foresight.trainer_wiring import make_reward_fn
