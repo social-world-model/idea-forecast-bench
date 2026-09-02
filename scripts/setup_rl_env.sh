@@ -19,8 +19,8 @@
 #    bash scripts/setup_rl_env_qwen3_5.sh
 #
 #  Recommended conda environments:
-#    conda create -n live-idea-bench-qwen3  python=3.11 -y   # for Qwen3
-#    conda create -n live-idea-bench-qwen35 python=3.11 -y   # for Qwen3.5
+#    conda create -n idea-forecast-bench-qwen3  python=3.11 -y   # for Qwen3
+#    conda create -n idea-forecast-bench-qwen35 python=3.11 -y   # for Qwen3.5
 # ==========================================================================
 set -euo pipefail
 

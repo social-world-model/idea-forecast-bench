@@ -24,7 +24,7 @@ WARNING Prior sampling failed (couldn't connect to huggingface.co); using heuris
 WARNING Prior scorer unavailable (...); falling back to heuristic memory scores.
 ```
 
-`live_idea_bench/strategy/forecaster.py` catches this, logs a warning, and
+`idea_forecast_bench/strategy/forecaster.py` catches this, logs a warning, and
 substitutes `_build_heuristic_innovations`. The run still emits five predictions
 per window, with no exception and no short windows. **A fully degraded MDF row
 is indistinguishable from a real one except through `fallback_events`.**
@@ -251,6 +251,209 @@ reports the previous run. And detect stalls explicitly: a finished run and a hun
 one both go quiet, so a watcher that only reports progress cannot tell them
 apart.
 
+Two later readings were wrong for a different reason: they used a signal that
+lags the work rather than one that misreports it.
+
+**Artifact mtime is not liveness.** A sharded `run_domain_backtest` writes its
+output at *topic* boundaries, so a shard mid-topic touches nothing. Eight shards
+sitting at the same 36-40 minute mtime, with the window count unchanged across
+two readings 40 minutes apart, read as a dead run. It was not: the serving
+endpoint was still emitting 1,449 tok/s and the window count was 516/624, not the
+384 the artifacts showed. Judge liveness from the endpoint's token counter or the
+log's mtime; the artifact tells you about the last completed topic, which on a
+slow topic is ancient.
+
+**`pgrep -f PATTERN` matches other pgreps carrying the same pattern.** A progress
+monitor polling `pgrep -f "run_domain_backtest.*probe"` every 180s makes the
+shard count read 9 for 8 shards, and — worse — can keep a `while pgrep; do` chain
+alive after the work has finished, delaying whatever it gates. `pkill -f` is
+sharper still: the pattern also matches the *invoking shell's own* command line,
+so `pkill -f foo.sh` from a shell whose command mentions `foo.sh` kills that
+shell. Both were hit in one session, the second twice.
+
+```bash
+# Self-matching: counts pgrep itself and any sibling pgrep.
+pgrep -fc "run_domain_backtest.py.*probe"
+
+# The bracket matches "run" in a target's cmdline but not the literal
+# "[r]un" in a sibling's.
+pgrep -fc "[r]un_domain_backtest.py.*probe"
+```
+
+Better than either: chain on a marker the work itself prints after `wait`
+returns. `pgrep` cannot distinguish *finished* from *all eight crashed*; a
+completion marker can only be written by the first.
+
+Finally, a comparison discipline. A distribution summary and a single sample are
+not comparable, and mistaking one for the other manufactures findings: a median
+`future_papers` of 218 next to one sampled window's 49 looked like two different
+quantities being recorded in two places. A paired per-window check across all 624
+windows found zero differences — the value ranges from 35 to 1,722, so 49 is
+ordinary. Compare like with like, and prefer a keyed join over two summaries.
+
+## Four failures that reported success, in order of how well they hid
+
+Every one of these ran to completion, exited zero, and left artifacts behind.
+
+**1. A context budget that fails every request.** `llm.py` pins
+`MAX_NUM_TOKENS = 4096` as the requested output length. `summary_prompting`
+prompts measure about 4,097 tokens. Served behind `--max-model-len 8192`, every
+call returns
+
+    400 ... maximum context length is 8192 tokens. However, you requested 4096
+    output tokens and your prompt contains at least 4097 input tokens, for a
+    total of at least 8193 tokens.
+
+one token over. Failures are per-window, so the run finishes normally with
+`total_windows=0`. Two machines burned twenty minutes each on this because the
+outward signs -- live processes, advancing tqdm, growing log files, a clean exit
+-- are identical to a healthy run. Give the endpoint headroom above
+`MAX_NUM_TOKENS` (`scripts/benchmark/serve_vllm.sh` refuses anything under
+16384), and check client logs for `maximum context length` rather than
+checking that processes are alive.
+
+**2. A launch that dies before the first line of work.** Exporting
+`PYTHONPATH=.` while invoking the script by absolute path from another cwd
+resolves "." to the wrong directory, and every shard dies instantly with
+`ModuleNotFoundError: No module named 'idea_forecast_bench'`. The log is 294
+bytes, which reads as "just started". Judge a launch by whether the log contains
+the first topic's paper count, not by its size.
+
+**3. Thinking traces in the output.** Qwen3.5 defaults to emitting a reasoning
+transcript. `llm.py` disables it -- but only when `OPENAI_BASE_URL` is set,
+since that is what marks the request as going to a local vLLM. A client that
+misses that variable produces "Titles" that are entire reasoning transcripts.
+This is the likely origin of an archived run whose predicted titles had a
+median length of 129 characters and a mean of 4,810, with 28.8% over 2,000
+characters. Test the endpoint the way the client calls it, not with a bare curl:
+a bare curl shows the thinking trace even when the pipeline is fine, and a
+pipeline missing the variable looks fine until you read the titles.
+
+**4. Duplicates filling the hole left by missing work.** Two machines split 52
+topics. One used the agreed grouping; the other rebuilt its own split and reused
+the same shard names. Result: 12 topics run twice, 12 never run. Every
+conventional check passed --
+
+    shard files       8            ✅
+    window total      312 + 312 = 624 against a target of 624   ✅
+    errors            0            ✅
+    per-shard topics  13/13/5/4/4/5/4/4, all plausible          ✅
+
+    unique topics     40 of 52     ❌
+    unique windows    480 of 624   ❌
+
+because the duplicates exactly offset the gap. This is the most concealed of the
+four: the other three leave at least one signal wrong, while here even the
+headline total is correct. Gate on **unique `(topic, cutoff)` pairs**, and assert
+both that unique topics equals 52 and that unique pairs equals 624 -- the first
+alone misses a topic that ran only some of its cutoffs, the second alone is what
+gets fooled here. `main-table` performs exactly this check and refuses to
+report an incomplete row.
+
+The coordination lesson is narrower and worth stating on its own: **never pass a
+group name across a machine boundary.** "Take S0+S1" was received by a peer that
+had built its own S0 and S1. Pass the explicit member list, or partition by
+artifact filename, which cannot be reinterpreted.
+`examples/benchmark/split_topics.py` is deterministic for a fixed corpus, so two
+machines running it on the same corpus get the same split; still pass the list.
+
+## Four more that reported success, from the re-judging round
+
+**5. Judge traffic sent to a generation-only endpoint.** One endpoint was served
+with `--served-model-name gpt-4.1-qwen35` alone; the others carried both that and
+the judge name. A judging shard pointed at it received
+
+    error: Error code: 404 - The model `qwen35-9b-judge` does not exist
+
+for every pair, and `llm_judge_eval` stored each as a decision with
+`problem=method=specificity=0`. The run finished, wrote a complete artifact,
+reported 156/156 windows, and produced a plausible-looking hit@5. 44% of one
+row's verdicts and 100% of two shards were fabricated zeros. Nothing in the
+process count, log growth, exit code or window count showed it.
+
+The signature to grep for is the reasoning text, not the score:
+
+```bash
+grep -c "Error code" OUT/*.judged.json
+```
+
+A zero score is indistinguishable from a real "no match"; the error string is
+the only thing that separates them. Smoke-test the endpoint with the exact model
+name the client will request -- `curl /v1/models` proves reachability, not that
+the name resolves. `scripts/benchmark/run_sharded_judge.sh` runs this grep at
+the end of every sweep and warns per file.
+
+Two caches must both be cleared to repair it. Purging `judge_decisions` alone
+leaves the window in `completed_windows`, so the rerun skips it and changes
+nothing; clearing `completed_windows` alone leaves the errored verdicts cached
+and the rerun re-serves them.
+
+**6. `pgrep` matching the shell that WROTE the script.** A chain script waited on
+`while pgrep -fc '[l]lm_judge_eval.py'`. The bracket stops it matching itself,
+but the parent that created the script via heredoc has the whole script text --
+including the literal `llm_judge_eval.py` on the launch line -- in its own
+command line. The loop matched its own parent and waited forever while the work
+had been finished for twenty minutes. Chain on a marker the work writes, or on a
+state-file count; a process-name match has now failed in five distinct ways in
+one session.
+
+**7. Seeding an embedding sidecar from the wrong shard.** Paper vectors are keyed
+by paper id, so a sidecar copied from a shard covering different topics is
+almost entirely useless. The copy loop took whichever file the glob returned
+first, and the shards quietly re-embedded: `[in_context_learning] embedding 2089
+papers`, billed to Voyage, for vectors that already existed. Index the available
+sidecars by their topic SET and copy the exact match.
+
+**8. A harness timeout taking backgrounded children with it.** `nohup ... &`
+inside a command that then hits its own timeout can still lose the children when
+the parent is torn down -- the launch printed "launched 27 shards" and the
+process count was zero a minute later. `setsid nohup ... < /dev/null &` detaches
+the process group and survives.
+
+## Stray environment variables redirect the judge
+
+`JUDGE_BASE_URL`, `JUDGE_MODEL`, `OPENAI_BASE_URL` and `VOYAGE_BASE_URL` are all
+honoured by `judge-eval` and by the generation client. Any of them left
+exported in a shared shell -- a GRPO run sets `JUDGE_BASE_URL` to its local
+vLLM, for instance -- silently sends scoring somewhere other than the model you
+think you are using. The run finishes, the artifact is complete, the numbers
+are plausible, and none of them were judged by gpt-4.1-mini.
+
+Start every judging script with
+
+```bash
+unset JUDGE_BASE_URL JUDGE_MODEL JUDGE_API_KEY OPENAI_BASE_URL VOYAGE_BASE_URL
+```
+
+and choose the judge by flag (`--judge-model`, `--judge-base-url`), which is
+what `scripts/benchmark/run_sharded_judge.sh` does.
+
+## The paper cache races when the cache is cold
+
+`cache_key()` covers `(input_dir, start_month, end_month, topics_fp, corpus_fp)`
+and nothing about sharding, so every shard of a sharded run computes the *same*
+key and targets the same `.pkl`. The write used to be direct:
+
+```python
+with open(cache_path, "wb") as handle:     # eight writers, one path
+    pickle.dump({...}, handle)
+```
+
+Eight interleaved `pickle.dump` calls leave a torn file that `cache_path.exists()`
+then finds on the next run, which either raises inside `pickle.load` or loads a
+truncated corpus and scores against it without erroring. The second is the
+dangerous one: fewer papers, no error, plausible numbers. It is now written to a
+pid-suffixed temp and `os.replace`d, which is atomic within a filesystem.
+
+The exposure rule is worth stating separately, because it predicts who gets hit:
+**only a cold cache races.** When the `.pkl` already exists every shard short-
+circuits on `exists()` and no one enters the write branch. A run reusing the
+main sweep's month range is therefore safe, while a run that changes
+`--start-month` or `--end-month` changes the key, finds nothing, and puts every
+shard into the write path at once. The sweep that exposed this was a
+contamination probe over a different month range; the concurrent sweep on the
+same machine, using the main range, never wrote at all.
+
 ## Corpus loading dominates short runs
 
 `corpus_fingerprint` walks every paper — one `rglob` plus a `stat` each. On a
@@ -259,12 +462,12 @@ cache lookup it feeds, so a warm cache does not avoid it. Twenty sharded
 processes each pay it: a 20-process sweep spent its first quarter-hour computing
 one hash twenty times.
 
-`LIVE_IDEA_CORPUS_FINGERPRINT` short-circuits it (110s to 0.000s) and is an
+`IDEA_FORECAST_CORPUS_FINGERPRINT` short-circuits it (110s to 0.000s) and is an
 explicit assertion that the corpus is frozen. Derive it once:
 
 ```bash
 python -c "
-from live_idea_bench.papers import corpus_fingerprint
+from idea_forecast_bench.papers import corpus_fingerprint
 print(corpus_fingerprint('data/csml_v2/raw_markdown'))"
 ```
 

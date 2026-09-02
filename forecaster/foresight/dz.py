@@ -34,8 +34,8 @@ from forecaster.foresight.operators import (
     load_operator_inventory,
     map_free_text_operator,
 )
-from live_idea_bench.backtest import split_train_future_by_cutoff
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.backtest import split_train_future_by_cutoff
+from idea_forecast_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 

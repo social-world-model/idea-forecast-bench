@@ -22,13 +22,13 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from live_idea_bench.backtest import (
+from idea_forecast_bench.backtest import (
     BacktestConfig,
     backtest,
     weighted_mean_over_topics,
 )
-from live_idea_bench.paper_cache import load_papers_and_topics
-from live_idea_bench.strategy import create_strategy
+from idea_forecast_bench.paper_cache import load_papers_and_topics
+from idea_forecast_bench.strategy import create_strategy
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -297,7 +297,7 @@ def main() -> int:
         # strategy takes --model-name, so record it for every strategy.
         resolved: str | None = args.model_name
         if args.strategy == "predictor_llm" and not resolved:
-            from live_idea_bench.config import (
+            from idea_forecast_bench.config import (
                 load_predictor_config,
                 load_runtime_config,
             )

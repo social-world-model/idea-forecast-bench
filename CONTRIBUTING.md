@@ -11,7 +11,7 @@ pre-commit install --hook-type commit-msg
 git config blame.ignoreRevsFile .git-blame-ignore-revs
 ```
 
-`poetry install` installs `live_idea_bench` and `forecaster` in **editable**
+`poetry install` installs `idea_forecast_bench` and `forecaster` in **editable**
 mode. That is deliberate: several modules resolve `config/`, `data/` and
 `examples/` relative to their own `__file__`, which only works while the
 packages live inside the repo. Do not publish this as a wheel without moving
@@ -34,9 +34,9 @@ One workflow, `CI`, with three jobs. Reproduce all of them locally:
 
 ```bash
 pre-commit run --all-files    # lint: ruff check, ruff format --check, codespell, file hygiene
-mypy                          # typecheck: strict, over live_idea_bench/ forecaster/ backend/
-python -c "import live_idea_bench, forecaster, backend.app"   # smoke
-live-idea-bench --help
+mypy                          # typecheck: strict, over idea_forecast_bench/ forecaster/ backend/
+python -c "import idea_forecast_bench, forecaster, backend.app"   # smoke
+idea-forecast-bench --help
 ```
 
 Two rules the tooling enforces that are easy to trip over:
@@ -58,7 +58,7 @@ you want to bring parts of it back.
 
 | Directory | Contains |
 |---|---|
-| `live_idea_bench/` | the benchmark package + evaluation protocol |
+| `idea_forecast_bench/` | the benchmark package + evaluation protocol |
 | `forecaster/` | the MDF forecaster |
 | `examples/` | **Python** entry scripts (the CLI dispatches into these) |
 | `scripts/` | **shell** wrappers for those entry scripts |
@@ -88,7 +88,7 @@ Keep a PR to one type of change. Several small PRs beat one large one.
 
 ## Changes that move published numbers
 
-`live_idea_bench/similarity.py`, `live_idea_bench/backtest.py` and `config/`
+`idea_forecast_bench/similarity.py`, `idea_forecast_bench/backtest.py` and `config/`
 determine the reported results. A change to any of them makes previously
 reported numbers non-reproducible. Say so explicitly in the PR description —
 `CODEOWNERS` routes these for review.

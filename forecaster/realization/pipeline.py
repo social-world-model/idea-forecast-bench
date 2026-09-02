@@ -41,7 +41,7 @@ from forecaster.realization.rl_context import (  # noqa: F401  re-export
 from forecaster.realization.trainers import (
     create_trainer_runner,
 )
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 

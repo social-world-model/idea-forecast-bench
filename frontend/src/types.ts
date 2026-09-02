@@ -1,4 +1,4 @@
-// ── Backtest engine types (mirrors live_idea_bench/models.py) ─────────────────
+// ── Backtest engine types (mirrors idea_forecast_bench/models.py) ─────────────────
 
 export type StrategyStatus = 'pending' | 'running' | 'done' | 'failed';
 

@@ -28,7 +28,7 @@ from forecaster.foresight.memory import build_memory
 from forecaster.foresight.prior_api import sample_z
 from forecaster.inference.deduplication import _jaccard_similarity
 from forecaster.models import Innovation
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 

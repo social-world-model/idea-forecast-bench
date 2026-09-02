@@ -13,7 +13,7 @@ from forecaster.realization.reward import (
     evaluate_rl_reward,
     evaluate_strict_completion_reward,
 )
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.models import PaperRecord
 
 
 @lru_cache(maxsize=8)

@@ -24,13 +24,13 @@ from forecaster.realization.realization_reward import (
     evaluate_strict_trajectory_reward,
 )
 from forecaster.realization.strict_runtime import parse_strict_rollout_completion
-from live_idea_bench.models import (
+from idea_forecast_bench.models import (
     EvaluationResult,
     IdeaPrediction,
     PaperRecord,
     PredictionMatchDetail,
 )
-from live_idea_bench.similarity import idea_text, paper_text, score_prediction_list
+from idea_forecast_bench.similarity import idea_text, paper_text, score_prediction_list
 
 logger = logging.getLogger(__name__)
 

@@ -12,8 +12,8 @@
 #    - We force AutoModelForCausalLM to use the text-only CausalLM head
 #
 #  Usage:
-#    conda create -n live-idea-bench-qwen35 python=3.11 -y
-#    conda activate live-idea-bench-qwen35
+#    conda create -n idea-forecast-bench-qwen35 python=3.11 -y
+#    conda activate idea-forecast-bench-qwen35
 #    bash scripts/setup_rl_env_qwen3_5.sh
 #
 #  Then run training:

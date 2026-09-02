@@ -10,8 +10,8 @@ from typing import Any
 from forecaster.config import HindsightConfig
 from forecaster.hindsight.extractor import extract_innovation
 from forecaster.models import HindsightSample, Innovation
-from live_idea_bench.backtest import split_train_future_by_cutoff
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.backtest import split_train_future_by_cutoff
+from idea_forecast_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 

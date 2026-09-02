@@ -10,8 +10,8 @@
 #    - vLLM provides ~5-10x generation speedup during GRPO rollouts
 #
 #  Usage:
-#    conda create -n live-idea-bench-qwen3 python=3.11 -y
-#    conda activate live-idea-bench-qwen3
+#    conda create -n idea-forecast-bench-qwen3 python=3.11 -y
+#    conda activate idea-forecast-bench-qwen3
 #    bash scripts/setup_rl_env_qwen3.sh
 #
 #  Then run training:

@@ -52,8 +52,8 @@ from forecaster.hindsight.topic_sampling import (  # noqa: E402
     write_json,
 )
 from forecaster.models import innovation_to_dict  # noqa: E402
-from live_idea_bench.backtest import split_train_future_by_cutoff  # noqa: E402
-from live_idea_bench.llm import _is_openai_model, create_client  # noqa: E402
+from idea_forecast_bench.backtest import split_train_future_by_cutoff  # noqa: E402
+from idea_forecast_bench.llm import _is_openai_model, create_client  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Manifest helpers (shared with run_topic_hindsight_preview.py)

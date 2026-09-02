@@ -225,7 +225,7 @@ def healthz() -> Response | tuple[Response, int]:
         {
             "status": "ok",
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "service": "live-idea-bench-backend",
+            "service": "idea-forecast-bench-backend",
         }
     )
 
@@ -332,7 +332,7 @@ def api_strategy_generate(strategy_id: str) -> tuple[Response, int]:
     cutoff_date_raw = payload.get("cutoff_date")
     if not isinstance(cutoff_date_raw, str) or not cutoff_date_raw.strip():
         raise APIError("cutoff_date is required (YYYY-MM-DD)", status_code=400)
-    from live_idea_bench.papers import normalize_date
+    from idea_forecast_bench.papers import normalize_date
 
     try:
         cutoff_date = normalize_date(cutoff_date_raw.strip())

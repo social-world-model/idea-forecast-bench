@@ -12,17 +12,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from live_idea_bench.backtest import split_train_future_by_cutoff
-from live_idea_bench.config import TopicDefinition, load_topics
-from live_idea_bench.models import PaperRecord
-from live_idea_bench.papers import (
+from idea_forecast_bench.backtest import split_train_future_by_cutoff
+from idea_forecast_bench.config import TopicDefinition, load_topics
+from idea_forecast_bench.models import PaperRecord
+from idea_forecast_bench.papers import (
     date_to_ordinal,
     get_paper_published_date,
     month_to_index,
     normalize_month,
     parse_markdown_paper,
 )
-from live_idea_bench.topics import classify_papers_by_topic
+from idea_forecast_bench.topics import classify_papers_by_topic
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TOPICS_CONFIG_PATH = "config/topics_v2.yaml"

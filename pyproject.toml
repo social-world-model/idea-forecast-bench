@@ -1,7 +1,7 @@
 [project]
-name = "live-idea-bench"
+name = "idea-forecast-bench"
 version = "0.0.1"
-description = "IdeaForecastBench (LiveIdeaBench): forecasting emerging research ideas against future literature."
+description = "IdeaForecastBench: forecasting emerging research ideas against future literature."
 authors = [{ name = "Haofei Yu", email = "yuhaofei44@gmail.com" }]
 license = "MIT"
 readme = "README.md"
@@ -26,7 +26,7 @@ dependencies = [
     "requests>=2.28.0",
     # Imported at module top level by the core packages -- previously resolved
     # only transitively through the optional torch stack:
-    #   tqdm  -> live_idea_bench/backtest.py
+    #   tqdm  -> idea_forecast_bench/backtest.py
     #   numpy -> forecaster/foresight/{gates,indices,metrics,reward}.py,
     #            forecaster/embedding/local_embedder.py
     "tqdm>=4.66",
@@ -43,7 +43,7 @@ Paper = "https://arxiv.org/abs/2609.00747"
 Issues = "https://github.com/ulab-uiuc/live-idea-bench/issues"
 
 [project.scripts]
-live-idea-bench = "live_idea_bench.__main__:main"
+idea-forecast-bench = "idea_forecast_bench.__main__:main"
 
 [tool.poetry]
 # The two packages are installed in EDITABLE mode (poetry's default for the
@@ -51,9 +51,9 @@ live-idea-bench = "live_idea_bench.__main__:main"
 # repo-root assets that live OUTSIDE the packages via
 # `Path(__file__).resolve().parents[N]` --
 #
-#   live_idea_bench/config.py     -> config/config.yaml
-#   live_idea_bench/__main__.py   -> examples/          (CLI dispatch target)
-#   live_idea_bench/ingest.py     -> data/
+#   idea_forecast_bench/config.py     -> config/config.yaml
+#   idea_forecast_bench/__main__.py   -> examples/          (CLI dispatch target)
+#   idea_forecast_bench/ingest.py     -> data/
 #   forecaster/config.py          -> config/forecaster/
 #   forecaster/realization/config.py, forecaster/foresight/operators.py,
 #   forecaster/hindsight/topic_sampling.py
@@ -64,7 +64,7 @@ live-idea-bench = "live_idea_bench.__main__:main"
 # Do not publish this as a wheel without first moving config/ and the CLI's
 # entry scripts inside the packages.
 packages = [
-    { include = "live_idea_bench" },
+    { include = "idea_forecast_bench" },
     { include = "forecaster" },
 ]
 
@@ -99,7 +99,7 @@ transformers = ">=4.40"
 # entry scripts branch explicitly on TRL 1.0/1.4 APIs (GRPOConfig without
 # max_prompt_length, GRPOConfig.vllm_group_port). The old ">=0.9" floor
 # resolved to trl 0.11.4, which has no GRPOTrainer at all -- so the documented
-# `python -m live_idea_bench train` could not run against the locked version.
+# `python -m idea_forecast_bench train` could not run against the locked version.
 trl = ">=1.4"
 peft = ">=0.10"
 datasets = ">=2.18"
@@ -139,7 +139,7 @@ build-backend = "poetry.core.masonry.api"
 # `.` makes it walk examples/ and scripts/, where two files can share a module
 # name and mypy aborts with "Source file found twice under different module
 # names" before checking anything.
-files = ["live_idea_bench", "forecaster", "backend"]
+files = ["idea_forecast_bench", "forecaster", "backend"]
 ignore_missing_imports = true
 check_untyped_defs = true
 follow_imports = "normal"

@@ -93,14 +93,14 @@ jobs:
       # point that no longer resolves, and a dispatch table pointing at a
       # script that has been moved or deleted.
       - name: Packages import
-        run: poetry run python -c "import live_idea_bench, forecaster, backend.app"
+        run: poetry run python -c "import idea_forecast_bench, forecaster, backend.app"
       - name: CLI responds
-        run: poetry run live-idea-bench --help
+        run: poetry run idea-forecast-bench --help
       - name: CLI dispatch targets exist
         run: |
           poetry run python - <<'PY'
           import pathlib, re, sys
-          src = pathlib.Path("live_idea_bench/__main__.py").read_text()
+          src = pathlib.Path("idea_forecast_bench/__main__.py").read_text()
           targets = sorted(set(re.findall(r'"((?:benchmark|forecaster)/[a-z0-9_]+\.py)"', src)))
           missing = [t for t in targets if not (pathlib.Path("examples") / t).exists()]
           print(f"checked {len(targets)} CLI targets")
@@ -110,7 +110,7 @@ jobs:
       - name: Config loads and the taxonomy resolves
         run: |
           poetry run python -c "
-          from live_idea_bench.config import load_runtime_config
+          from idea_forecast_bench.config import load_runtime_config
           n = len(load_runtime_config().topics)
           assert n == 52, f'expected 52 topics, got {n}'
           print('config OK:', n, 'topics')"

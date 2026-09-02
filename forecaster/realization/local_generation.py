@@ -6,10 +6,10 @@ import logging
 import threading
 from typing import Any
 
-from live_idea_bench.config import load_predictor_config
-from live_idea_bench.daily import coerce_prediction
-from live_idea_bench.models import IdeaPrediction, PaperRecord
-from live_idea_bench.predictor import (
+from idea_forecast_bench.config import load_predictor_config
+from idea_forecast_bench.daily import coerce_prediction
+from idea_forecast_bench.models import IdeaPrediction, PaperRecord
+from idea_forecast_bench.predictor import (
     build_abstract_block,
     extract_json_payload,
     heuristic_predictions,

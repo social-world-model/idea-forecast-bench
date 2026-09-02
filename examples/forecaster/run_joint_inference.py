@@ -28,10 +28,10 @@ from forecaster.inference.algorithm import run_joint_inference
 from forecaster.models import innovation_to_dict
 from forecaster.prior.memory import build_memory_store_from_hindsight_samples
 from forecaster.prior.sampler import sample_innovations
-from live_idea_bench.backtest import split_train_future_by_cutoff
-from live_idea_bench.config import load_topics
-from live_idea_bench.papers import load_papers_from_markdown
-from live_idea_bench.topics import classify_papers_by_topic
+from idea_forecast_bench.backtest import split_train_future_by_cutoff
+from idea_forecast_bench.config import load_topics
+from idea_forecast_bench.papers import load_papers_from_markdown
+from idea_forecast_bench.topics import classify_papers_by_topic
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 log = logging.getLogger("joint_inference")

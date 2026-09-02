@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Any
 
 from forecaster.realization.config import EpisodeBuildConfig
-from live_idea_bench.backtest import split_train_future_by_cutoff
-from live_idea_bench.models import PaperRecord
-from live_idea_bench.papers import add_months, month_start_date, month_to_index
+from idea_forecast_bench.backtest import split_train_future_by_cutoff
+from idea_forecast_bench.models import PaperRecord
+from idea_forecast_bench.papers import add_months, month_start_date, month_to_index
 
 
 @dataclass

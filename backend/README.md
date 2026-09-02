@@ -1,9 +1,9 @@
 # Backend Runbook
 
-The Flask API for `live-idea-bench` — serves stored forecasting strategies, runs
+The Flask API for `idea-forecast-bench` — serves stored forecasting strategies, runs
 backtests/generation on request, and the daily ingest/eval pipeline. This is a
 **deployment/serving** component only; model training lives in the main README
-(`python -m live_idea_bench`) and `forecaster/`, not here.
+(`python -m idea_forecast_bench`) and `forecaster/`, not here.
 
 ## What lives here
 
@@ -15,8 +15,8 @@ backtests/generation on request, and the daily ingest/eval pipeline. This is a
 ## 1. Environment setup
 
 ```bash
-conda create -n live-idea-bench python=3.11 -y
-conda activate live-idea-bench
+conda create -n idea-forecast-bench python=3.11 -y
+conda activate idea-forecast-bench
 poetry install --with webapp
 ```
 
@@ -29,7 +29,7 @@ than a core dependency of the benchmark package.
 
 ```bash
 export LIVE_IDEA_ADMIN_TOKEN="change-me"
-export LIVE_IDEA_BENCH_DATA_DIR="$(pwd)/data/csml/raw_markdown"
+export IDEA_FORECAST_BENCH_DATA_DIR="$(pwd)/data/csml/raw_markdown"
 export PORT=5000
 export FLASK_DEBUG=0
 ```
@@ -123,11 +123,11 @@ state, and generates the next cutoff.
 ## 6. Docker
 
 ```bash
-docker build -t live-idea-bench-backend -f backend/Dockerfile .
+docker build -t idea-forecast-bench-backend -f backend/Dockerfile .
 docker run --rm -p 5000:5000 \
   -e LIVE_IDEA_ADMIN_TOKEN=change-me \
   -e OPENAI_API_KEY=$OPENAI_API_KEY \
-  live-idea-bench-backend
+  idea-forecast-bench-backend
 ```
 
 ## 7. Default paths
@@ -137,5 +137,5 @@ docker run --rm -p 5000:5000 \
 - Backend port: `5000`
 
 > Training a forecaster (SFT prior + GRPO realization) is **not** a backend
-> concern — see the top-level `README.md` (`python -m live_idea_bench train`) and
+> concern — see the top-level `README.md` (`python -m idea_forecast_bench train`) and
 > `forecaster/`.

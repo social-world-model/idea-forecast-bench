@@ -16,7 +16,7 @@ from forecaster.hindsight.extractor import parse_innovation
 from forecaster.hindsight.prompt import build_hindsight_prompt
 from forecaster.hindsight.topic_sampling import TOPIC_HINDSIGHT_HORIZON_MONTHS
 from forecaster.models import Innovation
-from live_idea_bench.backtest import split_train_future_by_cutoff
+from idea_forecast_bench.backtest import split_train_future_by_cutoff
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +128,7 @@ def build_batch_request_body(
     """Build the ``/v1/chat/completions`` request body for a single batch line.
 
     Mirrors the OpenAI branch of ``get_response_from_llm`` in
-    ``live_idea_bench/llm.py`` so that batch results are identical to
+    ``idea_forecast_bench/llm.py`` so that batch results are identical to
     synchronous calls.
     """
     messages: list[dict[str, str]] = [
@@ -175,7 +175,7 @@ def prepare_batch_jsonl(
         targets: List of target dicts (same format as
             :func:`~forecaster.hindsight.topic_sampling.select_preview_targets`).
         grouped_papers: Mapping from ``topic_id`` to a sequence of
-            :class:`~live_idea_bench.models.PaperRecord`.
+            :class:`~idea_forecast_bench.models.PaperRecord`.
         model: OpenAI model identifier used in the request body.
         config: Hindsight extraction config.
         output_path: Destination path for the ``.jsonl`` file.

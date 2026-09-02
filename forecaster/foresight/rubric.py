@@ -8,7 +8,7 @@ The rubric is consumed by:
   * the Phase-2 AUC validation pass.
 
 Generation is done by a frozen strong LLM. We keep the generation prompt
-in this file so test code can inspect it without touching live_idea_bench.
+in this file so test code can inspect it without touching idea_forecast_bench.
 """
 
 from __future__ import annotations

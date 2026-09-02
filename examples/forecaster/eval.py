@@ -34,13 +34,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from forecaster.realization.model_zoo import resolve_small_model
-from live_idea_bench.backtest import (
+from idea_forecast_bench.backtest import (
     BacktestConfig,
     backtest,
     weighted_mean_over_topics,
 )
-from live_idea_bench.paper_cache import load_papers_and_topics
-from live_idea_bench.strategy import create_strategy
+from idea_forecast_bench.paper_cache import load_papers_and_topics
+from idea_forecast_bench.strategy import create_strategy
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -163,7 +163,7 @@ def _load_papers_and_topics(
     start_month: str,
     end_month: str,
 ) -> tuple[list, list, dict]:
-    """Load + cache papers/topics; see live_idea_bench.paper_cache."""
+    """Load + cache papers/topics; see idea_forecast_bench.paper_cache."""
     return load_papers_and_topics(papers_dir, start_month, end_month, verbose=False)
 
 

@@ -263,7 +263,7 @@ def make_reward_fn(
                 try:
                     out.append(
                         compute_score_v2(
-                            data_source=f"live_idea_bench::{trainer_name}",
+                            data_source=f"idea_forecast_bench::{trainer_name}",
                             solution_str=sol,
                             ground_truth="",
                             extra_info=extra,
@@ -311,7 +311,7 @@ def make_reward_fn(
             try:
                 out.append(
                     compute_score(
-                        data_source=f"live_idea_bench::{trainer_name}",
+                        data_source=f"idea_forecast_bench::{trainer_name}",
                         solution_str=completion,
                         ground_truth="",
                         extra_info=extra,

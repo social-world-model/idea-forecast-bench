@@ -5,14 +5,14 @@ Main entry points:
 - run_joint_inference: joint inference (Algorithm 1)
 - MemoryStore: memory inventory for the innovation prior
 """
-# Dependency direction: forecaster -> live_idea_bench, one way only.
-# live_idea_bench never imports forecaster at module scope; the MDF strategy
-# adapters under live_idea_bench/strategy/ import it inside functions.
+# Dependency direction: forecaster -> idea_forecast_bench, one way only.
+# idea_forecast_bench never imports forecaster at module scope; the MDF strategy
+# adapters under idea_forecast_bench/strategy/ import it inside functions.
 #
-# The symbols below that pull in live_idea_bench.backtest (hindsight,
+# The symbols below that pull in idea_forecast_bench.backtest (hindsight,
 # orchestrator, inference) stay behind __getattr__ so that `import forecaster`
 # does not drag in the whole benchmark runner. This used to be load-bearing --
-# it worked around a real cycle through live_idea_bench.strategy.policy_rl --
+# it worked around a real cycle through idea_forecast_bench.strategy.policy_rl --
 # but that cycle is gone; the laziness is now just about import cost.
 
 from forecaster.config import (
@@ -63,7 +63,7 @@ __all__ = [
     "load_realization_config",
     "load_inference_config",
     "MemoryStore",
-    # Lazily-loaded (live_idea_bench.backtest dependency):
+    # Lazily-loaded (idea_forecast_bench.backtest dependency):
     "extract_innovation",
     "build_hindsight_dataset",
     "run_joint_inference",
@@ -71,7 +71,7 @@ __all__ = [
 ]
 
 # ---------------------------------------------------------------------------
-# Lazy loaders for symbols that depend on live_idea_bench.backtest
+# Lazy loaders for symbols that depend on idea_forecast_bench.backtest
 # ---------------------------------------------------------------------------
 
 _LAZY_MAP: dict[str, tuple[str, str]] = {

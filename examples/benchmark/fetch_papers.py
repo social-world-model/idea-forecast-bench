@@ -1,19 +1,19 @@
 """Fetch an arXiv corpus in the layout the benchmark expects.
 
-Without this the benchmark has no input: `live-idea-bench benchmark` defaults
+Without this the benchmark has no input: `idea-forecast-bench benchmark` defaults
 to `--input-dir data/csml/raw_markdown`, and nothing in the repo put anything
-there. `live_idea_bench.ingest` could already do the work but was reachable
+there. `idea_forecast_bench.ingest` could already do the work but was reachable
 only from Python, so reproducing a run started with "write your own script".
 
 Papers land as ``<out-dir>/<YYYY-MM>/<paper_id>.md``. The loader globs for
 ``*.md`` recursively, so this layout is directly consumable:
 
-    live-idea-bench fetch --out-dir data/csml/raw_markdown
-    live-idea-bench benchmark --input-dir data/csml/raw_markdown
+    idea-forecast-bench fetch --out-dir data/csml/raw_markdown
+    idea-forecast-bench benchmark --input-dir data/csml/raw_markdown
 
 Usage:
-    live-idea-bench fetch                              # cs.LG, 12 months back
-    live-idea-bench fetch --query "cat:cs.CL" --max-results 2000
+    idea-forecast-bench fetch                              # cs.LG, 12 months back
+    idea-forecast-bench fetch --query "cat:cs.CL" --max-results 2000
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from live_idea_bench.ingest import ingest_latest_arxiv_papers
+from idea_forecast_bench.ingest import ingest_latest_arxiv_papers
 
 DEFAULT_OUT_DIR = "data/csml/raw_markdown"
 
@@ -82,7 +82,7 @@ def main() -> int:
     print(f"  corpus now: {len(paths)} papers across {len(months)} months")
     if months:
         print(f"  range: {months[0]} .. {months[-1]}")
-        print(f"\nNext: live-idea-bench benchmark --input-dir {out_dir}")
+        print(f"\nNext: idea-forecast-bench benchmark --input-dir {out_dir}")
     else:
         print("\nNo papers written. Widen --lookback-days or loosen --query.")
         return 1

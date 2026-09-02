@@ -25,15 +25,19 @@ from typing import Any
 
 import openai
 
-from live_idea_bench.backtest import (  # noqa: E402
+from idea_forecast_bench.backtest import (  # noqa: E402
     split_train_future_by_cutoff,
     weighted_mean_over_topics,
 )
-from live_idea_bench.config import load_topics  # noqa: E402
-from live_idea_bench.models import IdeaPrediction  # noqa: E402
-from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
-from live_idea_bench.similarity import _sanitize, idea_text, paper_text  # noqa: E402
-from live_idea_bench.topics import classify_papers_by_topic  # noqa: E402
+from idea_forecast_bench.config import load_topics  # noqa: E402
+from idea_forecast_bench.models import IdeaPrediction  # noqa: E402
+from idea_forecast_bench.papers import load_papers_from_markdown  # noqa: E402
+from idea_forecast_bench.similarity import (  # noqa: E402
+    _sanitize,
+    idea_text,
+    paper_text,
+)
+from idea_forecast_bench.topics import classify_papers_by_topic  # noqa: E402
 
 VOYAGE_BASE_URL = "https://api.voyageai.com/v1"
 DEFAULT_MODEL = "voyage-3-large"

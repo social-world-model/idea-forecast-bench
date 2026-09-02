@@ -38,8 +38,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
-from live_idea_bench.models import IdeaPrediction, PaperRecord
-from live_idea_bench.similarity import idea_text, paper_text
+from idea_forecast_bench.models import IdeaPrediction, PaperRecord
+from idea_forecast_bench.similarity import idea_text, paper_text
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only import, kept off the hot path
     import openai

@@ -1,7 +1,7 @@
 """Configuration dataclasses and YAML loaders for the forecaster package.
 
 Config dataclasses are mutable (not frozen), following the same pattern as
-live_idea_bench/config.py and forecaster/realization/config.py.
+idea_forecast_bench/config.py and forecaster/realization/config.py.
 """
 
 from __future__ import annotations

@@ -45,8 +45,8 @@ from forecaster.prior.memory import (
 from forecaster.prior.sampler import sample_innovations
 from forecaster.prior.sft_dataset import build_sft_samples, save_sft_dataset
 from forecaster.prior.trainer import train_prior
-from live_idea_bench.llm import create_client
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.llm import create_client
+from idea_forecast_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 

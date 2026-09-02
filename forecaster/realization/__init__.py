@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 # NOTE: candidates, episodes, grpo, and pipeline are loaded lazily because
-# episodes.py imports live_idea_bench.backtest, which in turn imports
+# episodes.py imports idea_forecast_bench.backtest, which in turn imports
 # forecaster.realization.config — creating a circular import if these modules
 # were loaded eagerly when the package initializes.
 from importlib import import_module

@@ -21,7 +21,7 @@ from forecaster.models import (
     memory_inventory_from_dict,
     memory_inventory_to_dict,
 )
-from live_idea_bench.papers import date_to_ordinal, month_start_date
+from idea_forecast_bench.papers import date_to_ordinal, month_start_date
 
 _RECENCY_DECAY_PER_MONTH: float = 0.9
 _DEFAULT_QUERY_RECENCY_WEIGHT: float = 0.45

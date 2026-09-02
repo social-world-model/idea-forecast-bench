@@ -35,14 +35,15 @@ benchmark does.
   innovation from a memory-conditioned prior, realizes it into a grounded proposal, and
   trains the realization policy with GRPO against a future-grounded reward.
 
-The Python package and CLI are named `live-idea-bench`, the project's working name.
+The Python package is `idea_forecast_bench` and the CLI is `idea-forecast-bench`. The
+GitHub repository keeps its original slug, `live-idea-bench`.
 
 ## Installation
 
 ```bash
 # create an environment (conda shown; any Python >=3.10,<3.13 works)
-conda create -n live-idea-bench python=3.11 -y
-conda activate live-idea-bench
+conda create -n idea-forecast-bench python=3.11 -y
+conda activate idea-forecast-bench
 
 # install Poetry if you do not have it
 curl -sSL https://install.python-poetry.org | python3 -
@@ -91,8 +92,8 @@ and point `--input-dir` at wherever you unpacked it. Or pull a fresh one from ar
 which needs no account:
 
 ```bash
-live-idea-bench fetch                                   # into data/csml/raw_markdown
-live-idea-bench fetch --query "cat:cs.CL" --max-results 5000
+idea-forecast-bench fetch                                   # into data/csml/raw_markdown
+idea-forecast-bench fetch --query "cat:cs.CL" --max-results 5000
 ```
 
 A fresh corpus is useful for checking that the pipeline works, but it will not reproduce
@@ -101,7 +102,7 @@ the paper's numbers; the frozen corpus will.
 ### 2. Run the baselines
 
 ```bash
-live-idea-bench baselines --input-dir /path/to/corpus
+idea-forecast-bench baselines --input-dir /path/to/corpus
 ```
 
 This scores all five baselines under identical windows and an identical matcher, then
@@ -124,10 +125,10 @@ Every flag has a default, so the commands above are complete as written. Common
 variations:
 
 ```bash
-live-idea-bench baselines --only topic_trend,summary_prompting     # a subset
-live-idea-bench baselines --start-month 2024-06 --end-month 2025-06 --top-k 10
-live-idea-bench benchmark --strategy summary_prompting             # one strategy
-live-idea-bench benchmark --strategy summary_prompting --model-name Qwen/Qwen2.5-7B-Instruct
+idea-forecast-bench baselines --only topic_trend,summary_prompting     # a subset
+idea-forecast-bench baselines --start-month 2024-06 --end-month 2025-06 --top-k 10
+idea-forecast-bench benchmark --strategy summary_prompting             # one strategy
+idea-forecast-bench benchmark --strategy summary_prompting --model-name Qwen/Qwen2.5-7B-Instruct
 ```
 
 ### 3. Score with the retrieve-then-judge protocol
@@ -137,7 +138,7 @@ retrieves candidates for each prediction, and scores each pair on problem, metho
 specificity:
 
 ```bash
-live-idea-bench judge-eval \
+idea-forecast-bench judge-eval \
   --input-json output/backtest/summary_prompting.json \
   --papers-dir /path/to/corpus \
   --output output/judged/summary_prompting.judged.json
@@ -146,7 +147,7 @@ live-idea-bench judge-eval \
 The judge defaults to `gpt-4.1-mini`; pass `--judge-model` and `--judge-base-url` to use
 another one. When the judge supplies your numbers, run `benchmark` with
 `--skip-matching` to skip the embedding match it would otherwise duplicate. Assemble the
-final table from judged artifacts with `live-idea-bench main-table`.
+final table from judged artifacts with `idea-forecast-bench main-table`.
 
 ### Checking the wiring without provider keys
 
@@ -156,7 +157,7 @@ be exercised against a local server or stub with no provider account:
 ```bash
 export OPENAI_BASE_URL=http://127.0.0.1:8000/v1  OPENAI_API_KEY=EMPTY
 export VOYAGE_BASE_URL=http://127.0.0.1:8000/v1  VOYAGE_API_KEY=EMPTY
-live-idea-bench baselines --only topic_trend
+idea-forecast-bench baselines --only topic_trend
 ```
 
 This verifies wiring, not quality: only `windows` reaching a non-zero value tells you the
@@ -182,10 +183,10 @@ MDF needs trained checkpoints, so it is run with `benchmark --strategy forecaste
 than through `baselines`. Install the `forecaster` group, then:
 
 ```bash
-live-idea-bench hindsight     # extract latent-innovation labels from future papers
-live-idea-bench train-prior   # SFT the memory-conditioned prior
-live-idea-bench train         # GRPO-train the realization policy
-live-idea-bench infer         # prior → realize → select
+idea-forecast-bench hindsight     # extract latent-innovation labels from future papers
+idea-forecast-bench train-prior   # SFT the memory-conditioned prior
+idea-forecast-bench train         # GRPO-train the realization policy
+idea-forecast-bench infer         # prior → realize → select
 ```
 
 `scripts/run_train_and_eval.sh` chains these end to end. The GRPO step defaults to the
@@ -193,17 +194,40 @@ gated foresight reward and needs prebuilt artifacts; see
 [forecaster/foresight/README.md](forecaster/foresight/README.md) for that sequence, or
 set `REWARD_MODE=legacy` to run the pipeline without them.
 
-## Running at scale
+## Reproducing the paper's sweep
 
-A full sweep is 624 windows per (strategy, backbone). Sharding with `--topics`,
-concurrency against self-hosted judges, corpus-fingerprint caching, and the silent
-failure modes we hit along the way are documented in
-[docs/running-at-scale.md](docs/running-at-scale.md).
+A full sweep is 624 windows per (strategy, backbone), which is too slow for one
+process: the work between API calls is GIL-bound, so the run is sharded by topic
+across processes. Two scripts do this with the paper's settings as defaults:
+
+```bash
+# 1. generate: 5 strategies x 4 topic shards, predictions only (--skip-matching)
+OPENAI_API_KEY=... bash scripts/benchmark/run_sharded_backtest.sh
+
+# 2. judge: one judge-eval process per shard, each with its own state file
+OPENAI_API_KEY=... VOYAGE_API_KEY=... bash scripts/benchmark/run_sharded_judge.sh
+
+# 3. table
+idea-forecast-bench main-table --source "gpt-4.1=output/sharded/judged/*.judged.json"
+```
+
+To run a local backbone or the Qwen3.5-9B judge, serve it with
+`scripts/benchmark/serve_vllm.sh` and point `OPENAI_BASE_URL` at it. The script's
+header explains the two settings that fail silently when wrong: the served model
+name, which decides routing, and the context length.
+
+Before judging, make sure none of `JUDGE_BASE_URL`, `JUDGE_MODEL`, `OPENAI_BASE_URL`
+or `VOYAGE_BASE_URL` are left exported from another run. Any of them silently
+redirects scoring to a different model, and nothing errors. The judge script unsets
+them and takes the judge by flag instead.
+
+Concurrency, corpus-fingerprint caching, and the silent failure modes met while
+running the sweep are documented in [docs/running-at-scale.md](docs/running-at-scale.md).
 
 ## Package structure
 
 ```
-live_idea_bench/            # the benchmark
+idea_forecast_bench/            # the benchmark
 ├── backtest.py             # rolling-window backtest loop
 ├── papers.py, paper_cache.py  # corpus loading and caching
 ├── similarity.py           # embedding matcher
@@ -218,7 +242,7 @@ forecaster/                 # MDF: Mode-Decomposition Forecaster
 └── foresight/              # future-grounded reward, indices, rubrics
 
 examples/                   # Python entry scripts behind each CLI command
-scripts/                    # shell wrappers and GPU environment setup
+scripts/                    # sharded sweep launchers, vLLM serving, GPU env setup
 config/                     # YAML config, including the 52-topic taxonomy
 docs/                       # running-at-scale notes
 backend/, frontend/         # optional web app
@@ -227,7 +251,7 @@ backend/, frontend/         # optional web app
 <details>
 <summary><b>All commands</b></summary>
 
-`live-idea-bench <cmd> --help` shows any command's own flags.
+`idea-forecast-bench <cmd> --help` shows any command's own flags.
 
 | Command | What it does |
 |---|---|

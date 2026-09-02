@@ -13,8 +13,8 @@ checked before any run starts, so a missing key fails in one second rather than
 five subprocesses later.
 
 Usage:
-    live-idea-bench baselines
-    live-idea-bench baselines --only topic_trend,summary_prompting
+    idea-forecast-bench baselines
+    idea-forecast-bench baselines --only topic_trend,summary_prompting
 """
 
 from __future__ import annotations
@@ -122,7 +122,7 @@ def _run_one(strategy: str, args: argparse.Namespace, out_path: Path) -> bool:
     cmd = [
         sys.executable,
         "-m",
-        "live_idea_bench",
+        "idea_forecast_bench",
         "benchmark",
         "--input-dir",
         args.input_dir,

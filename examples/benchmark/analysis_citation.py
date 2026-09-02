@@ -25,7 +25,7 @@ import json
 import time
 from pathlib import Path
 
-from live_idea_bench.semantic_scholar import fetch_paper
+from idea_forecast_bench.semantic_scholar import fetch_paper
 
 DEFAULT_DELAY = 1.1  # seconds between requests when no API key
 

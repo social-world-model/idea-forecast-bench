@@ -14,7 +14,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from datetime import date
 
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.models import PaperRecord
 
 
 def _paper_date(p: PaperRecord) -> date | None:

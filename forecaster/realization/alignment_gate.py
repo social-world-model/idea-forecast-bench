@@ -40,7 +40,7 @@ from forecaster.realization.reward import (
 from forecaster.realization.trainers import (
     PreparedRLContext,
 )
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 

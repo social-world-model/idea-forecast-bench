@@ -1,6 +1,6 @@
 {
-  "short_name": "LiveIdeaBench",
-  "name": "LiveIdeaBench \u2014 forecasting emerging research ideas",
+  "short_name": "IdeaForecastBench",
+  "name": "IdeaForecastBench \u2014 forecasting emerging research ideas",
   "icons": [
     {
       "src": "favicon.ico",

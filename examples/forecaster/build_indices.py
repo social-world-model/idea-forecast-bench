@@ -18,12 +18,12 @@ from forecaster.foresight.indices import (
     SentenceTransformerEmbedder,
     build_cutoff_indices,
 )
-from live_idea_bench.papers import load_papers_from_markdown
+from idea_forecast_bench.papers import load_papers_from_markdown
 
 _p = argparse.ArgumentParser(description="Build foresight cutoff indices.")
 _p.add_argument(
     "--papers-dir",
-    default=os.environ.get("LIVE_IDEA_BENCH_PAPERS_DIR", "data/csml/raw_markdown"),
+    default=os.environ.get("IDEA_FORECAST_BENCH_PAPERS_DIR", "data/csml/raw_markdown"),
 )
 _p.add_argument("--dz", default="data/topic_hindsight/dz.jsonl")
 _p.add_argument("--art", default="output/foresight_artifacts")

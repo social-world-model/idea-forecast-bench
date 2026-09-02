@@ -15,7 +15,7 @@ from forecaster.models import Innovation, RealizationTrajectory
 from forecaster.realization.proposal_generator import score_local_proposal
 from forecaster.realization.realization_reward import compute_realization_reward
 from forecaster.realization.strict_runtime import score_strict_realization_trajectory
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.models import PaperRecord
 
 if TYPE_CHECKING:
     from forecaster.prior.memory import MemoryStore
@@ -40,7 +40,7 @@ def _semantic_similarity(text_a: str, text_b: str) -> float:
     Uses the same hybrid engine as evidence retrieval (difflib + keyword overlap),
     avoiding any heavy ML dependency. Returns a value in [0, 1].
     """
-    from live_idea_bench.similarity import lexical_similarity
+    from idea_forecast_bench.similarity import lexical_similarity
 
     return float(lexical_similarity(text_a, text_b))
 

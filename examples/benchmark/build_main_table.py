@@ -3,7 +3,7 @@
 
 The two hit@k columns are NOT two judge runs. ``S>=2`` is the judge's own
 ``is_match`` (``MATCH_PM_THRESHOLD=5`` and ``MATCH_S_THRESHOLD=2`` in
-``live_idea_bench/judge/config.py``). ``S>=3`` re-applies
+``idea_forecast_bench/judge/config.py``). ``S>=3`` re-applies
 ``problem + method >= 5 AND specificity >= 3`` to the raw per-dimension scores
 already stored in ``per_prediction`` -- it is a recount, not a re-judge, so it
 costs nothing and cannot drift from the ``S>=2`` column. To move the threshold
@@ -18,7 +18,7 @@ the backbone ordering holds under both. Report the two facts separately.
 
 Usage::
 
-    python -m live_idea_bench main-table \\
+    python -m idea_forecast_bench main-table \\
         --source "gpt-4.1=output/judged/gpt41.*.judged.json" \\
         --source "Qwen2.5-7B=output/judged/qwen7b.*.judged.json" \\
         --source "MDF-Qwen2.5-7B=output/judged/mdf.*.judged.json"

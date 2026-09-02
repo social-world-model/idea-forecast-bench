@@ -36,7 +36,7 @@ from forecaster.realization.trainers import (
     PreparedRLContext,
     build_config_fingerprint,
 )
-from live_idea_bench.models import PaperRecord
+from idea_forecast_bench.models import PaperRecord
 
 logger = logging.getLogger(__name__)
 

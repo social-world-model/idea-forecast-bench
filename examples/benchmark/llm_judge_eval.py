@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""LLM-as-Judge evaluation for LiveIdeaBench predictions -- the CLI.
+"""LLM-as-Judge evaluation for IdeaForecastBench predictions -- the CLI.
 
-The protocol itself lives in ``live_idea_bench.judge``; this file parses flags,
+The protocol itself lives in ``idea_forecast_bench.judge``; this file parses flags,
 loads the corpus, fans out over topics, and writes the report.
 
 Pipeline:
@@ -12,13 +12,13 @@ Pipeline:
   5. Compute diversity (cluster coverage) and novelty (embedding distance)
 
 Usage:
-    live-idea-bench judge-eval \\
+    idea-forecast-bench judge-eval \\
         --input-json output/baselines/topic_trend.json \\
         --papers-dir data/csml/raw_markdown \\
         --output output/judge/topic_trend_judged.json
 
     # Quick check on one topic (2 windows):
-    live-idea-bench judge-eval \\
+    idea-forecast-bench judge-eval \\
         --input-json output/baselines/topic_trend.json \\
         --papers-dir data/csml/raw_markdown \\
         --output output/judge/smoke.json \\
@@ -39,9 +39,9 @@ from typing import Any
 
 import openai
 
-from live_idea_bench.backtest import weighted_mean_over_topics
-from live_idea_bench.config import load_topics
-from live_idea_bench.judge.config import (
+from idea_forecast_bench.backtest import weighted_mean_over_topics
+from idea_forecast_bench.config import load_topics
+from idea_forecast_bench.judge.config import (
     DEFAULT_CLUSTER_K,
     DEFAULT_JUDGE,
     DEFAULT_TOP_R,
@@ -50,11 +50,11 @@ from live_idea_bench.judge.config import (
     MATCH_S_THRESHOLD,
     VOYAGE_BASE_URL,
 )
-from live_idea_bench.judge.identity import embed_fingerprint, judge_fingerprint
-from live_idea_bench.judge.state import RunState
-from live_idea_bench.judge.topics import process_topic
-from live_idea_bench.papers import load_papers_from_markdown
-from live_idea_bench.topics import classify_papers_by_topic
+from idea_forecast_bench.judge.identity import embed_fingerprint, judge_fingerprint
+from idea_forecast_bench.judge.state import RunState
+from idea_forecast_bench.judge.topics import process_topic
+from idea_forecast_bench.papers import load_papers_from_markdown
+from idea_forecast_bench.topics import classify_papers_by_topic
 
 
 def main() -> int:
@@ -122,7 +122,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    # Same override as the benchmark matcher (live_idea_bench/similarity.py):
+    # Same override as the benchmark matcher (idea_forecast_bench/similarity.py):
     # without it, VOYAGE_BASE_URL would silently apply to `baselines` but not to
     # `judge-eval`, and the two would embed against different endpoints.
     embed_base_url = os.environ.get("VOYAGE_BASE_URL") or VOYAGE_BASE_URL

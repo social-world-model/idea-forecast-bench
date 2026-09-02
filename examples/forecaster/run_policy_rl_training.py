@@ -19,12 +19,12 @@ from forecaster.realization.model_zoo import (  # noqa: E402
     resolve_small_model,
 )
 from forecaster.realization.pipeline import run_policy_rl_pipeline  # noqa: E402
-from live_idea_bench.papers import load_papers_from_markdown  # noqa: E402
+from idea_forecast_bench.papers import load_papers_from_markdown  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Prepare and train RL policy checkpoints for LiveIdeaBench."
+        description="Prepare and train RL policy checkpoints for IdeaForecastBench."
     )
     parser.add_argument(
         "--input-dir",

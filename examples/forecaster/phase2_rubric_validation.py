@@ -4,7 +4,7 @@
 Two modes:
   --mode smoke   stubbed scorer + hand-crafted rubrics. Proves the pipeline runs
                  end-to-end without network/LLM. CI-safe.
-  --mode live    real LLM (live_idea_bench.llm.create_client) for both rubric
+  --mode live    real LLM (idea_forecast_bench.llm.create_client) for both rubric
                  generation and judge scoring. Requires API keys + network.
 
 Per-topic workflow:
@@ -258,8 +258,8 @@ def generate_rubric_via_llm(
         )
         raw = resp.choices[0].message.content or ""
     else:
-        from live_idea_bench.config import load_runtime_config
-        from live_idea_bench.llm import create_client, get_response_from_llm
+        from idea_forecast_bench.config import load_runtime_config
+        from idea_forecast_bench.llm import create_client, get_response_from_llm
 
         runtime_cfg = load_runtime_config()
         resolved = model_name or runtime_cfg.model_name

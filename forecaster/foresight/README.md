@@ -45,7 +45,7 @@ PYTHONPATH=. python examples/forecaster/phase2_rubric_validation.py --mode live
 PYTHONPATH=. python - <<'PY'
 from pathlib import Path
 from forecaster.foresight.indices import SentenceTransformerEmbedder, build_cutoff_indices
-from live_idea_bench.papers import load_papers   # adjust to your loader
+from idea_forecast_bench.papers import load_papers   # adjust to your loader
 papers = load_papers(...)                        # your corpus
 build_cutoff_indices(
     papers=papers,

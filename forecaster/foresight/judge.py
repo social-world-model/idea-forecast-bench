@@ -5,7 +5,7 @@ The judge has one public method:
     score(idea_text, candidate_text, rubric) -> JudgeResult
 
 It wraps the same LLM client the benchmark already uses
-(`live_idea_bench.llm.get_response_from_llm`) so the training-time reward
+(`idea_forecast_bench.llm.get_response_from_llm`) so the training-time reward
 shares its scoring backbone with the eval-time scorer.
 
 A pluggable `ScorerFn` is exposed so unit tests can inject a stub.
@@ -138,7 +138,7 @@ def make_live_scorer(
         Model is taken from `model_name` arg or env `JUDGE_MODEL`.
         API key from env `JUDGE_API_KEY` (defaults to "EMPTY" so local
         servers without auth still work).
-      * Otherwise → use live_idea_bench.llm routing (gpt-4o / claude / gemini).
+      * Otherwise → use idea_forecast_bench.llm routing (gpt-4o / claude / gemini).
 
     The judge prompt itself is shared across backends so the M2 AUC
     numbers are directly comparable across judges.
@@ -176,9 +176,9 @@ def make_live_scorer(
         _scorer.__name__ = f"live_scorer_local:{resolved_model}@{resolved_base}"
         return _scorer
 
-    # Fallback: live_idea_bench routing (OpenAI / Anthropic / Gemini hosted models).
-    from live_idea_bench.config import load_runtime_config
-    from live_idea_bench.llm import create_client, get_response_from_llm
+    # Fallback: idea_forecast_bench routing (OpenAI / Anthropic / Gemini hosted models).
+    from idea_forecast_bench.config import load_runtime_config
+    from idea_forecast_bench.llm import create_client, get_response_from_llm
 
     runtime_cfg = load_runtime_config()
     resolved = model_name or runtime_cfg.model_name

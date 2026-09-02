@@ -9,13 +9,13 @@ from types import TracebackType
 from typing import Any
 
 from backend import strategy_store
-from live_idea_bench.daily import (
+from idea_forecast_bench.daily import (
     compute_leaderboard_score,
     daily_cutoff_date,
     evaluate_previous_generation,
 )
-from live_idea_bench.ingest import ingest_latest_arxiv_papers
-from live_idea_bench.papers import load_papers_from_markdown, month_to_index
+from idea_forecast_bench.ingest import ingest_latest_arxiv_papers
+from idea_forecast_bench.papers import load_papers_from_markdown, month_to_index
 
 
 class PipelineAlreadyRunningError(RuntimeError):
