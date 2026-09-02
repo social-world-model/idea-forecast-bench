@@ -1,4 +1,4 @@
-# Combinatorial (Ramon-Llull) forecaster: GPU runbook
+# Combinatorial (Ramon-Llull) forecaster: runbook
 
 The L1 "static rule" experiment: mine theme / domain / method elements from
 every pre-cutoff paper, build the community state (decayed element heat plus
@@ -19,8 +19,87 @@ realisation prompt and judge are shared:
 The headline contrast is `combinatorial` minus `combinatorial_independent`:
 whether the co-occurrence distribution carries forecasting signal at all.
 
-Everything runs on local Qwen3.5-9B replicas (generation and judge). The only
-paid call is Voyage embeddings (~$5 for the full sweep).
+Generation and judging can both run on local Qwen3.5-9B replicas, or on a
+hosted OpenAI-compatible API. Voyage embeddings are needed either way
+(~$5 for the full sweep): the judge retrieval is Voyage-only by design.
+
+## Two ways to run
+
+**A. Hosted API, no GPU** (`scripts/run_combinatorial_api.sh`) — jump to the
+API section below. This is the cheap way to find out whether the idea works
+at all.
+
+**B. Local GPU replicas** (`scripts/run_combinatorial.sh`) — sections 0-5,
+for the full 624-window sweep.
+
+---
+
+# API mode (DashScope / no GPU)
+
+DashScope hosts third-party models under `vendor/model` ids, which collide
+with Hugging Face ids. Exporting `DASHSCOPE_API_KEY` makes `llm.py` route any
+id that is not a local path and not claimed by another provider to the
+DashScope OpenAI-compatible endpoint. **Unset that key when you want a local
+model**, or the local backend is shadowed.
+
+```bash
+export DASHSCOPE_API_KEY=...
+export VOYAGE_API_KEY=...          # element merging + the judge retrieval
+idea-forecast-bench fetch --from-hf --out-dir data/hf_full/raw_markdown   # once, 1.6 GB
+```
+
+### Step 1: generate only, do not score
+
+The cheapest thing that can falsify the approach. Two topics, the last four
+cutoffs, three sampler arms; no judge.
+
+```bash
+TOPICS=llm_alignment_rlhf,rag_retrieval MIN_CUTOFF_MONTH=2025-03   OUTPUT_DIR=output/pilot JUDGE=0 bash scripts/run_combinatorial_api.sh
+```
+
+Then read the output. Look at `output/pilot/logs/extract.log` for the merge
+clusters (are the elements real research concepts, or arXiv boilerplate?) and
+at a window of ideas (are they specific, or could they describe any paper?).
+If either is bad, no amount of judging fixes it — fix the extraction prompt or
+`canonicalize.merge_threshold` first.
+
+### Step 2: add scoring
+
+Widen to roughly 100 windows, which is where a paired difference of about
+0.15 in Hit@5 separates from noise (standard error near 0.055); at 50 windows
+you can only read the direction.
+
+```bash
+TOPICS=llm_alignment_rlhf,rag_retrieval,llm_reasoning_math,llm_long_context,\
+llm_agents,moe,quantization,image_gen_diffusion \
+  OUTPUT_DIR=output/step2 JUDGE=1 bash scripts/run_combinatorial_api.sh
+```
+
+Reads out `output/step2/table.txt` plus a per-stage token ledger from
+`output/step2/usage.jsonl`, which is what sizes the full run.
+
+### Thinking levels
+
+Set per stage by the script; `DASHSCOPE_THINKING` overrides.
+
+| Stage | Level | Why |
+|---|---|---|
+| Extraction | off | Strict JSON over a short abstract, tens of thousands of calls. Reasoning multiplies billed output tokens and the trace is returned in `reasoning_content`, which the client drops — billed, never seen. |
+| Realisation | low (budget 512) | A few hundred calls, and the one step where composing elements into a specific idea can benefit. Applies equally to all arms, so it cannot confound the contrast. |
+| Judge | off (forced) | `JUDGE_MAX_TOKENS` is 256; a reasoning trace eats it and every call fails to parse. |
+| Specificity | off | The reply is three integers. |
+
+### Token budget (measured prompts, estimated volumes)
+
+For the full 52-topic sweep with four arms, the judge is about 85% of all
+input tokens (624 windows x 5 predictions x 10 retrieved candidates x 4 arms
+= 124,800 calls, each resending a 2,246-token rubric). Scope the judge first
+if the budget is tight: `ARMS="combinatorial combinatorial_independent"`
+halves it and still answers whether co-occurrence carries signal.
+
+---
+
+# GPU mode (local Qwen3.5-9B)
 
 ## 0. Environment (once)
 

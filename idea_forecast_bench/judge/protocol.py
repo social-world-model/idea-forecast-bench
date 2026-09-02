@@ -47,12 +47,18 @@ def call_judge(
                 "temperature": JUDGE_TEMPERATURE,
                 "max_tokens": JUDGE_MAX_TOKENS,
             }
-            # Qwen3.5 judges default to "thinking" mode, which burns the token
-            # budget on <think> tokens before the PROBLEM_MATCH/... lines.
+            # Reasoning judges default to "thinking" mode, which burns the
+            # 256-token budget on the reasoning trace before the
+            # PROBLEM_MATCH/... lines and fails to parse on every call. The
+            # switch is spelled differently per backend: vLLM/SGLang take a
+            # chat-template kwarg, DashScope takes a top-level field.
+            extra_body: dict[str, Any] = {}
             if "qwen" in judge_model.lower():
-                create_kwargs["extra_body"] = {
-                    "chat_template_kwargs": {"enable_thinking": False}
-                }
+                extra_body["chat_template_kwargs"] = {"enable_thinking": False}
+            if "dashscope" in str(getattr(judge_client, "base_url", "")).lower():
+                extra_body["enable_thinking"] = False
+            if extra_body:
+                create_kwargs["extra_body"] = extra_body
             resp = judge_client.chat.completions.create(**create_kwargs)
             content = resp.choices[0].message.content or ""
             # Strip any chain-of-thought block before parsing so a reasoning

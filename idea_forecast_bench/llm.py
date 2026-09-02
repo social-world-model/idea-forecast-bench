@@ -18,6 +18,7 @@ def _unsupported_model_error(model: str) -> ValueError:
         f"'{model}'. Supported model families: claude-*, gpt-4o*, gpt-4.1*, gpt-5*, "
         "*gemini*, "
         "Together AI hosted (deepseek-ai/*, Qwen/*), "
+        "DashScope hosted (any id, with DASHSCOPE_API_KEY set), "
         "or a local/Hugging Face model reference such as Qwen/Qwen3.5-2B."
     )
 
@@ -77,6 +78,62 @@ def _is_deepseek_official_model(model: str) -> bool:
     return model.lower().startswith("deepseek-")
 
 
+# Alibaba DashScope (Model Studio / 百炼) exposes an OpenAI-compatible endpoint
+# that hosts third-party models under `vendor/model` ids, e.g.
+# `vanchin/deepseek-v4-pro-0813`. Those ids collide with Hugging Face ids, so
+# without this branch they fall through to the LOCAL backend and the client
+# tries to download a hosted-only model.
+#
+# Detection rule: DASHSCOPE_API_KEY is set AND the id is not an existing local
+# path (a real checkpoint on disk always wins). Everything not claimed by an
+# earlier family therefore goes to DashScope while that key is exported --
+# unset it when you mean to load a local model.
+DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+
+def _is_dashscope_model(model: str) -> bool:
+    if not os.environ.get("DASHSCOPE_API_KEY"):
+        return False
+    if (
+        _is_openai_model(model)
+        or _is_anthropic_model(model)
+        or _is_gemini_model(model)
+        or _is_together_model(model)
+        or _is_deepseek_official_model(model)
+    ):
+        return False
+    from pathlib import Path as _Path
+
+    return not _Path(model).exists()
+
+
+# Reasoning budgets for DashScope thinking mode. Keep them small: the reply
+# still has to fit in MAX_NUM_TOKENS, and a long reasoning trace on a strict
+# JSON task is how a run ends up with truncated, unparseable output.
+_THINKING_BUDGETS: dict[str, int] = {"low": 512, "medium": 1024, "high": 2048}
+_THINKING_OFF = {"off", "none", "disabled", "false", "0"}
+
+
+def dashscope_thinking_body(reasoning_effort: str | None) -> dict[str, Any]:
+    """extra_body for a DashScope call.
+
+    Thinking is OFF unless asked for, because the two highest-volume stages
+    (element extraction, the retrieve-then-judge judge) are strict-schema
+    tasks where reasoning only multiplies billed output tokens -- and the
+    judge's 256-token budget would be spent before it emits a score line.
+    Turn it on per stage with `reasoning_effort` or DASHSCOPE_THINKING."""
+    level = (reasoning_effort or os.environ.get("DASHSCOPE_THINKING") or "off").lower()
+    if level in _THINKING_OFF:
+        return {"enable_thinking": False}
+    budget = _THINKING_BUDGETS.get(level)
+    if budget is None:
+        raise ValueError(
+            f"Unknown thinking level {level!r}; use one of "
+            f"{', '.join(sorted(_THINKING_BUDGETS))} or off."
+        )
+    return {"enable_thinking": True, "thinking_budget": budget}
+
+
 def _is_local_model(model: str) -> bool:
     if (
         _is_openai_model(model)
@@ -84,6 +141,7 @@ def _is_local_model(model: str) -> bool:
         or _is_gemini_model(model)
         or _is_together_model(model)
         or _is_deepseek_official_model(model)
+        or _is_dashscope_model(model)
     ):
         return False
     return resolve_model_reference(model) is not None
@@ -164,6 +222,22 @@ def create_client(model: str) -> tuple[Any, str]:
             model,
         )
 
+    if _is_dashscope_model(model):
+        import openai
+
+        api_key = _require_api_key("DASHSCOPE_API_KEY", model)
+        base_url = os.environ.get("DASHSCOPE_BASE_URL") or DASHSCOPE_BASE_URL
+        timeout = _stream_idle_timeout()
+        return (
+            openai.OpenAI(
+                api_key=api_key,
+                base_url=base_url,
+                timeout=timeout,
+                max_retries=2,
+            ),
+            model,
+        )
+
     if _is_gemini_model(model):
         import google.generativeai as genai
 
@@ -180,6 +254,42 @@ def create_client(model: str) -> tuple[Any, str]:
         return None, resolved_model
 
     raise _unsupported_model_error(model)
+
+
+_USAGE_LOCK = __import__("threading").Lock()
+
+
+def _log_usage(model: str, usage: Any) -> None:
+    """Append one JSON line per call to IDEA_FORECAST_USAGE_LOG, when set.
+
+    A pilot's real token counts are the only way to size a full run; reasoning
+    tokens in particular are billed but never appear in the reply, so they are
+    invisible without this."""
+    path = os.environ.get("IDEA_FORECAST_USAGE_LOG")
+    if not path or usage is None:
+        return
+    import json
+    import time
+
+    record = {
+        "ts": round(time.time(), 3),
+        "model": model,
+        "stage": os.environ.get("IDEA_FORECAST_USAGE_STAGE", ""),
+        "prompt_tokens": getattr(usage, "prompt_tokens", None),
+        "completion_tokens": getattr(usage, "completion_tokens", None),
+        "total_tokens": getattr(usage, "total_tokens", None),
+    }
+    details = getattr(usage, "completion_tokens_details", None)
+    if details is not None:
+        record["reasoning_tokens"] = getattr(details, "reasoning_tokens", None)
+    prompt_details = getattr(usage, "prompt_tokens_details", None)
+    if prompt_details is not None:
+        record["cached_tokens"] = getattr(prompt_details, "cached_tokens", None)
+    try:
+        with _USAGE_LOCK, open(path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record) + "\n")
+    except OSError as exc:  # a ledger must never take the run down
+        logger.debug("usage log write failed: %s", exc)
 
 
 def _sanitize_text(text: str) -> str:
@@ -276,7 +386,11 @@ def get_response_from_llm(
         response = client.chat.completions.create(**request_kwargs)
         content = response.choices[0].message.content or ""
         new_msg_history = new_msg_history + [{"role": "assistant", "content": content}]
-    elif _is_together_model(model) or _is_deepseek_official_model(model):
+    elif (
+        _is_together_model(model)
+        or _is_deepseek_official_model(model)
+        or _is_dashscope_model(model)
+    ):
         new_msg_history = msg_history + [{"role": "user", "content": msg}]
         request_kwargs = {
             "model": model,
@@ -296,14 +410,22 @@ def get_response_from_llm(
             request_kwargs["top_p"] = top_p
         if seed is not None:
             request_kwargs["seed"] = seed
+        if _is_dashscope_model(model):
+            # DashScope takes thinking control at the top level of the body,
+            # and reports usage only when asked for it on a stream.
+            request_kwargs["extra_body"] = dashscope_thinking_body(reasoning_effort)
+            request_kwargs["stream_options"] = {"include_usage": True}
         stream = client.chat.completions.create(**request_kwargs)
         chunks: list[str] = []
+        usage: Any = None
         for chunk in stream:
+            usage = getattr(chunk, "usage", None) or usage
             if not chunk.choices:
                 continue
             piece = getattr(chunk.choices[0].delta, "content", None)
             if piece:
                 chunks.append(piece)
+        _log_usage(model, usage)
         content = "".join(chunks)
         # DeepSeek-R1 / Qwen thinking variants leak chain-of-thought inside
         # <think>...</think>; strip it so downstream JSON parsing isn't fooled.
