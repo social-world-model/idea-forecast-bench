@@ -11,10 +11,12 @@ TOPIC_WORKERS="${TOPIC_WORKERS:-4}"
 TOPICS="${TOPICS:-}"
 JUDGE_MODEL_FLAG="${JUDGE_MODEL:-}"
 JUDGE_BASE_URL_FLAG="${JUDGE_BASE_URL:-}"
+EMBED_BASE_URL="${EMBED_BASE_URL:-}"   # explicit opt-in for a local embedding endpoint
 
 # The judge is chosen by flag only. Any of these left exported silently
 # redirects scoring to another model without an error.
 unset JUDGE_BASE_URL JUDGE_MODEL JUDGE_API_KEY OPENAI_BASE_URL VOYAGE_BASE_URL
+[[ -n "$EMBED_BASE_URL" ]] && export VOYAGE_BASE_URL="$EMBED_BASE_URL"
 
 extra=()
 [[ -n "$TOPICS" ]] && extra+=(--topics "$TOPICS")

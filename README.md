@@ -147,13 +147,24 @@ final table from judged artifacts with `idea-forecast-bench main-table`.
 
 ### Checking the wiring without provider keys
 
-Both generation and matching accept an OpenAI-compatible endpoint, so the whole path can
-be exercised against a local server or stub with no provider account:
+Generation, matching and the judge all accept an OpenAI-compatible endpoint, so the
+whole path can be exercised against a local server or stub with no provider account.
+For the single-process commands, point both clients at it:
 
 ```bash
 export OPENAI_BASE_URL=http://127.0.0.1:8000/v1  OPENAI_API_KEY=EMPTY
 export VOYAGE_BASE_URL=http://127.0.0.1:8000/v1  VOYAGE_API_KEY=EMPTY
 idea-forecast-bench baselines --only topic_trend
+```
+
+For the sharded driver, the judge takes its endpoint and model explicitly, and the
+embedding endpoint is an explicit opt-in because the judge script unsets
+`VOYAGE_BASE_URL` on purpose:
+
+```bash
+OPENAI_BASE_URL=http://127.0.0.1:8000/v1 OPENAI_API_KEY=EMPTY VOYAGE_API_KEY=EMPTY \
+  EMBED_BASE_URL=http://127.0.0.1:8000/v1 JUDGE_BASE_URL=http://127.0.0.1:8000/v1 JUDGE_MODEL=local \
+  MODEL=gpt-4.1-local EXPECTED_TOPICS=<n> EXPECTED_WINDOWS=<n> bash scripts/run_benchmark.sh
 ```
 
 This verifies wiring, not quality: only `windows` reaching a non-zero value tells you the

@@ -42,7 +42,10 @@ wait_all() {
 }
 
 # 1. generate ---------------------------------------------------------------
-mapfile -t SHARD_TOPICS < <(SHARDS="$SHARDS" bash scripts/benchmark/split_topics.sh | grep -v '^$')
+SHARD_TOPICS=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] && SHARD_TOPICS+=("$line")
+done < <(SHARDS="$SHARDS" bash scripts/benchmark/split_topics.sh)
 echo "generating: ${#SHARD_TOPICS[@]} shards x strategies: $STRATEGIES"
 pids=()
 for strategy in $STRATEGIES; do
