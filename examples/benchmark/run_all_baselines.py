@@ -97,8 +97,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Max future papers each prediction is matched against. The matcher "
         "issues one embedding call per (prediction, candidate) pair, so leaving "
-        "this unset is O(top_k * |future|) calls per window -- ~1.5M calls for a "
-        "208-window five-baseline sweep. Must be identical across baselines for "
+        "this unset is O(top_k * |future|) calls per window -- millions of calls "
+        "for a full five-baseline sweep. Must be identical across baselines for "
         "the rows to stay comparable.",
     )
     parser.add_argument("--workers", type=int, default=1)

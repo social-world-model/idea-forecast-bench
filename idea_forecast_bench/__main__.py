@@ -20,7 +20,6 @@ MDF forecaster:
     train-prior      SFT the memory-conditioned innovation prior.
     train            GRPO-train the realization policy.
     infer            Joint inference: sample from the prior -> realize -> select.
-    eval             Evaluate a trained forecaster on a held-out test window.
 
 Analysis:
     analysis         Evaluation-validity analyses (citation / coauthor / leakage).
@@ -72,7 +71,6 @@ _COMMANDS: dict[str, tuple[str, str]] = {
         "forecaster/run_joint_inference.py",
         "Joint inference: prior -> realize -> select.",
     ),
-    "eval": ("forecaster/eval.py", "Evaluate a trained forecaster."),
     # analysis (examples/benchmark/)
     "analysis": (
         "benchmark/analysis_leakage.py",

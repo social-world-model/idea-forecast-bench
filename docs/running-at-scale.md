@@ -454,18 +454,6 @@ shard into the write path at once. The sweep that exposed this was a
 contamination probe over a different month range; the concurrent sweep on the
 same machine, using the main range, never wrote at all.
 
-## Provenance of the earlier 208-window results
-
-Before the 624-episode sweep the paper now reports, an earlier snapshot
-evaluated MDF on Qwen3.5-9B over 208 windows (four cutoffs, 2024-09 to
-2024-12, corpus from 2024-06). Those numbers were produced by ad-hoc scripts
-(`orchestrate_208.sh`, `gen_4cut.sh`, `gen_cut09.sh`, `fast_judge.sh`, and a
-LoRA-merge step) that were never committed: they hardcode one machine's GPU
-ids, ports, a mount point that no longer exists, and a since-removed
-`--similarity-engine` flag. They remain in that machine's working tree and are
-deliberately not in this repository. The 624-episode results are reproduced by
-the sharded launchers in `scripts/benchmark/`.
-
 ## Corpus loading dominates short runs
 
 `corpus_fingerprint` walks every paper — one `rglob` plus a `stat` each. On a

@@ -176,7 +176,10 @@ print(str(grpo_dir))
 echo "Realization checkpoint: ${REAL_CKPT}"
 
 # ---- Phase 4: Evaluation via Benchmark Backtest ----
-# Uses run_domain_backtest.py (same as all other strategies) for fair comparison.
+# Uses run_domain_backtest.py (same as all other strategies) for fair comparison,
+# then scores the predictions with the retrieve-then-judge protocol, which is
+# where the reported numbers come from. Generation skips the embedding match
+# (--skip-matching) because judge-eval re-embeds and re-retrieves itself.
 # Eval range: 2024-10 to 2025-03 (3 windows with horizon=3).
 
 EVAL_START="${EVAL_START:-2024-10}"
@@ -184,9 +187,9 @@ EVAL_END="${EVAL_END:-2025-03}"
 
 TRAINED_EVAL="${OUT}/eval_trained.json"
 if [ -f "$TRAINED_EVAL" ]; then
-  echo ""; echo "===== Phase 4: Eval (trained) — SKIPPED (exists) ====="
+  echo ""; echo "===== Phase 4: Generate (trained) — SKIPPED (exists) ====="
 else
-  echo ""; echo "===== Phase 4: Eval (trained forecaster) ====="
+  echo ""; echo "===== Phase 4: Generate (trained forecaster) ====="
   python3 examples/benchmark/run_domain_backtest.py \
     --strategy forecaster \
     --model-name "$BASE_MODEL_ID" \
@@ -195,38 +198,36 @@ else
     --input-dir "$PAPERS" \
     --start-month "$EVAL_START" --end-month "$EVAL_END" \
     --top-k 5 --horizon-months 3 \
-    --similarity-engine heuristic --workers 1 \
+    --skip-matching --workers 1 \
     --output "$TRAINED_EVAL"
 fi
 
-# ---- Voyage re-eval (paper-comparable scores) ----
-VOYAGE_EVAL="${OUT}/eval_voyage.json"
-if [ -n "${VOYAGE_API_KEY:-}" ] && [ -f "$TRAINED_EVAL" ]; then
-  if [ -f "$VOYAGE_EVAL" ]; then
-    echo ""; echo "===== Voyage Re-eval — SKIPPED (exists) ====="
-  else
-    echo ""; echo "===== Voyage Re-eval (threshold=0.80) ====="
-    VOYAGE_API_KEY="$VOYAGE_API_KEY" python3 examples/benchmark/reeval_voyage.py \
-      --input-json "$TRAINED_EVAL" \
-      --papers-dir "$PAPERS" \
-      --output "$VOYAGE_EVAL" \
-      --threshold 0.80
-  fi
+# ---- Phase 5: retrieve-then-judge scoring ----
+# Needs OPENAI_API_KEY (gpt-4.1-mini judge by default) and VOYAGE_API_KEY
+# (retrieval embeddings). The judge is chosen by flag; none of the *_BASE_URL
+# variables may be left exported, or scoring is silently redirected.
+unset JUDGE_BASE_URL JUDGE_MODEL JUDGE_API_KEY OPENAI_BASE_URL VOYAGE_BASE_URL
+JUDGED="${OUT}/eval_trained.judged.json"
+if [ -z "${OPENAI_API_KEY:-}" ] || [ -z "${VOYAGE_API_KEY:-}" ]; then
+  echo ""; echo "===== Phase 5: Judge — SKIPPED (set OPENAI_API_KEY and VOYAGE_API_KEY) ====="
+elif [ -f "$JUDGED" ]; then
+  echo ""; echo "===== Phase 5: Judge — SKIPPED (exists) ====="
+else
+  echo ""; echo "===== Phase 5: Judge (retrieve-then-judge) ====="
+  python3 examples/benchmark/llm_judge_eval.py \
+    --input-json "$TRAINED_EVAL" \
+    --papers-dir "$PAPERS" \
+    --output "$JUDGED" \
+    --state-file "${JUDGED%.json}.state.json"
 fi
 
 echo ""
 echo "===== Results ====="
-if [ -f "$VOYAGE_EVAL" ]; then
-  python3 -c "
-import json
-data = json.load(open('${VOYAGE_EVAL}'))
-s = data.get('aggregate_summary', {})
-print(f'  hit@5={s.get(\"avg_hit_at_k\", 0):.4f}  P@5={s.get(\"avg_precision_at_k\", 0):.4f}  '
-      f'R@5={s.get(\"avg_recall_at_k\", 0):.4f}  MRR={s.get(\"avg_mrr\", 0):.4f}  '
-      f'Nov={s.get(\"avg_novelty\", 0):.4f}  Div={s.get(\"avg_diversity\", 0):.4f}')
-"
-elif [ -f "$TRAINED_EVAL" ]; then
-  echo "  (Heuristic only — set VOYAGE_API_KEY for paper-comparable scores)"
+echo "  predictions: $TRAINED_EVAL"
+if [ -f "$JUDGED" ]; then
+  echo "  judged:      $JUDGED"
+  echo "  table:       idea-forecast-bench main-table --source \"${MODEL}=${JUDGED}\" \\"
+  echo "                 --expected-topics <n> --expected-windows <n>   # counts for this eval range"
+else
+  echo "  (metrics in the predictions file are NaN by design; run the judge for scores)"
 fi
-
-echo ""; echo "===== Done ====="

@@ -55,13 +55,12 @@ cd live-idea-bench
 poetry install
 ```
 
-`poetry install` is enough to run the benchmark and every baseline. Two optional groups
-add more:
+`poetry install` is enough to run the benchmark and every baseline. Training MDF needs
+one more group:
 
 | Group | Command | When you need it |
 |---|---|---|
 | forecaster | `poetry install --with forecaster` | train or run MDF locally (torch, trl, peft) |
-| webapp | `poetry install --with webapp` | the optional Flask API under `backend/` |
 
 > For GPU training, install a CUDA-matched torch with `scripts/setup_rl_env*.sh`
 > rather than through Poetry: the default index can resolve a wheel that leaves
@@ -245,7 +244,6 @@ examples/                   # Python entry scripts behind each CLI command
 scripts/                    # sharded sweep launchers, vLLM serving, GPU env setup
 config/                     # YAML config, including the 52-topic taxonomy
 docs/                       # running-at-scale notes
-backend/, frontend/         # optional web app
 ```
 
 <details>
@@ -264,7 +262,6 @@ backend/, frontend/         # optional web app
 | `train-prior` | SFT the memory-conditioned innovation prior |
 | `train` | GRPO-train the realization policy |
 | `infer` | Joint inference: prior → realize → select |
-| `eval` | Evaluate a trained forecaster on a held-out window |
 | `analysis` | Evaluation-validity analyses (citation / coauthor / leakage) |
 
 </details>

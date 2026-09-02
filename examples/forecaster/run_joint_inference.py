@@ -4,7 +4,7 @@
 All-local inference using trained prior (SFT) and realization (GRPO) checkpoints.
 No LLM API calls — both models run on local GPU.
 
-Produces proposals in reeval_voyage.py-compatible format.
+Produces proposals in the same shape as run_domain_backtest.py predictions.
 
 Usage:
     python examples/run_joint_inference.py \
@@ -147,7 +147,7 @@ def main() -> int:
         json.dumps(proposals_data, indent=2, ensure_ascii=False)
     )
 
-    # Build predictions in reeval_voyage format
+    # Build predictions in the backtest artifact's prediction format
     topics = load_topics()
     grouped = classify_papers_by_topic(papers, topics)
 
