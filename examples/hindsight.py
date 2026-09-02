@@ -27,7 +27,7 @@ from idea_forecast_bench.backtest import split_train_future_by_cutoff  # noqa: E
 from idea_forecast_bench.llm import _is_openai_model, create_client  # noqa: E402
 
 # ---------------------------------------------------------------------------
-# Manifest helpers (shared with run_topic_hindsight_preview.py)
+# Manifest helpers
 # ---------------------------------------------------------------------------
 
 

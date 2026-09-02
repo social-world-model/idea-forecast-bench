@@ -97,7 +97,7 @@ jobs:
           poetry run python - <<'PY'
           import pathlib, re, sys
           src = pathlib.Path("idea_forecast_bench/__main__.py").read_text()
-          targets = sorted(set(re.findall(r'"((?:benchmark|forecaster)/[a-z0-9_]+\.py)"', src)))
+          targets = sorted(set(re.findall(r'"([a-z0-9_]+\.py)"', src)))
           missing = [t for t in targets if not (pathlib.Path("examples") / t).exists()]
           print(f"checked {len(targets)} CLI targets")
           if missing:

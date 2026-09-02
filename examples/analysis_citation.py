@@ -33,7 +33,7 @@ def _require_llmjudge_schema(data: dict, source: str) -> None:
         if "train_paper_ids" not in w:
             raise SystemExit(
                 f"{source}: llm_judge_eval output predates train_paper_ids. "
-                "Re-run llm_judge_eval.py to populate per-window train ids."
+                "Re-run judge_eval.py to populate per-window train ids."
             )
         return
 

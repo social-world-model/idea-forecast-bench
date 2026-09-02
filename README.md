@@ -177,8 +177,15 @@ matchers are not comparable, so there is no flag to change the matcher.
 
 MDF is trained in two stages, a supervised prior and a GRPO-trained realization
 policy, then evaluated through the same `benchmark` and `judge-eval` path as every
-baseline. The commands below are the full pipeline; `scripts/run_train_and_eval.sh`
-chains steps 3 to 5 and skips any stage whose checkpoint already exists.
+baseline. The commands below are the full pipeline. Every step also has a shell twin
+in `scripts/` (`hindsight.sh`, `build_indices.sh`, `build_rubrics.sh`,
+`train_prior.sh`, `train.sh`, `benchmark.sh`, `judge_eval.sh`) whose variables are
+the paper's settings, and `scripts/run_train.sh` chains all of them, skipping any
+stage whose output already exists:
+
+```bash
+OPENAI_API_KEY=... VOYAGE_API_KEY=... bash scripts/run_train.sh
+```
 
 ### Step 0 — GPU environment
 
@@ -212,10 +219,10 @@ per-topic rubric. Build both (one GPU for the embedder; the rubric step calls a
 judge, either the OpenAI default or a local endpoint via `--judge-base-url`):
 
 ```bash
-python examples/forecaster/build_indices.py --papers-dir /path/to/corpus \
+python examples/build_indices.py --papers-dir /path/to/corpus \
   --hindsight data/topic_hindsight/hindsight_samples.jsonl \
   --art output/foresight_artifacts
-python examples/forecaster/build_rubrics.py --mode live \
+python examples/build_rubrics.py --mode live \
   --rubrics-dir output/foresight_artifacts/rubrics
 ```
 
@@ -234,7 +241,7 @@ idea-forecast-bench train-prior --model qwen2.5-7b-instruct \
 ### Step 4 — Realization GRPO
 
 Warm-starts from the prior adapter. The foresight judge is `gpt-4o` unless
-`JUDGE_BASE_URL` points at a local endpoint (`scripts/benchmark/serve_vllm.sh`);
+`JUDGE_BASE_URL` points at a local endpoint (`scripts/serve_vllm.sh`);
 `FORESIGHT_JUDGE_WORKERS` bounds its concurrency.
 
 ```bash
@@ -270,34 +277,32 @@ idea-forecast-bench judge-eval --input-json output/backtest/forecaster.json \
 
 A full sweep is 624 windows per (strategy, backbone), which is too slow for one
 process: the work between API calls is GIL-bound, so the run is sharded by topic
-across processes. Two scripts do this with the paper's settings as defaults:
+across processes. One script does the whole thing with the paper's settings as
+defaults, calling `scripts/split_topics.sh`, `benchmark.sh`, `judge_eval.sh` and
+`main_table.sh` in turn:
 
 ```bash
-# 1. generate: 5 strategies x 4 topic shards, predictions only (--skip-matching)
-OPENAI_API_KEY=... bash scripts/benchmark/run_sharded_backtest.sh
-
-# 2. judge: one judge-eval process per shard, each with its own state file
-OPENAI_API_KEY=... VOYAGE_API_KEY=... bash scripts/benchmark/run_sharded_judge.sh
-
-# 3. table
-idea-forecast-bench main-table --source "gpt-4.1=output/sharded/judged/*.judged.json"
+OPENAI_API_KEY=... VOYAGE_API_KEY=... bash scripts/run_benchmark.sh
+# MODEL, SHARDS, STRATEGIES, INPUT_DIR and OUTPUT_DIR are environment variables
 ```
 
 To run a local backbone or the Qwen3.5-9B judge, serve it with
-`scripts/benchmark/serve_vllm.sh` and point `OPENAI_BASE_URL` at it. Two settings
+`scripts/serve_vllm.sh` and point `OPENAI_BASE_URL` at it. Two settings
 fail silently when wrong. The served model name decides routing: generation only
 goes to `OPENAI_BASE_URL` for names starting with `gpt-4o`, `gpt-4.1` or `gpt-5`, so
 serve a local backbone under an alias such as `gpt-4o-qwen7b` and pass the judge's
-own name with `--judge-model`. The context length must be at least 16384, because
+own name with `JUDGE_MODEL`. The context length must be at least 16384, because
 the client requests 4096 output tokens and the longest prompts are about 4100.
 
 ```bash
-SERVED_NAMES="gpt-4o-qwen7b" bash scripts/benchmark/serve_vllm.sh /models/Qwen2.5-7B-Instruct 31000
+SERVED_NAMES="gpt-4o-qwen7b" bash scripts/serve_vllm.sh /models/Qwen2.5-7B-Instruct 31000
+MODEL=gpt-4o-qwen7b LABEL=Qwen2.5-7B OPENAI_BASE_URL=http://127.0.0.1:31000/v1 OPENAI_API_KEY=EMPTY \
+  VOYAGE_API_KEY=... bash scripts/run_benchmark.sh
 ```
 
 Before judging, make sure none of `JUDGE_BASE_URL`, `JUDGE_MODEL`, `OPENAI_BASE_URL`
 or `VOYAGE_BASE_URL` are left exported from another run. Any of them silently
-redirects scoring to a different model, and nothing errors. The judge script unsets
+redirects scoring to a different model, and nothing errors. `judge_eval.sh` unsets
 them and takes the judge by flag instead.
 
 Concurrency, corpus-fingerprint caching, and the silent failure modes met while
@@ -320,8 +325,8 @@ forecaster/                 # MDF: Mode-Decomposition Forecaster
 ├── realization/            # realization policy (GRPO)
 └── foresight/              # future-grounded reward, indices, rubrics
 
-examples/                   # Python entry scripts behind each CLI command
-scripts/                    # sharded sweep launchers, vLLM serving, MDF pipeline wrapper
+examples/                   # one Python entry script per CLI command
+scripts/                    # one shell twin per example, plus run_benchmark.sh and run_train.sh
 config/                     # YAML config, including the 52-topic taxonomy
 docs/                       # running-at-scale notes
 ```

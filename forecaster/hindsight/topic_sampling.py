@@ -103,7 +103,7 @@ FIXED_TOPIC_HINDSIGHT_EPISODES: tuple[TopicHindsightEpisode, ...] = (
     # Two properties depend on the quarterly spacing, so do not switch to a
     # monthly grid without handling both: (1) output/foresight_artifacts/indices
     # only holds indices at these quarter boundaries -- a monthly grid needs 8
-    # more, built with examples/forecaster/build_indices.py; (2) quarterly future
+    # more, built with examples/build_indices.py; (2) quarterly future
     # windows do not overlap, whereas monthly ones overlap by 2/3 and
     # sample_future_papers_deterministically has no cross-episode dedup (its
     # seen_paper_ids is function-local), so the same paper would be selected as

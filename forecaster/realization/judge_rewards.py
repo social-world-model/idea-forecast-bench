@@ -25,7 +25,7 @@ class SupportsEmbedding(Protocol):
 
 logger = logging.getLogger(__name__)
 
-# Reuse the exact constants from examples/llm_judge_eval.py so the GRPO
+# Reuse the exact constants from examples/judge_eval.py so the GRPO
 # training reward and the offline eval stay numerically aligned.
 DEFAULT_TOP_R = 10
 DEFAULT_CLUSTER_K = 5
@@ -244,7 +244,7 @@ def compute_soft_reward(
 
     Returns the soft score of the highest-scoring matched candidate, or 0.0
     if no candidate passes the match thresholds. This is the per-prediction
-    analogue of ``examples/llm_judge_eval.py``'s aggregate ``soft_score``.
+    analogue of ``examples/judge_eval.py``'s aggregate ``soft_score``.
     """
     if not future_papers:
         return 0.0

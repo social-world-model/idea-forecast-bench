@@ -45,7 +45,7 @@ def _analyze(data: dict, label: str) -> dict:
     if not saw_matches_key:
         raise SystemExit(
             f"[leakage] '{label}': no window carried a 'matches' list. This "
-            "script reads the CANONICAL backtest schema (run_domain_backtest.py "
+            "script reads the CANONICAL backtest schema (benchmark.py "
             "output with per-match lead_time), not llm_judge_eval output."
         )
 
@@ -102,7 +102,7 @@ def main() -> int:
         "--input",
         nargs="+",
         required=True,
-        help="canonical run_domain_backtest.py output JSON files",
+        help="canonical benchmark.py output JSON files",
     )
     parser.add_argument("--output", default="leakage_report.json")
     args = parser.parse_args()

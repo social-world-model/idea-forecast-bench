@@ -34,44 +34,44 @@ _EXAMPLES = _REPO_ROOT / "examples"
 # command -> (relative script path, one-line help). The script is executed as
 # __main__ with sys.argv rewritten, so its existing argparse handles the flags.
 _COMMANDS: dict[str, tuple[str, str]] = {
-    # benchmark (examples/benchmark/)
+    # benchmark (examples/)
     "fetch": (
-        "benchmark/fetch_papers.py",
+        "fetch.py",
         "Download an arXiv corpus the benchmark can read.",
     ),
     "baselines": (
-        "benchmark/run_all_baselines.py",
+        "baselines.py",
         "Run every baseline on one corpus and print a comparison table.",
     ),
     "benchmark": (
-        "benchmark/run_domain_backtest.py",
+        "benchmark.py",
         "Run a domain-separated backtest.",
     ),
     "judge-eval": (
-        "benchmark/llm_judge_eval.py",
+        "judge_eval.py",
         "Retrieve-then-judge LLM evaluation of predictions.",
     ),
     # MDF forecaster
     "hindsight": (
-        "forecaster/run_topic_hindsight.py",
+        "hindsight.py",
         "Extract latent-innovation training labels.",
     ),
-    "train-prior": ("forecaster/run_prior_sft.py", "SFT the innovation prior."),
+    "train-prior": ("train_prior.py", "SFT the innovation prior."),
     "train": (
-        "forecaster/run_policy_rl_training.py",
+        "train.py",
         "GRPO-train the realization policy.",
     ),
     "infer": (
-        "forecaster/run_joint_inference.py",
+        "infer.py",
         "Joint inference: prior -> realize -> select.",
     ),
-    # analysis (examples/benchmark/)
+    # analysis (examples/)
     "analysis": (
-        "benchmark/analysis_leakage.py",
+        "analysis_leakage.py",
         "Evaluation-validity analyses (citation/coauthor/leakage).",
     ),
     "main-table": (
-        "benchmark/build_main_table.py",
+        "main_table.py",
         "Assemble the main results table from judge-eval outputs.",
     ),
 }
@@ -96,9 +96,9 @@ _OPTIONAL_MODULES: dict[str, str] = {
 
 # `analysis` is a small family; let the user pick which one (default: leakage).
 _ANALYSIS_VARIANTS = {
-    "leakage": "benchmark/analysis_leakage.py",
-    "citation": "benchmark/analysis_citation.py",
-    "coauthor": "benchmark/analysis_coauthor.py",
+    "leakage": "analysis_leakage.py",
+    "citation": "analysis_citation.py",
+    "coauthor": "analysis_coauthor.py",
 }
 
 

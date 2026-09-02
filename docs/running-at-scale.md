@@ -202,9 +202,9 @@ the sub-second buckets, means back off.
 
 ### The multiplier is not always one layer deep
 
-`benchmark` has a single pool (`run_domain_backtest.py`, `--workers` over
+`benchmark` has a single pool (`benchmark.py`, `--workers` over
 topics). `judge-eval` nests two: `--topic-workers` over topics
-(`llm_judge_eval.py`) and `--workers` over candidates within a window
+(`judge_eval.py`) and `--workers` over candidates within a window
 (`judge/windows.py`). Same flag name, and in `judge-eval` the real concurrency is
 their product times the process count:
 
@@ -254,7 +254,7 @@ apart.
 Two later readings were wrong for a different reason: they used a signal that
 lags the work rather than one that misreports it.
 
-**Artifact mtime is not liveness.** A sharded `run_domain_backtest` writes its
+**Artifact mtime is not liveness.** A sharded `benchmark` run writes its
 output at *topic* boundaries, so a shard mid-topic touches nothing. Eight shards
 sitting at the same 36-40 minute mtime, with the window count unchanged across
 two readings 40 minutes apart, read as a dead run. It was not: the serving
@@ -264,7 +264,7 @@ log's mtime; the artifact tells you about the last completed topic, which on a
 slow topic is ancient.
 
 **`pgrep -f PATTERN` matches other pgreps carrying the same pattern.** A progress
-monitor polling `pgrep -f "run_domain_backtest.*probe"` every 180s makes the
+monitor polling `pgrep -f "benchmark.py.*probe"` every 180s makes the
 shard count read 9 for 8 shards, and — worse — can keep a `while pgrep; do` chain
 alive after the work has finished, delaying whatever it gates. `pkill -f` is
 sharper still: the pattern also matches the *invoking shell's own* command line,
@@ -273,7 +273,7 @@ shell. Both were hit in one session, the second twice.
 
 ```bash
 # Self-matching: counts pgrep itself and any sibling pgrep.
-pgrep -fc "run_domain_backtest.py.*probe"
+pgrep -fc "benchmark.py.*probe"
 
 # The bracket matches "run" in a target's cmdline but not the literal
 # "[r]un" in a sibling's.
@@ -308,7 +308,7 @@ one token over. Failures are per-window, so the run finishes normally with
 `total_windows=0`. Two machines burned twenty minutes each on this because the
 outward signs -- live processes, advancing tqdm, growing log files, a clean exit
 -- are identical to a healthy run. Give the endpoint headroom above
-`MAX_NUM_TOKENS` (`scripts/benchmark/serve_vllm.sh` refuses anything under
+`MAX_NUM_TOKENS` (`scripts/serve_vllm.sh` refuses anything under
 16384), and check client logs for `maximum context length` rather than
 checking that processes are alive.
 
@@ -354,7 +354,7 @@ The coordination lesson is narrower and worth stating on its own: **never pass a
 group name across a machine boundary.** "Take S0+S1" was received by a peer that
 had built its own S0 and S1. Pass the explicit member list, or partition by
 artifact filename, which cannot be reinterpreted.
-`examples/benchmark/split_topics.py` is deterministic for a fixed corpus, so two
+`examples/split_topics.py` is deterministic for a fixed corpus, so two
 machines running it on the same corpus get the same split; still pass the list.
 
 ## Four more that reported success, from the re-judging round
@@ -380,7 +380,7 @@ grep -c "Error code" OUT/*.judged.json
 A zero score is indistinguishable from a real "no match"; the error string is
 the only thing that separates them. Smoke-test the endpoint with the exact model
 name the client will request -- `curl /v1/models` proves reachability, not that
-the name resolves. `scripts/benchmark/run_sharded_judge.sh` runs this grep at
+the name resolves. `scripts/run_benchmark.sh` runs this grep at
 the end of every sweep and warns per file.
 
 Two caches must both be cleared to repair it. Purging `judge_decisions` alone
@@ -391,7 +391,7 @@ and the rerun re-serves them.
 **6. `pgrep` matching the shell that WROTE the script.** A chain script waited on
 `while pgrep -fc '[l]lm_judge_eval.py'`. The bracket stops it matching itself,
 but the parent that created the script via heredoc has the whole script text --
-including the literal `llm_judge_eval.py` on the launch line -- in its own
+including the literal `judge_eval.py` on the launch line -- in its own
 command line. The loop matched its own parent and waited forever while the work
 had been finished for twenty minutes. Chain on a marker the work writes, or on a
 state-file count; a process-name match has now failed in five distinct ways in
@@ -426,7 +426,7 @@ unset JUDGE_BASE_URL JUDGE_MODEL JUDGE_API_KEY OPENAI_BASE_URL VOYAGE_BASE_URL
 ```
 
 and choose the judge by flag (`--judge-model`, `--judge-base-url`), which is
-what `scripts/benchmark/run_sharded_judge.sh` does.
+what `scripts/run_benchmark.sh` does.
 
 ## The paper cache races when the cache is cold
 

@@ -28,7 +28,7 @@ forecaster/foresight/
   forecast.py           — forecast(papers_before_t) -> top-K
   metrics.py            — MMD + Wasserstein + impact-stratified breakdown
 
-examples/forecaster/
+examples/
   build_indices.py               — D_z from the hindsight labels + per-cutoff indices
   build_rubrics.py               — --mode smoke|live; writes rubrics + validation reports
 ```
@@ -41,7 +41,7 @@ examples/forecaster/
 1. Build per-cutoff indices and rubrics:
 
 ```bash
-PYTHONPATH=. python examples/forecaster/build_rubrics.py --mode live
+PYTHONPATH=. python examples/build_rubrics.py --mode live
 PYTHONPATH=. python - <<'PY'
 from pathlib import Path
 from forecaster.foresight.indices import SentenceTransformerEmbedder, build_cutoff_indices
@@ -71,6 +71,6 @@ dedup_penalty: 0.0           # try 0.05–0.1 if collapse appears
 rubric_refresh_every: 0      # opt-in; 0 = static rubric
 ```
 
-3. Run training as before (`scripts/run_train_and_eval.sh` etc.). The
+3. Run training as before (`scripts/run_train.sh` etc.). The
    TRL runner now resolves the reward through `make_reward_fn` and logs
    `reward backend: foresight_reward_fn (mode=foresight)` on start.
