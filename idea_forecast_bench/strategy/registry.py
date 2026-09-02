@@ -8,6 +8,16 @@ from idea_forecast_bench.strategy.retrieval_prompting import RetrievalPromptingS
 from idea_forecast_bench.strategy.summary_prompting import SummaryPromptingStrategy
 from idea_forecast_bench.strategy.topic_trend import TopicTrendStrategy
 
+# Sampler variant per strategy name. Each name becomes its own row in
+# main-table because benchmark.py stamps the strategy into the artifact.
+_COMBINATORIAL_VARIANTS: dict[str, str] = {
+    "combinatorial": "full",
+    "combinatorial_full": "full",
+    "combinatorial_frequency": "frequency",
+    "combinatorial_independent": "independent",
+    "combinatorial_random": "random",
+}
+
 
 def create_strategy(
     strategy_name: str,
@@ -107,5 +117,28 @@ def create_strategy(
             retrieval_top_n=int(retrieval_top_n) if retrieval_top_n else 20,
             temperature=temperature,
             reasoning_effort=reasoning_effort,
+        )
+    if normalized in _COMBINATORIAL_VARIANTS:
+        from idea_forecast_bench.strategy.combinatorial import CombinatorialStrategy
+
+        resolved_model = model_name or legacy_params.get("model_id")
+        element_cache = legacy_params.get("element_cache_path")
+        base_urls_raw = legacy_params.get("base_urls")
+        base_urls = (
+            [u for u in str(base_urls_raw).split(",") if u.strip()]
+            if base_urls_raw
+            else None
+        )
+        return CombinatorialStrategy(
+            model_name=str(resolved_model) if resolved_model else None,
+            variant=_COMBINATORIAL_VARIANTS[normalized],
+            element_cache_path=str(element_cache) if element_cache else None,
+            config_path=(
+                str(legacy_params["combinatorial_config"])
+                if legacy_params.get("combinatorial_config")
+                else None
+            ),
+            temperature=temperature,
+            base_urls=base_urls,
         )
     raise ValueError(f"Unsupported strategy: {strategy_name}")

@@ -11,7 +11,8 @@ STRATEGIES="${STRATEGIES:-topic_trend predictor_llm summary_prompting retrieval_
 SHARDS="${SHARDS:-4}"
 export START_MONTH="${START_MONTH:-2024-04}"
 export END_MONTH="${END_MONTH:-2025-09}"
-export INPUT_DIR MODEL
+ELEMENT_CACHE="${ELEMENT_CACHE:-}"   # combinatorial strategies only
+export INPUT_DIR MODEL ELEMENT_CACHE
 
 if [[ -z "${OPENAI_BASE_URL:-}" ]]; then
   : "${OPENAI_API_KEY:?OPENAI_API_KEY is not set and OPENAI_BASE_URL is empty}"

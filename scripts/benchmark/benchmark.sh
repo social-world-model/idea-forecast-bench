@@ -17,12 +17,16 @@ SKIP_MATCHING="${SKIP_MATCHING:-1}"
 TOPICS="${TOPICS:-}"
 PRIOR_CHECKPOINT="${PRIOR_CHECKPOINT:-}"
 REALIZATION_CHECKPOINT="${REALIZATION_CHECKPOINT:-}"
+ELEMENT_CACHE="${ELEMENT_CACHE:-}"   # combinatorial strategies
+BASE_URLS="${BASE_URLS:-}"
 
 extra=()
 [[ "$SKIP_MATCHING" == "1" ]] && extra+=(--skip-matching)
 [[ -n "$TOPICS" ]] && extra+=(--topics "$TOPICS")
 [[ -n "$PRIOR_CHECKPOINT" ]] && extra+=(--prior-checkpoint "$PRIOR_CHECKPOINT")
 [[ -n "$REALIZATION_CHECKPOINT" ]] && extra+=(--realization-checkpoint "$REALIZATION_CHECKPOINT")
+[[ -n "$ELEMENT_CACHE" ]] && extra+=(--element-cache "$ELEMENT_CACHE")
+[[ -n "$BASE_URLS" ]] && extra+=(--base-urls "$BASE_URLS")
 
 python examples/benchmark/benchmark.py \
   --input-dir "$INPUT_DIR" \

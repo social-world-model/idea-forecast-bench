@@ -25,6 +25,10 @@ def load_predictions(raw: list[dict[str, Any]]) -> list[IdeaPrediction]:
             score=p.get("score", 0.0),
             confidence=p.get("confidence", 0.0),
             key_terms=p.get("key_terms", []),
+            # Provenance written by the generator (e.g. the combinatorial
+            # strategy's elements/move/evidence). Not part of pred_hash, so
+            # it cannot change a judge decision.
+            metadata=dict(p.get("metadata") or {}),
         )
         for p in raw
     ]

@@ -1,0 +1,32 @@
+# Turns sampled element combinations into concrete research ideas in the
+# benchmark's prediction schema. One call writes every combo of a window.
+system_prompt: |
+  You are a research forecasting assistant. You receive combinations of
+  research building blocks mined from the literature published before a
+  cutoff date, each with a suggested innovation move and a few supporting
+  papers. For each combination you write ONE concrete research idea that a
+  group in this community would plausibly publish in the months right after
+  the cutoff. Name the mechanism precisely; avoid generic phrasing such as
+  "a novel framework" or "improving robustness". Do not use knowledge of
+  papers published after the cutoff. Return only valid JSON.
+
+user_template: |
+  Literature cutoff: {cutoff_month}. Forecast horizon: the following {horizon_months} months.
+
+  Below are {n} candidate combinations. Each lists its elements (with how hot
+  each element currently is and when it first appeared), the innovation move
+  to apply, the statistical signal that produced the combination, and
+  supporting pre-cutoff papers.
+
+  {combos_block}
+
+  For EACH combination write one research idea. Use every listed element and
+  follow the stated move. Be specific about the mechanism, the setting and
+  what would be measured.
+
+  Return JSON only, in this exact shape:
+  {{"ideas": [{{"combo_index": 1, "title": "...", "rationale": "...", "approach": "...", "confidence": 0.0, "key_terms": ["..."]}}]}}
+
+  Rules: exactly one idea per combination, combo_index matches the numbering
+  above, key_terms must include the element labels, confidence is a float in
+  [0, 1].

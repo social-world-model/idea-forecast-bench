@@ -28,6 +28,10 @@ STRATEGY_ORDER = (
     "retrieval_prompting",
     "memory_prompting",
     "forecaster",
+    "combinatorial",
+    "combinatorial_frequency",
+    "combinatorial_independent",
+    "combinatorial_random",
 )
 
 # Full 52-topic sweep: 52 topics x 12 cutoffs.
@@ -127,7 +131,7 @@ def collect(
 
 def _print_table(sources: list[tuple[str, str]], rows: dict[Key, Row]) -> None:
     header = (
-        f"{'backbone':<17}{'strategy':<21}{'windows':>8}"
+        f"{'backbone':<17}{'strategy':<27}{'windows':>8}"
         f"{'hit@k S>=2':>12}{'hit@k S>=3':>12}{'short':>7}{'prior_fb':>10}"
     )
     print(header)
@@ -141,7 +145,7 @@ def _print_table(sources: list[tuple[str, str]], rows: dict[Key, Row]) -> None:
             if n == 0:
                 continue
             print(
-                f"{backbone:<17}{strategy:<21}{n:>8}"
+                f"{backbone:<17}{strategy:<27}{n:>8}"
                 f"{row['hit2'] / n:>12.4f}{row['hit3'] / n:>12.4f}"
                 f"{row['short']:>7}{row['prior_fallback']:>10}"
             )

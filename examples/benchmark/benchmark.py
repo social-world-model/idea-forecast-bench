@@ -58,6 +58,25 @@ def main() -> int:
         default=None,
         help="Path to policy manifest JSON (policy_rl strategy).",
     )
+    parser.add_argument(
+        "--element-cache",
+        type=str,
+        default=None,
+        help="Element cache dir from `extract-elements` (combinatorial strategies).",
+    )
+    parser.add_argument(
+        "--combinatorial-config",
+        type=str,
+        default=None,
+        help="Override config/combinatorial.yaml (combinatorial strategies).",
+    )
+    parser.add_argument(
+        "--base-urls",
+        type=str,
+        default=None,
+        help="Comma-separated OpenAI-compatible base URLs used round-robin "
+        "(combinatorial strategies; a served alias must still start with gpt-4o).",
+    )
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument(
         "--horizon-months",
@@ -190,6 +209,9 @@ def main() -> int:
         realization_checkpoint=args.realization_checkpoint,
         memory_path=args.memory_path,
         policy_manifest_path=args.policy_manifest_path,
+        element_cache_path=args.element_cache,
+        combinatorial_config=args.combinatorial_config,
+        base_urls=args.base_urls,
     )
     bt_config = BacktestConfig(
         top_k=args.top_k,

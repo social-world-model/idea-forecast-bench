@@ -15,6 +15,8 @@ Benchmark:
     benchmark        Run a domain-separated backtest of a forecasting strategy.
     judge-eval       Score saved predictions with the retrieve-then-judge LLM judge.
     main-table       Assemble the main results table from judge-eval outputs.
+    extract-elements Mine theme/domain/method elements per paper (combinatorial).
+    specificity-eval Outcome-blind specificity/breadth rating of predictions.
 
 MDF forecaster:
     hindsight        Extract latent-innovation training labels from future papers.
@@ -73,6 +75,15 @@ _COMMANDS: dict[str, tuple[str, str]] = {
     "main-table": (
         "benchmark/main_table.py",
         "Assemble the main results table from judge-eval outputs.",
+    ),
+    # combinatorial forecaster (examples/)
+    "extract-elements": (
+        "benchmark/extract_elements.py",
+        "Mine theme/domain/method elements per paper into a resumable cache.",
+    ),
+    "specificity-eval": (
+        "benchmark/specificity_eval.py",
+        "Outcome-blind specificity/breadth rating of saved predictions.",
     ),
 }
 

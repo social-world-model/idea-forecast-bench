@@ -1,0 +1,89 @@
+# Combinatorial (Ramon-Llull-style) forecaster. Every numeric knob of the
+# strategy lives here; the code reads this file and hardcodes nothing.
+schema_version: 1
+
+extraction:
+  prompt: combinatorial_extract.yaml
+  temperature: 0.0
+  max_summary_chars: 1500
+  max_elements_per_type:
+    theme: 3
+    domain: 2
+    method: 3
+    frame: 2
+  retry_temperature_bump: 0.2
+
+canonicalize:
+  # voyage | hash   (hash is a deterministic offline stand-in for dry runs)
+  embed_backend: voyage
+  embed_model: voyage-3-large
+  # Cosine threshold above which two surface forms of the same element type
+  # are treated as one element. Calibrate on the pilot with --dump-clusters.
+  merge_threshold: 0.86
+  # An element must appear in at least this many pre-cutoff papers to be
+  # sampleable. Falls back to 1 when the vocabulary is too small.
+  min_count: 2
+  aliases:
+    llm: large language model
+    llms: large language model
+    lm: language model
+    lms: language model
+    rl: reinforcement learning
+    rlhf: reinforcement learning from human feedback
+    rag: retrieval augmented generation
+    vlm: vision language model
+    vlms: vision language model
+    mllm: multimodal large language model
+    cot: chain of thought
+    sft: supervised fine-tuning
+    dpo: direct preference optimization
+    moe: mixture of experts
+    kd: knowledge distillation
+    gnn: graph neural network
+    gnns: graph neural network
+
+state:
+  # Heat of an element = sum over its papers of 2^(-age_months / half_life).
+  half_life_months: 6.0
+  # "Recent" window used for the rising-co-occurrence signal and the move
+  # distribution.
+  recent_months: 3
+  # Additive smoothing inside log2((recent + a) / (older + a)).
+  smoothing_alpha: 0.5
+  # An element is "hot" when its heat is at or above this quantile.
+  hot_quantile: 0.7
+
+sampler:
+  # Per element type, only the top-M by heat are candidates for enumeration.
+  top_m_per_type: 30
+  # For three-element patterns the enumeration is cubic, so a smaller M.
+  top_m_triple: 12
+  type_patterns:
+    - [theme, method]
+    - [domain, method]
+    - [theme, domain]
+    - [theme, domain, method]
+  # Sampling probability is proportional to score ** gamma.
+  score_gamma: 1.0
+  lambda_rising: 1.0
+  lambda_unpaired: 1.0
+  rising_log_clip: 2.0
+
+realize:
+  prompt: combinatorial_realize.yaml
+  # Qwen3.5 non-thinking recommended decode settings.
+  temperature: 0.7
+  top_p: 0.8
+  evidence_per_combo: 3
+  evidence_snippet_chars: 220
+  # When the LLM still returns fewer ideas than combos after one retry, pad
+  # with a template-written idea (flagged metadata.fallback=True) so no window
+  # is short.
+  fallback_template: true
+  # Warn to stderr when fewer than this fraction of a window's train papers
+  # have an extraction record.
+  min_coverage_warn: 0.8
+
+specificity:
+  prompt: combinatorial_specificity.yaml
+  temperature: 0.0

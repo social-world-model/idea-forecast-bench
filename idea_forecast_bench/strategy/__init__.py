@@ -1,4 +1,5 @@
 from idea_forecast_bench.strategy.base import IdeaStrategy
+from idea_forecast_bench.strategy.combinatorial import CombinatorialStrategy
 from idea_forecast_bench.strategy.forecaster import ForecasterStrategy
 from idea_forecast_bench.strategy.policy_rl import PolicyRLStrategy
 from idea_forecast_bench.strategy.predictor_llm import PredictorLLMStrategy
@@ -7,6 +8,7 @@ from idea_forecast_bench.strategy.retrieval_prompting import RetrievalPromptingS
 from idea_forecast_bench.strategy.summary_prompting import SummaryPromptingStrategy
 
 __all__ = [
+    "CombinatorialStrategy",
     "IdeaStrategy",
     "PolicyRLStrategy",
     "PredictorLLMStrategy",
