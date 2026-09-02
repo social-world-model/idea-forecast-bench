@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 from pathlib import Path
 
 from idea_forecast_bench.ingest import ingest_latest_arxiv_papers
@@ -84,6 +85,7 @@ def download_from_hf(repo_id: str, out_dir: Path) -> int:
             (month_dir / f"{arxiv_id}.md").write_bytes(text.encode("utf-8"))
             written += 1
         file.unlink()
+    shutil.rmtree(cache_dir, ignore_errors=True)
     print(f"  wrote {written} papers from {len(files)} monthly files into {out_dir}")
     return 0
 
