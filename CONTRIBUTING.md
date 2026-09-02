@@ -3,8 +3,8 @@
 ## Setup
 
 ```bash
-git clone https://github.com/social-world-model/live-idea-bench.git
-cd live-idea-bench
+git clone https://github.com/social-world-model/idea-forecast-bench.git
+cd idea-forecast-bench
 poetry install --with dev          # core + tooling
 pre-commit install                      # lint on commit
 pre-commit install --hook-type commit-msg
