@@ -84,8 +84,9 @@ before it starts, so a missing key costs a second rather than five failed runs.
 
 The frozen corpus the paper was run against is on Hugging Face at
 [4R5T/idea-forecast-bench](https://huggingface.co/datasets/4R5T/idea-forecast-bench):
-108,768 arXiv papers from 2023-01 to 2025-10 as Markdown, one archive per month. One
-command downloads and unpacks it:
+108,768 arXiv papers from 2023-01 to 2025-10 as Markdown text, one Parquet file per
+month, so it also loads with `datasets.load_dataset`. One command downloads it and
+writes the papers out as the Markdown tree the benchmark reads:
 
 ```bash
 idea-forecast-bench fetch --from-hf          # into data/csml/raw_markdown

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import tarfile
 from pathlib import Path
 
 from idea_forecast_bench.ingest import ingest_latest_arxiv_papers
@@ -54,30 +53,38 @@ def parse_args() -> argparse.Namespace:
 
 
 def download_from_hf(repo_id: str, out_dir: Path) -> int:
-    """Download the per-month archives and unpack them into out_dir."""
+    """Download the per-month Parquet files and write them out as Markdown."""
+    import pyarrow.parquet as pq
     from huggingface_hub import snapshot_download
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    archive_dir = out_dir / ".hf_archives"
+    cache_dir = out_dir / ".hf_parquet"
     print(f"Downloading {repo_id} ...")
     snapshot_download(
         repo_id,
         repo_type="dataset",
-        local_dir=archive_dir,
-        allow_patterns=["*.tar.gz", "manifest.json"],
+        local_dir=cache_dir,
+        allow_patterns=["*.parquet", "manifest.json"],
     )
-    archives = sorted(archive_dir.glob("*.tar.gz"))
-    if not archives:
-        print(f"No archives found in {repo_id}.")
+    files = sorted(cache_dir.glob("*.parquet"))
+    if not files:
+        print(f"No Parquet files found in {repo_id}.")
         return 1
-    for archive in archives:
-        month = archive.name[: -len(".tar.gz")]
-        if (out_dir / month).is_dir():
+    written = 0
+    for file in files:
+        month = file.stem
+        month_dir = out_dir / month
+        if month_dir.is_dir():
             continue
-        with tarfile.open(archive, "r:gz") as tar:
-            tar.extractall(out_dir, filter="data")
-        archive.unlink()
-    print(f"  unpacked {len(archives)} monthly archives into {out_dir}")
+        month_dir.mkdir()
+        table = pq.read_table(file, columns=["arxiv_id", "text"])
+        ids = table.column("arxiv_id").to_pylist()
+        texts = table.column("text").to_pylist()
+        for arxiv_id, text in zip(ids, texts, strict=True):
+            (month_dir / f"{arxiv_id}.md").write_bytes(text.encode("utf-8"))
+            written += 1
+        file.unlink()
+    print(f"  wrote {written} papers from {len(files)} monthly files into {out_dir}")
     return 0
 
 
