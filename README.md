@@ -241,7 +241,6 @@ backend/, frontend/         # optional web app
 | `train` | GRPO-train the realization policy |
 | `infer` | Joint inference: prior → realize → select |
 | `eval` | Evaluate a trained forecaster on a held-out window |
-| `ablate` | Single-metric GRPO (soft / coverage / novelty) |
 | `analysis` | Evaluation-validity analyses (citation / coauthor / leakage) |
 
 </details>

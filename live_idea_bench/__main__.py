@@ -22,9 +22,6 @@ MDF forecaster:
     infer            Joint inference: sample from the prior -> realize -> select.
     eval             Evaluate a trained forecaster on a held-out test window.
 
-Single-metric ablation:
-    ablate           Train the soft / coverage / novelty single-metric GRPO variants.
-
 Analysis:
     analysis         Evaluation-validity analyses (citation / coauthor / leakage).
     main-table       Assemble the main results table from judge-eval outputs.
@@ -76,11 +73,6 @@ _COMMANDS: dict[str, tuple[str, str]] = {
         "Joint inference: prior -> realize -> select.",
     ),
     "eval": ("forecaster/eval.py", "Evaluate a trained forecaster."),
-    # single-metric ablation
-    "ablate": (
-        "forecaster/train_grpo_metric.py",
-        "Single-metric GRPO: soft/coverage/novelty.",
-    ),
     # analysis (examples/benchmark/)
     "analysis": (
         "benchmark/analysis_leakage.py",

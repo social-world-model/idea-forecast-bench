@@ -90,7 +90,7 @@ optional = true
 # GPU training extras. NOTE: `torch` here is only a loose marker — `poetry
 # install --with forecaster` pulls a default-index torch whose CUDA build may
 # not match your driver. Install the CUDA-correct torch with the setup scripts
-# instead (scripts/setup_rl_env_*.sh, scripts/setup_new_machine.sh), which pin
+# instead (scripts/setup_rl_env_*.sh), which pin
 # the right +cuXXX wheel via --index-url for your GPU.
 [tool.poetry.group.forecaster.dependencies]
 torch = ">=2.0"

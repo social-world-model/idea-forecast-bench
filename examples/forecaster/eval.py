@@ -1,14 +1,14 @@
 """Single forecaster eval entry point — runs the trained model on a held-out test window.
 
-Mirrors ``examples/forecaster/train.py`` structure. Reads checkpoints from the same
-output dir that ``train.py`` wrote to, runs the per-topic backtest across the test
-window (default ``2024-10 ~ 2025-03`` — clean held-out from the ``2023-01 ~ 2024-09``
+Reads the prior and realization checkpoints from one training output dir
+(``prior_sft/final_checkpoint`` and the GRPO checkpoint, see ``--output-dir``),
+runs the per-topic backtest across the test window (default ``2024-10 ~ 2025-03`` — clean held-out from the ``2023-01 ~ 2024-09``
 training window), writes a JSON report in the same shape as
 ``examples/run_domain_backtest.py`` so downstream tools (Voyage re-eval, etc.) keep
 working unchanged.
 
-When the wrapper script ``scripts/forecaster/eval_vllm.sh`` has set ``SGLANG_PRIOR_URL``
-and ``SGLANG_URL`` env vars (pointing at vLLM servers), the underlying inference
+When ``SGLANG_PRIOR_URL`` and ``SGLANG_URL`` are set (pointing at OpenAI-compatible
+servers for the prior and the realization policy), the underlying inference
 helpers automatically route through them — see
 ``forecaster/prior/sampler.py:_sglang_prior_url`` and
 ``forecaster/realization/proposal_generator.py:_sglang_api_url``. Those helpers speak

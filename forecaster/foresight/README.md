@@ -1,10 +1,10 @@
 # Foresight — future-grounded GRPO
 
-All Phase-1..8 modules from the locked plan live under this package and
-`tests/test_foresight_*.py`. The existing GRPO trainer was kept intact;
-the new reward + conditioning are routed through a single
-`reward_mode: legacy|foresight` switch in
-`config/forecaster/grpo_train.yaml`.
+The foresight reward scores a rollout against the papers that actually appeared
+after the cutoff: retrieve from a per-cutoff future index, then judge the
+rollout against each retrieved paper with a topic rubric. It is selected with
+the `reward_mode: legacy|foresight` switch in `config/forecaster/grpo_train.yaml`
+and needs two prebuilt artifacts, indices and rubrics, described below.
 
 ## Directory layout
 
@@ -17,48 +17,24 @@ forecaster/foresight/
   dz.py                 — augment_hindsight_rows: raw hindsight JSONL → D_z
   rubric.py             — Rubric schema + generation prompt + parser
   judge.py              — RubricJudge + StubScorer + make_live_scorer
-  rubric_validation.py  — LabeledPair, compute_auc, validate_rubric (Phase 2 gate)
+  rubric_validation.py  — LabeledPair, compute_auc, validate_rubric
   prior_io.py           — D_z ↔ prior SFT bridge + RawMemoryStore adapter
   prior_api.py          — sample_z(memory_text, n, temperature)
   gates.py              — format_ok, grounded, operator_consistent
   reward.py             — compute_foresight_reward + compute_score_v2 (TRL drop-in)
   trainer_wiring.py     — make_reward_fn(config, ...) — legacy|foresight switch
   grouping.py           — assert_group_invariant + dedup penalty
-  refresh.py            — Phase-6 rubric co-evolution state machine
-  forecast.py           — Phase-7 forecast(papers_before_t) -> top-K
+  refresh.py            — rubric co-evolution state machine (opt-in)
+  forecast.py           — forecast(papers_before_t) -> top-K
   metrics.py            — MMD + Wasserstein + impact-stratified breakdown
-  ablations.py          — AblationConfig + baseline_set (Phase 8)
 
-scripts/
-  phase1_spot_check.py           — M1 spot-check on the existing D_z
+examples/forecaster/
+  build_indices.py               — per-cutoff future/history indices
   phase2_rubric_validation.py    — --mode smoke|live; writes rubrics + reports
-  phase3_prior_smoke.py          — D_z → SFT JSONL + sample_z wiring
-  phase4_reward_smoke.py         — end-to-end TRL-shape reward_fn
-  phase5_grouping_smoke.py       — grouping assert + dedup penalty
-  phase8_ablations.py            — --mode smoke|live; writes reports/results.md
 ```
 
-## Quickstart by phase
-
-```bash
-# Phase 1: M1 spot-check (no LLM, runs on existing hindsight JSONL)
-PYTHONPATH=. python examples/forecaster/phase1_spot_check.py
-
-# Phase 2: rubric construction (smoke mode = no LLM)
-PYTHONPATH=. python examples/forecaster/phase2_rubric_validation.py --mode smoke
-
-# Phase 3: SFT input shape (no GPU)
-PYTHONPATH=. python examples/forecaster/phase3_prior_smoke.py
-
-# Phase 4: reward end-to-end (gates + judge stub)
-PYTHONPATH=. python examples/forecaster/phase4_reward_smoke.py
-
-# Phase 5: grouping invariant + dedup penalty
-PYTHONPATH=. python examples/forecaster/phase5_grouping_smoke.py
-
-# Phase 8: ablation table (smoke evaluator)
-PYTHONPATH=. python examples/forecaster/phase8_ablations.py --mode smoke
-```
+`reward.py` scores the retrieved candidates concurrently; set
+`FORESIGHT_JUDGE_WORKERS=1` to make the judge calls serial again.
 
 ## Wiring the new reward into a real GRPO run
 
