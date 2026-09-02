@@ -105,14 +105,18 @@ class VectorStore:
         self.path = path
         self._lock = threading.Lock()
         self._vectors: dict[str, list[float]] = {}
+        self.embedder_name = ""
         if path.exists():
             raw = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(raw, dict):
-                self._vectors = {
-                    str(k): [float(x) for x in v]
-                    for k, v in raw.items()
-                    if isinstance(v, list)
-                }
+                payload = raw.get("vectors") if "vectors" in raw else raw
+                self.embedder_name = str(raw.get("embedder", ""))
+                if isinstance(payload, dict):
+                    self._vectors = {
+                        str(k): [float(x) for x in v]
+                        for k, v in payload.items()
+                        if isinstance(v, list)
+                    }
 
     def __len__(self) -> int:
         return len(self._vectors)
@@ -135,9 +139,22 @@ class VectorStore:
         *,
         batch_size: int = 512,
     ) -> int:
-        """Embed every key not yet stored; returns how many were added."""
+        """Embed every key not yet stored; returns how many were added.
+
+        Refuses to extend a store built by a different embedder: cosine
+        distances from two models are not comparable, so a mixed store would
+        merge elements by a threshold that means nothing."""
+        if self.embedder_name and self.embedder_name != embedder.model_name:
+            raise ValueError(
+                f"{self.path} holds vectors from {self.embedder_name!r}, but this "
+                f"run embeds with {embedder.model_name!r}. Mixing two embedding "
+                "geometries under one merge threshold is meaningless -- delete "
+                "that file to re-embed, or switch back."
+            )
+        self.embedder_name = embedder.model_name
         todo = self.missing(keys)
         if not todo:
+            self.save()
             return 0
         added = 0
         for start in range(0, len(todo), batch_size):
@@ -156,5 +173,7 @@ class VectorStore:
 
     def save(self) -> None:
         with self._lock:
-            payload = json.dumps(self._vectors)
+            payload = json.dumps(
+                {"embedder": self.embedder_name, "vectors": self._vectors}
+            )
         atomic_write_text(self.path, payload)

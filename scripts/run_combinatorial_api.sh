@@ -40,8 +40,18 @@ export END_MONTH="${END_MONTH:-2025-09}"
 MIN_CUTOFF_MONTH="${MIN_CUTOFF_MONTH:-2024-07}"
 
 : "${DASHSCOPE_API_KEY:?DASHSCOPE_API_KEY is not set}"
+# Judge retrieval is Voyage-only by design, so scoring cannot start without
+# the key. Element merging can fall back to offline hashing, which is enough
+# to eyeball a JUDGE=0 pass -- near-synonyms just stay separate.
 # NOTE: no apostrophes inside ${VAR:?...} -- bash 3.2 (macOS) mis-parses them.
-: "${VOYAGE_API_KEY:?VOYAGE_API_KEY is not set: element merging and judge retrieval both embed with Voyage}"
+EMBED_BACKEND="${EMBED_BACKEND:-}"
+if [[ "$JUDGE" == "1" ]]; then
+  : "${VOYAGE_API_KEY:?VOYAGE_API_KEY is not set: the judge retrieval embeds with Voyage and has no fallback}"
+elif [[ -z "${VOYAGE_API_KEY:-}" && -z "$EMBED_BACKEND" ]]; then
+  EMBED_BACKEND=hash
+  echo "WARNING: no VOYAGE_API_KEY; merging elements with offline hashing." >&2
+  echo "         Fine for reading ideas, NOT for reported numbers." >&2
+fi
 # Any of these left over from another run silently redirects calls elsewhere.
 unset OPENAI_BASE_URL VOYAGE_BASE_URL TOGETHER_API_KEY JUDGE_BASE_URL JUDGE_MODEL
 
@@ -66,6 +76,7 @@ IDEA_FORECAST_USAGE_STAGE=extract DASHSCOPE_THINKING=off \
     --input-dir "$INPUT_DIR" --start-month "$START_MONTH" --end-month "$END_MONTH" \
     --cache-dir "$ELEMENT_CACHE" --model-name "$MODEL" \
     --workers "$EXTRACT_WORKERS" --embed --dump-clusters 30 \
+    ${EMBED_BACKEND:+--embed-backend "$EMBED_BACKEND"} \
     "${topic_args[@]}" 2>&1 | tee "$LOG_DIR/extract.log"
 
 echo "== 2/3 generate: $ARMS (thinking $REALIZE_THINKING) =="
