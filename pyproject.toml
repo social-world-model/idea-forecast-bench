@@ -1,7 +1,7 @@
 [project]
 name = "live-idea-bench"
 version = "0.0.1"
-description = "LiveIdeaBench: forecasting emerging research ideas against future literature."
+description = "IdeaForecastBench (LiveIdeaBench): forecasting emerging research ideas against future literature."
 authors = [{ name = "Haofei Yu", email = "yuhaofei44@gmail.com" }]
 license = "MIT"
 readme = "README.md"
@@ -39,6 +39,7 @@ dependencies = [
 
 [project.urls]
 Repository = "https://github.com/ulab-uiuc/live-idea-bench"
+Paper = "https://arxiv.org/abs/2609.00747"
 Issues = "https://github.com/ulab-uiuc/live-idea-bench/issues"
 
 [project.scripts]
