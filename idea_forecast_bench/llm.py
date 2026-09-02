@@ -107,31 +107,42 @@ def _is_dashscope_model(model: str) -> bool:
     return not _Path(model).exists()
 
 
-# Reasoning budgets for DashScope thinking mode. Keep them small: the reply
-# still has to fit in MAX_NUM_TOKENS, and a long reasoning trace on a strict
-# JSON task is how a run ends up with truncated, unparseable output.
-_THINKING_BUDGETS: dict[str, int] = {"low": 512, "medium": 1024, "high": 2048}
+# DashScope thinking control.
+#
+# Two properties of vanchin/deepseek-v4-pro-0813 drive this:
+#   * enable_thinking defaults to TRUE, so a call that says nothing reasons;
+#   * thinking_budget is NOT supported, and reasoning_effort only accepts
+#     "high" (default) and "max" -- low/medium are silently promoted to high.
+# There is therefore no cheap middle setting: thinking is either off or
+# unbounded. Since MAX_NUM_TOKENS caps the completion, an unbounded trace can
+# also consume the budget before the model emits the JSON it was asked for.
+# Hence: off by default, and on only when explicitly requested.
 _THINKING_OFF = {"off", "none", "disabled", "false", "0"}
+_THINKING_EFFORTS = {"high", "max"}
+# Levels this model does not implement, mapped to what it actually does, so a
+# caller asking for "low" gets high reasoning rather than a 400.
+_EFFORT_ALIASES = {"low": "high", "medium": "high", "on": "high", "true": "high"}
 
 
 def dashscope_thinking_body(reasoning_effort: str | None) -> dict[str, Any]:
     """extra_body for a DashScope call.
 
-    Thinking is OFF unless asked for, because the two highest-volume stages
-    (element extraction, the retrieve-then-judge judge) are strict-schema
-    tasks where reasoning only multiplies billed output tokens -- and the
-    judge's 256-token budget would be spent before it emits a score line.
-    Turn it on per stage with `reasoning_effort` or DASHSCOPE_THINKING."""
+    Thinking is OFF unless asked for: the two highest-volume stages (element
+    extraction and the retrieve-then-judge judge) are strict-schema tasks
+    where a reasoning trace is billed, dropped by the client, and -- for the
+    judge -- would consume its 256-token budget before a score line appears.
+    Request it per stage with `reasoning_effort` or DASHSCOPE_THINKING."""
     level = (reasoning_effort or os.environ.get("DASHSCOPE_THINKING") or "off").lower()
     if level in _THINKING_OFF:
         return {"enable_thinking": False}
-    budget = _THINKING_BUDGETS.get(level)
-    if budget is None:
+    effort = _EFFORT_ALIASES.get(level, level)
+    if effort not in _THINKING_EFFORTS:
         raise ValueError(
-            f"Unknown thinking level {level!r}; use one of "
-            f"{', '.join(sorted(_THINKING_BUDGETS))} or off."
+            f"Unknown thinking level {level!r}; use off, "
+            f"{', '.join(sorted(_THINKING_EFFORTS))}, or an alias "
+            f"({', '.join(sorted(_EFFORT_ALIASES))})."
         )
-    return {"enable_thinking": True, "thinking_budget": budget}
+    return {"enable_thinking": True, "reasoning_effort": effort}
 
 
 def _is_local_model(model: str) -> bool:
@@ -408,13 +419,15 @@ def get_response_from_llm(
         }
         if top_p is not None:
             request_kwargs["top_p"] = top_p
-        if seed is not None:
-            request_kwargs["seed"] = seed
         if _is_dashscope_model(model):
             # DashScope takes thinking control at the top level of the body,
-            # and reports usage only when asked for it on a stream.
+            # and reports usage only when asked for it on a stream. `seed` is
+            # deliberately not forwarded: the DeepSeek models served here
+            # reject it, and sending it fails the whole call.
             request_kwargs["extra_body"] = dashscope_thinking_body(reasoning_effort)
             request_kwargs["stream_options"] = {"include_usage": True}
+        elif seed is not None:
+            request_kwargs["seed"] = seed
         stream = client.chat.completions.create(**request_kwargs)
         chunks: list[str] = []
         usage: Any = None

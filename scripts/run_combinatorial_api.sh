@@ -14,9 +14,12 @@
 #     TOPICS=llm_alignment_rlhf,rag_retrieval MIN_CUTOFF_MONTH=2025-03 \
 #     OUTPUT_DIR=output/pilot bash scripts/run_combinatorial_api.sh
 #
-# Thinking is set per stage on purpose: off for extraction (strict JSON, huge
-# volume) and for judging (a 256-token budget the reasoning trace would eat),
-# on for realisation (few calls, the one step where composing helps).
+# Thinking is off by default at every stage. vanchin/deepseek-v4-pro-0813
+# enables it unless told otherwise, does not support thinking_budget, and
+# promotes reasoning_effort low/medium to high -- so it is either off or
+# unbounded, and an unbounded trace can eat the completion budget before the
+# JSON appears. REALIZE_THINKING=high turns it on for realisation only, which
+# is the one stage cheap enough (hundreds of calls) to experiment with.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -29,7 +32,7 @@ LABEL="${LABEL:-DeepSeek-V4-Pro}"
 ARMS="${ARMS:-combinatorial combinatorial_independent combinatorial_random}"
 TOPICS="${TOPICS:-}"
 JUDGE="${JUDGE:-0}"
-REALIZE_THINKING="${REALIZE_THINKING:-low}"
+REALIZE_THINKING="${REALIZE_THINKING:-off}"   # off | high | max
 ELEMENT_CACHE="${ELEMENT_CACHE:-$OUTPUT_DIR/elements}"
 EXTRACT_WORKERS="${EXTRACT_WORKERS:-32}"
 GEN_WORKERS="${GEN_WORKERS:-4}"

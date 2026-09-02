@@ -82,20 +82,42 @@ Reads out `output/step2/table.txt` plus a per-stage token ledger from
 
 Set per stage by the script; `DASHSCOPE_THINKING` overrides.
 
+`vanchin/deepseek-v4-pro-0813` enables thinking unless told otherwise, does
+not support `thinking_budget`, and promotes `reasoning_effort` low/medium to
+high. There is no cheap middle setting: it is off, or unbounded. The router
+therefore sends `enable_thinking: false` unless a level is requested, and it
+does not forward `seed`, which this model rejects.
+
 | Stage | Level | Why |
 |---|---|---|
-| Extraction | off | Strict JSON over a short abstract, tens of thousands of calls. Reasoning multiplies billed output tokens and the trace is returned in `reasoning_content`, which the client drops — billed, never seen. |
-| Realisation | low (budget 512) | A few hundred calls, and the one step where composing elements into a specific idea can benefit. Applies equally to all arms, so it cannot confound the contrast. |
+| Extraction | off | Strict JSON over a short abstract, tens of thousands of calls. Reasoning multiplies billed output tokens and the trace comes back in `reasoning_content`, which the client drops — billed, never seen. |
+| Realisation | off, `REALIZE_THINKING=high` to try it | Only a few hundred calls, so it is the one stage cheap enough to experiment with; it applies equally to all arms, so it cannot confound the contrast. Watch for truncated JSON: an unbounded trace can consume the completion budget. |
 | Judge | off (forced) | `JUDGE_MAX_TOKENS` is 256; a reasoning trace eats it and every call fails to parse. |
 | Specificity | off | The reply is three integers. |
 
-### Token budget (measured prompts, estimated volumes)
+### Token budget and cost
 
-For the full 52-topic sweep with four arms, the judge is about 85% of all
-input tokens (624 windows x 5 predictions x 10 retrieved candidates x 4 arms
-= 124,800 calls, each resending a 2,246-token rubric). Scope the judge first
-if the budget is tight: `ARMS="combinatorial combinatorial_independent"`
-halves it and still answers whether co-occurrence carries signal.
+Prompt sizes are measured; paper counts are estimated from the topic
+classifier on a sample of the corpus. Prices are the Beijing off-peak tier of
+`vanchin/deepseek-v4-pro-0813` (input CNY 4.5/M, output CNY 13.5/M, cache-hit
+input CNY 0.45/M; peak is roughly double). TPM is 1,200,000, which is what
+sets the wall clock.
+
+| Run | Papers | Windows x arms | Tokens in / out | Cost (off-peak) | Time |
+|---|---|---|---|---|---|
+| Step 1, no judge | ~1,700 | 36 x 3 | 2.1M / 0.3M | ~CNY 13 | 10-20 min |
+| Step 2, judged | ~14,700 | 96 x 3 | 55M / 3M | CNY 120-290 | 1.5-3 h |
+| Full sweep | ~45,000 | 624 x 3 | 311M / 17M | CNY 640-1,600 | 6-10 h |
+
+The range on cost is whether the repeated system prompts hit the context
+cache. The judge dominates every judged run: 624 windows x 5 predictions x 10
+retrieved candidates x 3 arms = 93,600 calls, each resending a 2,246-token
+rubric. Scope it first if the budget is tight —
+`ARMS="combinatorial combinatorial_independent"` drops a third and still
+answers whether co-occurrence carries signal.
+
+Voyage embeddings are billed separately: about USD 3 for step 2, USD 9 for
+the full sweep.
 
 ---
 
