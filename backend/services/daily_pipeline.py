@@ -23,7 +23,7 @@ class PipelineAlreadyRunningError(RuntimeError):
 
 
 def _lock_ttl_seconds() -> int:
-    raw = os.environ.get("LIVE_IDEA_PIPELINE_LOCK_TTL_SECONDS")
+    raw = os.environ.get("IDEA_FORECAST_PIPELINE_LOCK_TTL_SECONDS")
     if raw is None:
         return 6 * 60 * 60
     try:

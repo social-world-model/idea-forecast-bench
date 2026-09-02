@@ -181,16 +181,16 @@ def ingest_latest_arxiv_papers(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     utc_now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-    resolved_query = query or _env_str("LIVE_IDEA_ARXIV_QUERY", DEFAULT_QUERY)
+    resolved_query = query or _env_str("IDEA_FORECAST_ARXIV_QUERY", DEFAULT_QUERY)
     resolved_max_results = (
         max_results
         if max_results is not None
-        else _env_int("LIVE_IDEA_ARXIV_MAX_RESULTS", DEFAULT_MAX_RESULTS)
+        else _env_int("IDEA_FORECAST_ARXIV_MAX_RESULTS", DEFAULT_MAX_RESULTS)
     )
     resolved_lookback_days = (
         lookback_days
         if lookback_days is not None
-        else _env_int("LIVE_IDEA_ARXIV_LOOKBACK_DAYS", DEFAULT_LOOKBACK_DAYS)
+        else _env_int("IDEA_FORECAST_ARXIV_LOOKBACK_DAYS", DEFAULT_LOOKBACK_DAYS)
     )
     base_dir = Path(
         data_dir
