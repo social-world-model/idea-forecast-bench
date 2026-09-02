@@ -1,10 +1,3 @@
-"""Stage helpers for ForecasterPipeline.
-
-Split out of orchestrator.py, which had grown past the repo's 800-line cap.
-These are pure module-level helpers; the pipeline class itself stays in
-orchestrator.py.
-"""
-
 from __future__ import annotations
 
 import json

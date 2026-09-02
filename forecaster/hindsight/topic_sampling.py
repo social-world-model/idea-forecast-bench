@@ -1,5 +1,3 @@
-"""Shared helpers for topic-based hindsight manifest and preview scripts."""
-
 from __future__ import annotations
 
 import concurrent.futures

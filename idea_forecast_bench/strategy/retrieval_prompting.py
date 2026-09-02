@@ -1,21 +1,3 @@
-"""Retrieval-Augmented Prompting baseline strategy.
-
-Implements baseline (5) from the IdeaForecastBench paper:
-
-    Retrieval-Augmented Prompting augments the historical context with
-    retrieved representative papers or summaries before generation, testing
-    whether stronger grounding in the historical literature improves
-    forecasting beyond direct prompting.
-
-This differs from Direct Prompting in that the historical context is selected
-by similarity-based retrieval against a query derived from the most recent
-literature, rather than a fixed chronological trailing window.
-
-Single LLM call per window. Retrieval is deterministic (hybrid
-semantic+keyword similarity from `idea_forecast_bench.similarity`), keeping
-the baseline batch-friendly and reproducible across re-runs.
-"""
-
 from __future__ import annotations
 
 import json

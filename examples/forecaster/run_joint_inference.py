@@ -1,20 +1,4 @@
 #!/usr/bin/env python3
-"""Run joint inference (Algorithm 1): prior sampling + realization + scoring.
-
-All-local inference using trained prior (SFT) and realization (GRPO) checkpoints.
-No LLM API calls — both models run on local GPU.
-
-Produces proposals in the same shape as run_domain_backtest.py predictions.
-
-Usage:
-    python examples/run_joint_inference.py \
-        --prior-checkpoint output/prior_sft/final_checkpoint \
-        --realization-checkpoint output/realization_grpo/grpo \
-        --hindsight output/hindsight_samples.jsonl \
-        --papers-dir data/csml/raw_markdown \
-        --output-dir output/joint_inference
-"""
-
 from __future__ import annotations
 
 import argparse

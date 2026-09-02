@@ -1,14 +1,3 @@
-"""sample_z(memory_text, n, temperature) — diverse z sampling for inference.
-
-A thin wrapper over the existing forecaster.prior.sampler that takes a
-precomputed memory string (e.g., from build_memory()) and returns a list
-of Innovation samples. Use this as the prior interface from Phase 7's
-forecast() composition.
-
-This module deliberately does no model loading itself; it composes with
-whatever loader the existing sampler exposes.
-"""
-
 from __future__ import annotations
 
 import logging

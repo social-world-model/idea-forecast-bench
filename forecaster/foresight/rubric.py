@@ -1,16 +1,3 @@
-"""Rubric data model + generation prompt scaffolding.
-
-A rubric R is a small structured object describing the *match criteria*
-that count as "an emerging research idea in topic T at this cutoff".
-The rubric is consumed by:
-  * the rubric-conditioned judge (forecaster/foresight/judge.py),
-  * the reward function (Phase 4),
-  * the Phase-2 AUC validation pass.
-
-Generation is done by a frozen strong LLM. We keep the generation prompt
-in this file so test code can inspect it without touching idea_forecast_bench.
-"""
-
 from __future__ import annotations
 
 import json

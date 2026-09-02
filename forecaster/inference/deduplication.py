@@ -1,5 +1,3 @@
-"""Deduplication for joint inference candidates."""
-
 from __future__ import annotations
 
 from forecaster.models import JointCandidate

@@ -1,20 +1,3 @@
-"""D_z augmentation: turn the raw hindsight JSONL into the Phase-1 D_z.
-
-Input rows (existing `data/topic_hindsight/hindsight_samples.jsonl`):
-  {topic_id, episode_id, cutoff_date, future_paper_id, future_paper_title,
-   future_paper_published_date, innovation:{base_direction, operator, gap},
-   context_paper_count}
-
-Output rows (D_z, written by `augment_hindsight_rows`):
-  {cutoff_t, topic_id, episode_id,
-   target_z: {base_direction, operator, gap},
-   operator_closed,                    # one of CLOSED_OPERATORS ∪ {"other"}
-   source_future_id,                   # = future_paper_id
-   future_paper_published_date,        # for downstream window asserts
-   context_paper_ids: [...] | null,    # populated only if a corpus is supplied
-   memory_text: str | null}            # populated only if a corpus is supplied
-"""
-
 from __future__ import annotations
 
 import json

@@ -1,12 +1,3 @@
-"""
-Strategy store: CRUD for Strategy objects, backed by per-file JSON in backend/strategies/.
-
-A Strategy bundles:
-  - strategy_name : which IdeaStrategy implementation ("topic_trend", …)
-  - params        : strategy hyper-params (recent_months, min_keyword_freq)
-  - config        : BacktestConfig fields + data_dir
-"""
-
 import json
 import os
 import uuid

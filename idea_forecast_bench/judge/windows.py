@@ -1,5 +1,3 @@
-"""Score one (topic, cutoff) window: retrieve, judge, then aggregate."""
-
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed

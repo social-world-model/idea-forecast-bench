@@ -1,5 +1,3 @@
-"""Generate research proposals from innovation triples and evidence."""
-
 from __future__ import annotations
 
 import logging

@@ -1,5 +1,3 @@
-"""LLM-based hindsight innovation extraction."""
-
 from __future__ import annotations
 
 import json

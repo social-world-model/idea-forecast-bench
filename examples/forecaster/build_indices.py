@@ -1,23 +1,3 @@
-"""Build the foresight reward's artifacts: D_z rows and per-cutoff indices.
-
-The gated foresight reward (config/forecaster/grpo_train.yaml, reward_mode:
-foresight) scores a rollout against the papers that appeared after its cutoff.
-It needs, per training cutoff, a future index and a history index, and it
-needs D_z: the hindsight labels re-keyed by cutoff with each free-text operator
-mapped onto the closed operator inventory.
-
-This script produces both. D_z is derived from the hindsight JSONL when the
---dz file does not exist yet; the indices are embedded with a local
-sentence-transformer (allenai-specter) and saved under --art/indices. Rubrics,
-the third artifact, come from build_rubrics.py.
-
-Usage:
-    python examples/forecaster/build_indices.py \\
-        --papers-dir data/csml/raw_markdown \\
-        --hindsight data/topic_hindsight/hindsight_samples.jsonl \\
-        --art output/foresight_artifacts
-"""
-
 from __future__ import annotations
 
 import argparse

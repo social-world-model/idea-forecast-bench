@@ -1,18 +1,3 @@
-"""Run a domain-separated backtest from the command line.
-
-This exercises the same per-topic backtest pipeline used by the backend
-(strategy_store.run_backtest_sync) but without requiring Flask or a
-persisted strategy JSON file.
-
-Usage::
-
-    python examples/run_domain_backtest.py \
-        --input-dir data/csml/raw_markdown \
-        --strategy topic_trend \
-        --start-month 2024-01 --end-month 2025-06 \
-        --output /tmp/domain_backtest.json
-"""
-
 from __future__ import annotations
 
 import argparse

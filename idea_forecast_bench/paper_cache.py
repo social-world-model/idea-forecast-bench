@@ -1,25 +1,3 @@
-"""Cached corpus loading, keyed on everything that changes the result.
-
-Three entry scripts had copy-pasted the same cache block, and all three keyed
-it on ``input_dir | start_month | end_month`` with the comment "topics config
-is stable". The cache also stores ``grouped`` -- the topic-to-paper assignment
--- which depends entirely on the taxonomy. Editing config/topics_v2.yaml
-therefore left the key unchanged and silently reused the old grouping, so a
-run could report results computed against a taxonomy that no longer existed.
-That is the kind of failure a benchmark cannot afford: it is invisible and it
-changes the numbers.
-
-The key here includes a fingerprint of the resolved topic definitions, so any
-taxonomy edit misses the cache. Topics are loaded first because that is a
-cheap YAML parse; the expensive steps are reading the corpus and classifying
-it.
-
-It also includes a fingerprint of the corpus. `fetch` is incremental, so the
-documented workflow -- fetch, run, fetch more, run again -- kept every input to
-the old key identical while the corpus underneath had grown, and the second run
-silently reported the first run's numbers.
-"""
-
 from __future__ import annotations
 
 import contextlib

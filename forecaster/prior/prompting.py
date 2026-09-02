@@ -1,5 +1,3 @@
-"""Shared prompt contract for prior training, sampling, and scoring."""
-
 from __future__ import annotations
 
 from pathlib import Path

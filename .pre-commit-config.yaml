@@ -1,13 +1,3 @@
-# Single source of truth for lint/format. CI runs exactly these hooks via
-# `pre-commit run --all-files`, so "green locally" and "green in CI" cannot
-# diverge. Before this, ruff was pinned to 0.1.5 in CI, ^0.3.0 in pyproject
-# and 0.15.x locally -- three tools, three rulesets, three answers.
-#
-# mypy deliberately does NOT run here. The mirrors-mypy hook installs mypy in
-# an isolated venv without the project's dependencies, so it cannot resolve
-# third-party imports and reports misleading results. It runs in CI from the
-# poetry environment instead (.github/workflows/ci.yml, `typecheck` job).
-
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

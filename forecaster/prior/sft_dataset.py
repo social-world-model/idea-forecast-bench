@@ -1,5 +1,3 @@
-"""Build SFT training dataset for the innovation prior."""
-
 from __future__ import annotations
 
 import json

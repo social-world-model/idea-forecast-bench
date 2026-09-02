@@ -1,16 +1,3 @@
-"""Per-cutoff vector indices for the Foresight reward + grounding gate.
-
-Two index types per training cutoff t:
-  * FutureIndex  — over Y_{t+1} (papers published in (t, t+horizon])
-                   used by the new reward to retrieve true-future candidates.
-  * HistoryIndex — over X_{<=t} (papers available at the cutoff)
-                   used by the grounding gate (does the rollout's cited
-                   evidence retrieve close enough to anything that *did* exist?).
-
-Index storage is intentionally minimal (numpy arrays + JSON metadata).
-A faiss/hnsw backend can be swapped in later behind the `search()` API.
-"""
-
 from __future__ import annotations
 
 import hashlib

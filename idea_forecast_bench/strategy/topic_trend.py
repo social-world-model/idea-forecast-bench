@@ -1,14 +1,3 @@
-"""Topic Trend baseline strategy.
-
-Groups historical papers into topic clusters via keyword co-occurrence, tracks
-each cluster's trajectory, and uses an LLM to generate one prediction per
-top-trending cluster.
-
-Operates at the
-*cluster* level — a topic is a coherent group of co-occurring keywords that
-collectively describe a research direction.
-"""
-
 from __future__ import annotations
 
 import contextlib

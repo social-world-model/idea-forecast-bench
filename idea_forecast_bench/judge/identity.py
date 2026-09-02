@@ -1,10 +1,3 @@
-"""Stable identities for predictions and for a run's configuration.
-
-The fingerprints decide when a checkpoint may be reused: a state file written
-under a different judge, rubric, or embedding model is not comparable to one
-written under the current settings, so it must miss rather than be reused.
-"""
-
 from __future__ import annotations
 
 import hashlib

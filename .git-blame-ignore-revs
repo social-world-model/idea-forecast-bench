@@ -1,7 +1,1 @@
-# Revisions to skip in `git blame`: bulk reformatting with no behaviour change.
-#
-# GitHub reads this file automatically. Locally, enable it once with:
-#   git config blame.ignoreRevsFile .git-blame-ignore-revs
-
-# style: apply ruff format repo-wide (162 files)
 64ebde6eeb17170e5f6ea8597cdbe1535ba270e0

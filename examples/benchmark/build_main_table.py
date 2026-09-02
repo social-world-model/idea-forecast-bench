@@ -1,32 +1,4 @@
 #!/usr/bin/env python3
-"""Assemble the main results table from judged artifacts, at two match thresholds.
-
-The two hit@k columns are NOT two judge runs. ``S>=2`` is the judge's own
-``is_match`` (``MATCH_PM_THRESHOLD=5`` and ``MATCH_S_THRESHOLD=2`` in
-``idea_forecast_bench/judge/config.py``). ``S>=3`` re-applies
-``problem + method >= 5 AND specificity >= 3`` to the raw per-dimension scores
-already stored in ``per_prediction`` -- it is a recount, not a re-judge, so it
-costs nothing and cannot drift from the ``S>=2`` column. To move the threshold
-again, change ``_strict_match`` below; to change what a dimension means, you
-have to re-run the judge.
-
-Why the strict column exists: over 90% of matches at ``S>=2`` sit exactly on
-the threshold, and the rubric reads ``S=1`` as "generic enough to loosely fit",
-so the loose column rewards breadth. Across all three backbones,
-``topic_trend`` and ``predictor_llm`` swap rank between the two columns while
-the backbone ordering holds under both. Report the two facts separately.
-
-Usage::
-
-    python -m idea_forecast_bench main-table \\
-        --source "gpt-4.1=output/judged/gpt41.*.judged.json" \\
-        --source "Qwen2.5-7B=output/judged/qwen7b.*.judged.json" \\
-        --source "MDF-Qwen2.5-7B=output/judged/mdf.*.judged.json"
-
-Each ``--source`` is ``<backbone label>=<glob>`` over ``judge-eval`` outputs.
-Sources are printed in the order given.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -36,6 +8,16 @@ import json
 import sys
 from pathlib import Path
 from typing import Any
+
+DESCRIPTION = """\
+Assemble the main results table from judge-eval outputs, at two match thresholds.
+
+S>=2 is the judge's own is_match. S>=3 re-applies problem + method >= 5 AND
+specificity >= 3 to the stored per-dimension scores: a recount, not a re-judge.
+Each --source is '<backbone label>=<glob>' over judge-eval outputs; sources are
+printed in the order given, and a row that does not cover every expected
+topic and window is flagged rather than reported.
+"""
 
 STRATEGY_ORDER = (
     "topic_trend",
@@ -186,7 +168,7 @@ def _check_coverage(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+        description=DESCRIPTION, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
         "--source",

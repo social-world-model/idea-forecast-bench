@@ -1,8 +1,3 @@
-"""Memory store for the innovation prior.
-
-All mutation operations return new MemoryStore instances (immutable pattern).
-"""
-
 from __future__ import annotations
 
 import contextlib

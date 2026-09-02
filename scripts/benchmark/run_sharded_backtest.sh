@@ -1,42 +1,4 @@
 #!/usr/bin/env bash
-# Generate predictions for several strategies, sharded across processes by topic.
-#
-# This is how the paper's sweep was produced: STRATEGIES x SHARDS processes, each
-# running `benchmark` over a disjoint --topics set with its own --output. Sharding
-# is by topic because a single interpreter saturates on GIL-bound work long
-# before the LLM endpoint does; the shards are balanced by paper count
-# (examples/benchmark/split_topics.py) because the cutoffs inside a shard run
-# serially and an unbalanced split leaves every other process waiting on one.
-#
-# By default the run skips the embedding match (--skip-matching): the reported
-# numbers come from `judge-eval`, which re-embeds and re-retrieves everything
-# itself, so matching here would be ~1M wasted Voyage calls. Every metric in the
-# generation artifacts is therefore NaN on purpose; score them with
-# scripts/benchmark/run_sharded_judge.sh.
-#
-# Defaults reproduce the paper's window: 12 monthly cutoffs 2024-07..2025-06,
-# 3-month horizon, 52 topics = 624 windows per strategy.
-#
-# Environment (every variable has a default):
-#   INPUT_DIR         corpus of markdown papers        data/csml/raw_markdown
-#   OUTPUT_DIR        where <strategy>.s<N>.json land   output/sharded/backtest
-#   LOG_DIR           one log per process               $OUTPUT_DIR/logs
-#   MODEL             generation model                  gpt-4.1
-#   STRATEGIES        space-separated                   all five baselines
-#   SHARDS            processes per strategy            4
-#   WORKERS           threads per process               8
-#   START_MONTH / END_MONTH / MIN_CUTOFF_MONTH / HORIZON_MONTHS / TOP_K / MIN_TRAIN_PAPERS
-#   SKIP_MATCHING     1 to skip the embedding match     1
-#   PYTHON_BIN        interpreter to use                python
-#   OPENAI_BASE_URL   point generation at a local OpenAI-compatible server; see
-#                     scripts/benchmark/serve_vllm.sh for the naming requirement
-#   IDEA_FORECAST_CORPUS_FINGERPRINT  derived once here if unset, so the
-#                     processes do not each walk the corpus to compute it
-#
-# Usage:
-#   OPENAI_API_KEY=... bash scripts/benchmark/run_sharded_backtest.sh
-#   MODEL=gpt-4o-qwen7b OPENAI_BASE_URL=http://127.0.0.1:31000/v1 OPENAI_API_KEY=EMPTY \
-#     bash scripts/benchmark/run_sharded_backtest.sh
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

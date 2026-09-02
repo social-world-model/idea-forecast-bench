@@ -1,13 +1,3 @@
-"""IdeaForecastBench: temporal backtesting of scientific idea generation.
-
-The names re-exported here are the package's intended public surface: config,
-data models, strategies, and the entry points for running and scoring a
-backtest. Internal helpers -- date arithmetic, file IO, markdown parsing,
-prompt lookup -- stay importable from their own modules; they used to sit in
-``__all__`` only because it had accumulated every symbol in the package, which
-turned each of them into an implicit compatibility promise.
-"""
-
 from idea_forecast_bench.backtest import (
     BacktestConfig,
     BacktestRunner,

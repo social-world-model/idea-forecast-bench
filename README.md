@@ -284,9 +284,16 @@ idea-forecast-bench main-table --source "gpt-4.1=output/sharded/judged/*.judged.
 ```
 
 To run a local backbone or the Qwen3.5-9B judge, serve it with
-`scripts/benchmark/serve_vllm.sh` and point `OPENAI_BASE_URL` at it. The script's
-header explains the two settings that fail silently when wrong: the served model
-name, which decides routing, and the context length.
+`scripts/benchmark/serve_vllm.sh` and point `OPENAI_BASE_URL` at it. Two settings
+fail silently when wrong. The served model name decides routing: generation only
+goes to `OPENAI_BASE_URL` for names starting with `gpt-4o`, `gpt-4.1` or `gpt-5`, so
+serve a local backbone under an alias such as `gpt-4o-qwen7b` and pass the judge's
+own name with `--judge-model`. The context length must be at least 16384, because
+the client requests 4096 output tokens and the longest prompts are about 4100.
+
+```bash
+SERVED_NAMES="gpt-4o-qwen7b" bash scripts/benchmark/serve_vllm.sh /models/Qwen2.5-7B-Instruct 31000
+```
 
 Before judging, make sure none of `JUDGE_BASE_URL`, `JUDGE_MODEL`, `OPENAI_BASE_URL`
 or `VOYAGE_BASE_URL` are left exported from another run. Any of them silently

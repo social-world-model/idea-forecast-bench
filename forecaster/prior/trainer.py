@@ -1,5 +1,3 @@
-"""SFT trainer for the innovation prior using HuggingFace Trainer + LoRA."""
-
 from __future__ import annotations
 
 import json

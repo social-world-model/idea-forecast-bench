@@ -1,13 +1,3 @@
-"""build_memory(papers_before_t) -> str.
-
-A compact text inventory of *active research directions* at cutoff t.
-Each entry is a short topic summary + recency/momentum count over the
-most recent window. The function is intentionally simple and swappable;
-downstream code (prior SFT, rubric retrieval, reward grounding) only
-relies on the returned string being a stable, deterministic projection
-of `papers_before_t`.
-"""
-
 from __future__ import annotations
 
 from collections import defaultdict

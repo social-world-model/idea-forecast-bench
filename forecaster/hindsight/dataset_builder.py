@@ -1,5 +1,3 @@
-"""Build the hindsight dataset D_z = {(X_<=t, z_tilde_{t+1})}."""
-
 from __future__ import annotations
 
 import json

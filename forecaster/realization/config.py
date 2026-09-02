@@ -113,14 +113,14 @@ class OnlineRLTrainConfig:
         "sentence-transformer:sentence-transformers/allenai-specter"
     )
     foresight_judge_mode: str = "live"  # "live" | "stub" (stub used only in tests)
-    # Phase-5: in-group dedup penalty. Subtracted from each rollout's reward
+    # In-group dedup penalty. Subtracted from each rollout's reward
     # for every near-duplicate sibling within its group (Jaccard >= threshold).
     dedup_penalty: float = 0.0
     dedup_jaccard_threshold: float = 0.85
-    # Phase-5: enforce (cutoff_t, z) grouping invariant in the reward callback.
+    # Enforce (cutoff_t, z) grouping invariant in the reward callback.
     # Set False only for debug; production training must keep this on.
     grouping_assert: bool = True
-    # Phase-6: rubric refresh interval (in trainer steps). 0 = disabled.
+    # Rubric refresh interval (in trainer steps). 0 = disabled.
     rubric_refresh_every: int = 0
     rubric_refresh_auc_min: float = 0.70
 

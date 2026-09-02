@@ -1,23 +1,4 @@
 #!/usr/bin/env bash
-# ==========================================================================
-#  Full MDF pipeline: prior SFT -> realization GRPO -> generate -> judge.
-#  Skips SFT/GRPO if checkpoints already exist. Each phase is one CLI
-#  command; the README's "Training MDF" section shows them individually.
-#
-#  Usage:
-#    MODEL=qwen2.5-7b-instruct bash scripts/run_train_and_eval.sh
-#
-#  Reward (GRPO phase):
-#    REWARD_MODE=foresight (default) — the gated, future-grounded reward used
-#      for the reported results. Needs the artifact dir built by
-#      examples/forecaster/build_indices.py and build_rubrics.py
-#      (per-cutoff indices + rubrics under $FORESIGHT_ARTIFACT_DIR).
-#    REWARD_MODE=legacy — fixed-weight composite reward, NO artifacts required.
-#        REWARD_MODE=legacy bash scripts/run_train_and_eval.sh
-#
-#  Environment: the `forecaster` poetry group plus a CUDA torch (README,
-#  Training MDF, step 0). USE_VLLM=1 needs vllm installed as well.
-# ==========================================================================
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -42,13 +23,13 @@ echo "  Output: ${OUT}"
 echo "  Dates:  ${START_MONTH} ~ ${END_MONTH}"
 echo "=============================================="
 
-# ---- Phase 2: Prior SFT ----
+# ---- Prior SFT ----
 PRIOR_CKPT="${OUT}/prior_sft/final_checkpoint"
 
 if [ -d "$PRIOR_CKPT" ] && [ -f "${OUT}/prior_sft/train_result.json" ]; then
-  echo ""; echo "===== Phase 2: Prior SFT — SKIPPED (checkpoint exists) ====="
+  echo ""; echo "===== Prior SFT — SKIPPED (checkpoint exists) ====="
 else
-  echo ""; echo "===== Phase 2: Prior SFT ====="
+  echo ""; echo "===== Prior SFT ====="
   python3 examples/forecaster/run_prior_sft.py \
     --hindsight "$HINDSIGHT" \
     --output-dir "${OUT}/prior_sft" \
@@ -57,7 +38,7 @@ fi
 
 PRIOR_CKPT=$(python3 -c "import json; print(json.load(open('${OUT}/prior_sft/train_result.json'))['checkpoint_path'])")
 
-# ---- Phase 3: Realization GRPO ----
+# ---- Realization GRPO ----
 GRPO_DIR="${OUT}/realization_grpo"
 GRPO_MANIFEST="${GRPO_DIR}/grpo/policy_manifest.json"
 
@@ -90,9 +71,9 @@ case "$REWARD_MODE" in
 esac
 
 if [ -f "$GRPO_MANIFEST" ]; then
-  echo ""; echo "===== Phase 3: Realization GRPO — SKIPPED (manifest exists) ====="
+  echo ""; echo "===== Realization GRPO — SKIPPED (manifest exists) ====="
 else
-  echo ""; echo "===== Phase 3: Realization GRPO (reward=${REWARD_MODE}, config=${GRPO_CONFIG}) ====="
+  echo ""; echo "===== Realization GRPO (reward=${REWARD_MODE}, config=${GRPO_CONFIG}) ====="
   python3 examples/forecaster/run_policy_rl_training.py \
     --input-dir "$PAPERS" \
     --output-dir "$GRPO_DIR" \
@@ -130,7 +111,7 @@ print(str(grpo_dir))
 ")
 echo "Realization checkpoint: ${REAL_CKPT}"
 
-# ---- Phase 4: Evaluation via Benchmark Backtest ----
+# ---- Generate: benchmark backtest with the trained forecaster ----
 # Uses run_domain_backtest.py (same as all other strategies) for fair comparison,
 # then scores the predictions with the retrieve-then-judge protocol, which is
 # where the reported numbers come from. Generation skips the embedding match
@@ -142,9 +123,9 @@ EVAL_END="${EVAL_END:-2025-03}"
 
 TRAINED_EVAL="${OUT}/eval_trained.json"
 if [ -f "$TRAINED_EVAL" ]; then
-  echo ""; echo "===== Phase 4: Generate (trained) — SKIPPED (exists) ====="
+  echo ""; echo "===== Generate — SKIPPED (exists) ====="
 else
-  echo ""; echo "===== Phase 4: Generate (trained forecaster) ====="
+  echo ""; echo "===== Generate (trained forecaster) ====="
   python3 examples/benchmark/run_domain_backtest.py \
     --strategy forecaster \
     --model-name "$BASE_MODEL_ID" \
@@ -157,18 +138,18 @@ else
     --output "$TRAINED_EVAL"
 fi
 
-# ---- Phase 5: retrieve-then-judge scoring ----
+# ---- Judge: retrieve-then-judge scoring ----
 # Needs OPENAI_API_KEY (gpt-4.1-mini judge by default) and VOYAGE_API_KEY
 # (retrieval embeddings). The judge is chosen by flag; none of the *_BASE_URL
 # variables may be left exported, or scoring is silently redirected.
 unset JUDGE_BASE_URL JUDGE_MODEL JUDGE_API_KEY OPENAI_BASE_URL VOYAGE_BASE_URL
 JUDGED="${OUT}/eval_trained.judged.json"
 if [ -z "${OPENAI_API_KEY:-}" ] || [ -z "${VOYAGE_API_KEY:-}" ]; then
-  echo ""; echo "===== Phase 5: Judge — SKIPPED (set OPENAI_API_KEY and VOYAGE_API_KEY) ====="
+  echo ""; echo "===== Judge — SKIPPED (set OPENAI_API_KEY and VOYAGE_API_KEY) ====="
 elif [ -f "$JUDGED" ]; then
-  echo ""; echo "===== Phase 5: Judge — SKIPPED (exists) ====="
+  echo ""; echo "===== Judge — SKIPPED (exists) ====="
 else
-  echo ""; echo "===== Phase 5: Judge (retrieve-then-judge) ====="
+  echo ""; echo "===== Judge (retrieve-then-judge) ====="
   python3 examples/benchmark/llm_judge_eval.py \
     --input-json "$TRAINED_EVAL" \
     --papers-dir "$PAPERS" \

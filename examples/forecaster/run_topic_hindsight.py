@@ -1,32 +1,3 @@
-"""Unified hindsight innovation extraction script.
-
-Supports both a fast *preview* mode (a small subset of targets) and a *full*
-mode that processes every selected paper in the manifest.  Extraction can be
-done via sequential synchronous LLM calls (the default, works with any
-provider) or via the OpenAI Batch API (``--batch`` flag, 50 % cost savings,
-resume-capable).
-
-Examples
---------
-Preview mode, synchronous (same as run_topic_hindsight_preview.py)::
-
-    python examples/run_topic_hindsight.py \\
-        --input-dir data/papers --output-dir output/ \\
-        --mode preview --preview-count 10 --model gpt-4o
-
-Full mode, OpenAI Batch API::
-
-    python examples/run_topic_hindsight.py \\
-        --input-dir data/papers --output-dir output/ \\
-        --mode full --batch --model gpt-4o
-
-Full mode, synchronous (slow but works with Anthropic / Gemini too)::
-
-    python examples/run_topic_hindsight.py \\
-        --input-dir data/papers --output-dir output/ \\
-        --mode full --model claude-3-5-sonnet-20241022
-"""
-
 from __future__ import annotations
 
 import argparse

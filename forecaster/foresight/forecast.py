@@ -1,22 +1,3 @@
-"""Phase-7 forecast(X_<=t) → top-K ideas.
-
-A thin composer over Phase-1's build_memory + Phase-3's sample_z + the
-existing realization stack. Designed so each step is injectable:
-
-    forecast(
-        papers_before_t=...,
-        cutoff_t=...,
-        n_candidates=..., top_k=...,
-        sampler=...,                       # (memory, n, t) -> List[Innovation]
-        realizer=...,                      # (memory, z, papers) -> RealizationResult
-        scorer=...,                        # (z, real) -> (prior, real_score) tuple
-    ) -> List[ScoredForecast]
-
-Defaults route to forecaster.foresight.prior_api.sample_z and a thin
-wrapper around forecaster.realization.proposal_generator. Tests inject
-stubs to keep the path LLM-free.
-"""
-
 from __future__ import annotations
 
 import logging

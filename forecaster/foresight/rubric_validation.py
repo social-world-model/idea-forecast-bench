@@ -1,18 +1,3 @@
-"""Phase-2 rubric validation: discriminative AUC + leakage detection.
-
-A rubric R is accepted iff:
-  1. ROC AUC on (positive, negative) idea/candidate pairs >= rubric_auc_min
-     (default 0.70, configurable per-call).
-  2. No "leakage hits": negative pairs scoring at/above the positive median.
-
-Both signals are derived from the same scored-pair table so the runner
-can persist a single CSV for inspection.
-
-This module is *backend-agnostic*: pass any callable
-`scorer(idea, candidate, rubric) -> JudgeResult` (e.g. RubricJudge.score
-or a stubbed function used in tests).
-"""
-
 from __future__ import annotations
 
 import csv

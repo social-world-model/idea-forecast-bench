@@ -68,7 +68,7 @@ foresight_embedder: "sentence-transformer:sentence-transformers/allenai-specter"
 foresight_judge_mode: live
 grouping_assert: true
 dedup_penalty: 0.0           # try 0.05–0.1 if collapse appears
-rubric_refresh_every: 0      # Phase 6 opt-in; 0 = static rubric
+rubric_refresh_every: 0      # opt-in; 0 = static rubric
 ```
 
 3. Run training as before (`scripts/run_train_and_eval.sh` etc.). The

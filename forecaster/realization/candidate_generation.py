@@ -1,8 +1,3 @@
-"""Generate realization candidates for an episode (API / local HF / heuristic).
-
-Split out of pipeline.py, which had grown to 1,573 lines.
-"""
-
 from __future__ import annotations
 
 import logging

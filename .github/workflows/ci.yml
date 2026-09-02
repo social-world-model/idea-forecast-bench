@@ -1,9 +1,5 @@
 name: CI
 
-# One pipeline, one required status check. This replaced eight overlapping
-# workflows (ci / codespell / isort / mypy / pre-commit / pytest / ruff /
-# tests) where five were failing on main, two were duplicates of each other,
-# and the only green one -- pre-commit -- had no run step at all.
 
 on:
   push:

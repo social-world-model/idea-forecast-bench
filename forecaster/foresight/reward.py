@@ -1,21 +1,3 @@
-"""Phase-4 reward: retrieve-then-judge against the per-cutoff future index.
-
-Drop-in replacement for the old composite paper-faithful reward. Exposed
-two ways:
-
-  1. `compute_foresight_reward(rollout_text, payload, ctx) -> float`
-     — pure function for unit tests + ablation runners.
-  2. Routed inside the live TRL reward callback via `ForesightContext`
-     installation (forecaster/foresight/trainer_wiring.py, added next).
-
-Gates (any failure ⇒ 0.0):
-  * format_ok
-  * grounded (history index over X_<=t)
-  * operator_consistent (rollout-vs-z.operator)
-Retrieve from future_index[cutoff_t] (top-R) → rubric-conditioned judge
-(`forecaster.foresight.judge`). Return max of the judge scores.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -84,7 +66,7 @@ class ForesightContext:
     # Per-cutoff indices keyed by `cutoff_date` (YYYY-MM-DD).
     future_indices: dict[str, FutureIndex]
     history_indices: dict[str, HistoryIndex]
-    # Topic-keyed rubric library (Phase 2 outputs).
+    # Topic-keyed rubric library (build_rubrics.py outputs).
     rubrics: dict[str, Rubric]
     # future_paper_id -> topic_id, used to recover topic_id when the dataset's
     # extra_info doesn't carry it (HindsightSample drops topic_id upstream).

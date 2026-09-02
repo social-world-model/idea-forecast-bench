@@ -1,16 +1,3 @@
-"""Rubric-conditioned judge for the new reward + Phase-2 validation.
-
-The judge has one public method:
-
-    score(idea_text, candidate_text, rubric) -> JudgeResult
-
-It wraps the same LLM client the benchmark already uses
-(`idea_forecast_bench.llm.get_response_from_llm`) so the training-time reward
-shares its scoring backbone with the eval-time scorer.
-
-A pluggable `ScorerFn` is exposed so unit tests can inject a stub.
-"""
-
 from __future__ import annotations
 
 import logging

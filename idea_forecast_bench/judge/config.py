@@ -1,9 +1,3 @@
-"""Constants and prompts that define the retrieve-then-judge protocol.
-
-Changing anything here changes what a score means, so these values are also
-folded into the judge fingerprint that guards the checkpoint file.
-"""
-
 from __future__ import annotations
 
 import re

@@ -1,14 +1,5 @@
 name: Security
 
-# CodeQL was the obvious choice here, but it cannot pass on this repository:
-# uploading its results needs GitHub Advanced Security, which is not enabled
-# ("Advanced Security must be enabled for this repository to use code
-# scanning"). Shipping a workflow that is guaranteed red would recreate
-# exactly the problem this repo just dug itself out of, so this runs the
-# checks that do work without that feature.
-#
-# To add CodeQL: enable Settings -> Code security -> Code scanning, then add
-# a standard github/codeql-action workflow.
 
 on:
   push:

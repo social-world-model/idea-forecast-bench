@@ -1,22 +1,3 @@
-"""Run every baseline over one corpus and print a comparison table.
-
-Reproducing the baseline table used to mean invoking `benchmark` once per
-strategy, by hand, and remembering to keep every window/scoring flag identical
-between runs -- if one run drifted, the numbers were no longer comparable.
-
-Every strategy sees exactly the same windows and the same matcher; the shared
-settings are printed once so a run is self-documenting.
-
-Every baseline needs two things: an LLM provider (all five generate their
-predictions with one) and VOYAGE_API_KEY (matching is embedding-only). Both are
-checked before any run starts, so a missing key fails in one second rather than
-five subprocesses later.
-
-Usage:
-    idea-forecast-bench baselines
-    idea-forecast-bench baselines --only topic_trend,summary_prompting
-"""
-
 from __future__ import annotations
 
 import argparse

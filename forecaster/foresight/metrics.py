@@ -1,15 +1,3 @@
-"""Phase-8 non-optimized distribution metrics.
-
-These metrics deliberately do NOT use the rubric-conditioned judge. They
-sit alongside the standard bench scorer to rebut the "you just overfit
-your own judge" objection.
-
-  * mmd_rbf(P, Q)     — squared MMD between two embedding sets, RBF kernel.
-  * wasserstein_1d(p, q) — 1-D Wasserstein between two scalar distributions.
-  * impact_stratified_breakdown(rows, bucket_fn) — slice metrics by
-    citation count / impact bucket.
-"""
-
 from __future__ import annotations
 
 import logging

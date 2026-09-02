@@ -1,11 +1,3 @@
-"""Closed operator inventory + free-text → closed mapping.
-
-The hindsight extractor (forecaster/hindsight/extractor.py) emits one of
-ALLOWED_INNOVATION_OPERATORS (8 verbs). For the Foresight plan we collapse
-this to a closed 4-set plus an `other` bucket so the rubric/reward gates
-can branch on a small enum.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Iterable

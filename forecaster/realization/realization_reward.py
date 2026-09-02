@@ -1,5 +1,3 @@
-"""Extended reward function for the realization GRPO training."""
-
 from __future__ import annotations
 
 import logging

@@ -1,19 +1,20 @@
-"""IdeaForecastBench unified command-line entrypoint.
+from __future__ import annotations
 
-This is the single front door to the repository. It groups the project's work
-into a handful of subcommands and forwards all remaining arguments to the
-underlying script's ``main()`` unchanged, so every flag documented on the
-individual scripts keeps working.
+import runpy
+import sys
+from pathlib import Path
 
-    python -m idea_forecast_bench <command> [args...]
+OVERVIEW = """\
+IdeaForecastBench command-line entrypoint.
 
-Commands
---------
+    idea-forecast-bench <command> [args...]
+
 Benchmark:
     fetch            Download an arXiv corpus the benchmark can read.
     baselines        Run every baseline on one corpus, print a comparison table.
     benchmark        Run a domain-separated backtest of a forecasting strategy.
     judge-eval       Score saved predictions with the retrieve-then-judge LLM judge.
+    main-table       Assemble the main results table from judge-eval outputs.
 
 MDF forecaster:
     hindsight        Extract latent-innovation training labels from future papers.
@@ -23,16 +24,9 @@ MDF forecaster:
 
 Analysis:
     analysis         Evaluation-validity analyses (citation / coauthor / leakage).
-    main-table       Assemble the main results table from judge-eval outputs.
 
-Run ``python -m idea_forecast_bench <command> --help`` to see a command's own flags.
+Run `idea-forecast-bench <command> --help` to see a command's own flags.
 """
-
-from __future__ import annotations
-
-import runpy
-import sys
-from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _EXAMPLES = _REPO_ROOT / "examples"
@@ -109,7 +103,7 @@ _ANALYSIS_VARIANTS = {
 
 
 def _print_overview() -> None:
-    print(__doc__.strip())
+    print(OVERVIEW.strip())
 
 
 def main(argv: list[str] | None = None) -> int:

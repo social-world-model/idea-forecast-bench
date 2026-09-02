@@ -1,30 +1,4 @@
 #!/usr/bin/env python3
-"""LLM-as-Judge evaluation for IdeaForecastBench predictions -- the CLI.
-
-The protocol itself lives in ``idea_forecast_bench.judge``; this file parses flags,
-loads the corpus, fans out over topics, and writes the report.
-
-Pipeline:
-  1. Embed predictions + future papers with voyage-3-large
-  2. Retrieve top-R candidates per prediction (cosine similarity)
-  3. Call the LLM judge for each candidate (multi-dimensional scoring)
-  4. A prediction "hits" if (P+M >= 5) AND (S >= 2), scale 0-3
-  5. Compute diversity (cluster coverage) and novelty (embedding distance)
-
-Usage:
-    idea-forecast-bench judge-eval \\
-        --input-json output/baselines/topic_trend.json \\
-        --papers-dir data/csml/raw_markdown \\
-        --output output/judge/topic_trend_judged.json
-
-    # Quick check on one topic (2 windows):
-    idea-forecast-bench judge-eval \\
-        --input-json output/baselines/topic_trend.json \\
-        --papers-dir data/csml/raw_markdown \\
-        --output output/judge/smoke.json \\
-        --topics llm_pretraining --max-windows 2
-"""
-
 from __future__ import annotations
 
 import argparse

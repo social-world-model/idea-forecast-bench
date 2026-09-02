@@ -1,8 +1,3 @@
-"""Assemble and cache the context shared by every RL trainer backend.
-
-Split out of pipeline.py, which had grown to 1,573 lines.
-"""
-
 from __future__ import annotations
 
 import logging

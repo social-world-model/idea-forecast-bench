@@ -1,5 +1,3 @@
-"""Scoring functions for joint inference."""
-
 from __future__ import annotations
 
 import math

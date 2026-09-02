@@ -1,5 +1,3 @@
-"""Diversity (cluster coverage) and novelty, computed from embeddings."""
-
 from __future__ import annotations
 
 from idea_forecast_bench.judge.embeddings import cosine

@@ -1,25 +1,4 @@
 #!/usr/bin/env python3
-"""Data leakage check: compare match rate across within-window lead-time buckets.
-
-Each backtest window spans [cutoff, cutoff+horizon]. For every TOP-K prediction
-the canonical output records a per-match ``lead_time`` fraction in [0, 1]:
-0.0 = matched paper published right at the cutoff, 1.0 = published at the far
-edge of the horizon. If a model leaked future knowledge, predictions matching
-papers published *close* to the cutoff (small lead_time) should hit at a higher
-rate than predictions matching papers published *late* in the horizon.
-
-This reads the CANONICAL backtest schema produced by run_domain_backtest.py:
-  topic_results[*].backtest.windows[*].matches[*] -> {is_match, lead_time, ...}
-The old version bucketed by (future_end_month - cutoff_month), which equals the
-fixed horizon for every window, collapsing everything into one bucket so the
-Mann-Whitney test never fired.
-
-Usage:
-    python examples/benchmark/analysis_leakage.py \\
-        --input memory_prompting_backtest.json predictor_llm_backtest.json \\
-        --output leakage_report.json
-"""
-
 from __future__ import annotations
 
 import argparse

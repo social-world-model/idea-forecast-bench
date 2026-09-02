@@ -1,5 +1,3 @@
-"""Strict interactive search environment shared by training and inference."""
-
 from __future__ import annotations
 
 import logging

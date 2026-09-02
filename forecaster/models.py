@@ -1,9 +1,3 @@
-"""Domain models for the forecaster package.
-
-All models are frozen (immutable) dataclasses representing the factorized
-latent variable model: p(Y|X) ≈ Π_j Σ_z p(y_j|z_j,X) p(z_j|X).
-"""
-
 from __future__ import annotations
 
 import json

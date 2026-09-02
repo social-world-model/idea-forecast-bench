@@ -1,20 +1,3 @@
-"""Forecaster package: implements the factorized latent variable forecasting method.
-
-Main entry points:
-- ForecasterPipeline: full 4-phase pipeline
-- run_joint_inference: joint inference (Algorithm 1)
-- MemoryStore: memory inventory for the innovation prior
-"""
-# Dependency direction: forecaster -> idea_forecast_bench, one way only.
-# idea_forecast_bench never imports forecaster at module scope; the MDF strategy
-# adapters under idea_forecast_bench/strategy/ import it inside functions.
-#
-# The symbols below that pull in idea_forecast_bench.backtest (hindsight,
-# orchestrator, inference) stay behind __getattr__ so that `import forecaster`
-# does not drag in the whole benchmark runner. This used to be load-bearing --
-# it worked around a real cycle through idea_forecast_bench.strategy.policy_rl --
-# but that cycle is gone; the laziness is now just about import cost.
-
 from forecaster.config import (
     HindsightConfig,
     InferenceConfig,

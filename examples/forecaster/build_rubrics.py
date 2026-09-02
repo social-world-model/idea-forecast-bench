@@ -1,23 +1,4 @@
 #!/usr/bin/env python
-"""Phase-2 rubric construction + AUC validation.
-
-Two modes:
-  --mode smoke   stubbed scorer + hand-crafted rubrics. Proves the pipeline runs
-                 end-to-end without network/LLM. CI-safe.
-  --mode live    real LLM (idea_forecast_bench.llm.create_client) for both rubric
-                 generation and judge scoring. Requires API keys + network.
-
-Per-topic workflow:
-  1. Pull D_z rows in the topic (positives are ideas extracted from
-     post-cutoff papers; the candidate text = "{title}\\n\\n{gap}").
-  2. Construct negatives: ideas describing pre-cutoff existing work for
-     the same topic. In smoke mode we synthesize them (lexical inversion).
-     In live mode we sample from the rubric-held-out earlier cutoffs.
-  3. Build (or load) the rubric.
-  4. Score all pairs, compute AUC + leakage.
-  5. Persist rubric to rubrics/{topic}.json and append to reports.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -47,7 +28,7 @@ from forecaster.foresight.rubric_validation import (
     write_scored_pairs_csv,
 )
 
-logger = logging.getLogger("phase2")
+logger = logging.getLogger("build_rubrics")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -99,11 +80,11 @@ def build_topic_pairs(
     Negatives (live): the caller is expected to splice in extractor-derived
         pre-cutoff ideas via `rows` already labeled — see _label_in_rows().
     """
-    pos_rows = [r for r in rows if r.get("_phase2_label") in (None, 1)]
+    pos_rows = [r for r in rows if r.get("_rubric_label") in (None, 1)]
     rng.shuffle(pos_rows)
     pos_rows = pos_rows[:n_per_class]
 
-    explicit_neg_rows = [r for r in rows if r.get("_phase2_label") == 0]
+    explicit_neg_rows = [r for r in rows if r.get("_rubric_label") == 0]
     explicit_neg_rows = explicit_neg_rows[:n_per_class]
 
     pairs: list[LabeledPair] = []
@@ -136,7 +117,7 @@ def build_topic_pairs(
     elif pos_rows:
         # Default negatives: paraphrase each positive into legacy framing.
         # In smoke mode this is the only signal; in live mode it serves
-        # until we extract real pre-cutoff ideas (Phase 2 follow-up).
+        # until we extract real pre-cutoff ideas (follow-up).
         for r in pos_rows[:n_per_class]:
             pairs.append(
                 LabeledPair(
@@ -410,7 +391,7 @@ def main() -> int:
 
     # ---------------- write summary report ----------------
     report_lines: list[str] = [
-        "# Phase 2 — Rubric validation report\n",
+        "# Rubric validation report\n",
         f"mode: `{args.mode}` | scorer: `{scorer.name if hasattr(scorer, 'name') else scorer.__name__}` "
         f"| threshold: {args.threshold:.2f} | n_per_class: {args.n_per_class}\n",
         "| topic | cutoff | n+ | n- | AUC | leakage | passed |",
@@ -432,7 +413,7 @@ def main() -> int:
     Path(args.report).write_text("\n".join(report_lines), encoding="utf-8")
 
     # ---------------- leakage report ----------------
-    leakage_lines: list[str] = ["# Phase 2 — Leakage report\n"]
+    leakage_lines: list[str] = ["# Leakage report\n"]
     if not leakage_warnings:
         leakage_lines.append("No leakage hits detected across the evaluated topics.")
     else:

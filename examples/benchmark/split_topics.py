@@ -1,21 +1,4 @@
 #!/usr/bin/env python3
-"""Split the topic taxonomy into shards balanced by paper count.
-
-One ``benchmark`` process is one Python interpreter, and the per-window work
-outside the API call (the lexical prefilter, corpus filtering) is GIL-bound, so
-``--workers`` only parallelises the API wait. The way to scale a sweep is to run
-several processes over disjoint ``--topics`` sets. Within a shard the cutoffs run
-serially, so the shards must carry similar numbers of papers or every other
-process ends up waiting on the heaviest one.
-
-Prints one line per shard, each a comma-separated list of topic ids, ready for
-``benchmark --topics``. ``scripts/benchmark/run_sharded_backtest.sh`` calls this.
-
-Usage::
-
-    python examples/benchmark/split_topics.py --input-dir data/csml/raw_markdown --shards 4
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -41,7 +24,9 @@ def balanced_split(counts: dict[str, int], shards: int) -> list[list[str]]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser = argparse.ArgumentParser(
+        description="Split the topic taxonomy into shards balanced by paper count."
+    )
     parser.add_argument("--input-dir", default="data/csml/raw_markdown")
     parser.add_argument("--shards", type=int, default=4)
     # Same defaults as run_domain_backtest.py: the split must see the same

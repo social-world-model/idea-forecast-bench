@@ -1,35 +1,4 @@
 #!/usr/bin/env bash
-# Score sharded generation artifacts with the retrieve-then-judge protocol.
-#
-# One `judge-eval` process per artifact in GEN_DIR, each with its OWN
-# --state-file. judge/state.py's RunState guards its checkpoint with a
-# threading.Lock only: two processes sharing a state file each load it, then
-# replace it over the other's writes, and the tmp-file rename races. Never
-# point two processes at one state file.
-#
-# Concurrency is three layers multiplied: processes x --workers x --topic-workers.
-# Against a hosted API (the default gpt-4.1-mini judge) 20 x 8 x 4 = 640 is fine;
-# the API queues. Against a self-hosted vLLM endpoint the same numbers collapse
-# it -- thousands of timeouts, throughput down to a third -- so keep the product
-# near 240 there (e.g. WORKERS=4 TOPIC_WORKERS=1 over 60 processes). The signal
-# to watch is the endpoint's num_requests_waiting, not GPU utilisation: waiting
-# above zero means back off; waiting at zero with high utilisation means the
-# clients are not feeding it and you can add processes.
-#
-# Environment (every variable has a default):
-#   GEN_DIR           artifacts from run_sharded_backtest.sh   output/sharded/backtest
-#   OUTPUT_DIR        <name>.judged.json + .state.json          output/sharded/judged
-#   LOG_DIR           one log per process                      $OUTPUT_DIR/logs
-#   INPUT_DIR         the same corpus the generation run used  data/csml/raw_markdown
-#   WORKERS           judge threads per window                 8
-#   TOPIC_WORKERS     topics in flight per process             4
-#   JUDGE_MODEL       passed as --judge-model                  (judge-eval's default)
-#   JUDGE_BASE_URL    passed as --judge-base-url               (hosted API)
-#   PYTHON_BIN        interpreter to use                       python
-#   IDEA_FORECAST_CORPUS_FINGERPRINT  derived once here if unset
-#
-# Usage:
-#   OPENAI_API_KEY=... VOYAGE_API_KEY=... bash scripts/benchmark/run_sharded_judge.sh
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

@@ -1,10 +1,3 @@
-"""Realization RL pipeline: orchestration.
-
-The episode/prompt, candidate-generation, context-caching and alignment-gate
-stages moved to sibling modules; their public names are re-exported here so
-existing `from forecaster.realization.pipeline import ...` keeps working.
-"""
-
 from __future__ import annotations
 
 import logging

@@ -1,5 +1,3 @@
-"""ForecasterStrategy: wraps run_joint_inference as an IdeaStrategy."""
-
 from __future__ import annotations
 
 import dataclasses

@@ -1,18 +1,3 @@
-"""Semantic Scholar lookups for the evaluation-validity analyses.
-
-Both analysis scripts had a byte-identical `_s2_fetch`, and both re-raised
-every HTTPError that was not a 404 -- including 429. Semantic Scholar rate
-limits unauthenticated traffic aggressively and `--s2-key` is documented as
-optional, so 429 is the *expected* response on the supported keyless path, not
-an exceptional one. Hitting it killed the run with a raw traceback and threw
-away every lookup already made.
-
-Rate limits and transient server errors are retried with exponential backoff
-here, honouring Retry-After when the server sends it. A request that still
-fails is reported and skipped, which degrades the analysis rather than ending
-it -- the same treatment connection errors already got.
-"""
-
 from __future__ import annotations
 
 import json

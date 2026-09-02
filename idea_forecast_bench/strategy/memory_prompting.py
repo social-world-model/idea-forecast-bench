@@ -1,26 +1,3 @@
-"""Memory-Augmented Prompting baseline strategy.
-
-Maintains a compressed "memory" of long-term historical papers and combines it
-with recent full abstracts when prompting the LLM to forecast future ideas.
-
-Architecture
-------------
-Given training papers up to cutoff_month:
-
-  long-term papers  (older than `memory_months` before cutoff)
-        │
-        ▼
-  [LLM compress]  → memory: bullet-point summary of recurring themes
-        │
-        ├── + recent papers (last `memory_months` months, full abstracts)
-        │
-        ▼
-  [LLM forecast]  → top_k research predictions
-
-This tests whether lightweight historical abstraction (memory) adds value over
-using only recent context (Direct Prompting).
-"""
-
 from __future__ import annotations
 
 import contextlib

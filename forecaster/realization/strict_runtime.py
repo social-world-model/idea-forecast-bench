@@ -1,5 +1,3 @@
-"""Strict realization runtime built on the interactive search environment."""
-
 from __future__ import annotations
 
 import json

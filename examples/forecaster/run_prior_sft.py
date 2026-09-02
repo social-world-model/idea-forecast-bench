@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""Train the innovation prior via SFT on hindsight data.
-
-Usage:
-    python examples/run_prior_sft.py \
-        --hindsight output/hindsight_samples.jsonl \
-        --output-dir output/prior_sft_qwen3.5-2b \
-        --model qwen3.5-2b
-"""
-
 from __future__ import annotations
 
 import argparse

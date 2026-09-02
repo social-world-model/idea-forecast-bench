@@ -1,26 +1,3 @@
-"""Summary Prompting baseline strategy.
-
-Implements baseline (4) from the IdeaForecastBench paper:
-
-    Summary Prompting first compresses the historical literature into a short
-    summary and then forecasts future ideas from that summary, testing whether
-    lightweight historical abstraction is sufficient.
-
-This differs from Memory-Augmented Prompting in that the forecast step
-conditions ONLY on the compressed summary — raw recent abstracts are not
-re-introduced. This isolates the contribution of "lightweight abstraction"
-alone, as the paper specifies.
-
-Two LLM calls per window:
-  Call 1 (compress) — system prefix "You are a research summarizer." —
-    compress all train_papers into a short single-paragraph summary.
-  Call 2 (forecast) — system prefix "You are a research forecasting assistant" —
-    forecast top_k ideas conditioned on the summary only.
-
-The two system prefixes are intentionally distinct from MemoryPromptingStrategy
-so the batch runner can route the two rounds independently.
-"""
-
 from __future__ import annotations
 
 import json

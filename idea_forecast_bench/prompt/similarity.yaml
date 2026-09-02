@@ -1,6 +1,3 @@
-# Matching is embedding-only (Voyage). There is no engine choice: scores from
-# different matchers are not comparable, and making it selectable invited runs
-# whose numbers could not be compared to each other.
 embedding_threshold: 0.4
 system_prompt: |
   You are a precise similarity evaluator. You output structured scores and reasoning.

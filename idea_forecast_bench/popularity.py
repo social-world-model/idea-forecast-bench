@@ -1,9 +1,3 @@
-"""Popularity scoring for papers using the Semantic Scholar API.
-
-Fetches citation counts and normalizes them into [0, 1] weights.
-All functions gracefully degrade — API failures return zero citations.
-"""
-
 from __future__ import annotations
 
 import json

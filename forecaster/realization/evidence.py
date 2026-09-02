@@ -1,5 +1,3 @@
-"""Embedding-based evidence retrieval for the realization module."""
-
 from __future__ import annotations
 
 import logging

@@ -1,12 +1,3 @@
-"""Temporal window constants and leakage assertions for the Foresight plan.
-
-Locked design decision (see memory: foresight-rl-plan-decisions):
-- train cutoffs:        t <= 2024-06
-- train future window:  ends at  <= 2024-09 (3-month horizon from the latest train cutoff)
-- rubric held-out:      cutoff <= 2024-06, positives drawn from 2024-07..2024-09
-- test cutoffs:         t >= 2024-10
-"""
-
 from __future__ import annotations
 
 from collections.abc import Iterable

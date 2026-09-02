@@ -1,5 +1,3 @@
-"""Joint inference algorithm (Algorithm 1 from the paper)."""
-
 from __future__ import annotations
 
 import dataclasses

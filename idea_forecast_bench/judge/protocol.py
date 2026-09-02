@@ -1,5 +1,3 @@
-"""The judge call itself: prompt, decode settings, and score parsing."""
-
 from __future__ import annotations
 
 import time

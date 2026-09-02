@@ -1,8 +1,3 @@
-"""Turn RL episodes into the prompt rows the trainer consumes.
-
-Split out of pipeline.py, which had grown to 1,573 lines.
-"""
-
 from __future__ import annotations
 
 import logging

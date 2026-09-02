@@ -1,5 +1,3 @@
-"""Embedding calls and cosine retrieval for the judge pipeline."""
-
 from __future__ import annotations
 
 import math

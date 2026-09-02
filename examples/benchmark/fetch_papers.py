@@ -1,21 +1,3 @@
-"""Fetch an arXiv corpus in the layout the benchmark expects.
-
-Without this the benchmark has no input: `idea-forecast-bench benchmark` defaults
-to `--input-dir data/csml/raw_markdown`, and nothing in the repo put anything
-there. `idea_forecast_bench.ingest` could already do the work but was reachable
-only from Python, so reproducing a run started with "write your own script".
-
-Papers land as ``<out-dir>/<YYYY-MM>/<paper_id>.md``. The loader globs for
-``*.md`` recursively, so this layout is directly consumable:
-
-    idea-forecast-bench fetch --out-dir data/csml/raw_markdown
-    idea-forecast-bench benchmark --input-dir data/csml/raw_markdown
-
-Usage:
-    idea-forecast-bench fetch                              # cs.LG, 12 months back
-    idea-forecast-bench fetch --query "cat:cs.CL" --max-results 2000
-"""
-
 from __future__ import annotations
 
 import argparse

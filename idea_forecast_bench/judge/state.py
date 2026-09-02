@@ -1,5 +1,3 @@
-"""Checkpoint file for a judge run: embeddings and judge decisions."""
-
 from __future__ import annotations
 
 import json

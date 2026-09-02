@@ -1,14 +1,3 @@
-# Closed operator inventory for the Foresight RL plan (Phase 1.1a).
-# The hindsight extractor still emits free-text operators drawn from
-# ALLOWED_INNOVATION_OPERATORS (forecaster/models.py). This file is the
-# downstream closed mapping that the rubric, reward gate, and prior SFT
-# label cleaner all read.
-#
-# `unmappable_bucket` controls what happens to free-text operators that
-# do not have a mapping below. They get tagged `other` and surface in the
-# M1 spot-check ratio. Per the locked design decision: drop/merge `other`
-# rows from training only after the ratio is observed and approved.
-
 version: 1
 unmappable_bucket: other
 
