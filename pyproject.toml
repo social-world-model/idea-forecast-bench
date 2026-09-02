@@ -35,6 +35,7 @@ dependencies = [
     # used to arrive only transitively via sentence-transformers in the
     # optional groups, so a core install silently computed a different metric.
     "scikit-learn>=1.3",
+    "huggingface-hub (>=0.25)",
 ]
 
 [project.urls]

@@ -82,13 +82,18 @@ before it starts, so a missing key costs a second rather than five failed runs.
 
 ### 1. Get a corpus
 
-Use the frozen corpus the paper was run against
-([md_files.zip, ~5 GB](https://drive.google.com/file/d/1182o0Teo3G128c3mxeimDQNBZNY-iWCe/view?usp=sharing))
-and point `--input-dir` at wherever you unpacked it. Or pull a fresh one from arXiv,
-which needs no account:
+The frozen corpus the paper was run against is on Hugging Face at
+[4R5T/idea-forecast-bench](https://huggingface.co/datasets/4R5T/idea-forecast-bench):
+239,532 arXiv papers from 2007-04 to 2025-10 as Markdown, one archive per month. One
+command downloads and unpacks it:
 
 ```bash
-idea-forecast-bench fetch                                   # into data/csml/raw_markdown
+idea-forecast-bench fetch --from-hf          # into data/csml/raw_markdown
+```
+
+Or pull a fresh corpus from arXiv, which needs no account:
+
+```bash
 idea-forecast-bench fetch --query "cat:cs.CL" --max-results 5000
 ```
 
