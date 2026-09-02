@@ -27,6 +27,7 @@ Single-metric ablation:
 
 Analysis:
     analysis         Evaluation-validity analyses (citation / coauthor / leakage).
+    main-table       Assemble the main results table from judge-eval outputs.
 
 Run ``python -m live_idea_bench <command> --help`` to see a command's own flags.
 """
@@ -84,6 +85,10 @@ _COMMANDS: dict[str, tuple[str, str]] = {
     "analysis": (
         "benchmark/analysis_leakage.py",
         "Evaluation-validity analyses (citation/coauthor/leakage).",
+    ),
+    "main-table": (
+        "benchmark/build_main_table.py",
+        "Assemble the main results table from judge-eval outputs.",
     ),
 }
 
