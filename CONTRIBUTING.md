@@ -24,9 +24,9 @@ Optional groups:
 | `--with forecaster` | torch, transformers, trl, peft, datasets, accelerate | training/running MDF locally |
 | `--with webapp` | flask, flask-cors | running `backend/app.py` |
 
-Install CUDA-correct torch from `scripts/setup_rl_env*.sh`, not from
-`poetry install --with forecaster` — the default index can resolve a wheel
-that leaves `torch.cuda.is_available()` False.
+After `poetry install --with forecaster`, reinstall torch from the PyTorch index
+for your CUDA version; the default index can resolve a wheel that leaves
+`torch.cuda.is_available()` False. The README's Training MDF step 0 has the command.
 
 ## What CI checks
 

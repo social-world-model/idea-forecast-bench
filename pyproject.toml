@@ -89,9 +89,8 @@ optional = true
 
 # GPU training extras. NOTE: `torch` here is only a loose marker — `poetry
 # install --with forecaster` pulls a default-index torch whose CUDA build may
-# not match your driver. Install the CUDA-correct torch with the setup scripts
-# instead (scripts/setup_rl_env_*.sh), which pin
-# the right +cuXXX wheel via --index-url for your GPU.
+# not match your driver. Reinstall torch from the PyTorch index for your CUDA
+# version afterwards (README, Training MDF, step 0).
 [tool.poetry.group.forecaster.dependencies]
 torch = ">=2.0"
 transformers = ">=4.40"

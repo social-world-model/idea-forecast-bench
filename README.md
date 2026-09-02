@@ -62,9 +62,6 @@ one more group:
 |---|---|---|
 | forecaster | `poetry install --with forecaster` | train or run MDF locally (torch, trl, peft) |
 
-> For GPU training, install a CUDA-matched torch with `scripts/setup_rl_env*.sh`
-> rather than through Poetry: the default index can resolve a wheel that leaves
-> `torch.cuda.is_available()` False.
 
 ## Setup
 
@@ -178,20 +175,96 @@ matchers are not comparable, so there is no flag to change the matcher.
 
 ## Training MDF
 
-MDF needs trained checkpoints, so it is run with `benchmark --strategy forecaster` rather
-than through `baselines`. Install the `forecaster` group, then:
+MDF is trained in two stages, a supervised prior and a GRPO-trained realization
+policy, then evaluated through the same `benchmark` and `judge-eval` path as every
+baseline. The commands below are the full pipeline; `scripts/run_train_and_eval.sh`
+chains steps 3 to 5 and skips any stage whose checkpoint already exists.
+
+### Step 0 — GPU environment
 
 ```bash
-idea-forecast-bench hindsight     # extract latent-innovation labels from future papers
-idea-forecast-bench train-prior   # SFT the memory-conditioned prior
-idea-forecast-bench train         # GRPO-train the realization policy
-idea-forecast-bench infer         # prior → realize → select
+conda create -n idea-forecast-bench-train python=3.11 -y
+conda activate idea-forecast-bench-train
+poetry install --with forecaster
+# Poetry resolves torch from PyPI, which may not match your CUDA driver.
+# Reinstall it from the PyTorch index for your CUDA version (cu124 shown):
+pip install --force-reinstall torch --index-url https://download.pytorch.org/whl/cu124
+pip install vllm          # optional; USE_VLLM=1 makes GRPO rollouts ~10x faster
+python -c "import torch; assert torch.cuda.is_available()"
 ```
 
-`scripts/run_train_and_eval.sh` chains these end to end. The GRPO step defaults to the
-gated foresight reward and needs prebuilt artifacts; see
-[forecaster/foresight/README.md](forecaster/foresight/README.md) for that sequence, or
-set `REWARD_MODE=legacy` to run the pipeline without them.
+### Step 1 — Hindsight labels
+
+Extract a latent innovation (base direction, operator, gap) from each future paper
+in the fixed training episodes. Uses `gpt-4o` by default.
+
+```bash
+export OPENAI_API_KEY="your-openai-key"
+idea-forecast-bench hindsight --input-dir /path/to/corpus \
+  --output-dir data/topic_hindsight --mode full
+# -> data/topic_hindsight/hindsight_samples.jsonl
+```
+
+### Step 2 — Foresight reward artifacts
+
+The GRPO reward retrieves from a per-cutoff future index and judges against a
+per-topic rubric. Build both (one GPU for the embedder; the rubric step calls a
+judge, either the OpenAI default or a local endpoint via `--judge-base-url`):
+
+```bash
+python examples/forecaster/build_indices.py --papers-dir /path/to/corpus \
+  --hindsight data/topic_hindsight/hindsight_samples.jsonl \
+  --art output/foresight_artifacts
+python examples/forecaster/build_rubrics.py --mode live \
+  --rubrics-dir output/foresight_artifacts/rubrics
+```
+
+To skip this step, train with `--trainer-config grpo_train_legacy.yaml`, a
+fixed-weight composite reward that needs no artifacts.
+
+### Step 3 — Prior SFT
+
+```bash
+idea-forecast-bench train-prior --model qwen2.5-7b-instruct \
+  --hindsight data/topic_hindsight/hindsight_samples.jsonl \
+  --output-dir output/mdf/prior_sft
+# -> output/mdf/prior_sft/final_checkpoint (LoRA adapter)
+```
+
+### Step 4 — Realization GRPO
+
+Warm-starts from the prior adapter. The foresight judge is `gpt-4o` unless
+`JUDGE_BASE_URL` points at a local endpoint (`scripts/benchmark/serve_vllm.sh`);
+`FORESIGHT_JUDGE_WORKERS` bounds its concurrency.
+
+```bash
+USE_VLLM=1 idea-forecast-bench train --model-preset qwen2.5-7b-instruct \
+  --input-dir /path/to/corpus \
+  --hindsight data/topic_hindsight/hindsight_samples.jsonl \
+  --init-policy-path output/mdf/prior_sft/final_checkpoint \
+  --trainer grpo --trainer-config grpo_train.yaml \
+  --skip-alignment-check \
+  --output-dir output/mdf/realization_grpo
+# -> output/mdf/realization_grpo/grpo/checkpoints/final_checkpoint
+```
+
+`--skip-alignment-check` is required when the validation and test windows start in
+the same month, which is the paper's configuration.
+
+### Step 5 — Evaluate
+
+Unset `JUDGE_BASE_URL` first if step 4 set it, or the judge is silently redirected.
+
+```bash
+idea-forecast-bench benchmark --strategy forecaster \
+  --model-name Qwen/Qwen2.5-7B-Instruct \
+  --prior-checkpoint output/mdf/prior_sft/final_checkpoint \
+  --realization-checkpoint output/mdf/realization_grpo/grpo/checkpoints/final_checkpoint \
+  --input-dir /path/to/corpus --skip-matching \
+  --output output/backtest/forecaster.json
+idea-forecast-bench judge-eval --input-json output/backtest/forecaster.json \
+  --papers-dir /path/to/corpus --output output/judged/forecaster.judged.json
+```
 
 ## Reproducing the paper's sweep
 
@@ -241,7 +314,7 @@ forecaster/                 # MDF: Mode-Decomposition Forecaster
 └── foresight/              # future-grounded reward, indices, rubrics
 
 examples/                   # Python entry scripts behind each CLI command
-scripts/                    # sharded sweep launchers, vLLM serving, GPU env setup
+scripts/                    # sharded sweep launchers, vLLM serving, MDF pipeline wrapper
 config/                     # YAML config, including the 52-topic taxonomy
 docs/                       # running-at-scale notes
 ```

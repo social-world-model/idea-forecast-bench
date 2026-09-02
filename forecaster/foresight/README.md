@@ -29,8 +29,8 @@ forecaster/foresight/
   metrics.py            — MMD + Wasserstein + impact-stratified breakdown
 
 examples/forecaster/
-  build_indices.py               — per-cutoff future/history indices
-  phase2_rubric_validation.py    — --mode smoke|live; writes rubrics + reports
+  build_indices.py               — D_z from the hindsight labels + per-cutoff indices
+  build_rubrics.py               — --mode smoke|live; writes rubrics + validation reports
 ```
 
 `reward.py` scores the retrieved candidates concurrently; set
@@ -41,7 +41,7 @@ examples/forecaster/
 1. Build per-cutoff indices and rubrics:
 
 ```bash
-PYTHONPATH=. python examples/forecaster/phase2_rubric_validation.py --mode live
+PYTHONPATH=. python examples/forecaster/build_rubrics.py --mode live
 PYTHONPATH=. python - <<'PY'
 from pathlib import Path
 from forecaster.foresight.indices import SentenceTransformerEmbedder, build_cutoff_indices

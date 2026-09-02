@@ -1,37 +1,27 @@
 #!/usr/bin/env bash
 # ==========================================================================
-#  Full paper pipeline: Prior SFT → Realization GRPO → Joint Inference → Eval
-#  Skips SFT/GRPO if checkpoints already exist.
-#
-#  Works with both Qwen3 (vLLM-enabled) and Qwen3.5 (transformers 5.x) envs.
-#  Auto-detects model family and validates the current conda environment.
+#  Full MDF pipeline: prior SFT -> realization GRPO -> generate -> judge.
+#  Skips SFT/GRPO if checkpoints already exist. Each phase is one CLI
+#  command; the README's "Training MDF" section shows them individually.
 #
 #  Usage:
-#    MODEL=qwen3-1.7b bash scripts/run_train_and_eval.sh
-#    MODEL=qwen3.5-2b bash scripts/run_train_and_eval.sh
+#    MODEL=qwen2.5-7b-instruct bash scripts/run_train_and_eval.sh
 #
-#  Reward (GRPO Phase 3):
+#  Reward (GRPO phase):
 #    REWARD_MODE=foresight (default) — the gated, future-grounded reward used
-#      for the reported results. Needs a prebuilt artifact dir (per-cutoff
-#      future/history indices + validated rubrics). Build it first:
-#        1. provide the paper corpus at $PAPERS
-#        2. run the hindsight pipeline to produce data/topic_hindsight/dz.jsonl
-#        3. python examples/forecaster/build_indices.py --papers-dir "$PAPERS" \
-#               --dz data/topic_hindsight/dz.jsonl --art output/foresight_artifacts
-#        4. generate validated rubrics (see forecaster/foresight/README.md)
+#      for the reported results. Needs the artifact dir built by
+#      examples/forecaster/build_indices.py and build_rubrics.py
+#      (per-cutoff indices + rubrics under $FORESIGHT_ARTIFACT_DIR).
 #    REWARD_MODE=legacy — fixed-weight composite reward, NO artifacts required.
-#      Use it to run the whole pipeline end to end on a fresh clone, or while
-#      the foresight artifacts are still being built:
 #        REWARD_MODE=legacy bash scripts/run_train_and_eval.sh
 #
-#  Environment setup (run once per model family):
-#    bash scripts/setup_rl_env.sh qwen3      # vLLM + transformers <5
-#    bash scripts/setup_rl_env.sh qwen3.5    # transformers >=5, no vLLM
+#  Environment: the `forecaster` poetry group plus a CUDA torch (README,
+#  Training MDF, step 0). USE_VLLM=1 needs vllm installed as well.
 # ==========================================================================
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-MODEL="${MODEL:-qwen3-1.7b}"
+MODEL="${MODEL:-qwen2.5-7b-instruct}"
 HINDSIGHT="${HINDSIGHT:-output/hindsight_samples.jsonl}"
 PAPERS="${PAPERS:-data/csml/raw_markdown}"
 OUT="output/forecaster_${MODEL}"
@@ -41,49 +31,13 @@ END_MONTH="${END_MONTH:-2025-03}"
 REWARD_MODE="${REWARD_MODE:-foresight}"
 FORESIGHT_ARTIFACT_DIR="${FORESIGHT_ARTIFACT_DIR:-output/foresight_artifacts}"
 
-# ---- Auto-detect model family and validate environment ----
-ENV_INFO=$(python3 -c "
+BASE_MODEL_ID=$(python3 -c "
 from forecaster.realization.model_zoo import resolve_small_model
-import transformers
-spec = resolve_small_model('${MODEL}')
-tv = int(transformers.__version__.split('.')[0])
-family = spec.family
-vllm_ok = False
-try:
-    import vllm
-    from trl.import_utils import is_vllm_available
-    vllm_ok = is_vllm_available()
-except Exception:
-    pass
-
-# Validate env compatibility
-if family == 'qwen3.5' and tv < 5:
-    print(f'ERROR: {spec.alias} requires transformers >=5.x (found {transformers.__version__})')
-    print(f'  Fix: conda activate <qwen35-env> or bash scripts/setup_rl_env.sh qwen3.5')
-    import sys; sys.exit(1)
-if family == 'qwen3' and tv >= 5:
-    print(f'WARNING: {spec.alias} works best with transformers <5 + vLLM (found {transformers.__version__})')
-    print(f'  Hint: conda activate <qwen3-env> or bash scripts/setup_rl_env.sh qwen3')
-
-print(f'{spec.model_id}|{family}|tv={transformers.__version__}|vllm={vllm_ok}')
-")
-
-# Check if validation failed
-if echo "$ENV_INFO" | grep -q "^ERROR:"; then
-  echo "$ENV_INFO" >&2; exit 1
-fi
-if echo "$ENV_INFO" | grep -q "^WARNING:"; then
-  echo "$ENV_INFO" >&2
-fi
-
-BASE_MODEL_ID=$(echo "$ENV_INFO" | tail -1 | cut -d'|' -f1)
-MODEL_FAMILY=$(echo "$ENV_INFO" | tail -1 | cut -d'|' -f2)
-ENV_DETAIL=$(echo "$ENV_INFO" | tail -1 | cut -d'|' -f3-)
+print(resolve_small_model('${MODEL}').model_id)")
 
 echo "=============================================="
 echo " Full Pipeline (prior SFT -> realization GRPO -> eval)"
 echo "  Model:  ${MODEL} (${BASE_MODEL_ID})"
-echo "  Family: ${MODEL_FAMILY} | ${ENV_DETAIL}"
 echo "  Output: ${OUT}"
 echo "  Dates:  ${START_MONTH} ~ ${END_MONTH}"
 echo "=============================================="
@@ -118,8 +72,9 @@ case "$REWARD_MODE" in
       echo "       The gated foresight reward needs per-cutoff indices + validated rubrics." >&2
       echo "       Build them first:" >&2
       echo "         python examples/forecaster/build_indices.py --papers-dir \"${PAPERS}\" \\" >&2
-      echo "             --dz data/topic_hindsight/dz.jsonl --art \"${FORESIGHT_ARTIFACT_DIR}\"" >&2
-      echo "         (then generate validated rubrics — see forecaster/foresight/README.md)" >&2
+      echo "             --hindsight \"${HINDSIGHT}\" --art \"${FORESIGHT_ARTIFACT_DIR}\"" >&2
+      echo "         python examples/forecaster/build_rubrics.py --mode live \\" >&2
+      echo "             --rubrics-dir \"${FORESIGHT_ARTIFACT_DIR}/rubrics\"" >&2
       echo "       Or run the whole pipeline with the no-artifacts reward:" >&2
       echo "         REWARD_MODE=legacy bash scripts/run_train_and_eval.sh" >&2
       exit 1
