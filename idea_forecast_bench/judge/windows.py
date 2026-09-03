@@ -104,7 +104,11 @@ def process_window(
                     judge_client=judge_client,
                     judge_model=judge_model,
                 )
-            state.set_decision(_ph, pid, d)
+            # Only a real verdict is cached. A parse failure is a service
+            # symptom, not a judgement: caching it freezes an unscored pair as
+            # a non-match forever, and every later run silently inherits it.
+            if not d.get("parse_failed"):
+                state.set_decision(_ph, pid, d)
             return pid, score, d
 
         judge_results: dict[str, tuple[float, dict[str, Any]]] = {}

@@ -73,12 +73,28 @@ def call_judge(
                 # Do NOT silently backfill to 1 — that would mark a truncated or
                 # malformed response as a real low score. Treat as a parse
                 # failure and retry; only after retries give up explicitly.
-                last_problem = f"missing dims {missing}"
+                #
+                # An EMPTY reply is the common case and means something
+                # different from a malformed one: the model spent its whole
+                # token budget before emitting a score line, which is what a
+                # reasoning trace does to a 256-token budget. Say so, because
+                # "missing dims" sends the reader looking at the rubric.
+                blank = not content.strip()
+                last_problem = (
+                    "empty reply — the model returned no content "
+                    "(thinking mode consumes the token budget)"
+                    if blank
+                    else f"missing dims {missing}"
+                )
                 if attempt < MAX_JUDGE_RETRY - 1:
                     print(
                         f"\n  [judge parse-retry {attempt + 1}] {last_problem}",
                         flush=True,
                     )
+                    # Back off. The previous version retried instantly, so all
+                    # three attempts landed inside the same bad moment and a
+                    # transient blank became a permanent zero.
+                    time.sleep(2**attempt)
                     continue
                 print(
                     f"\n  [judge PARSE-FAILED] {last_problem} — recording parse_failed",
