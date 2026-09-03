@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="鲁尔转盘组合预测器在 IdeaForecastBench 上的试跑：方法、数据与判分结果">
+<title>鲁尔转盘试跑</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&family=Noto+Sans+SC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#F5F6F3; --surface:#FFFFFF; --surface-2:#ECEFEA;
+  --ink:#1B2129; --ink-soft:#56606C; --ink-faint:#8A94A0;
+  --rule:#D9DED8; --rule-strong:#B9C2BB;
+  --accent:#2A5674; --accent-wash:#E4ECF1; --accent-ink:#FFFFFF;
+  --ochre:#96651E; --ochre-wash:#F5EDDC;
+  --ok:#2F6B4F; --bad:#9B3D3D; --bad-wash:#F6E6E6;
+  --theme-c:#2A5674; --domain-c:#6A4C93; --method-c:#2F6B4F; --frame-c:#6B7280;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#111519; --surface:#181D23; --surface-2:#1F262E;
+    --ink:#E6EAEE; --ink-soft:#A3ACB7; --ink-faint:#6F7986;
+    --rule:#2A323C; --rule-strong:#3B4550;
+    --accent:#86B4D2; --accent-wash:#1B2B38; --accent-ink:#0F1418;
+    --ochre:#D2A560; --ochre-wash:#2B2316;
+    --ok:#7CC0A0; --bad:#D68B8B; --bad-wash:#2E1C1C;
+    --theme-c:#86B4D2; --domain-c:#B49ED9; --method-c:#7CC0A0; --frame-c:#9AA3AE;
+  }
+}
+:root[data-theme="dark"]{
+    --paper:#111519; --surface:#181D23; --surface-2:#1F262E;
+    --ink:#E6EAEE; --ink-soft:#A3ACB7; --ink-faint:#6F7986;
+    --rule:#2A323C; --rule-strong:#3B4550;
+    --accent:#86B4D2; --accent-wash:#1B2B38; --accent-ink:#0F1418;
+    --ochre:#D2A560; --ochre-wash:#2B2316;
+    --ok:#7CC0A0; --bad:#D68B8B; --bad-wash:#2E1C1C;
+    --theme-c:#86B4D2; --domain-c:#B49ED9; --method-c:#7CC0A0; --frame-c:#9AA3AE;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);margin:0;
+  font-family:"Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  font-size:16px;line-height:1.85;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1040px;margin:0 auto;padding:0 28px 96px}
+.measure{max-width:72ch}
+h1,h2,h3{font-family:"Noto Serif SC","Songti SC","STSong",Georgia,serif;text-wrap:balance;margin:0}
+a{color:var(--accent)}
+.mono,code{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:.92em}
+.muted{color:var(--ink-faint)}
+header{border-bottom:1px solid var(--rule-strong);padding:56px 0 26px;margin-bottom:36px}
+h1{font-size:clamp(28px,4vw,40px);font-weight:700;letter-spacing:.01em;line-height:1.3}
+.standfirst{font-size:17px;color:var(--ink-soft);margin:14px 0 0;max-width:62ch}
+.runbar{display:flex;flex-wrap:wrap;gap:4px 28px;margin-top:24px;font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-faint)}
+.runbar b{color:var(--ink-soft);font-weight:500}
+section{margin-top:56px}
+.eyebrow{display:flex;align-items:baseline;gap:14px;border-top:1px solid var(--rule);padding-top:14px;margin-bottom:18px}
+.step{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.14em;color:var(--accent);font-weight:500;white-space:nowrap}
+h2{font-size:24px;font-weight:700}
+h3{font-size:17px;font-weight:700;margin:32px 0 10px}
+p{margin:0 0 14px}
+.lede{font-size:17px}
+/* 结论卡 */
+.tldr{background:var(--surface);border:1px solid var(--rule);border-top:3px solid var(--accent);padding:20px 24px 8px;margin-top:36px}
+.tldr .lbl{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.14em;color:var(--accent);margin-bottom:8px}
+.tldr ol{margin:0;padding-left:1.3em}
+.tldr li{margin-bottom:10px}
+.tldr li b{font-weight:700}
+/* 定义列表 */
+.spec{display:grid;grid-template-columns:minmax(110px,auto) 1fr;border-top:1px solid var(--rule);margin:20px 0 0}
+.spec dt,.spec dd{border-bottom:1px solid var(--rule);padding:10px 0;margin:0}
+.spec dt{font-weight:500;color:var(--ink-soft);padding-right:20px;font-size:14.5px}
+.spec dd{font-size:15px}
+.spec .note{color:var(--ink-faint);font-size:13.5px}
+/* 流水线 */
+.pipe{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule);margin:22px 0 0}
+@media(min-width:820px){.pipe{grid-template-columns:repeat(5,1fr)}}
+.pipe>div{background:var(--surface);padding:16px 16px 18px}
+.pipe .n{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--accent);letter-spacing:.1em}
+.pipe h4{margin:6px 0 6px;font-size:15px;font-weight:700;font-family:inherit}
+.pipe p{font-size:13.5px;color:var(--ink-soft);margin:0;line-height:1.6}
+.pipe .who{display:block;margin-top:9px;font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink-faint)}
+/* 表格 */
+.tablewrap{overflow-x:auto;margin:20px 0 0}
+table{border-collapse:collapse;width:100%;font-size:14.5px}
+th,td{text-align:left;padding:10px 14px 10px 0;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-size:12.5px;font-weight:500;color:var(--ink-soft);border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+th .thsub{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink-faint);font-weight:400}
+td.num,th.num{text-align:right;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;padding-right:0;white-space:nowrap}
+tr.hi td{background:var(--accent-wash)}
+.armname{display:block;font-weight:700}
+.armdesc{display:block;font-size:12.5px;color:var(--ink-faint)}
+.se{color:var(--ink-faint);font-size:12px}
+.ok{color:var(--ok);font-weight:700} .warn{color:var(--ochre);font-weight:700}
+/* 元素标签 */
+.chip{display:inline-flex;align-items:baseline;gap:6px;padding:2px 8px 3px;border:1px solid;border-radius:2px;font-size:13px;line-height:1.4;background:var(--surface)}
+.chip .k{font-size:10.5px;opacity:.8}
+.chip .m{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink-faint)}
+.chip.theme{border-color:var(--theme-c);color:var(--theme-c)}
+.chip.domain{border-color:var(--domain-c);color:var(--domain-c)}
+.chip.method{border-color:var(--method-c);color:var(--method-c)}
+.chip.frame{border-color:var(--frame-c);color:var(--frame-c)}
+.chip.bad{border-color:var(--bad);color:var(--bad)}
+.movetag{display:inline-block;padding:2px 9px 3px;background:var(--ochre-wash);color:var(--ochre);border-radius:2px;font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.06em}
+.traces{display:grid;gap:14px;margin-top:18px}
+.trace{background:var(--surface);border:1px solid var(--rule);padding:15px 18px 16px}
+.trace .parts{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:10px}
+.trace .idea{font-family:"Noto Serif SC","Songti SC",Georgia,serif;font-size:16px;line-height:1.5;margin:0 0 8px;font-weight:500}
+.trace .why{font-size:14px;color:var(--ink-soft);margin:0}
+.trace .ptitle{color:var(--ink)}
+.trace .stats{margin-top:10px;padding-top:9px;border-top:1px dashed var(--rule);font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-faint);display:flex;flex-wrap:wrap;gap:0 18px}
+.armhead{display:flex;align-items:baseline;gap:11px;margin:28px 0 0}
+.armhead .nm{font-weight:700}
+.armhead .desc{font-size:13.5px;color:var(--ink-soft)}
+.callout{border-left:3px solid var(--accent);background:var(--surface);padding:14px 18px;margin:22px 0 0}
+.callout.warn{border-left-color:var(--ochre)}
+.callout p{margin:0 0 8px;font-size:15px}
+.callout p:last-child{margin:0}
+.callout .lbl{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.1em;color:var(--ink-soft);display:block;margin-bottom:6px}
+/* 抽取样例 */
+.sample{background:var(--surface);border:1px solid var(--rule);padding:14px 18px 16px;margin:18px 0 0;max-width:620px}
+.sample .shead{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-faint);border-bottom:1px solid var(--rule);padding-bottom:8px;margin-bottom:10px}
+.srow{display:grid;grid-template-columns:56px 1fr;gap:10px;align-items:baseline;padding:5px 0}
+.srow .sk{font-size:13px;color:var(--ink-soft)}
+.srow .sv{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline}
+.srow .plain{font-family:"IBM Plex Mono",monospace;font-size:13px}
+/* 衰减表 */
+.decay{display:grid;grid-template-columns:auto 58px minmax(60px,1fr);gap:9px 14px;align-items:center;margin:18px 0 0;max-width:540px}
+.decay .dl{font-size:14.5px;color:var(--ink-soft);white-space:nowrap}
+.decay .dv{font-family:"IBM Plex Mono",monospace;font-size:13.5px;text-align:right;font-variant-numeric:tabular-nums}
+.decay .db{height:9px;background:var(--accent);border-radius:2px;min-width:3px}
+/* 计算条 */
+.receipt{background:var(--surface);border:1px solid var(--rule);padding:4px 18px 6px;margin:18px 0 0;max-width:540px}
+.rrow{display:flex;justify-content:space-between;gap:16px;padding:9px 0;border-bottom:1px solid var(--rule);font-size:14.5px}
+.rrow:last-child{border-bottom:0}
+.rrow .rv{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rrow.op .rl,.rrow.op .rv{color:var(--ink-soft)}
+.rrow.total{border-top:2px solid var(--rule-strong);font-weight:700}
+.rrow.total .rv{color:var(--accent)}
+.checkmark{color:var(--ok);font-family:"IBM Plex Mono",monospace;font-size:12.5px}
+.pending{display:inline-block;padding:3px 10px 4px;border:1px dashed var(--rule-strong);color:var(--ink-soft);font-size:13px}
+/* 36 窗格子 */
+.gridwrap{overflow-x:auto;margin-top:20px}
+.grid{min-width:640px;font-size:13px}
+.grow{display:grid;grid-template-columns:150px repeat(12,1fr);gap:3px;align-items:center;margin-bottom:3px}
+.grow.ghead{margin-bottom:8px}
+.gl{color:var(--ink-soft);font-size:13px;padding-right:8px}
+.gm{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink-faint);text-align:center}
+.gc{display:block;height:26px;border-radius:3px;text-align:center;line-height:26px;font-family:"IBM Plex Mono",monospace;font-size:12px}
+.gc.hit{background:var(--accent);color:var(--accent-ink)}
+.gc.miss{background:transparent;border:1px solid var(--rule-strong)}
+.gc.pend{background:var(--surface-2)}
+.garm{margin-top:14px}
+.gname{font-weight:700;margin-bottom:6px}
+.glegend{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin-top:14px;font-size:12.5px;color:var(--ink-soft)}
+.glegend .gc{display:inline-block;width:26px;height:20px;line-height:20px}
+footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--rule);font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-faint)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+<style>
+html{color-scheme:light dark}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>把论文里的关键词重新组合，能不能猜中下一波论文？</h1>
+  <p class="standfirst">鲁尔转盘预测器在 IdeaForecastBench 上的小规模试跑：3 个话题、36 个月度窗口、540 条机器写出的研究想法，用三种"转盘抽法"对比。这一页写给没跟过实验的人。</p>
+  <div class="runbar">
+    <span><b>规模</b> 试跑 · 3 话题 · 36 窗</span>
+    <span><b>语料</b> arXiv 2024-04 → 2025-09</span>
+    <span><b>想法</b> 540 条</span>
+    <span><b>状态</b> 三种抽法全部判完</span>
+    <span><b>日期</b> 2026-09-02</span>
+  </div>
+</header>
+
+<div class="tldr">
+  <div class="lbl">先看结论</div>
+  <ol>
+    <li><b>转盘本身有用，猜中率是三级台阶：闭眼乱抽 0.195 → 只按热度抽 0.500 → 再看搭配 0.639。</b>这是 Hit@5，意思是 36 场考试里有多大比例至少猜中一条三个月内真被做出来的方向。三种抽法用同一批元素、同一份写想法的提示词、同一个裁判，差别只在怎么抽。</li>
+    <li><b>大头来自“知道谁热”，这一步站得住；“知道谁和谁常一起出现”只加了一点，站不住。</b>只按热度抽就比乱抽高 0.31，碰巧的概率约 1%。再加上搭配信息只多了 0.14：36 场里 21 场打平、赢 10 输 5，碰巧的概率有 30%，而且量化话题反而低了 0.17。所以这次能确认的是“热度有信号”，还不能确认“搭配有信号”。</li>
+    <li><b>猜中的大多是“方向对了、具体做法不同”。</b>再要求做法也一模一样（严格版），只有组合抽法还剩 0.056，也就是 36 场里 2 场，另外两种归零。换成只看 title、完全不管做法的口径，三种抽法的高低次序也不变。它猜得中领域往哪走，猜不中具体怎么做。</li>
+    <li><b>过程里差点出一个假结果，已经修掉。</b>对照组第一次判分时裁判模型返回了 81% 的空白，空白被当成“没猜中”记了下来，会让对照组被系统性压低。这个 bug 修好后两组对照全部重判，本页数字都是干净的。</li>
+    <li><b>怎么办：值得扩规模，但先修词表。</b>现在的合并门槛把 efficient / compression / scaling 并成了一个元素，压低了所有抽法的上限；调高门槛重新生成很便宜。修完再扩到 52 个话题，那时候“搭配有没有信号”才能定论。</li>
+  </ol>
+</div>
+
+<section>
+  <div class="eyebrow"><span class="step">背景</span><h2>在问什么，和谁比</h2></div>
+  <div class="measure">
+    <p class="lede">一个领域接下来三个月会做什么，能不能从已发表的论文里推出来？这次试跑只回答其中最小的一问：<strong>抽关键词组合去猜的时候，知道"哪些词爱一起出现"，比不知道，猜得更准吗？</strong></p>
+    <p>2025 年有篇论文把十三世纪拉蒙·鲁尔的"思维机器"做成了现代版：从论文里挖出主题、领域、方法三类词，像转盘一样组合起来生成研究想法。他们发现 99.5% 的论文都能拆成这三类词，可用这些词往回拼，只有 16.4% 能接近原标题。这个落差通常被读成"光靠组合不够"。我们怀疑的是另一种可能：<strong>他们是把词当独立骰子掷的。</strong>真实科研不是均匀组合，某些方法和某些问题老是绑在一起，而且这种偏好随时间变。</p>
+    <p>他们的词表其实也是大模型从论文里挖的，不是人手写死的清单，我们的抽取提示词就是从他们论文附录改的。差别在挖完之后怎么用。</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th></th><th>Llull 那篇</th><th>我们这次</th></tr></thead>
+      <tbody>
+        <tr><td>问的问题</td><td>组合能不能拼出像样的新想法</td><td>组合能不能猜中三个月后真有人做的事</td></tr>
+        <tr><td>怎么算对</td><td>人和模型给想法打新颖度、可行性</td><td>拿截止日之后三个月真实发表的论文来对</td></tr>
+        <tr class="hi"><td>时间</td><td>2022 到 2024 的论文混在一起，没有截止日</td><td>每月切一刀，只能看那一刀之前的论文</td></tr>
+        <tr class="hi"><td>怎么抽组合</td><td>取最常见的元素枚举全部组合，或均匀乱抽，都不看元素之间的关系</td><td>按热度加权，并且看这几个词是不是常一起出现</td></tr>
+        <tr><td>语料</td><td>6 个顶会共 7,483 篇</td><td>arXiv 三个话题共 2,401 篇，每话题 12 个截止月</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">
+    <span class="lbl">这两处改动就是本次试跑的全部</span>
+    <p>他们论文里自己写了，更细的、能识别元素之间关系的抽法可以作为未来方向。本页做的正是这件事，而<strong>"独立抽法"这一组就是把他们的原版放回来当对照</strong>，所以"组合减独立"这个差值，量的正好是"知道搭配"值多少。</p>
+    <p class="muted">他们的 16.4% 和本页的数字不能放一起比。16.4% 量的是能不能拼回已有论文的标题，是回头看；本页量的是有没有猜中之后三个月的新论文，是往前看。</p>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow"><span class="step">设定</span><h2>考试是怎么出的</h2></div>
+  <div class="measure">
+    <p>一场滚动的"事后考试"：每个月设一个截止日，预测器只能看截止日之前的论文，交出 5 条排好序的研究想法，再用之后三个月真实发表的论文来判有没有被人做出来。</p>
+  </div>
+  <dl class="spec">
+    <dt>语料</dt><dd>arXiv 机器学习相关论文，本次加载 2024-04 到 2025-09 共 63,855 篇 <span class="note">（完整语料 108,768 篇，2023-01 → 2025-10）</span></dd>
+    <dt>话题</dt><dd>长上下文 / KV cache（597 篇）· 量化与模型压缩（1,211 篇）· 混合专家 MoE（702 篇）<span class="note">，三者有重叠，去重后 2,401 篇</span></dd>
+    <dt>截止月</dt><dd>2024-07 到 2025-06，每月一个，每个话题 12 个</dd>
+    <dt>窗口</dt><dd>36 个（3 话题 × 12 个截止月），每种抽法都要答完全部 36 窗</dd>
+    <dt>预测期</dt><dd>截止月之后的 3 个月</dd>
+    <dt>每窗产出</dt><dd>5 条想法，带排序</dd>
+    <dt>怎么判</dt><dd>每条想法先按意思相近程度，从未来论文里找出最像的 10 篇，再让裁判模型对每一对打三项分，每项 0 到 3 分。<strong>问题分</strong>看是不是在解同一个问题，<strong>方法分</strong>看是不是同一路做法，<strong>具体分</strong>看想法里写的那个具体新意有没有真落在这篇论文上。问题分加方法分不低于 5，并且具体分不低于 2，才算命中。一篇未来论文最多只记给一条想法，防止五句空话分同一篇热门论文。</dd>
+    <dt>时间红线</dt><dd>元素热度、哪些元素常一起出现、依据论文，全部只从截止日前的论文算；代码里如果混进截止日之后的论文会直接报错。</dd>
+  </dl>
+</section>
+
+<section>
+  <div class="eyebrow"><span class="step">方法</span><h2>转盘怎么转：五步，只有一步不同</h2></div>
+  <div class="measure">
+    <p>把鲁尔的机器照搬过来：圆盘上的概念从文献里挖，每个概念占的扇区宽度，就是它现在有多热。</p>
+  </div>
+  <div class="pipe">
+    <div><span class="n">1</span><h4>拆元素</h4><p>每篇论文的标题和摘要被拆成主题 / 领域 / 方法 / 叙事四类元素，外加一个"操作"（延伸、迁移、组合、做基准、分析、简化、放大、适配之一）。每篇只拆一次，按论文 ID 缓存，所有话题和截止月共用。</p><span class="who">deepseek-v4-flash</span></div>
+    <div><span class="n">2</span><h4>合并近义词</h4><p>先统一单复数和写法，再让模型判断意思相近程度，同一盘里相近度超过 0.86（满分 1）的合成一个元素，"long context"和"long-context"就成了一个。</p><span class="who">voyage-3-large · 相近度门槛 0.86</span></div>
+    <div><span class="n">3</span><h4>算状态</h4><p>只用截止日前的论文，算三样东西：每个元素有多热（越老的论文算得越轻，半年前的只算一半）、哪两个元素经常出现在同一篇论文里、以及最近 3 个月每对搭配是在变多还是变少。</p><span class="who">不调模型</span></div>
+    <div><span class="n">4</span><h4>抽组合</h4><p>抽 5 个组合，每个 2–3 个元素加 1 个操作。<strong>三种抽法只在这一步不同。</strong></p><span class="who">按窗口和抽法固定随机种子</span></div>
+    <div><span class="n">5</span><h4>写成想法</h4><p>一次调用把 5 个组合都写成标准格式的想法。模型拿到的是元素、操作、这对搭配的统计信号，以及 3 篇截止日前的依据论文。</p><span class="who">deepseek-v4-pro</span></div>
+  </div>
+
+  <h3>这些词是从哪来的</h3>
+  <div class="measure">
+    <p>每篇论文只给模型看标题和摘要，让它吐出一个结构化的答案：主题 1 到 3 个、领域 1 到 2 个、方法 1 到 3 个、叙事 0 到 2 个，外加一个模板句和一个操作。提示词里有四条硬要求，都是为了让抽出来的词能复用：</p>
+    <p>必须是 1 到 5 个词的小写通用名词短语，要能在别的论文里再次出现。不许出现模型名、产品名、数据集名，或这篇论文自己造的缩写。主题、领域、方法三个盘互斥，一个短语只能进一个盘。缩写要写全，写 reinforcement learning from human feedback 而不是 RLHF。</p>
+    <p style="margin-top:18px">一条真实的抽取结果，语料里第一篇论文：</p>
+  </div>
+  <div class="sample">
+    <div class="shead">arXiv:2404.02258 · 2024-04-30</div>
+    <div class="srow"><span class="sk">主题</span><span class="sv"><span class="chip theme">dynamic allocation</span><span class="chip theme">compute efficiency</span></span></div>
+    <div class="srow"><span class="sk">领域</span><span class="sv"><span class="chip domain">language modeling</span></span></div>
+    <div class="srow"><span class="sk">方法</span><span class="sv"><span class="chip method">transformer</span><span class="chip method">top-k routing</span><span class="chip method">conditional computation</span></span></div>
+    <div class="srow"><span class="sk">叙事</span><span class="sv plain">无</span></div>
+    <div class="srow"><span class="sk">模板</span><span class="sv plain">A1 of C1 via C2</span></div>
+    <div class="srow"><span class="sk">操作</span><span class="sv"><span class="movetag">extend</span></span></div>
+  </div>
+  <div class="measure">
+    <p style="margin-top:18px">温度设成 0，每篇只抽一次，按论文编号缓存，所以同一篇论文在所有话题和所有截止月里用的是同一份结果。2,401 篇里 2,400 篇成功。</p>
+    <p>抽完之后有两道清洗。<strong>第一道是统一写法</strong>：转小写、去标点、去掉开头的冠词，按别名表把 llm 换成 large language model、moe 换成 mixture of experts，最后把词尾的复数变单数。单数化这一步踩过坑：bias 被切成了 bia，于是同一个概念在词表里裂成两个。现在代码专门排除了 ss、us、is、as、os、ics 结尾的词，caches 变 cache、analyses 变 analysis 这类不规则复数直接写在别名表里。</p>
+    <p><strong>第二道是合并近义词。</strong>在同一个盘里，把所有写法按出现次数从多到少排队，每个新词跟已经立起来的簇比意思相近度，超过 0.86 就并进去，否则自己另立一簇。出现最多的那个写法当簇名，所以 long-context 吃掉 long context，而不是反过来。整个过程没有随机数，同样的输入永远得到同样的词表。</p>
+  </div>
+
+  <h3>热度是怎么算出来的</h3>
+  <div class="measure">
+    <p>热度就是"提到这个元素的论文数，但按新旧打折"。找出截止日之前提到它的所有论文，每篇按离截止日隔了几个月给一个权重，再全部加起来。半衰期是 6 个月，也就是半年前的论文只算半篇。这个数字写在配置文件里，可以调。</p>
+  </div>
+  <div class="decay">
+    <span class="dl">截止当月发的</span><span class="dv">1.000</span><span class="db" style="width:100%"></span>
+    <span class="dl">3 个月前发的</span><span class="dv">0.707</span><span class="db" style="width:70.7%"></span>
+    <span class="dl">6 个月前发的</span><span class="dv">0.500</span><span class="db" style="width:50%"></span>
+    <span class="dl">12 个月前发的</span><span class="dv">0.250</span><span class="db" style="width:25%"></span>
+    <span class="dl">24 个月前发的</span><span class="dv">0.062</span><span class="db" style="width:6.2%"></span>
+  </div>
+  <div class="measure">
+    <p style="margin-top:18px">举个页面上出现过的真实元素。长上下文话题、截止 2025-03 那一窗，主题元素 <span class="chip theme">efficient</span> 出现在 50 篇论文里，热度是 33.85。如果这 50 篇都是当月发的，热度就正好等于 50；如果都是半年前发的，就是 25。实际平均每篇只贡献 0.677，反推出这批论文的等效平均年龄是 3.4 个月。</p>
+    <p><strong>按论文数算，不按提及次数。</strong>一篇论文的摘要里同一个概念说八遍也只算一次。所以热度更接近"多少人在做这件事"，而不是"被提了多少嘴"。</p>
+    <p><strong>是合并近义词之后才算的。</strong>这也是词表那个缺陷会伤到热度的原因：被合过头的 <span class="chip bad">adaptive</span> 元素，热度是 adaptive、efficient、compression、scaling 这几个词各自的论文堆在一起的总和，看起来异常热，其实是四个不同的概念挤在一个格子里。</p>
+    <p><strong>只用截止日之前的论文。</strong>如果有一篇截止日之后的论文混进来，代码会直接报错停下，不是靠人记得过滤。</p>
+    <p><strong>抽签时用的是相对热度。</strong>不直接用 33.85 这个绝对数，而是除以那一窗最热元素的热度，压到 0 和 1 之间。所以热度只在同一个窗口内部可比，跨窗口比大小没有意义。</p>
+  </div>
+
+  <h3>从热度到"这个组合被抽中"</h3>
+  <div class="measure">
+    <p>一个组合的分数由两部分相乘得到：各个元素的相对热度连乘，再乘上这对搭配的<strong>新鲜度</strong>。新鲜度从 1 起步，两种情况会把它抬高：这对元素最近越来越常一起出现，或者两个都很热却从来没人拼过。前者是跟趋势，后者是补空位。</p>
+    <p style="margin-top:18px">还是用那条排第一的想法，把它的分数从头算一遍。这几个数都存在它自己的记录里，可以对：</p>
+  </div>
+  <div class="receipt">
+    <div class="rrow"><span class="rl"><span class="chip theme">efficient</span> 的相对热度</span><span class="rv">0.481</span></div>
+    <div class="rrow"><span class="rl"><span class="chip domain">language modeling</span> 的相对热度</span><span class="rv">0.984</span></div>
+    <div class="rrow op"><span class="rl">两者相乘</span><span class="rv">0.473</span></div>
+    <div class="rrow op"><span class="rl">× 搭配新鲜度，这对最近涨了 1.5 倍</span><span class="rv">1.574</span></div>
+    <div class="rrow total"><span class="rl">= 这个组合的分数</span><span class="rv">0.744</span></div>
+  </div>
+  <div class="measure">
+    <p style="margin-top:14px">顺带能看出一件事：language modeling 的相对热度是 0.984，说明它几乎就是那一窗最热的元素。</p>
+    <p>抽的时候<strong>按分数加权随机，不是取分数最高的几个</strong>，而且一个元素被用过之后，同一窗剩下的抽签就不再用它，避免 5 条想法全绕着一个词转。所以冷门组合照样有机会。页面后面那条三项满分的长视频基准测试就是这样：两个元素当时分别只出现在 2 篇和 4 篇论文里，组合分只有 0.004，还是被抽出来并且猜中了。</p>
+    <p>另外有两道门槛。一个元素至少要出现在 <strong>2 篇</strong>论文里才有资格进抽签；每个圆盘只有最热的前 <strong>30</strong> 个参与枚举，需要三个元素的组合只取前 <strong>12</strong> 个，否则枚举量是立方级的。</p>
+  </div>
+
+  <h3>组合怎么变成一条想法</h3>
+  <div class="measure">
+    <p>抽出组合之后，先给它配几篇<strong>依据论文</strong>，全部来自截止日之前：把这个组合的元素分别在哪些论文里出现过找出来，命中元素最多的排前面，命中一样多的取最新的，取前 3 篇。如果这样凑不满 2 篇，就从最近 300 篇里挑字面上最像的补齐。</p>
+    <p>然后一次调用把 5 个组合都写成想法。模型看到的是每个组合的元素和操作、这对搭配的统计信号、以及那 3 篇依据论文的标题和摘要前 220 字。它的任务不是凭空想，而是把"混合专家 + 在线蒸馏 + 延伸"这种结构化组合，落实成一个具体的研究问题和做法。</p>
+    <p>输出格式和基准要求的一致：标题、做法、排序。如果模型返回的条数不够，重试一次，还不够就用模板兜底并打上标记。<strong>这次 540 条里没有一条走兜底，也没有一场考试交白卷。</strong></p>
+  </div>
+
+  <h3>三种抽法</h3>
+  <div class="measure"><p>同一批元素、同一份写想法的提示词、同一个裁判，只有"怎么抽"不一样。</p></div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>抽法</th><th>怎么抽</th><th>它在测什么</th></tr></thead>
+      <tbody>
+        <tr class="hi"><td><span class="armname">组合抽法</span><span class="armdesc">完整版</span></td><td>元素越热越容易被抽中，而且偏爱两种搭配：最近越来越常一起出现的（跟趋势），和两个都很热但从没人拼过的（补空位）。</td><td>我们的提案。</td></tr>
+        <tr><td><span class="armname">独立抽法</span><span class="armdesc">鲁尔原版</span></td><td>每个盘各转各的，越热越容易抽中，但完全不看谁和谁搭。</td><td><strong>对照组。</strong>它和上一行的差距，就是"知道搭配"值多少。</td></tr>
+        <tr><td><span class="armname">随机抽法</span><span class="armdesc">地板</span></td><td>闭眼乱抽，每个元素机会一样，操作也乱抽。</td><td>下界。上面两种都应该赢它。</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">
+    <span class="lbl">为什么只比这一对</span>
+    <p>其他所有条件都被固定住了。如果组合抽法赢了独立抽法，唯一变过的东西就是"抽的时候知不知道哪些元素常在一起"，所以差值就是"搭配信息"本身的价值。反过来，如果两者差不多，那说明元素真的像独立骰子，鲁尔的 16.4% 并没有被低估。</p>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow"><span class="step">数据</span><h2>从语料里挖出了什么</h2></div>
+  <h3>拆元素</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>项目</th><th class="num">数值</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>拆解的论文</td><td class="num">2,401</td><td>三个话题去重后的全部</td></tr>
+        <tr><td>拆解成功</td><td class="num">2,400</td><td>只有 1 篇模型的回答格式不对没法用，失败率 0.04%</td></tr>
+        <tr><td>每篇元素数</td><td class="num">6.53</td><td>四类元素合计的平均值</td></tr>
+        <tr><td>分配到操作</td><td class="num">100%</td><td>没有论文落到"未知"</td></tr>
+        <tr><td>原始元素写法</td><td class="num">5,901</td><td>不同的字面形式</td></tr>
+        <tr><td>合并后</td><td class="num">4,638</td><td>同一盘里意思相近度超过 0.86 的视为同一个</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>四个圆盘各有多少词</h3>
+  <div class="measure"><p>同一个词在一篇论文里说几遍只算一次，所以"抽出次数"是"多少篇论文提到过"的累加。后面三列是两道清洗的效果，最后一列是真正能进抽签的规模。</p></div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>圆盘</th><th class="num">抽出次数</th><th class="num">不同写法</th><th class="num">合并后</th><th class="num">至少 2 篇<br><span class="thsub">才有资格进抽签</span></th></tr></thead>
+      <tbody>
+        <tr><td><span class="chip method">方法</span></td><td class="num">6,249</td><td class="num">2,797</td><td class="num">2,228</td><td class="num">566</td></tr>
+        <tr><td><span class="chip theme">主题</span></td><td class="num">4,764</td><td class="num">1,716</td><td class="num">1,335</td><td class="num">401</td></tr>
+        <tr><td><span class="chip domain">领域</span></td><td class="num">3,708</td><td class="num">1,274</td><td class="num">1,007</td><td class="num">306</td></tr>
+        <tr><td><span class="chip frame">叙事</span></td><td class="num">943</td><td class="num">114</td><td class="num">68</td><td class="num">24</td></tr>
+        <tr class="hi"><td><strong>合计</strong></td><td class="num">15,664</td><td class="num">5,901</td><td class="num">4,638</td><td class="num">1,297</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>论文都在做哪种操作</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>操作</th><th class="num">论文数</th><th class="num">占比</th></tr></thead>
+      <tbody>
+        <tr><td>延伸 extend</td><td class="num">1,054</td><td class="num">43.9%</td></tr>
+        <tr><td>分析 analyze</td><td class="num">405</td><td class="num">16.9%</td></tr>
+        <tr><td>组合 combine</td><td class="num">324</td><td class="num">13.5%</td></tr>
+        <tr><td>适配 adapt</td><td class="num">182</td><td class="num">7.6%</td></tr>
+        <tr><td>简化 simplify</td><td class="num">176</td><td class="num">7.3%</td></tr>
+        <tr><td>迁移 transfer</td><td class="num">145</td><td class="num">6.0%</td></tr>
+        <tr><td>做基准 benchmark</td><td class="num">86</td><td class="num">3.6%</td></tr>
+        <tr><td>放大 scale</td><td class="num">28</td><td class="num">1.2%</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="measure"><p style="margin-top:14px">操作分布本身就是一个观察：在这三个偏"效率"的话题里，将近一半的论文是把已有路线再往前推一步，只有 1.2% 是把现成配方放大规模。</p></div>
+
+  <h3>词表长什么样，以及合并在哪里出了错</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>合并后的元素</th><th class="num">论文数</th><th class="num">吸收的写法</th><th>被合进来的字面形式</th></tr></thead>
+      <tbody>
+        <tr><td><span class="chip method">mixture of expert</span></td><td class="num">532</td><td class="num">2</td><td>mixture of expert (518), sparse mixture of expert (14)</td></tr>
+        <tr><td><span class="chip theme">long-context</span></td><td class="num">192</td><td class="num">3</td><td>long-context (145), long context (46), long-context understanding (1)</td></tr>
+        <tr><td><span class="chip method">low-rank adaptation</span></td><td class="num">125</td><td class="num">14</td><td>low-rank adaptation (68), low-rank approximation (23), low-rank decomposition (9), low-rank adapter (5)…</td></tr>
+        <tr><td><span class="chip method">kv cache compression</span></td><td class="num">112</td><td class="num">2</td><td>kv cache compression (97), kv cache (15)</td></tr>
+        <tr><td><span class="chip bad">adaptive</span></td><td class="num">409</td><td class="num">29</td><td>adaptive (108), <strong>efficient (108)</strong>, <strong>compression (64)</strong>, <strong>scaling (43)</strong>, dynamic (18)…</td></tr>
+        <tr><td><span class="chip bad">analysis</span></td><td class="num">777</td><td class="num">34</td><td>analysis (421), <strong>benchmark (108)</strong>, <strong>theory (93)</strong>, <strong>survey (65)</strong>, framework (19)…</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout warn">
+    <span class="lbl">这次跑已知的缺陷</span>
+    <p>最后两行合过头了。在 0.86 的门槛下，"adaptive""efficient""compression"这类又短又泛的单词被模型判成"意思差不多"，并成了一个元素；叙事盘里"分析""基准""综述"也被并到了一起。多词的技术术语合并得都对，出错的只是短而泛的词。</p>
+    <p>这个缺陷对三种抽法一视同仁，所以不会让对比偏向哪一边，但它让词表变钝，压低了所有抽法的上限。把门槛提到 0.90 左右重新合并，不用重新拆论文，也不用重新算相近度，只要重新生成一遍。</p>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow"><span class="step">结果</span><h2>拿真实发表的论文来判，命中了多少</h2></div>
+  <div class="measure">
+    <p>540 条想法每条对比 10 篇最像的未来论文，一共 5,400 次裁判打分，三种抽法各 1,800 次，全部拿到有效评分。要看的那个数是<strong>组合抽法减去独立抽法</strong>：正且大，说明搭配里有预测信号；接近零，说明词真的像独立骰子。</p>
+  </div>
+  <dl class="spec">
+    <dt>Hit@5</dt><dd>这一场 5 条里至少猜中 1 条记 1 分，否则 0 分，报 36 场的平均。可以读成"有多大比例的考试至少猜中一个方向"。</dd>
+    <dt>P@5</dt><dd>5 条里猜中几条，除以 5。</dd>
+    <dt>MRR</dt><dd>第一条猜中的想法排在第几位。排第 1 记 1 分，排第 2 记 0.5 分，看的是有没有把对的排到前面。</dd>
+    <dt>严格版 Hit@5</dt><dd>在已经算命中的想法里，再要求"具体新意"这项拿满分，也就是写的具体做法被论文原样做了出来。用来看分数里有多少只是"方向对、做法不同"。</dd>
+  </dl>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>抽法</th><th class="num">Hit@5<br><span class="thsub">至少猜中一条的窗口占比</span></th><th class="num">P@5<br><span class="thsub">5 条里猜中几条</span></th><th class="num">MRR<br><span class="thsub">猜中的那条排多靠前</span></th><th class="num">严格版 Hit@5<br><span class="thsub">做法也要一模一样</span></th><th class="num">猜中条数<br><span class="thsub">共 180 条</span></th></tr></thead>
+      <tbody><tr class="hi"><td><span class="armname">组合抽法</span><span class="armdesc">完整版：热度 × 搭配新鲜度</span></td><td class="num">0.639</td><td class="num">0.161</td><td class="num">0.306</td><td class="num">0.056</td><td class="num">29 / 180</td></tr>
+<tr><td><span class="armname">独立抽法</span><span class="armdesc">鲁尔原版：只看热度，不看搭配</span></td><td class="num">0.500</td><td class="num">0.133</td><td class="num">0.264</td><td class="num">0.000</td><td class="num">24 / 180</td></tr>
+<tr><td><span class="armname">随机抽法</span><span class="armdesc">闭眼乱抽</span></td><td class="num">0.195</td><td class="num">0.050</td><td class="num">0.074</td><td class="num">0.000</td><td class="num">9 / 180</td></tr></tbody>
+    </table>
+  </div>
+  <h3>同一场考试逐场比</h3>
+  <div class="measure"><p>三种抽法答的是同样的 36 场考试，所以可以一场一场地比，比只看平均分更可靠。"赢 / 平 / 输"数的是组合抽法在多少场里猜中得更多、一样多、更少。"碰巧的概率"的意思是：假如两种抽法其实一样好，只靠运气出现这么大差距的可能性有多大；一般低于 5% 才算站得住。"真实差距大概率的范围"是把 36 场反复抽样重算得到的，范围跨过 0 就说明分不清谁更好。</p></div>
+  <div class="tablewrap"><table>
+      <thead><tr><th>对比</th><th class="num">Hit@5 差了多少</th><th class="num">36 场里 赢 / 平 / 输</th><th class="num">真实差距大概率的范围<br><span class="thsub">95% 区间</span></th><th class="num">碰巧的概率<br><span class="thsub">p 值</span></th><th>结论</th></tr></thead>
+      <tbody><tr><td><span class="armname">组合 − 独立</span><span class="armdesc">搭配信息值多少</span></td>
+          <td class="num">+0.139</td>
+          <td class="num">10 / 21 / 5</td>
+          <td class="num">−0.056 到 +0.333</td>
+          <td class="num">0.302</td>
+          <td><span class="warn">站不住</span></td></tr><tr><td><span class="armname">组合 − 随机</span><span class="armdesc">整个转盘值多少</span></td>
+          <td class="num">+0.444</td>
+          <td class="num">19 / 14 / 3</td>
+          <td class="num">+0.222 到 +0.639</td>
+          <td class="num">0.001</td>
+          <td><span class="ok">站得住</span></td></tr></tbody></table></div>
+  <div class="callout">
+    <span class="lbl">这三行怎么读</span>
+    <p><strong>从随机到独立跳了 0.31。</strong>光是"抽热的元素"就让命中率翻了一倍多，说明一个领域的下一步，大部分是从它当下最热的东西延伸出来的。</p>
+    <p><strong>从独立到组合又加了 0.14，但站不住。</strong>36 场里 21 场打平，赢 10 输 5，碰巧出现这种差距的概率有 30%，真实差距的范围从 −0.06 到 +0.33，跨过了 0。分话题看更明显：长上下文 +0.25、MoE +0.33，量化反而 −0.17，两正一负。</p>
+    <p><strong>随机到独立那一步是站得住的。</strong>只按热度抽就比乱抽高 0.31，碰巧的概率约 1%。也就是说，这次试跑能确认的是"热度有信号"，还不能确认"搭配有信号"。</p>
+    <p><strong>严格版只有组合抽法有分。</strong>2 个窗口各有 1 条想法被论文原样做了出来（做法也一样，具体度满分），独立和随机一条都没有。样本太小，只能说方向和主表一致。</p>
+    <p>所以现在说"搭配里有预测信号"还早；说"热度里有信号，搭配值得放大样本再测"是稳的。</p>
+  </div>
+  <div class="callout warn">
+    <span class="lbl">过程里踩的一个坑，差点得出假结果</span>
+    <p>独立抽法第一次判分时，裁判模型悄悄开了"思考"模式，思考过程把 256 个字的回答额度吃光，81% 的打分返回了空白。空白被记成"没猜中"，还写进了缓存。这样对照组会被系统性压低，而我们的方法组是干净的，两个数放一起就会得到一个漂亮但完全是假象的"组合抽法大胜"。</p>
+    <p>已经修好：空白回答不再记入缓存、重试之间加了等待，清掉了 1,424 条被污染的记录，独立和随机两组全部重判。本页所有数字来自重判后的干净结果，三组各 1,800 次打分、0 次空白。这个坑本身也说明了为什么对照组必须和方法组走完全一样的判分链路。</p>
+  </div>
+  <h3>36 个窗口逐个看</h3>
+  <div class="measure"><p>每一格是一个窗口，横轴是截止月，每种抽法三行对应三个话题。格子里的数字是那一窗 5 条想法里命中了几条。</p></div>
+  <div class="gridwrap"><div class="grid">
+      <div class="grow ghead"><span class="gl"></span><span class="gm">24/07</span><span class="gm">24/08</span><span class="gm">24/09</span><span class="gm">24/10</span><span class="gm">24/11</span><span class="gm">24/12</span><span class="gm">25/01</span><span class="gm">25/02</span><span class="gm">25/03</span><span class="gm">25/04</span><span class="gm">25/05</span><span class="gm">25/06</span></div>
+      <div class="garm"><div class="gname">组合抽法</div><div class="grow"><span class="gl">长上下文 / KV cache</span><span class="gc hit" title="长上下文 / KV cache · 截止 2024-07 · 命中 1/5">1</span><span class="gc hit" title="长上下文 / KV cache · 截止 2024-08 · 命中 1/5">1</span><span class="gc miss" title="长上下文 / KV cache · 截止 2024-09 · 命中 0/5"></span><span class="gc hit" title="长上下文 / KV cache · 截止 2024-10 · 命中 1/5">1</span><span class="gc miss" title="长上下文 / KV cache · 截止 2024-11 · 命中 0/5"></span><span class="gc hit" title="长上下文 / KV cache · 截止 2024-12 · 命中 1/5">1</span><span class="gc hit" title="长上下文 / KV cache · 截止 2025-01 · 命中 1/5">1</span><span class="gc miss" title="长上下文 / KV cache · 截止 2025-02 · 命中 0/5"></span><span class="gc hit" title="长上下文 / KV cache · 截止 2025-03 · 命中 2/5">2</span><span class="gc hit" title="长上下文 / KV cache · 截止 2025-04 · 命中 1/5">1</span><span class="gc hit" title="长上下文 / KV cache · 截止 2025-05 · 命中 1/5">1</span><span class="gc miss" title="长上下文 / KV cache · 截止 2025-06 · 命中 0/5"></span></div><div class="grow"><span class="gl">混合专家 MoE</span><span class="gc miss" title="混合专家 MoE · 截止 2024-07 · 命中 0/5"></span><span class="gc hit" title="混合专家 MoE · 截止 2024-08 · 命中 2/5">2</span><span class="gc miss" title="混合专家 MoE · 截止 2024-09 · 命中 0/5"></span><span class="gc hit" title="混合专家 MoE · 截止 2024-10 · 命中 1/5">1</span><span class="gc miss" title="混合专家 MoE · 截止 2024-11 · 命中 0/5"></span><span class="gc hit" title="混合专家 MoE · 截止 2024-12 · 命中 1/5">1</span><span class="gc hit" title="混合专家 MoE · 截止 2025-01 · 命中 2/5">2</span><span class="gc hit" title="混合专家 MoE · 截止 2025-02 · 命中 2/5">2</span><span class="gc hit" title="混合专家 MoE · 截止 2025-03 · 命中 1/5">1</span><span class="gc hit" title="混合专家 MoE · 截止 2025-04 · 命中 2/5">2</span><span class="gc hit" title="混合专家 MoE · 截止 2025-05 · 命中 1/5">1</span><span class="gc hit" title="混合专家 MoE · 截止 2025-06 · 命中 1/5">1</span></div><div class="grow"><span class="gl">量化与模型压缩</span><span class="gc miss" title="量化与模型压缩 · 截止 2024-07 · 命中 0/5"></span><span class="gc hit" title="量化与模型压缩 · 截止 2024-08 · 命中 1/5">1</span><span class="gc hit" title="量化与模型压缩 · 截止 2024-09 · 命中 1/5">1</span><span class="gc miss" title="量化与模型压缩 · 截止 2024-10 · 命中 0/5"></span><span class="gc miss" title="量化与模型压缩 · 截止 2024-11 · 命中 0/5"></span><span class="gc miss" title="量化与模型压缩 · 截止 2024-12 · 命中 0/5"></span><span class="gc hit" title="量化与模型压缩 · 截止 2025-01 · 命中 2/5">2</span><span class="gc miss" title="量化与模型压缩 · 截止 2025-02 · 命中 0/5"></span><span class="gc hit" title="量化与模型压缩 · 截止 2025-03 · 命中 1/5">1</span><span class="gc hit" title="量化与模型压缩 · 截止 2025-04 · 命中 1/5">1</span><span class="gc hit" title="量化与模型压缩 · 截止 2025-05 · 命中 1/5">1</span><span class="gc miss" title="量化与模型压缩 · 截止 2025-06 · 命中 0/5"></span></div></div><div class="garm"><div class="gname">独立抽法</div><div class="grow"><span class="gl">长上下文 / KV cache</span><span class="gc hit" title="长上下文 / KV cache · 截止 2024-07 · 命中 2/5">2</span><span class="gc hit" title="长上下文 / KV cache · 截止 2024-08 · 命中 2/5">2</span><span class="gc miss" title="长上下文 / KV cache · 截止 2024-09 · 命中 0/5"></span><span class="gc hit" title="长上下文 / KV cache · 截止 2024-10 · 命中 1/5">1</span><span class="gc miss" title="长上下文 / KV cache · 截止 2024-11 · 命中 0/5"></span><span class="gc hit" title="长上下文 / KV cache · 截止 2024-12 · 命中 2/5">2</span><span class="gc miss" title="长上下文 / KV cache · 截止 2025-01 · 命中 0/5"></span><span class="gc miss" title="长上下文 / KV cache · 截止 2025-02 · 命中 0/5"></span><span class="gc hit" title="长上下文 / KV cache · 截止 2025-03 · 命中 1/5">1</span><span class="gc miss" title="长上下文 / KV cache · 截止 2025-04 · 命中 0/5"></span><span class="gc miss" title="长上下文 / KV cache · 截止 2025-05 · 命中 0/5"></span><span class="gc miss" title="长上下文 / KV cache · 截止 2025-06 · 命中 0/5"></span></div><div class="grow"><span class="gl">混合专家 MoE</span><span class="gc miss" title="混合专家 MoE · 截止 2024-07 · 命中 0/5"></span><span class="gc miss" title="混合专家 MoE · 截止 2024-08 · 命中 0/5"></span><span class="gc hit" title="混合专家 MoE · 截止 2024-09 · 命中 1/5">1</span><span class="gc miss" title="混合专家 MoE · 截止 2024-10 · 命中 0/5"></span><span class="gc miss" title="混合专家 MoE · 截止 2024-11 · 命中 0/5"></span><span class="gc miss" title="混合专家 MoE · 截止 2024-12 · 命中 0/5"></span><span class="gc hit" title="混合专家 MoE · 截止 2025-01 · 命中 1/5">1</span><span class="gc hit" title="混合专家 MoE · 截止 2025-02 · 命中 1/5">1</span><span class="gc miss" title="混合专家 MoE · 截止 2025-03 · 命中 0/5"></span><span class="gc hit" title="混合专家 MoE · 截止 2025-04 · 命中 2/5">2</span><span class="gc hit" title="混合专家 MoE · 截止 2025-05 · 命中 1/5">1</span><span class="gc miss" title="混合专家 MoE · 截止 2025-06 · 命中 0/5"></span></div><div class="grow"><span class="gl">量化与模型压缩</span><span class="gc hit" title="量化与模型压缩 · 截止 2024-07 · 命中 1/5">1</span><span class="gc miss" title="量化与模型压缩 · 截止 2024-08 · 命中 0/5"></span><span class="gc miss" title="量化与模型压缩 · 截止 2024-09 · 命中 0/5"></span><span class="gc hit" title="量化与模型压缩 · 截止 2024-10 · 命中 1/5">1</span><span class="gc miss" title="量化与模型压缩 · 截止 2024-11 · 命中 0/5"></span><span class="gc miss" title="量化与模型压缩 · 截止 2024-12 · 命中 0/5"></span><span class="gc hit" title="量化与模型压缩 · 截止 2025-01 · 命中 1/5">1</span><span class="gc hit" title="量化与模型压缩 · 截止 2025-02 · 命中 1/5">1</span><span class="gc hit" title="量化与模型压缩 · 截止 2025-03 · 命中 1/5">1</span><span class="gc hit" title="量化与模型压缩 · 截止 2025-04 · 命中 1/5">1</span><span class="gc hit" title="量化与模型压缩 · 截止 2025-05 · 命中 3/5">3</span><span class="gc hit" title="量化与模型压缩 · 截止 2025-06 · 命中 1/5">1</span></div></div><div class="garm"><div class="gname">随机抽法</div><div class="grow"><span class="gl">长上下文 / KV cache</span><span class="gc hit" title="长上下文 / KV cache · 截止 2024-07 · 命中 1/5">1</span><span class="gc miss" title="长上下文 / KV cache · 截止 2024-08 · 命中 0/5"></span><span class="gc miss" title="长上下文 / KV cache · 截止 2024-09 · 命中 0/5"></span><span class="gc miss" title="长上下文 / KV cache · 截止 2024-10 · 命中 0/5"></span><span class="gc miss" title="长上下文 / KV cache · 截止 2024-11 · 命中 0/5"></span><span class="gc hit" title="长上下文 / KV cache · 截止 2024-12 · 命中 3/5">3</span><span class="gc miss" title="长上下文 / KV cache · 截止 2025-01 · 命中 0/5"></span><span class="gc miss" title="长上下文 / KV cache · 截止 2025-02 · 命中 0/5"></span><span class="gc miss" title="长上下文 / KV cache · 截止 2025-03 · 命中 0/5"></span><span class="gc miss" title="长上下文 / KV cache · 截止 2025-04 · 命中 0/5"></span><span class="gc miss" title="长上下文 / KV cache · 截止 2025-05 · 命中 0/5"></span><span class="gc miss" title="长上下文 / KV cache · 截止 2025-06 · 命中 0/5"></span></div><div class="grow"><span class="gl">混合专家 MoE</span><span class="gc miss" title="混合专家 MoE · 截止 2024-07 · 命中 0/5"></span><span class="gc miss" title="混合专家 MoE · 截止 2024-08 · 命中 0/5"></span><span class="gc miss" title="混合专家 MoE · 截止 2024-09 · 命中 0/5"></span><span class="gc hit" title="混合专家 MoE · 截止 2024-10 · 命中 1/5">1</span><span class="gc miss" title="混合专家 MoE · 截止 2024-11 · 命中 0/5"></span><span class="gc miss" title="混合专家 MoE · 截止 2024-12 · 命中 0/5"></span><span class="gc miss" title="混合专家 MoE · 截止 2025-01 · 命中 0/5"></span><span class="gc miss" title="混合专家 MoE · 截止 2025-02 · 命中 0/5"></span><span class="gc miss" title="混合专家 MoE · 截止 2025-03 · 命中 0/5"></span><span class="gc hit" title="混合专家 MoE · 截止 2025-04 · 命中 1/5">1</span><span class="gc miss" title="混合专家 MoE · 截止 2025-05 · 命中 0/5"></span><span class="gc miss" title="混合专家 MoE · 截止 2025-06 · 命中 0/5"></span></div><div class="grow"><span class="gl">量化与模型压缩</span><span class="gc miss" title="量化与模型压缩 · 截止 2024-07 · 命中 0/5"></span><span class="gc miss" title="量化与模型压缩 · 截止 2024-08 · 命中 0/5"></span><span class="gc miss" title="量化与模型压缩 · 截止 2024-09 · 命中 0/5"></span><span class="gc hit" title="量化与模型压缩 · 截止 2024-10 · 命中 1/5">1</span><span class="gc hit" title="量化与模型压缩 · 截止 2024-11 · 命中 1/5">1</span><span class="gc hit" title="量化与模型压缩 · 截止 2024-12 · 命中 1/5">1</span><span class="gc miss" title="量化与模型压缩 · 截止 2025-01 · 命中 0/5"></span><span class="gc miss" title="量化与模型压缩 · 截止 2025-02 · 命中 0/5"></span><span class="gc miss" title="量化与模型压缩 · 截止 2025-03 · 命中 0/5"></span><span class="gc miss" title="量化与模型压缩 · 截止 2025-04 · 命中 0/5"></span><span class="gc miss" title="量化与模型压缩 · 截止 2025-05 · 命中 0/5"></span><span class="gc miss" title="量化与模型压缩 · 截止 2025-06 · 命中 0/5"></span></div></div>
+      <div class="glegend"><span class="gc hit">2</span> 这一窗命中，数字是 5 条里命中几条 <span class="gc miss"></span> 5 条全没命中 <span class="gc pend"></span> 判分中</div>
+    </div></div>
+  <h3>换个判定标准，结论会不会变</h3>
+  <div class="measure">
+    <p>裁判打的三个分可以拼出不同的及格线。如果只关心"方向对不对"，完全不管做法，就只看问题分；如果只关心做法，就只看方法分。下面把五种及格线都算了一遍，都用同一套流程：每条想法在自己的 10 篇候选论文里，按顺序找第一篇达标且还没被别人认领的论文。</p>
+  </div>
+  <div class="tablewrap"><table>
+      <thead><tr><th>判定标准</th><th class="num">组合</th><th class="num">独立</th><th class="num">随机</th><th class="num">组合 − 独立</th><th class="num">碰巧的概率</th></tr></thead>
+      <tbody><tr><td><span class="armname">沾边就算</span><span class="armdesc">问题分 ≥ 2，不管做法</span></td>
+          <td class="num">1.000</td><td class="num">1.000</td><td class="num">0.833</td>
+          <td class="num">+0.000</td>
+          <td class="num">1.00</td></tr><tr><td><span class="armname">只看 title</span><span class="armdesc">问题分 = 3，完全不管做法</span></td>
+          <td class="num">0.667</td><td class="num">0.500</td><td class="num">0.222</td>
+          <td class="num">+0.167</td>
+          <td class="num">0.18</td></tr><tr class="hi"><td><span class="armname">本页主表用的</span><span class="armdesc">问题+方法 ≥ 5 且 具体 ≥ 2</span></td>
+          <td class="num">0.639</td><td class="num">0.500</td><td class="num">0.194</td>
+          <td class="num">+0.139</td>
+          <td class="num">0.30</td></tr><tr><td><span class="armname">只看做法</span><span class="armdesc">方法分 = 3，不管问题</span></td>
+          <td class="num">0.222</td><td class="num">0.139</td><td class="num">0.056</td>
+          <td class="num">+0.083</td>
+          <td class="num">0.55</td></tr><tr><td><span class="armname">做法也要一模一样</span><span class="armdesc">在标准之上，具体分 = 3</span></td>
+          <td class="num">0.083</td><td class="num">0.000</td><td class="num">0.000</td>
+          <td class="num">+0.083</td>
+          <td class="num">0.25</td></tr></tbody></table></div>
+  <div class="measure">
+    <p style="margin-top:14px"><strong>只看 title 的口径下，结论不变。</strong>组合比独立高 0.167，比标准口径的 0.139 略大，但碰巧出现这么大差距的概率还有 0.18，仍然站不住。换口径救不回这个结论。</p>
+    <p><strong>门槛再松一格，这个口径就废了。</strong>问题分只要 2 分以上，三种抽法全部满分，连闭眼乱抽都有 0.833。因为同一个话题里的论文，问题多少都沾边。</p>
+    <p><strong>做法才是最难的一关。</strong>只看方法分满分时，最好的组合抽法也只有 0.222。它猜得中领域往哪走，猜不中具体怎么做，这一点在哪个口径下都成立。</p>
+    <p class="muted">表里"做法也要一模一样"那一行是 0.083，主表写的是 0.056。差别在算法：主表只看"标准口径下已经命中的那一篇"的具体度，这张表是在 10 篇候选里重新找具体度满分的论文。两种算法都说明同一件事，另外两种抽法在两种算法下都是 0。</p>
+  </div>
+
+  <h3>分话题</h3>
+  <div class="tablewrap"><table><thead><tr><th>话题</th><th class="num" colspan="2">组合抽法<br><span class="thsub">Hit@5 · P@5</span></th><th class="num" colspan="2">独立抽法<br><span class="thsub">Hit@5 · P@5</span></th><th class="num" colspan="2">随机抽法<br><span class="thsub">Hit@5 · P@5</span></th></tr></thead><tbody><tr><td>长上下文 / KV cache</td><td class="num">0.667</td><td class="num">0.150</td><td class="num">0.417</td><td class="num">0.133</td><td class="num">0.167</td><td class="num">0.067</td></tr><tr><td>混合专家 MoE</td><td class="num">0.750</td><td class="num">0.217</td><td class="num">0.417</td><td class="num">0.100</td><td class="num">0.167</td><td class="num">0.033</td></tr><tr><td>量化与模型压缩</td><td class="num">0.500</td><td class="num">0.117</td><td class="num">0.667</td><td class="num">0.167</td><td class="num">0.250</td><td class="num">0.050</td></tr></tbody></table></div>
+  <div class="callout">
+    <span class="lbl">这些数字能说到什么程度</span>
+    <p>36 个窗口只来自 3 个话题，同一话题相邻月份看的是几乎同一批文献，所以真正独立的样本接近 3 组而不是 36 场。经验上，两种抽法 Hit@5 差 0.25 以上在这里看得出来；差 0.05–0.10 就分不清是真有差距还是运气。这是"第一眼"加一次流水线验证，不是定论。</p>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow"><span class="step">例子</span><h2>命中和没命中，各长什么样</h2></div>
+  <div class="measure"><p>每条想法都能追溯：由哪几个元素、哪种操作抽出来，模型看了哪几篇旧论文，命中了哪篇真实论文，裁判为什么给分。下面是组合抽法里的几条。</p></div>
+
+  <div class="armhead"><span class="nm">命中的样子</span><span class="desc">想法在前，三个月内真实发表的论文在后</span></div>
+  <div class="traces">
+    <div class="trace">
+      <div class="parts"><span class="chip theme"><span class="k">主题</span>compression <span class="m">118篇</span></span><span class="chip domain"><span class="k">领域</span>large language model <span class="m">99篇</span></span><span class="chip method"><span class="k">方法</span>transformer <span class="m">23篇</span></span><span class="movetag">simplify</span></div>
+      <p class="idea">Single-stage transformer compression by removing attention heads and MLP neurons without retraining</p>
+      <p class="why">命中 → <span class="ptitle">Efficient LLMs with AMP: Attention Heads and MLP Pruning</span> <span class="mono">arXiv:2504.21174</span> · 裁判打分 问题 3 / 方法 3 / 具体 3，三项满分。裁判的话翻成白话：论文做的正是"一步到位地把模型里多余的注意力头和神经元剪掉，而且不用重新训练"，连标题用词都对上了。</p>
+      <div class="stats"><span>量化话题 · 截止 2025-03 · 排第 4</span><span>组合分 0.042</span></div>
+    </div>
+    <div class="trace">
+      <div class="parts"><span class="chip theme"><span class="k">主题</span>efficient <span class="m">50篇</span></span><span class="chip domain"><span class="k">领域</span>language modeling <span class="m">108篇</span></span><span class="movetag">analyze</span></div>
+      <p class="idea">Measuring the Efficiency Limits of Long-Context Language Models via Context Length Scaling Laws</p>
+      <p class="why">命中 → <span class="ptitle">The Sparse Frontier: Sparse Attention Trade-offs in Transformer LLMs</span> <span class="mono">arXiv:2504.17768</span> · 问题 3 / 方法 3 / 具体 2。两者都是跨模型规模和序列长度系统测量长上下文的效率–精度取舍；论文只聚焦稀疏注意力，没覆盖想法里提到的 KV cache 压缩，所以具体度扣了一分。这是整轮组合分最高的一条（0.744），因为"efficient + language modeling"这对搭配在最近 3 个月一起出现上升了 1.5 倍。</p>
+      <div class="stats"><span>长上下文话题 · 截止 2025-03 · 排第 1</span><span>组合分 0.744</span><span>一起出现次数 3 个月内涨 1.5×</span></div>
+    </div>
+    <div class="trace">
+      <div class="parts"><span class="chip theme"><span class="k">主题</span>efficiency <span class="m">41篇</span></span><span class="chip domain"><span class="k">领域</span>language modeling <span class="m">61篇</span></span><span class="chip method"><span class="k">方法</span>mixed-precision quantization <span class="m">24篇</span></span><span class="movetag">extend</span></div>
+      <p class="idea">Mixed-Precision KV-Cache Quantization with Layer-Wise Sensitivity Profiling for Long-Context Language Modeling</p>
+      <p class="why">命中 → <span class="ptitle">KVTuner: Sensitivity-Aware Layer-Wise Mixed-Precision KV Cache Quantization</span> <span class="mono">arXiv:2502.04420</span> · 问题 3 / 方法 3 / 具体 2。同一个问题（按层敏感度给 KV cache 分配不同位宽），同一路做法，细节上论文的分配算法和想法写的不一样。</p>
+      <div class="stats"><span>量化话题 · 截止 2025-01 · 排第 2</span><span>组合分 0.023</span></div>
+    </div>
+    <div class="trace">
+      <div class="parts"><span class="chip domain"><span class="k">领域</span>long context <span class="m">2篇</span></span><span class="chip method"><span class="k">方法</span>multimodal large language model <span class="m">4篇</span></span><span class="movetag">benchmark</span></div>
+      <p class="idea">Long-VideoQA: A Benchmark for Long-Context Multimodal Large Language Models</p>
+      <p class="why">命中 → <span class="ptitle">HourVideo: 1-Hour Video-Language Understanding</span> <span class="mono">arXiv:2411.04998</span> · 问题 3 / 方法 3 / 具体 3。值得注意的是这两个元素当时都只在 2–4 篇论文里出现过，很冷，照样命中，而且是满分。热度不是命中的必要条件。</p>
+      <div class="stats"><span>长上下文话题 · 截止 2024-10 · 排第 5</span><span>组合分 0.004</span></div>
+    </div>
+  </div>
+
+  <div class="armhead"><span class="nm">没命中的样子</span><span class="desc">最像的那篇未来论文和裁判的理由</span></div>
+  <div class="traces">
+    <div class="trace">
+      <div class="parts"><span class="chip domain"><span class="k">领域</span>natural language processing</span><span class="chip method"><span class="k">方法</span>flash attention</span><span class="movetag">extend</span></div>
+      <p class="idea">Extending Flash Attention to Low-Rank Decode-Phase Attention for NLP Transformers</p>
+      <p class="why">最像的是 <span class="ptitle">Multi-matrix Factorization Attention</span> <span class="mono">arXiv:2412.19255</span> · 问题 2 / 方法 2 / 具体 1。方向对了（都是给注意力"瘦身"来省显存），但想法说的是改底层计算内核，论文是设计一种新的注意力结构，裁判判"做法不是同一路"。这类"方向对、做法不同"在没猜中的里面占大头，也是严格版分数掉得厉害的原因。</p>
+      <div class="stats"><span>长上下文话题 · 截止 2024-10 · 排第 4</span></div>
+    </div>
+    <div class="trace">
+      <div class="parts"><span class="chip domain"><span class="k">领域</span>traffic forecasting</span><span class="chip method"><span class="k">方法</span>physics informed neural operator</span><span class="movetag">benchmark</span></div>
+      <p class="idea">A Benchmark for Physics-Informed Neural Operator Generalization Across Heterogeneous Traffic Sensor Networks</p>
+      <p class="why">最像的是 <span class="ptitle">Robust Traffic Forecasting against Spatial Shift over Years</span> <span class="mono">arXiv:2410.00373</span> · 问题 2 / 方法 1 / 具体 1。这条是在 MoE 话题里抽出来的，"交通预测"根本不是这个社区在做的事：话题分类把几篇沾边的论文划了进来，它们的元素就混进了词表。这是话题词表太宽的代价。</p>
+      <div class="stats"><span>MoE 话题 · 截止 2024-10 · 排第 2</span></div>
+    </div>
+  </div>
+
+  <div class="armhead"><span class="nm">另外两种抽法命中的样子</span><span class="desc">各取裁判分最高的一条</span></div>
+  <h3 style="margin-top:18px;font-size:15px">独立抽法</h3>
+  <div class="traces"><div class="trace"><div class="parts"><span class="chip theme"><span class="k">主题</span>outlier reduction <span class="m">4篇</span></span><span class="chip domain"><span class="k">领域</span>language modeling <span class="m">20篇</span></span><span class="movetag">extend</span></div>
+          <p class="idea">Layer-wise Weight Magnitude Reduction for Outlier-Free Post-Training Quantization of LLMs</p>
+          <p class="why">命中 → <span class="ptitle">FLATQUANT: FLATNESS MATTERS FOR LLM QUAN-TIZATION</span> <span class="mono">arXiv:2410.09426</span> · 裁判打分 问题 3 / 方法 3 / 具体 2</p></div></div>
+  <h3 style="margin-top:18px;font-size:15px">随机抽法</h3>
+  <div class="traces"><div class="trace"><div class="parts"><span class="chip domain"><span class="k">领域</span>recommendation <span class="m">2篇</span></span><span class="chip method"><span class="k">方法</span>hierarchical gating <span class="m">2篇</span></span><span class="movetag">extend</span></div>
+          <p class="idea">Hierarchical Gating with Cross-Level Sparsity for Multi-Scenario Recommendation</p>
+          <p class="why">命中 → <span class="ptitle">Adaptive Conditional Expert Selection Network for Multi-domain Recommendation</span> <span class="mono">arXiv:2411.06826</span> · 裁判打分 问题 3 / 方法 3 / 具体 2</p></div></div>
+
+  <div class="armhead"><span class="nm">同一个窗口，三种抽法各抽出什么</span><span class="desc">长上下文话题 · 截止 2025-03 · 310 篇历史 · 185 篇未来</span></div>
+  <div class="measure"><p style="margin-top:8px">光看抽出来的东西就能看出机制在按设计运转：组合抽法抽的是话题最热的核心（efficient、language modeling、kv cache compression）；独立抽法把热元素和不相干的元素混在一起，比如在长上下文话题里抽出"image classification"；随机抽法住在只出现过两篇的长尾里，比如"positional attention bias + convolution"。但这只说明抽法不同，不说明谁猜得准，谁猜得准要看上面的判分。</p></div>
+</section>
+
+<section>
+  <div class="eyebrow"><span class="step">局限</span><h2>36 个窗口能说什么，不能说什么</h2></div>
+  <div class="measure">
+    <p><strong>三个话题只是三组样本。</strong>同一话题相邻月份读的几乎是同一批文献，不算独立样本。只有很大的差距才看得出来，这次"组合 − 独立"的 0.14 正好落在看不清的区间里。</p>
+    <p><strong>词表比应有的钝。</strong>0.86 的合并门槛把几个泛主题并成了一个，三种抽法一起吃亏，但所有抽法的天花板都被压低了。</p>
+    <p><strong>猜中不等于新颖，也不等于有价值。</strong>只说明三个月内有人做了这件事，不说明想法是新的、好的，也不说明是"预见"而不是把截止日前摘要里已经看得见的趋势复述了一遍。</p>
+    <p><strong>不能和论文里的表并排。</strong>不同的生成模型、不同的裁判、36 窗而不是 624 窗。这些数字只能互相比，不能和别处比。</p>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow"><span class="step">花费</span><h2>跑到这里花了多少</h2></div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>阶段</th><th>模型</th><th class="num">调用次数</th><th class="num">读入字数<br><span class="thsub">token</span></th><th class="num">写出字数<br><span class="thsub">token</span></th><th class="num">约 CNY</th></tr></thead>
+      <tbody>
+        <tr><td>拆元素</td><td class="mono">deepseek-v4-flash</td><td class="num">2,406</td><td class="num">2,336,133</td><td class="num">172,185</td><td class="num">2.7</td></tr>
+        <tr><td>拆元素（前一轮，被限流废掉）</td><td class="mono">vanchin/deepseek-v4-pro</td><td class="num">517</td><td class="num">501,641</td><td class="num">39,964</td><td class="num">2.8</td></tr>
+        <tr><td>写想法 × 3 种抽法</td><td class="mono">vanchin/deepseek-v4-pro</td><td class="num">109</td><td class="num">202,038</td><td class="num">136,031</td><td class="num">2.8</td></tr>
+        <tr><td>判分：组合抽法</td><td class="mono">deepseek-v4-flash</td><td class="num">1,800</td><td class="num" colspan="2">按调用数估算</td><td class="num">~5.4</td></tr>
+        <tr><td>判分：独立抽法第一次（空白回答的重试风暴，作废）</td><td class="mono">deepseek-v4-flash</td><td class="num">~4,600</td><td class="num" colspan="2">按调用数估算</td><td class="num">~12.6</td></tr>
+        <tr><td>判分：独立抽法重判 + 随机抽法</td><td class="mono">deepseek-v4-flash</td><td class="num">~3,000</td><td class="num" colspan="2">按调用数估算</td><td class="num">~8.5</td></tr>
+        <tr><td>意思相近度计算（合并近义词 + 判分时找相似论文）</td><td class="mono">voyage-3-large</td><td class="num">—</td><td class="num" colspan="2">—</td><td class="num">~15</td></tr>
+        <tr><td><strong>合计</strong></td><td></td><td></td><td colspan="2"></td><td class="num"><strong>~48</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="measure">
+    <p style="margin-top:16px">一共约 48 元，其中约 13 元是那次空白回答的重试风暴白烧的。拆元素的钱只跟论文数有关，而且全部缓存了，以后加话题时已拆过的论文不用再花。判分的钱是"窗口 × 抽法 × 50 次打分"，任何要打分的运行都由它主导；判分没有记进用量账本，所以那几行是按调用数估的。按现在的单价，把范围扩到论文用的 52 个话题、624 窗，三种抽法全跑约 370 元，4–6 小时。</p>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow"><span class="step">下一步</span><h2>看完这一页之后可以做的三件事</h2></div>
+  <div class="measure">
+    <p><strong>1. 修词表再跑一遍。</strong>把合并阈值提到 0.90，重新合并和生成，不用重新拆论文，也不用重新算向量。这是最便宜的一次提升。</p>
+    <p><strong>2. 有信号就上全量。</strong>如果组合抽法明显赢了独立抽法，扩到 52 个话题、624 窗，那时候话题级的置信区间才站得住。中间档（8 个话题）花 CNY 60 只能得到一个看不清的答案，不划算。</p>
+    <p><strong>3. 没信号就先别盖楼。</strong>设计文档里的 L2（让系统自己往前滚）和 L3（多智能体）都建立在"组合分布里有信号"之上。如果 L1 就是平的，先回头修拆元素和写想法这两步。</p>
+  </div>
+</section>
+
+<footer>
+  IdeaForecastBench · 分支 feat/combinatorial-l1 · 生成于 2026-09-03<br>
+  数据来源 output/pilot/judged 下三个 judged.json，判分模型 deepseek-v4-flash，元素缓存 output/pilot/elements<br>
+  每条想法用了哪些元素、哪种操作、看了哪几篇依据论文，都存在它自己的预测元数据里
+</footer>
+</div>
+</body>
+</html>
