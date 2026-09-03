@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import argparse
 import sys
-from collections import Counter
+import threading
+import time
+from collections import Counter, deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -71,6 +73,13 @@ def parse_args() -> argparse.Namespace:
         help="Comma-separated OpenAI-compatible base URLs, used round-robin.",
     )
     parser.add_argument("--workers", type=int, default=16)
+    parser.add_argument(
+        "--rpm",
+        type=int,
+        default=0,
+        help="Client-side cap on requests per minute (0 = uncapped). Hosted "
+        "marketplace models carry a low RPM quota; pacing beats absorbing 429s.",
+    )
     parser.add_argument("--limit", type=int, default=None, help="Max papers (testing)")
     parser.add_argument("--dry-run", action="store_true", help="Fake extractor, no LLM")
     parser.add_argument("--retry-failed", action="store_true")
@@ -85,6 +94,32 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--allow-fingerprint-mismatch", action="store_true")
     parser.add_argument("--selfcheck", action="store_true", help="Closed-form checks")
     return parser.parse_args()
+
+
+class _RateLimiter:
+    """Blocks so that no more than `rpm` acquisitions happen in any 60s window.
+
+    A hosted quota is enforced per minute, so absorbing 429s wastes the retry
+    budget; pacing the submissions avoids them instead."""
+
+    def __init__(self, rpm: int) -> None:
+        self.rpm = max(0, rpm)
+        self._lock = threading.Lock()
+        self._stamps: deque[float] = deque()
+
+    def acquire(self) -> None:
+        if not self.rpm:
+            return
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                while self._stamps and now - self._stamps[0] >= 60.0:
+                    self._stamps.popleft()
+                if len(self._stamps) < self.rpm:
+                    self._stamps.append(now)
+                    return
+                wait = 60.0 - (now - self._stamps[0])
+            time.sleep(max(wait, 0.05))
 
 
 def _union_papers(
@@ -125,26 +160,44 @@ def _run_extraction(
     if not todo:
         return
 
-    def _one(paper: PaperRecord) -> ExtractionRecord:
+    throttle = _RateLimiter(args.rpm)
+
+    def _one(paper: PaperRecord) -> ExtractionRecord | None:
         if caller is None:
             return fake_extraction(paper, aliases, fingerprint)
+        throttle.acquire()
         return extract_paper(
             paper, caller, prompt, cfg.extraction, aliases, fingerprint
         )
 
     writer = cache.writer()
-    failures = 0
+    failures = deferred = 0
     try:
         with ThreadPoolExecutor(max_workers=args.workers) as pool:
             futures = {pool.submit(_one, p): p for p in todo}
             for future in tqdm(as_completed(futures), total=len(futures), unit="paper"):
                 record = future.result()
+                if record is None:
+                    # Service was busy. Leave the paper uncached so re-running
+                    # this command picks it up instead of burning it.
+                    deferred += 1
+                    continue
                 writer.append(record)
                 if not record.ok:
                     failures += 1
     finally:
         writer.close()
-    print(f"extracted {len(todo)} papers, {failures} failed", flush=True)
+    print(
+        f"extracted {len(todo) - deferred} papers, {failures} unparseable, "
+        f"{deferred} deferred (rate limit / timeout -- re-run to pick them up)",
+        flush=True,
+    )
+    if deferred:
+        print(
+            "  Deferred papers are NOT cached. Re-run the same command; consider "
+            "a lower --workers or a --rpm cap.",
+            flush=True,
+        )
 
 
 def _element_texts(records: dict[str, ExtractionRecord]) -> dict[str, str]:

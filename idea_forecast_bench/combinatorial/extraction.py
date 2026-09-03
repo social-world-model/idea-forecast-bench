@@ -174,6 +174,20 @@ def _record(
     )
 
 
+#: Exception types that mean "the service was busy", not "this paper cannot be
+#: extracted". Caching them as failures burns the paper: the cache is keyed by
+#: paper id and a failed record is skipped on the next run.
+_TRANSIENT = ("ratelimit", "timeout", "apiconnection", "internalserver", "apistatus")
+
+
+def is_transient_error(exc: BaseException) -> bool:
+    name = type(exc).__name__.lower()
+    if any(marker in name for marker in _TRANSIENT):
+        return True
+    status = getattr(exc, "status_code", None)
+    return status in (408, 409, 429, 500, 502, 503, 504)
+
+
 def extract_paper(
     paper: PaperRecord,
     caller: TextCaller,
@@ -181,10 +195,13 @@ def extract_paper(
     cfg: ExtractionConfig,
     aliases: Mapping[str, str],
     fingerprint: str,
-) -> ExtractionRecord:
-    """One paper -> one record. Retries once at a higher temperature when the
-    first answer cannot be parsed; a second failure is recorded, not raised,
-    so a bad paper never stalls the run."""
+) -> ExtractionRecord | None:
+    """One paper -> one record, or None.
+
+    None means the service was busy (rate limit, timeout, 5xx): the paper is
+    left uncached so a later run picks it up. A record with status=failed
+    means the model answered and the answer could not be parsed twice -- that
+    IS cached, because retrying it costs money and rarely helps."""
     user = build_user_message(paper, prompt, cfg.max_summary_chars)
     last_error = ""
     temperatures = (cfg.temperature, cfg.temperature + cfg.retry_temperature_bump)
@@ -193,7 +210,9 @@ def extract_paper(
             raw = caller.complete(
                 prompt.system_prompt, user, temperature=temperature, seed=0
             )
-        except Exception as exc:  # noqa: BLE001 - recorded, not swallowed
+        except Exception as exc:  # noqa: BLE001 - classified, not swallowed
+            if is_transient_error(exc):
+                return None
             last_error = f"{type(exc).__name__}: {exc}"
             continue
         parsed = parse_extraction(raw, cfg.max_elements_per_type, aliases)

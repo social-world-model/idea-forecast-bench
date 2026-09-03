@@ -41,6 +41,13 @@ canonicalize:
     kd: knowledge distillation
     gnn: graph neural network
     gnns: graph neural network
+    # Plurals the suffix rules get wrong. This map is applied first, so an
+    # entry here settles the word before singularisation sees it.
+    caches: cache
+    niches: niche
+    analyses: analysis
+    indices: index
+    matrices: matrix
 
 state:
   # Heat of an element = sum over its papers of 2^(-age_months / half_life).

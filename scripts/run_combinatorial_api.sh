@@ -25,8 +25,14 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 INPUT_DIR="${INPUT_DIR:-data/hf_full/raw_markdown}"
 OUTPUT_DIR="${OUTPUT_DIR:-output/combi_api}"
+# Element extraction is a high-volume tagging task, so it runs on a fast, cheap
+# model; realisation is a few hundred calls where quality matters. Marketplace
+# ids (vendor/model) can carry a far lower RPM quota than first-party ones --
+# check before pointing a bulk stage at one.
 MODEL="${MODEL:-vanchin/deepseek-v4-pro-0813}"
-JUDGE_MODEL_NAME="${JUDGE_MODEL_NAME:-$MODEL}"
+EXTRACT_MODEL="${EXTRACT_MODEL:-deepseek-v4-flash}"
+REALIZE_MODEL="${REALIZE_MODEL:-$MODEL}"
+JUDGE_MODEL_NAME="${JUDGE_MODEL_NAME:-$EXTRACT_MODEL}"
 JUDGE_BASE_URL_VALUE="${JUDGE_BASE_URL_VALUE:-https://dashscope.aliyuncs.com/compatible-mode/v1}"
 LABEL="${LABEL:-DeepSeek-V4-Pro}"
 ARMS="${ARMS:-combinatorial combinatorial_independent combinatorial_random}"
@@ -34,7 +40,8 @@ TOPICS="${TOPICS:-}"
 JUDGE="${JUDGE:-0}"
 REALIZE_THINKING="${REALIZE_THINKING:-off}"   # off | high | max
 ELEMENT_CACHE="${ELEMENT_CACHE:-$OUTPUT_DIR/elements}"
-EXTRACT_WORKERS="${EXTRACT_WORKERS:-32}"
+EXTRACT_WORKERS="${EXTRACT_WORKERS:-16}"
+EXTRACT_RPM="${EXTRACT_RPM:-0}"   # 0 = uncapped; set it when the model has a low RPM quota
 GEN_WORKERS="${GEN_WORKERS:-4}"
 JUDGE_WORKERS="${JUDGE_WORKERS:-8}"
 JUDGE_TOPIC_WORKERS="${JUDGE_TOPIC_WORKERS:-4}"
@@ -73,21 +80,21 @@ export IDEA_FORECAST_USAGE_LOG="${IDEA_FORECAST_USAGE_LOG:-$OUTPUT_DIR/usage.jso
 topic_args=()
 [[ -n "$TOPICS" ]] && topic_args+=(--topics "$TOPICS")
 
-echo "== 1/3 extract elements (thinking off) =="
+echo "== 1/3 extract elements with $EXTRACT_MODEL (thinking off) =="
 IDEA_FORECAST_USAGE_STAGE=extract DASHSCOPE_THINKING=off \
   python examples/benchmark/extract_elements.py \
     --input-dir "$INPUT_DIR" --start-month "$START_MONTH" --end-month "$END_MONTH" \
-    --cache-dir "$ELEMENT_CACHE" --model-name "$MODEL" \
-    --workers "$EXTRACT_WORKERS" --embed --dump-clusters 30 \
+    --cache-dir "$ELEMENT_CACHE" --model-name "$EXTRACT_MODEL" \
+    --workers "$EXTRACT_WORKERS" --rpm "$EXTRACT_RPM" --embed --dump-clusters 30 \
     ${EMBED_BACKEND:+--embed-backend "$EMBED_BACKEND"} \
     "${topic_args[@]}" 2>&1 | tee "$LOG_DIR/extract.log"
 
-echo "== 2/3 generate: $ARMS (thinking $REALIZE_THINKING) =="
+echo "== 2/3 generate with $REALIZE_MODEL: $ARMS (thinking $REALIZE_THINKING) =="
 for arm in $ARMS; do
   echo "  -- $arm"
   IDEA_FORECAST_USAGE_STAGE="realize:$arm" DASHSCOPE_THINKING="$REALIZE_THINKING" \
     python examples/benchmark/benchmark.py \
-      --strategy "$arm" --model-name "$MODEL" --element-cache "$ELEMENT_CACHE" \
+      --strategy "$arm" --model-name "$REALIZE_MODEL" --element-cache "$ELEMENT_CACHE" \
       --input-dir "$INPUT_DIR" --start-month "$START_MONTH" --end-month "$END_MONTH" \
       --min-cutoff-month "$MIN_CUTOFF_MONTH" --skip-matching \
       --workers "$GEN_WORKERS" --output "$GEN_DIR/$arm.json" \

@@ -14,12 +14,20 @@ _KEEP_RE = re.compile(r"[^a-z0-9 \-]+")
 _SPACE_RE = re.compile(r"\s+")
 
 
+# Words whose plural-looking ending is part of the stem. "bias" lost its s and
+# became "bia" in a real extraction run, which then failed to merge with
+# "biases" -- two vocabulary entries for one concept.
+_NOT_PLURAL_ENDINGS = ("ss", "us", "is", "as", "os", "ics")
+
+
 def _singularize(token: str) -> str:
-    if len(token) <= 3:
+    if len(token) <= 4:
         return token
+    if token.endswith(("ses", "xes", "zes", "ches", "shes")):
+        return token[:-2]
     if token.endswith("ies"):
         return token[:-3] + "y"
-    if token.endswith(("ss", "us", "is", "ics")):
+    if token.endswith(_NOT_PLURAL_ENDINGS):
         return token
     if token.endswith("s"):
         return token[:-1]

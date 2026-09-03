@@ -239,12 +239,16 @@ def create_client(model: str) -> tuple[Any, str]:
         api_key = _require_api_key("DASHSCOPE_API_KEY", model)
         base_url = os.environ.get("DASHSCOPE_BASE_URL") or DASHSCOPE_BASE_URL
         timeout = _stream_idle_timeout()
+        # Marketplace models carry a much lower request-per-minute quota than
+        # the first-party ones, so a batch job meets 429 constantly. The SDK
+        # backs off and honours retry-after; two attempts is not enough to ride
+        # that out, and every give-up costs a paper.
         return (
             openai.OpenAI(
                 api_key=api_key,
                 base_url=base_url,
                 timeout=timeout,
-                max_retries=2,
+                max_retries=int(os.environ.get("DASHSCOPE_MAX_RETRIES", "8")),
             ),
             model,
         )
