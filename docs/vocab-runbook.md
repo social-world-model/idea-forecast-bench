@@ -217,3 +217,27 @@ be met when a cutoff has only a hundred training papers. The next
 vocabulary change is therefore to scale the fold threshold with the
 topic's training size (or use a longer window for small topics), not to
 touch the prompt or the merge thresholds.
+
+## Forward / backward on the v2 vocabulary (2026-09-04)
+
+`scripts/run_forward_backward.sh` (idea level, judge-eval `--direction`)
+and `vocab-oracle` (concept-pair level, no LLM). Idea level, 3 topics x 12
+cutoffs: v1 forward P@5 0.161 vs backward 0.339 when the realiser's
+evidence papers stay in the backward target, 0.106 when they are excluded
+(`--exclude-evidence`); v2 0.117 / 0.117. Pair level, 20 topics x 6
+cutoffs (120 windows), lift over the window base rate:
+
+| sampler | forward P@5 | backward P@5 | forward lift | backward lift |
+|---|---|---|---|---|
+| random | 0.035 | 0.043 | 0.6x | 0.4x |
+| heat | 0.168 | 0.268 | 2.2x | 2.2x |
+| full (heat x freshness) | 0.191 | 0.346 | 2.4x | 2.9x |
+| copy (past co-occurrence) | 0.162 | 0.806 | 2.4x | 7.5x |
+| new_heat (never paired, both hot) | 0.108 | 0.000 | 1.4x | 0 |
+
+Reading: the backward base rate is structurally higher than the forward
+one (the vocabulary is built from the past), so compare lifts, not raw
+deltas. Heat and the full rule carry a real forward signal of about 2.2 to
+2.4x base with little recall bias; the copy baseline is recall. A
+backward>forward gap at the idea level is evidence leakage unless the
+evidence papers are excluded.
