@@ -23,6 +23,7 @@ Concept vocabulary:
     vocab-v1-import     Import the v1 element cache into a v2 concept store.
     vocab-build         Extract, embed, and build+check a vocabulary end to end.
     vocab-html          Render a self-contained HTML review page of the vocabulary.
+    vocab-explainer     Render a self-contained HTML explainer of the vocabulary.
 
 MDF forecaster:
     hindsight        Extract latent-innovation training labels from future papers.
@@ -107,6 +108,10 @@ _COMMANDS: dict[str, tuple[str, str]] = {
     "vocab-html": (
         "benchmark/vocab_html.py",
         "Render a self-contained HTML review page of the concept vocabulary.",
+    ),
+    "vocab-explainer": (
+        "benchmark/vocab_explainer.py",
+        "Render a self-contained HTML explainer of how the vocabulary is built.",
     ),
 }
 

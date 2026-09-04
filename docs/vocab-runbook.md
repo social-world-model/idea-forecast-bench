@@ -175,3 +175,45 @@ Reading:
   0.546) at essentially the same `coverage_both` (0.634 vs. 0.638) and
   identical `mid_layer_share` (0.489) — see the comment in
   `config/vocab.yaml`.
+
+## 20-topic run (2026-09-04, 12-month window, hybrid promote5)
+
+Twenty topics (8 LLM-side, 12 other fields), corpus 2024-10 .. 2025-09,
+cutoffs 2025-01 .. 2025-06, 19,183 papers extracted (0.13% unparseable),
+116,604 concept texts embedded. Built in four topic shards with
+`--reuse-store b493410c0021 --skip-embed` (two shards at a time: every
+process loads the 2.6 GB vector file, and the machine has 16 GB). Per-topic
+means over the six cutoffs are in `output/vocab/v2_20topics/<topic>/*.json`;
+the review page is `output/vocab/vocab_explainer.html` (`vocab-explainer`).
+
+| topic | cov_both | cov_obj | cov_mech | spearman | stability | mid_layer |
+|---|---|---|---|---|---|---|
+| reinforcement_learning | 0.847 | 0.915 | 0.924 | 0.59 | 0.67 | 0.62 |
+| llm_alignment_rlhf | 0.783 | 0.901 | 0.859 | 0.55 | 0.65 | 0.55 |
+| quantization | 0.776 | 0.905 | 0.852 | 0.59 | 0.66 | 0.53 |
+| graph_gnn | 0.773 | 0.874 | 0.880 | 0.58 | 0.68 | 0.58 |
+| time_series | 0.735 | 0.838 | 0.872 | 0.57 | 0.67 | 0.60 |
+| federated_learning | 0.732 | 0.833 | 0.866 | 0.59 | 0.69 | 0.64 |
+| molecular_graph | 0.722 | 0.912 | 0.772 | 0.56 | 0.67 | 0.45 |
+| medical_imaging | 0.691 | 0.863 | 0.787 | 0.54 | 0.66 | 0.49 |
+| image_gen_diffusion | 0.656 | 0.830 | 0.780 | 0.55 | 0.68 | 0.47 |
+| llm_long_context | 0.633 | 0.795 | 0.770 | 0.56 | 0.62 | 0.44 |
+| continual_learning | 0.594 | 0.737 | 0.806 | 0.50 | 0.67 | 0.45 |
+| llm_agents | 0.576 | 0.732 | 0.775 | 0.47 | 0.63 | 0.35 |
+| llm_reasoning_math | 0.575 | 0.857 | 0.640 | 0.54 | 0.61 | 0.36 |
+| speech_audio | 0.561 | 0.811 | 0.692 | 0.44 | 0.63 | 0.30 |
+| autonomous_driving | 0.561 | 0.816 | 0.682 | 0.48 | 0.65 | 0.33 |
+| moe | 0.503 | 0.717 | 0.674 | 0.49 | 0.62 | 0.40 |
+| recommendation | 0.495 | 0.669 | 0.723 | 0.46 | 0.65 | 0.35 |
+| rag_retrieval | 0.485 | 0.637 | 0.727 | 0.50 | 0.61 | 0.36 |
+| protein_structure | 0.466 | 0.784 | 0.567 | 0.43 | 0.62 | 0.30 |
+| code_llm | 0.400 | 0.591 | 0.629 | 0.41 | 0.61 | 0.25 |
+
+Reading: 13 of 20 topics clear `cov_both >= 0.5 and mid_layer >= 0.35`.
+Coverage tracks topic size: the six largest topics (2,000+ papers in the
+window) all score 0.73 or better, while the smallest (code_llm 382,
+protein_structure 208 papers) fail, because `promote_min_count: 5` cannot
+be met when a cutoff has only a hundred training papers. The next
+vocabulary change is therefore to scale the fold threshold with the
+topic's training size (or use a longer window for small topics), not to
+touch the prompt or the merge thresholds.
