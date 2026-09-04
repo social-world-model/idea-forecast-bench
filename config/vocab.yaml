@@ -1,0 +1,89 @@
+# Vocabulary experiment: every numeric knob of the concept vocabulary lives
+# here. The build code reads this file and hardcodes nothing; the sha of this
+# file is stamped into every report so a ledger row can be traced back.
+schema_version: 1
+
+extraction:
+  prompt: vocab_extract_v2.yaml
+  temperature: 0.0
+  max_summary_chars: 1500
+  max_terms_per_slot:
+    object: 2
+    mechanism: 3
+    problem: 2
+  retry_temperature_bump: 0.2
+  aliases:
+    llm: large language model
+    llms: large language model
+    lm: language model
+    lms: language model
+    rl: reinforcement learning
+    rlhf: reinforcement learning from human feedback
+    rag: retrieval augmented generation
+    vlm: vision language model
+    vlms: vision language model
+    mllm: multimodal large language model
+    cot: chain of thought
+    sft: supervised fine-tuning
+    dpo: direct preference optimization
+    moe: mixture of experts
+    kd: knowledge distillation
+    gnn: graph neural network
+    gnns: graph neural network
+    ptq: post-training quantization
+    qat: quantization-aware training
+    caches: cache
+    niches: niche
+    analyses: analysis
+    indices: index
+    matrices: matrix
+
+cluster:
+  # voyage | hash   (hash is a deterministic offline stand-in for dry runs)
+  embed_backend: voyage
+  embed_model: voyage-3-large
+  # Cosine at or above which two multi-word terms of the same slot are one
+  # concept (a "fine" cluster = a mechanism / object / problem).
+  fine_threshold: 0.90
+  # Single-token terms carry little context and sit close together in
+  # embedding space (adaptive ~ efficient ~ scalable). They need a much
+  # higher bar to merge, unless they share a long prefix (scalable /
+  # scalability).
+  single_token_threshold: 0.95
+  shared_prefix_chars: 6
+  # Parents (the "coarse" level) are merged among themselves at this cosine.
+  parent_threshold: 0.90
+  # A term's slot is decided by majority vote over the training papers, so
+  # one text is one concept in one slot. Below this majority share the label
+  # is reported as a slot conflict.
+  slot_majority_min: 0.6
+
+tag:
+  # A concept in at least this share of the topic's training papers is
+  # BACKGROUND: it is the topic, not a forecast, and is excluded from the
+  # combinable vocabulary (but kept for reporting and evidence).
+  background_doc_frac: 0.20
+  # A concept must appear in at least this many training papers to be a
+  # regular (non-emerging) sampleable concept.
+  min_count: 2
+  # A concept first seen within this many months before the cutoff is
+  # EMERGING and kept even at count 1.
+  emerging_months: 3
+  emerging_min_count: 1
+  # Hybrid level. 0 disables it (fine concepts are kept as their own nodes
+  # regardless of count, the old behaviour). Above 0, a fine concept with
+  # fewer than this many training papers is folded into a concept named by
+  # its (merged) parent label instead of staying its own node; fine
+  # concepts sharing the same (slot, parent label) fold into one concept.
+  # Locked 2026-09-04 after the 3-topic sweep: 5 gave coverage_both 0.634,
+  # mid_layer_share 0.489, spearman 0.580 (see output/vocab/ledger.md).
+  promote_min_count: 5
+
+checks:
+  horizon_months: 3
+  # A future paper's term maps to a pre-cutoff concept if it is a member
+  # (exact normalized text) or its nearest same-slot leader is at least this
+  # cosine away.
+  assign_threshold: 0.90
+  # "Mid-layer" concepts sit in clusters with at least this many papers.
+  mid_layer_min_papers: 3

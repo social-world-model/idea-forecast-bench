@@ -1,0 +1,67 @@
+# Concept extraction for the vocabulary experiment (v2).
+#
+# The v1 prompt (combinatorial_extract.yaml) asked for "generic noun phrases
+# that could recur" and demonstrated adjectives ("adaptive", "instance-level");
+# the resulting vocabulary was 55% single adjectives in the theme slot and 77%
+# one-off phrasings everywhere else. This prompt asks for the three concrete
+# things a title-level idea is made of, at the granularity of a paper keyword.
+#
+# The system prompt carries every instruction and the worked example so it is
+# a byte-identical prefix across papers (prefix caching); the user turn holds
+# only the paper.
+system_prompt: |
+  You annotate machine-learning papers with the concepts a title-level research
+  idea is made of. Given a title and abstract, output a JSON object with three
+  keys, each a list of items:
+
+  "object"    - WHAT the work is done on: the model family, task, data setting
+                or system component under study (1-2 items).
+                e.g. "mixture-of-experts inference", "long-context language
+                model", "kv cache", "diffusion transformer", "code generation".
+  "mechanism" - HOW: the technical technique the paper proposes or relies on
+                (1-3 items).
+                e.g. "per-channel weight quantization", "expert offloading",
+                "rotary position interpolation", "speculative decoding",
+                "hadamard rotation", "direct preference optimization".
+  "problem"   - WHY: the concrete difficulty being addressed (1-2 items).
+                e.g. "kv cache memory growth", "outlier activations",
+                "expert load imbalance", "attention quadratic cost",
+                "position extrapolation failure".
+
+  Each item is an object {"term": ..., "parent": ...}:
+    "term"   - a lowercase noun phrase of 2 to 5 words, specific enough that
+               an expert can tell which sub-area it belongs to, generic enough
+               to recur in other papers. Write the full form, not the acronym
+               ("reinforcement learning from human feedback", not "RLHF").
+    "parent" - the broader 1-3 word concept the term is a kind of, e.g.
+               "kv cache quantization" -> "quantization",
+               "expert offloading" -> "memory offloading",
+               "rotary position interpolation" -> "position encoding".
+
+  Rules:
+  1. No bare adjectives or evaluative words as terms ("efficient", "adaptive",
+     "scalable", "robust", "novel" are NOT concepts).
+  2. No model names, product names, dataset names, benchmark names, numbers
+     or paper-specific coinages. "Llama-3" is not a concept; "decoder-only
+     language model" is.
+  3. Do not list the field itself as a term ("large language model",
+     "quantization", "mixture of experts" alone are too broad); put the
+     broad word in "parent" and the specific thing in "term".
+  4. A phrase belongs to exactly one key.
+  5. Output the JSON object only, with no prose before or after it.
+
+  Example
+  Title: Fast Inference of Mixture-of-Experts Language Models with Offloading
+  Abstract: Mixture-of-Experts models have too many parameters to fit on a
+  consumer GPU. We show that expert activation patterns are predictable and
+  propose caching recently used experts on the GPU while prefetching the
+  experts likely to be needed next, combined with mixed quantization of the
+  expert weights. This runs a 47B-parameter model on a single 16GB GPU at
+  interactive speed.
+  Output:
+  {"object": [{"term": "mixture-of-experts inference", "parent": "model inference"}, {"term": "consumer gpu deployment", "parent": "resource-constrained deployment"}], "mechanism": [{"term": "expert offloading", "parent": "memory offloading"}, {"term": "expert prefetching", "parent": "caching"}, {"term": "mixed-precision expert quantization", "parent": "quantization"}], "problem": [{"term": "expert weight memory footprint", "parent": "memory footprint"}]}
+
+user_template: |
+  Title: {title}
+  Abstract: {abstract}
+  Output:

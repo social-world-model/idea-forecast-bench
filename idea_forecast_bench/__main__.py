@@ -18,6 +18,12 @@ Benchmark:
     extract-elements Mine theme/domain/method elements per paper (combinatorial).
     specificity-eval Outcome-blind specificity/breadth rating of predictions.
 
+Concept vocabulary:
+    vocab-probe-select  Choose a fixed per-topic probe set from the v1 cache.
+    vocab-v1-import     Import the v1 element cache into a v2 concept store.
+    vocab-build         Extract, embed, and build+check a vocabulary end to end.
+    vocab-html          Render a self-contained HTML review page of the vocabulary.
+
 MDF forecaster:
     hindsight        Extract latent-innovation training labels from future papers.
     train-prior      SFT the memory-conditioned innovation prior.
@@ -84,6 +90,23 @@ _COMMANDS: dict[str, tuple[str, str]] = {
     "specificity-eval": (
         "benchmark/specificity_eval.py",
         "Outcome-blind specificity/breadth rating of saved predictions.",
+    ),
+    # concept vocabulary experiment (examples/)
+    "vocab-probe-select": (
+        "benchmark/vocab_probe_select.py",
+        "Choose a fixed per-topic probe set from the v1 element cache.",
+    ),
+    "vocab-v1-import": (
+        "benchmark/vocab_v1_import.py",
+        "Import the v1 element cache into a v2 concept-vocabulary store.",
+    ),
+    "vocab-build": (
+        "benchmark/vocab_build.py",
+        "Extract, embed, and build+check a concept vocabulary end to end.",
+    ),
+    "vocab-html": (
+        "benchmark/vocab_html.py",
+        "Render a self-contained HTML review page of the concept vocabulary.",
     ),
 }
 
