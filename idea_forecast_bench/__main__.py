@@ -114,6 +114,10 @@ _COMMANDS: dict[str, tuple[str, str]] = {
         "benchmark/vocab_explainer.py",
         "Render a self-contained HTML explainer of how the vocabulary is built.",
     ),
+    "vocab-export": (
+        "benchmark/vocab_export.py",
+        "Export the locked vocabulary to per-topic JSON and one CSV.",
+    ),
     "vocab-oracle": (
         "benchmark/vocab_oracle.py",
         "Zero-API combination-level forward/backward oracle test on the v2 vocabulary.",
