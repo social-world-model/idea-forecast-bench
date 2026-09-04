@@ -71,6 +71,20 @@ def main() -> int:
         help="Override config/combinatorial.yaml (combinatorial strategies).",
     )
     parser.add_argument(
+        "--vocab-store",
+        type=str,
+        default=None,
+        help="Concept vocab store dir, output/vocab/cache/<fingerprint> "
+        "(vocab_combinatorial strategies; run examples/benchmark/vocab_build.py "
+        "first).",
+    )
+    parser.add_argument(
+        "--vocab-config",
+        type=str,
+        default="config/vocab.yaml",
+        help="Override config/vocab.yaml (vocab_combinatorial strategies).",
+    )
+    parser.add_argument(
         "--base-urls",
         type=str,
         default=None,
@@ -212,6 +226,8 @@ def main() -> int:
         element_cache_path=args.element_cache,
         combinatorial_config=args.combinatorial_config,
         base_urls=args.base_urls,
+        vocab_store_dir=args.vocab_store,
+        vocab_config_path=args.vocab_config,
     )
     bt_config = BacktestConfig(
         top_k=args.top_k,

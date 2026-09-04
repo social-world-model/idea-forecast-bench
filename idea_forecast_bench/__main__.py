@@ -24,6 +24,7 @@ Concept vocabulary:
     vocab-build         Extract, embed, and build+check a vocabulary end to end.
     vocab-html          Render a self-contained HTML review page of the vocabulary.
     vocab-explainer     Render a self-contained HTML explainer of the vocabulary.
+    vocab-oracle        Zero-API combination-level forward/backward oracle test.
 
 MDF forecaster:
     hindsight        Extract latent-innovation training labels from future papers.
@@ -112,6 +113,10 @@ _COMMANDS: dict[str, tuple[str, str]] = {
     "vocab-explainer": (
         "benchmark/vocab_explainer.py",
         "Render a self-contained HTML explainer of how the vocabulary is built.",
+    ),
+    "vocab-oracle": (
+        "benchmark/vocab_oracle.py",
+        "Zero-API combination-level forward/backward oracle test on the v2 vocabulary.",
     ),
 }
 

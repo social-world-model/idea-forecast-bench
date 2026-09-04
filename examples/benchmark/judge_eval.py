@@ -38,7 +38,43 @@ def main() -> int:
     )
     parser.add_argument("--input-json", required=True)
     parser.add_argument("--papers-dir", required=True)
-    parser.add_argument("--output", required=True)
+    parser.add_argument(
+        "--output",
+        default=None,
+        help=(
+            "Output path. Default: derived from --input-json "
+            "(<input>.judged.json, or <input>.backward.judged.json when "
+            "--direction backward and --output was not given explicitly)."
+        ),
+    )
+    parser.add_argument(
+        "--direction",
+        choices=("forward", "backward"),
+        default="forward",
+        help=(
+            "Score saved predictions against the future (forward, default) "
+            "or against an equal-length window of the past (backward)."
+        ),
+    )
+    parser.add_argument(
+        "--exclude-evidence",
+        action="store_true",
+        help=(
+            "Drop each prediction's own evidence papers "
+            "(metadata.evidence_paper_ids) from its candidate pool before "
+            "retrieval, so a prediction cannot 'hit' the paper it was "
+            "derived from."
+        ),
+    )
+    parser.add_argument(
+        "--equalize-pool",
+        action="store_true",
+        help=(
+            "For --direction backward, subsample the backward target set "
+            "down to the size of the forward future set when it is larger, "
+            "so hit rates are compared over pools of equal size."
+        ),
+    )
     parser.add_argument(
         "--state-file",
         default=None,
@@ -121,7 +157,19 @@ def main() -> int:
         timeout=60.0,
     )
 
-    out_path = Path(args.output)
+    if args.output:
+        out_path = Path(args.output)
+    else:
+        # No explicit --output: derive it from --input-json, same convention
+        # as scripts/benchmark/judge_eval.sh, with a `.backward` marker so a
+        # backward-direction run never collides with a forward one.
+        input_stem = str(args.input_json)
+        if input_stem.endswith(".json"):
+            input_stem = input_stem[: -len(".json")]
+        suffix = (
+            ".backward.judged.json" if args.direction == "backward" else ".judged.json"
+        )
+        out_path = Path(f"{input_stem}{suffix}")
     state_path = (
         Path(args.state_file)
         if args.state_file
@@ -129,7 +177,15 @@ def main() -> int:
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    judge_fp = judge_fingerprint(args.judge_model)
+    # Namespaces the judge-decision cache by direction/exclude-evidence/
+    # equalize-pool too: these change which papers get judged against which
+    # predictions, so a state file from another mode must not be resumed
+    # silently (judge_fingerprint hashes the whole string, so "qwen" etc.
+    # still matches inside it for the thinking-mode branch).
+    judge_fp = judge_fingerprint(
+        f"{args.judge_model}|{args.direction}|"
+        f"ev{int(args.exclude_evidence)}|eq{int(args.equalize_pool)}"
+    )
     embed_fp = embed_fingerprint(args.embed_model)
     state = RunState(state_path, judge_fingerprint=judge_fp, embed_fingerprint=embed_fp)
     atexit.register(state.force_flush)
@@ -188,6 +244,9 @@ def main() -> int:
             state=state,
             workers=args.workers,
             max_windows=args.max_windows,
+            direction=args.direction,
+            exclude_evidence=args.exclude_evidence,
+            equalize_pool=args.equalize_pool,
         )
 
     results_lock = threading.Lock()
@@ -243,6 +302,9 @@ def _write_output(
         "source_json": args.input_json,
         "embed_model": args.embed_model,
         "judge_model": args.judge_model,
+        "direction": args.direction,
+        "exclude_evidence": args.exclude_evidence,
+        "equalize_pool": args.equalize_pool,
         "top_r": args.top_r,
         "cluster_k": args.cluster_k,
         "match_pm_threshold": MATCH_PM_THRESHOLD,

@@ -18,6 +18,14 @@ _COMBINATORIAL_VARIANTS: dict[str, str] = {
     "combinatorial_random": "random",
 }
 
+# Same sampler/realiser as _COMBINATORIAL_VARIANTS, but the community state
+# is built from the v2 concept vocabulary instead of the v1 element cache --
+# see idea_forecast_bench.strategy.vocab_combinatorial.
+_VOCAB_COMBINATORIAL_VARIANTS: dict[str, str] = {
+    "vocab_combinatorial": "full",
+    "vocab_combinatorial_random": "random",
+}
+
 
 def create_strategy(
     strategy_name: str,
@@ -133,6 +141,36 @@ def create_strategy(
             model_name=str(resolved_model) if resolved_model else None,
             variant=_COMBINATORIAL_VARIANTS[normalized],
             element_cache_path=str(element_cache) if element_cache else None,
+            config_path=(
+                str(legacy_params["combinatorial_config"])
+                if legacy_params.get("combinatorial_config")
+                else None
+            ),
+            temperature=temperature,
+            base_urls=base_urls,
+        )
+    if normalized in _VOCAB_COMBINATORIAL_VARIANTS:
+        from idea_forecast_bench.strategy.vocab_combinatorial import (
+            VocabCombinatorialStrategy,
+        )
+
+        resolved_model = model_name or legacy_params.get("model_id")
+        vocab_store = legacy_params.get("vocab_store_dir")
+        base_urls_raw = legacy_params.get("base_urls")
+        base_urls = (
+            [u for u in str(base_urls_raw).split(",") if u.strip()]
+            if base_urls_raw
+            else None
+        )
+        return VocabCombinatorialStrategy(
+            model_name=str(resolved_model) if resolved_model else None,
+            variant=_VOCAB_COMBINATORIAL_VARIANTS[normalized],
+            vocab_store_dir=str(vocab_store) if vocab_store else None,
+            vocab_config_path=(
+                str(legacy_params["vocab_config_path"])
+                if legacy_params.get("vocab_config_path")
+                else None
+            ),
             config_path=(
                 str(legacy_params["combinatorial_config"])
                 if legacy_params.get("combinatorial_config")

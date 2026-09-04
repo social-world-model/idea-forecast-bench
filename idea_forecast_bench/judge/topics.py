@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import random
 from typing import Any
 
 import openai
 
 from idea_forecast_bench.backtest import (
+    split_backward_target,
     split_train_future_by_cutoff,
 )
 from idea_forecast_bench.judge.config import MAX_CHARS
@@ -28,6 +30,9 @@ def process_topic(
     state: RunState,
     workers: int,
     max_windows: int | None,
+    direction: str = "forward",
+    exclude_evidence: bool = False,
+    equalize_pool: bool = False,
 ) -> tuple[str, dict[str, Any]]:
     saved_bt = saved_topic.get("backtest")
     if not saved_bt or not saved_bt.get("windows"):
@@ -73,24 +78,49 @@ def process_topic(
             print(f"  [{topic_id}] window {cutoff} already done, skipping", flush=True)
             continue
 
-        train, future, _, _ = split_train_future_by_cutoff(
-            papers=scoped_papers,
-            cutoff_month=cutoff,
-            horizon_months=horizon_months,
-            cutoff_date=w.get("cutoff_date"),
-        )
-        if not future:
+        equalized = False
+        target_before = 0
+        if direction == "backward":
+            train, target, _, _ = split_backward_target(
+                papers=scoped_papers,
+                cutoff_month=cutoff,
+                horizon_months=horizon_months,
+                cutoff_date=w.get("cutoff_date"),
+            )
+            target_before = len(target)
+            if equalize_pool:
+                _, forward_future, _, _ = split_train_future_by_cutoff(
+                    papers=scoped_papers,
+                    cutoff_month=cutoff,
+                    horizon_months=horizon_months,
+                    cutoff_date=w.get("cutoff_date"),
+                )
+                if len(target) > len(forward_future):
+                    # Re-seeded to 0 per window: deterministic and
+                    # independent of window processing order.
+                    rng = random.Random(0)
+                    target = rng.sample(target, len(forward_future))
+                    equalized = True
+        else:
+            train, target, _, _ = split_train_future_by_cutoff(
+                papers=scoped_papers,
+                cutoff_month=cutoff,
+                horizon_months=horizon_months,
+                cutoff_date=w.get("cutoff_date"),
+            )
+            target_before = len(target)
+        if not target:
             continue
 
         print(
             f"  [{topic_id}] window {wi + 1}/{len(saved_windows)} cutoff={cutoff} "
-            f"future={len(future)} ...",
+            f"direction={direction} target={len(target)} ...",
             flush=True,
         )
 
         window_result = process_window(
             window_data=w,
-            future_papers=future,
+            future_papers=target,
             train_paper_ids=[p.paper_id for p in train],
             paper_vecs=paper_vecs,
             embed_client=embed_client,
@@ -101,7 +131,14 @@ def process_topic(
             cluster_k=cluster_k,
             state=state,
             workers=workers,
+            exclude_evidence=exclude_evidence,
         )
+        if equalize_pool:
+            window_result = {
+                **window_result,
+                "equalize_pool_applied": equalized,
+                "target_papers_before_equalize": target_before,
+            }
         windows_out.append(window_result)
         state.mark_window_done(topic_id, cutoff, window_result)
 

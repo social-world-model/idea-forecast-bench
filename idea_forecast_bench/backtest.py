@@ -170,6 +170,56 @@ def split_train_future_by_cutoff(
     return train, future, future_end_month, future_end_date
 
 
+def split_backward_target(
+    papers: list[PaperRecord],
+    cutoff_month: str | None = None,
+    horizon_months: int = 3,
+    cutoff_date: str | None = None,
+) -> tuple[list[PaperRecord], list[PaperRecord], str, str]:
+    """Mirror of `split_train_future_by_cutoff`, reflected onto the past.
+
+    The forward window's length in days is computed exactly as
+    `split_train_future_by_cutoff` computes it (`future_end_ord - cutoff_ord`).
+    `backward_target` is then the papers in that same number of days
+    immediately BEFORE the cutoff: `cutoff_ord - span_days < date <= cutoff_ord`.
+    `remaining_train` is whatever is left further back: `date <= cutoff_ord -
+    span_days`.
+
+    This lets the same saved predictions be scored against a "backward"
+    target set of the same size-in-days as the forward future window, so
+    forward P@5 and backward P@5 are comparable.
+
+    Returns (remaining_train, backward_target, start_date, cutoff_date) where
+    start_date is the exclusive lower bound of the backward window and
+    cutoff_date is the resolved cutoff (inclusive upper bound).
+    """
+    resolved_cutoff_month, resolved_cutoff_date = _resolve_cutoff(
+        cutoff_month=cutoff_month,
+        cutoff_date=cutoff_date,
+    )
+    future_end_month = add_months(resolved_cutoff_month, horizon_months)
+    future_end_date = month_end_date(future_end_month)
+    cutoff_ord = date_to_ordinal(resolved_cutoff_date)
+    future_end_ord = date_to_ordinal(future_end_date)
+    span_days = future_end_ord - cutoff_ord
+    start_ord = cutoff_ord - span_days
+    start_date = (
+        datetime.fromordinal(start_ord).date().isoformat() if start_ord >= 1 else ""
+    )
+
+    remaining_train = [
+        paper
+        for paper in papers
+        if date_to_ordinal(get_paper_published_date(paper)) <= start_ord
+    ]
+    backward_target = [
+        paper
+        for paper in papers
+        if start_ord < date_to_ordinal(get_paper_published_date(paper)) <= cutoff_ord
+    ]
+    return remaining_train, backward_target, start_date, resolved_cutoff_date
+
+
 def evaluate_at_cutoff(
     papers: list[PaperRecord],
     strategy: IdeaStrategy,

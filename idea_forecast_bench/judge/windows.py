@@ -47,6 +47,7 @@ def process_window(
     cluster_k: int,
     state: RunState,
     workers: int,
+    exclude_evidence: bool = False,
 ) -> dict[str, Any]:
     cutoff = window_data["cutoff_month"]
     predictions = load_predictions(window_data.get("predictions", []))[:top_k]
@@ -59,6 +60,7 @@ def process_window(
     used_paper_ids: set[str] = set()
     judge_calls = 0
     judge_parse_failures = 0
+    n_evidence_excluded = 0
 
     for pred in predictions:
         pt = _sanitize(pred_text(pred))[:MAX_CHARS]
@@ -70,8 +72,19 @@ def process_window(
             pred_vec = embed_batch([pt], embed_client)[0]
             state.set_pred_vec(ph, pred_vec)
 
-        # Retrieve top-R candidates
-        candidates = top_r_candidates(pred_vec, paper_vecs, future_paper_ids, top_r)
+        # Retrieve top-R candidates. When exclude_evidence is set, drop this
+        # prediction's own evidence papers from the candidate pool first --
+        # otherwise a prediction could "hit" the very paper it was derived
+        # from, which is not a forecast.
+        candidate_paper_ids = future_paper_ids
+        if exclude_evidence:
+            evidence_ids = set(pred.metadata.get("evidence_paper_ids") or [])
+            if evidence_ids:
+                candidate_paper_ids = [
+                    pid for pid in future_paper_ids if pid not in evidence_ids
+                ]
+                n_evidence_excluded += len(future_paper_ids) - len(candidate_paper_ids)
+        candidates = top_r_candidates(pred_vec, paper_vecs, candidate_paper_ids, top_r)
 
         # Judge all candidates in parallel
         # Loop variables bound as defaults: see the note in
@@ -229,6 +242,7 @@ def process_window(
         "judge_parse_failure_rate": round(judge_parse_failures / judge_calls, 4)
         if judge_calls
         else 0.0,
+        "n_evidence_excluded": n_evidence_excluded,
         "evaluation": {
             "hit_at_k": round(hit_at_k, 4),
             "mrr": round(mrr, 4),
