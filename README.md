@@ -1,25 +1,13 @@
-<h1 align="center">IdeaForecastBench</h1>
+![IdeaForecastBench: Can Large Language Models Forecast What Researchers Study Next?](assets/ideabench.png)
 
 <p align="center">
-  <b>Can Large Language Models Forecast What Researchers Study Next?</b>
+  <a href="https://arxiv.org/abs/2609.00747"><img src="https://img.shields.io/badge/arXiv-2609.00747-b31b1b.svg" alt="arXiv"></a>
+  <a href="https://github.com/social-world-model/idea-forecast-bench/actions/workflows/ci.yml"><img src="https://github.com/social-world-model/idea-forecast-bench/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://www.python.org/downloads/release/python-3109/"><img src="https://img.shields.io/badge/python-%E2%89%A53.10-blue" alt="Python 3.10+"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://github.com/social-world-model/idea-forecast-bench/pulls"><img src="https://img.shields.io/badge/PRs-welcome-red" alt="PRs welcome"></a>
+  <a href="https://pre-commit.com/"><img src="https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white" alt="pre-commit"></a>
 </p>
-
-<div align="center">
-
-[![arXiv](https://img.shields.io/badge/arXiv-2609.00747-b31b1b.svg)](https://arxiv.org/abs/2609.00747)
-[![CI](https://github.com/social-world-model/idea-forecast-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/social-world-model/idea-forecast-bench/actions/workflows/ci.yml)
-[![Python 3.10](https://img.shields.io/badge/python-%E2%89%A53.10-blue)](https://www.python.org/downloads/release/python-3109/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![GitHub pull request](https://img.shields.io/badge/PRs-welcome-red)](https://github.com/social-world-model/idea-forecast-bench/pulls)
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
-
-</div>
-
-## News
-
-- **Sep 1, 2026** — Our paper is out on arXiv ([2609.00747](https://arxiv.org/abs/2609.00747)) and accepted to **EMNLP 2026** 🎉
-
-## Introduction
 
 **IdeaForecastBench** evaluates research idea *forecasting*. Given a community's
 literature up to a cutoff, a system produces up to five ranked ideas, which are then
@@ -27,15 +15,9 @@ scored against the papers that actually appeared afterwards. Judging an idea's n
 at generation time does not establish whether it anticipates subsequent work; this
 benchmark does.
 
-- **624 rolling episodes across 52 topics**, with a fixed **retrieve-then-judge**
-  protocol and separately reported results from two judges.
-- **Five history-compression baselines** (topic trend, direct, summary, retrieval,
-  memory) across GPT-4.1, Qwen2.5-7B/14B, and Qwen3.5-9B.
-- **MDF**, the *Mode-Decomposition Forecaster*: a learned method that samples a latent
-  innovation from a memory-conditioned prior, realizes it into a grounded proposal, and
-  trains the realization policy with GRPO against a future-grounded reward.
+## News
 
-The Python package is `idea_forecast_bench` and the CLI is `idea-forecast-bench`.
+- **Sep 1, 2026** — Our paper is out on arXiv ([2609.00747](https://arxiv.org/abs/2609.00747)) and accepted to **EMNLP 2026** 🎉
 
 ## Installation
 
